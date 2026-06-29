@@ -8,6 +8,19 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+function getCorsOrigins(): string[] {
+  const fromEnv = (process.env.CORS_ORIGIN || 'http://localhost:5173')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+
+  const vercel: string[] = [];
+  if (process.env.VERCEL_URL) vercel.push(`https://${process.env.VERCEL_URL}`);
+  if (process.env.VERCEL_BRANCH_URL) vercel.push(`https://${process.env.VERCEL_BRANCH_URL}`);
+
+  return [...new Set([...fromEnv, ...vercel])];
+}
+
 function requireEnv(key: string): string {
   const value = process.env[key];
   if (!value) {
@@ -20,6 +33,7 @@ export const config = {
   port: parseInt(process.env.PORT || '3001', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
   isDev: process.env.NODE_ENV !== 'production',
+  isVercel: !!process.env.VERCEL,
 
   supabase: {
     url: requireEnv('SUPABASE_URL'),
@@ -51,10 +65,7 @@ export const config = {
   },
 
   cors: {
-    origins: (process.env.CORS_ORIGIN || 'http://localhost:5173')
-      .split(',')
-      .map((o) => o.trim())
-      .filter(Boolean),
+    origins: getCorsOrigins(),
   },
 
   sessionsDir: process.env.SESSIONS_DIR || path.join(process.cwd(), 'sessions'),

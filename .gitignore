@@ -2,6 +2,7 @@ node_modules/
 dist/
 build/
 sessions/
+*.tsbuildinfo
 backend/sessions/
 supabase/.temp/
 .env
@@ -15,3 +16,4 @@ Thumbs.db
 .vscode/
 .idea/
 .cursor/
+.vercel

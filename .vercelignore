@@ -1,0 +1,9 @@
+backend/sessions
+backend/.env
+frontend/.env
+.env
+.env.*
+!.env.example
+sessions
+node_modules
+.cursor

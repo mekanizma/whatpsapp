@@ -33,7 +33,7 @@ npm run dev
 - [Sistem Mimarisi](docs/ARCHITECTURE.md)
 - [Database ER Diagram](docs/DATABASE_ER.md)
 - [Kurulum Rehberi](docs/SETUP.md)
-- [Render.com Yayın](docs/RENDER.md)
+- [Vercel Yayın](docs/VERCEL.md)
 
 ## Proje Yapısı
 

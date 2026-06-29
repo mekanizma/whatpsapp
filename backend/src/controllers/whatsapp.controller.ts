@@ -149,6 +149,13 @@ export async function getWhatsAppStatus(req: AuthRequest, res: Response): Promis
 }
 
 export async function startQr(req: AuthRequest, res: Response): Promise<void> {
+  if (config.isVercel) {
+    res.status(503).json({
+      success: false,
+      error: 'WhatsApp QR bağlantısı Vercel serverless ortamında desteklenmiyor. Railway, Fly.io veya VPS kullanın.',
+    });
+    return;
+  }
   try {
     const session = await startQrSession(req.companyId!, req.userId);
     res.json({ success: true, data: session });
