@@ -9,7 +9,7 @@ services:
     region: frankfurt
     plan: free
     rootDir: backend
-    buildCommand: npm install && npm run build
+    buildCommand: NPM_CONFIG_PRODUCTION=false npm install && npm run build
     startCommand: npm start
     healthCheckPath: /health
     envVars:
@@ -37,7 +37,7 @@ services:
 staticSites:
   - name: whatsapp-ai-web
     rootDir: frontend
-    buildCommand: npm install && npm run build
+    buildCommand: NPM_CONFIG_PRODUCTION=false npm install && npm run build
     staticPublishPath: dist
     routes:
       - type: rewrite

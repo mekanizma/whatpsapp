@@ -3,11 +3,18 @@
   "version": "1.0.0",
   "private": true,
   "description": "AI WhatsApp Müşteri Temsilcisi SaaS Platformu",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
     "dev:backend": "npm run dev --prefix backend",
     "dev:frontend": "npm run dev --prefix frontend",
+    "postinstall": "npm install --prefix backend && npm install --prefix frontend",
     "build": "npm run build --prefix backend && npm run build --prefix frontend",
+    "build:backend": "npm run build --prefix backend",
+    "build:frontend": "npm run build --prefix frontend",
+    "start:backend": "npm run start --prefix backend",
     "install:all": "npm install && npm install --prefix backend && npm install --prefix frontend",
     "db:push": "npx supabase db push --yes",
     "db:setup": "npm run db:setup --prefix backend",

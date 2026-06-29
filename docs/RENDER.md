@@ -81,17 +81,25 @@ SESSIONS_DIR=/var/data/sessions
 
 ### Backend Web Service
 
-- **Root Directory:** `backend`
-- **Build:** `npm install && npm run build`
-- **Start:** `npm start`
-- **Health Check:** `/health`
+| Alan | Değer |
+|------|-------|
+| **Root Directory** | `backend` |
+| **Build Command** | `NPM_CONFIG_PRODUCTION=false npm install && npm run build` |
+| **Start Command** | `npm start` |
+| **Health Check** | `/health` |
+
+> **Önemli:** Root Directory boş bırakılırsa build kökten çalışır ve bağımlılıklar yüklenmez. Mutlaka `backend` yazın.
 
 ### Frontend Static Site
 
-- **Root Directory:** `frontend`
-- **Build:** `npm install && npm run build`
-- **Publish:** `dist`
-- **Rewrite:** `/*` → `/index.html`
+| Alan | Değer |
+|------|-------|
+| **Root Directory** | `frontend` |
+| **Build Command** | `NPM_CONFIG_PRODUCTION=false npm install && npm run build` |
+| **Publish Directory** | `dist` |
+| **Rewrite** | `/*` → `/index.html` |
+
+> **Önemli:** Root Directory mutlaka `frontend` olmalı. Publish Directory: `dist`
 
 ---
 
@@ -108,6 +116,8 @@ SESSIONS_DIR=/var/data/sessions
 
 | Sorun | Çözüm |
 |-------|-------|
+| `Cannot find module 'express'` | Root Directory yanlış — backend için `backend`, frontend için `frontend` |
+| TypeScript / tsc hataları | Build command'a `NPM_CONFIG_PRODUCTION=false` ekleyin |
 | CORS hatası | `CORS_ORIGIN` frontend URL ile eşleşmeli |
 | API bağlanamıyor | `VITE_API_URL` build sırasında set edilmeli; frontend'i yeniden deploy edin |
 | Giriş çalışmıyor | Supabase redirect URL'lerini kontrol edin |
