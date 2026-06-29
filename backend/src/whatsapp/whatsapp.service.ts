@@ -136,6 +136,6 @@ export async function sendMessageToCustomer(
   companyId: string,
   toPhone: string,
   message: string
-): Promise<boolean> {
-  return (await sendTestMessage(companyId, toPhone, message)).success;
+): Promise<{ success: boolean; error?: string }> {
+  return sendTestMessage(companyId, toPhone, message);
 }

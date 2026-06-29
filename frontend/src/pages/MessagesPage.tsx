@@ -19,6 +19,7 @@ export function MessagesPage() {
 
   const [selectedPhone, setSelectedPhone] = useState<string | null>(phoneParam);
   const [replyText, setReplyText] = useState('');
+  const [replyError, setReplyError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const queryClient = useQueryClient();
 
@@ -32,26 +33,32 @@ export function MessagesPage() {
     refetchInterval: 10000,
   });
 
+  const encodedPhone = selectedPhone ? encodeURIComponent(selectedPhone) : '';
+
   const { data: messages } = useQuery({
     queryKey: ['messages', selectedPhone],
-    queryFn: () => api.get<Message[]>(`/messages/${selectedPhone}`),
+    queryFn: () => api.get<Message[]>(`/messages/${encodedPhone}`),
     enabled: !!selectedPhone,
     refetchInterval: 5000,
   });
 
   const { data: activeTicket } = useQuery({
     queryKey: ['active-ticket', selectedPhone],
-    queryFn: () => api.get<Ticket | null>(`/tickets/active/${selectedPhone}`),
+    queryFn: () => api.get<Ticket | null>(`/tickets/active/${encodedPhone}`),
     enabled: !!selectedPhone,
     refetchInterval: 5000,
   });
 
   const replyMutation = useMutation({
-    mutationFn: (text: string) => api.post(`/messages/${selectedPhone}/reply`, { message: text }),
+    mutationFn: (text: string) => api.post(`/messages/${encodedPhone}/reply`, { message: text }),
     onSuccess: () => {
       setReplyText('');
+      setReplyError(null);
       queryClient.invalidateQueries({ queryKey: ['messages', selectedPhone] });
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    },
+    onError: (err: Error) => {
+      setReplyError(err.message || 'Mesaj gönderilemedi');
     },
   });
 
@@ -190,12 +197,20 @@ export function MessagesPage() {
             </div>
 
             <div className="border-t border-slate-100 bg-white p-4">
+              {replyError && (
+                <p className="mb-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 ring-1 ring-red-100">
+                  {replyError}
+                </p>
+              )}
               <div className="flex gap-2">
                 <Input
                   className="flex-1"
                   placeholder={hasActiveTicket ? 'Müşteriye yanıt yazın...' : 'Mesaj yazın...'}
                   value={replyText}
-                  onChange={(e) => setReplyText(e.target.value)}
+                  onChange={(e) => {
+                    setReplyText(e.target.value);
+                    if (replyError) setReplyError(null);
+                  }}
                   onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && replyText.trim() && replyMutation.mutate(replyText)}
                 />
                 <Button size="icon" className="shrink-0 rounded-xl" disabled={!replyText.trim() || replyMutation.isPending} onClick={() => replyMutation.mutate(replyText)}>

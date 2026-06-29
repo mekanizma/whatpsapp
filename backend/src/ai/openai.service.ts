@@ -16,6 +16,7 @@ import { getCachedResponse, setCachedResponse } from './ai-cache.service';
 import { filterRelevantKnowledge } from './knowledge-filter.service';
 import {
   checkAIQuota,
+  hasActiveTransferTicket,
   logAIUsage,
 } from './ai-quota.service';
 
@@ -53,6 +54,17 @@ export async function generateAIResponse(
   customerPhone: string
 ): Promise<AIResponse> {
   const trimmed = customerMessage.trim();
+
+  // Aktif canlı destek talebi varsa AI yanıt vermesin — temsilci devralsın
+  if (await hasActiveTransferTicket(companyId, customerPhone)) {
+    return {
+      message: '',
+      shouldTransfer: false,
+      skippedAI: true,
+      skipReason: 'active_ticket',
+      tokensUsed: 0,
+    };
+  }
 
   // 1) Ön filtre — API çağrısı yok
   const gate = preAIGate(trimmed);

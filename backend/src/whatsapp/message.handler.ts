@@ -14,6 +14,21 @@ const recentMessages = new Map<string, { text: string; time: number }>();
 const processedWaIds = new Set<string>();
 const recentTransferReplies = new Map<string, number>();
 const customerLocks = new Map<string, Promise<void>>();
+const customerJidCache = new Map<string, string>();
+
+function customerJidKey(companyId: string, phone: string): string {
+  return `${companyId}:${resolveCustomerPhone(phone)}`;
+}
+
+/** Gelen mesajdaki WhatsApp JID'ini sakla — temsilci yanıtlarında doğru alıcıya iletmek için */
+export function cacheCustomerJid(companyId: string, phone: string, jid: string): void {
+  if (!jid || jid.endsWith('@g.us')) return;
+  customerJidCache.set(customerJidKey(companyId, phone), jid);
+}
+
+export function getCachedCustomerJid(companyId: string, phone: string): string | null {
+  return customerJidCache.get(customerJidKey(companyId, phone)) || null;
+}
 
 export function normalizePhoneNumber(phone: string): string | null {
   let digits = phone.replace(/\D/g, '');
@@ -108,6 +123,7 @@ export function clearTransferState(companyId: string, customerPhone: string): vo
   const phone = resolveCustomerPhone(customerPhone);
   recentTransferReplies.delete(`${companyId}:${phone}`);
   recentMessages.delete(`${companyId}:${phone}`);
+  customerJidCache.delete(customerJidKey(companyId, phone));
 }
 
 export async function processInboundMessage(

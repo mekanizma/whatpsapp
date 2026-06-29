@@ -8,6 +8,11 @@ import { adminClient } from '../database/supabase';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { sendMessageToCustomer } from '../whatsapp/whatsapp.service';
 import { logActivity } from '../services/log.service';
+import { normalizePhoneNumber } from '../whatsapp/message.handler';
+
+function resolvePhoneParam(phone: string): string {
+  return normalizePhoneNumber(phone) || phone.replace(/\D/g, '');
+}
 
 export async function getConversations(req: AuthRequest, res: Response): Promise<void> {
   if (config.demoMode) {
@@ -53,7 +58,7 @@ export async function getConversations(req: AuthRequest, res: Response): Promise
 }
 
 export async function getConversationMessages(req: AuthRequest, res: Response): Promise<void> {
-  const { phone } = req.params;
+  const phone = resolvePhoneParam(req.params.phone as string);
 
   const { data, error } = await adminClient
     .from('messages')
@@ -71,7 +76,7 @@ export async function getConversationMessages(req: AuthRequest, res: Response): 
 }
 
 export async function replyToConversation(req: AuthRequest, res: Response): Promise<void> {
-  const { phone } = req.params;
+  const phone = resolvePhoneParam(req.params.phone as string);
   const { message } = req.body;
 
   if (!message?.trim()) {
@@ -79,11 +84,26 @@ export async function replyToConversation(req: AuthRequest, res: Response): Prom
     return;
   }
 
+  if (!req.companyId) {
+    res.status(403).json({ success: false, error: 'Şirket bilgisi bulunamadı' });
+    return;
+  }
+
   const { data: staffRecord } = await adminClient
     .from('staff')
     .select('id')
     .eq('profile_id', req.profile?.id)
-    .single();
+    .eq('company_id', req.companyId)
+    .maybeSingle();
+
+  const sendResult = await sendMessageToCustomer(req.companyId, phone, message.trim());
+  if (!sendResult.success) {
+    res.status(502).json({
+      success: false,
+      error: sendResult.error || 'WhatsApp mesajı müşteriye iletilemedi',
+    });
+    return;
+  }
 
   const { data: msg, error } = await adminClient
     .from('messages')
@@ -102,8 +122,6 @@ export async function replyToConversation(req: AuthRequest, res: Response): Prom
     res.status(400).json({ success: false, error: error.message });
     return;
   }
-
-  await sendMessageToCustomer(req.companyId!, phone as string, message.trim());
 
   await logActivity({
     userId: req.userId,

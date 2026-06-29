@@ -17,7 +17,14 @@ import {
 } from '@whiskeysockets/baileys';
 import { config } from '../config';
 import { adminClient } from '../database/supabase';
-import { processInboundMessage, extractPhoneFromMessage, jidToPhone, normalizePhoneNumber } from './message.handler';
+import {
+  processInboundMessage,
+  extractPhoneFromMessage,
+  jidToPhone,
+  normalizePhoneNumber,
+  cacheCustomerJid,
+  getCachedCustomerJid,
+} from './message.handler';
 import { logActivity } from '../services/log.service';
 
 export type QrSessionStatus = 'pending' | 'scanned' | 'connected' | 'expired' | 'failed';
@@ -296,6 +303,10 @@ async function connectBaileysSocket(companyId: string, session: BaileysSession):
       const customerName = msg.pushName || null;
       const replyJid = msg.key.remoteJid;
 
+      if (replyJid) {
+        cacheCustomerJid(companyId, customerPhone, replyJid);
+      }
+
       try {
         console.log(`[Baileys] Gelen mesaj: ${customerPhone} — "${text.slice(0, 40)}..."`);
 
@@ -392,6 +403,17 @@ export async function sendBaileysMessage(
   const socket = conn.socket;
 
   try {
+    const cachedJid = getCachedCustomerJid(companyId, normalized);
+    if (cachedJid) {
+      await withTimeout(
+        socket.sendMessage(cachedJid, { text: message }),
+        20_000,
+        'Mesaj gönderme zaman aşımı'
+      );
+      console.log(`[Baileys] Mesaj gönderildi (önbellek JID): ${companyId} → ${normalized}`);
+      return { success: true };
+    }
+
     const waResults = await withTimeout(
       socket.onWhatsApp(normalized),
       12_000,
@@ -404,13 +426,14 @@ export async function sendBaileysMessage(
     }
 
     const jid = waCheck.jid;
+    cacheCustomerJid(companyId, normalized, jid);
     await withTimeout(
       socket.sendMessage(jid, { text: message }),
       20_000,
       'Mesaj gönderme zaman aşımı. Numarayı 905XXXXXXXXX formatında deneyin.'
     );
 
-    console.log(`[Baileys] Test mesajı gönderildi: ${companyId} → ${normalized}`);
+    console.log(`[Baileys] Mesaj gönderildi: ${companyId} → ${normalized}`);
     return { success: true };
   } catch (err) {
     console.error(`[Baileys] Mesaj gönderme hatası (${companyId}):`, err);
