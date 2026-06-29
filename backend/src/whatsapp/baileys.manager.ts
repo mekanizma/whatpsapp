@@ -49,7 +49,7 @@ const tokenToCompany = new Map<string, string>();
 const logger = pino({ level: 'silent' });
 
 function getSessionDir(companyId: string): string {
-  const dir = path.join(process.cwd(), 'sessions', companyId);
+  const dir = path.join(config.sessionsDir, companyId);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -355,7 +355,7 @@ export async function disconnectBaileys(companyId: string): Promise<void> {
   connections.delete(companyId);
 
   // Oturum dosyalarını temizle
-  const sessionDir = path.join(process.cwd(), 'sessions', companyId);
+  const sessionDir = path.join(config.sessionsDir, companyId);
   if (fs.existsSync(sessionDir)) {
     fs.rmSync(sessionDir, { recursive: true, force: true });
   }
@@ -423,7 +423,7 @@ export async function sendBaileysMessage(
 
 // Sunucu başladığında mevcut oturumları yükle
 export async function restoreBaileysSessions(): Promise<void> {
-  const sessionsDir = path.join(process.cwd(), 'sessions');
+  const sessionsDir = config.sessionsDir;
   if (!fs.existsSync(sessionsDir)) return;
 
   const companyDirs = fs.readdirSync(sessionsDir);

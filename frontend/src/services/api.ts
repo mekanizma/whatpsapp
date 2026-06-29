@@ -6,7 +6,13 @@ import { supabase } from './supabase';
 import { isDemoMode } from '@/lib/env';
 import type { ApiResponse } from '@/types';
 
-const API_URL = import.meta.env.VITE_API_URL || '/api/v1';
+const API_BASE = (() => {
+  const raw = import.meta.env.VITE_API_URL || '/api/v1';
+  if (raw.endsWith('/api/v1')) return raw;
+  return `${raw.replace(/\/$/, '')}/api/v1`;
+})();
+
+const API_URL = API_BASE;
 const DEMO_TOKEN_KEY = 'wa_demo_token';
 
 export function setDemoToken(token: string) {

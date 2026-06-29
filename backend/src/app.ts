@@ -14,16 +14,26 @@ import { errorHandler, notFoundHandler } from './middleware/error.middleware';
 
 const app = express();
 
+if (!config.isDev) {
+  app.set('trust proxy', 1);
+}
+
 app.use(helmet());
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || (config.isDev && /^http:\/\/localhost:\d+$/.test(origin))) {
+    if (!origin) {
       callback(null, true);
-    } else if (origin === config.cors.origin) {
-      callback(null, true);
-    } else {
-      callback(new Error('CORS not allowed'));
+      return;
     }
+    if (config.isDev && /^http:\/\/localhost:\d+$/.test(origin)) {
+      callback(null, true);
+      return;
+    }
+    if (config.cors.origins.includes(origin)) {
+      callback(null, true);
+      return;
+    }
+    callback(new Error('CORS not allowed'));
   },
   credentials: true,
 }));

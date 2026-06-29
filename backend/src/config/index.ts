@@ -3,6 +3,7 @@
  * Validates and exports all environment variables
  */
 
+import path from 'path';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -50,8 +51,13 @@ export const config = {
   },
 
   cors: {
-    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+    origins: (process.env.CORS_ORIGIN || 'http://localhost:5173')
+      .split(',')
+      .map((o) => o.trim())
+      .filter(Boolean),
   },
+
+  sessionsDir: process.env.SESSIONS_DIR || path.join(process.cwd(), 'sessions'),
 
   demoMode: process.env.DEMO_MODE === 'true',
 } as const;
