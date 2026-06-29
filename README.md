@@ -5,7 +5,7 @@ KKTC ve Türkiye pazarına yönelik çok kiracılı WhatsApp AI müşteri temsil
 ## Özellikler
 
 - Multi-tenant SaaS mimarisi
-- WhatsApp Cloud API entegrasyonu
+- WhatsApp QR (Baileys) ve Cloud API entegrasyonu
 - OpenAI destekli otomatik müşteri yanıtları
 - Canlı destek ve ticket sistemi
 - Rol tabanlı erişim (Super Admin, Company Admin, Staff)
@@ -33,7 +33,7 @@ npm run dev
 - [Sistem Mimarisi](docs/ARCHITECTURE.md)
 - [Database ER Diagram](docs/DATABASE_ER.md)
 - [Kurulum Rehberi](docs/SETUP.md)
-- [Vercel Yayın](docs/VERCEL.md)
+- [Render Yayın](docs/RENDER.md)
 
 ## Proje Yapısı
 
@@ -53,4 +53,4 @@ whatsap/
 
 **Database:** Supabase PostgreSQL + Auth + Storage
 
-**AI:** OpenAI API | **WhatsApp:** Meta Cloud API
+**AI:** OpenAI API | **WhatsApp:** Baileys QR + Meta Cloud API

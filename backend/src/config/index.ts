@@ -14,11 +14,18 @@ function getCorsOrigins(): string[] {
     .map((o) => o.trim())
     .filter(Boolean);
 
-  const vercel: string[] = [];
-  if (process.env.VERCEL_URL) vercel.push(`https://${process.env.VERCEL_URL}`);
-  if (process.env.VERCEL_BRANCH_URL) vercel.push(`https://${process.env.VERCEL_BRANCH_URL}`);
+  const platform: string[] = [];
+  if (process.env.RENDER_EXTERNAL_URL) platform.push(process.env.RENDER_EXTERNAL_URL);
+  if (process.env.VERCEL_URL) platform.push(`https://${process.env.VERCEL_URL}`);
+  if (process.env.VERCEL_BRANCH_URL) platform.push(`https://${process.env.VERCEL_BRANCH_URL}`);
 
-  return [...new Set([...fromEnv, ...vercel])];
+  return [...new Set([...fromEnv, ...platform])];
+}
+
+function getPublicUrl(): string | null {
+  if (process.env.RENDER_EXTERNAL_URL) return process.env.RENDER_EXTERNAL_URL;
+  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
+  return null;
 }
 
 function requireEnv(key: string): string {
@@ -34,6 +41,9 @@ export const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   isDev: process.env.NODE_ENV !== 'production',
   isVercel: !!process.env.VERCEL,
+  isRender: !!process.env.RENDER,
+  publicUrl: getPublicUrl(),
+  serveFrontend: process.env.NODE_ENV === 'production',
 
   supabase: {
     url: requireEnv('SUPABASE_URL'),

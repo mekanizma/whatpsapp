@@ -1,6 +1,6 @@
 /**
- * WhatsApp QR connection service (yerel geliştirme)
- * Production (Vercel): Meta WhatsApp Cloud API — qr.service kullanılmaz
+ * WhatsApp QR connection service (Baileys)
+ * Render ve yerel geliştirmede çalışır; serverless (Vercel) ortamında devre dışı
  */
 
 import {

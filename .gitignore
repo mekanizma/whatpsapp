@@ -2,6 +2,7 @@ node_modules/
 dist/
 build/
 sessions/
+data/
 *.tsbuildinfo
 backend/sessions/
 supabase/.temp/

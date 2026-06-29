@@ -145,9 +145,7 @@ export async function getWhatsAppStatus(req: AuthRequest, res: Response): Promis
       is_configured: isBaileys || isCloudApi,
       connection_type: isBaileys ? 'qr' : isCloudApi ? 'api' : null,
       supports_qr: !config.isVercel,
-      webhook_url: config.isVercel && process.env.VERCEL_URL
-        ? `https://${process.env.VERCEL_URL}/webhook/whatsapp`
-        : null,
+      webhook_url: config.publicUrl ? `${config.publicUrl}/webhook/whatsapp` : null,
     },
   });
 }

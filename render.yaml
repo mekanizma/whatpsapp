@@ -1,0 +1,45 @@
+# Render Blueprint — tek web servisi (frontend + backend + WhatsApp QR)
+# Dashboard: https://dashboard.render.com/blueprint/new?repo=https://github.com/mekanizma/whatpsapp
+
+services:
+  - type: web
+    name: whatsapp-ai
+    runtime: node
+    region: frankfurt
+    plan: starter
+    branch: main
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    disk:
+      name: whatsapp-sessions
+      mountPath: /opt/render/project/src/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SESSIONS_DIR
+        value: /opt/render/project/src/data/sessions
+      - key: DEMO_MODE
+        value: "false"
+      - key: VITE_DEMO_MODE
+        value: "false"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: WHATSAPP_VERIFY_TOKEN
+        sync: false
+      - key: WHATSAPP_API_VERSION
+        value: v21.0
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false

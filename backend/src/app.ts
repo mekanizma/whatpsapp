@@ -3,6 +3,8 @@
  * Configures middleware, routes, and error handling
  */
 
+import path from 'path';
+import fs from 'fs';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -18,7 +20,9 @@ if (!config.isDev) {
   app.set('trust proxy', 1);
 }
 
-app.use(helmet());
+app.use(helmet({
+  contentSecurityPolicy: config.serveFrontend ? false : undefined,
+}));
 app.use(cors({
   origin: (origin, callback) => {
     if (!origin) {
@@ -55,6 +59,26 @@ app.get('/webhook/whatsapp', verifyWebhook);
 app.post('/webhook/whatsapp', handleWebhook);
 
 app.use('/api/v1', apiRoutes);
+
+if (config.serveFrontend) {
+  const frontendDist = path.resolve(__dirname, '../../frontend/dist');
+  if (fs.existsSync(frontendDist)) {
+    app.use(express.static(frontendDist, { index: false, maxAge: '1d' }));
+    app.get('*', (req, res, next) => {
+      if (
+        req.path.startsWith('/api') ||
+        req.path.startsWith('/webhook') ||
+        req.path === '/health'
+      ) {
+        next();
+        return;
+      }
+      res.sendFile(path.join(frontendDist, 'index.html'), (err) => {
+        if (err) next(err);
+      });
+    });
+  }
+}
 
 app.use(notFoundHandler);
 app.use(errorHandler);
