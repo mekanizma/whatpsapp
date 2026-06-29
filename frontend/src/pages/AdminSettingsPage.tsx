@@ -3,7 +3,7 @@
  */
 
 import { useQuery } from '@tanstack/react-query';
-import { Settings, ExternalLink, Database, Cpu, Shield } from 'lucide-react';
+import { Settings, ExternalLink, Database, Cpu, Shield, Smartphone } from 'lucide-react';
 import { api } from '@/services/api';
 import { PageHeader } from '@/components/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle, Spinner, Badge } from '@/components/ui';
@@ -38,6 +38,13 @@ export function AdminSettingsPage() {
       value: settings?.node_env || 'development',
       badge: settings?.demo_mode ? 'warning' as const : 'success' as const,
       sub: settings?.demo_mode ? 'Demo modu aktif' : 'Canlı mod',
+    },
+    {
+      icon: Smartphone,
+      title: 'WhatsApp Worker',
+      value: settings?.whatsapp_worker ? 'Bağlı' : 'Yapılandırılmamış',
+      badge: settings?.whatsapp_worker ? 'success' as const : 'warning' as const,
+      sub: settings?.whatsapp_worker ? 'Railway worker aktif' : 'WHATSAPP_WORKER_URL gerekli',
     },
   ];
 

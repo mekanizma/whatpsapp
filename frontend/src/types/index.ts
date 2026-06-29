@@ -96,6 +96,7 @@ export interface PlatformSettings {
   ai_cache_enabled: boolean;
   node_env: string;
   supabase_connected: boolean;
+  whatsapp_worker: boolean;
 }
 
 export interface DashboardStats {

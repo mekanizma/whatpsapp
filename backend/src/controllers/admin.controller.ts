@@ -215,6 +215,7 @@ export async function getPlatformSettings(_req: AuthRequest, res: Response): Pro
       ai_cache_enabled: config.ai.cacheEnabled,
       node_env: config.nodeEnv,
       supabase_connected: !config.demoMode,
+      whatsapp_worker: !!config.whatsapp.workerUrl,
     },
   });
 }

@@ -34,6 +34,7 @@ npm run dev
 - [Database ER Diagram](docs/DATABASE_ER.md)
 - [Kurulum Rehberi](docs/SETUP.md)
 - [Vercel Yayın](docs/VERCEL.md)
+- [WhatsApp Worker](docs/WHATSAPP-WORKER.md)
 
 ## Proje Yapısı
 

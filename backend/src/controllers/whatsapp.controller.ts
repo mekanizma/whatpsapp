@@ -13,6 +13,7 @@ import {
   cancelQrSession,
   getBaileysConnectionStatus,
   disconnectBaileys,
+  isWhatsAppWorkerEnabled,
 } from '../whatsapp/qr.service';
 import { logActivity } from '../services/log.service';
 
@@ -99,7 +100,7 @@ export async function sendTest(req: AuthRequest, res: Response): Promise<void> {
 
 export async function getWhatsAppStatus(req: AuthRequest, res: Response): Promise<void> {
   const companyId = req.companyId!;
-  const baileys = getBaileysConnectionStatus(companyId);
+  const baileys = await getBaileysConnectionStatus(companyId);
 
   if (baileys.connected) {
     res.json({
@@ -149,10 +150,11 @@ export async function getWhatsAppStatus(req: AuthRequest, res: Response): Promis
 }
 
 export async function startQr(req: AuthRequest, res: Response): Promise<void> {
-  if (config.isVercel) {
+  if (config.isVercel && !isWhatsAppWorkerEnabled()) {
     res.status(503).json({
       success: false,
-      error: 'WhatsApp QR bağlantısı Vercel serverless ortamında desteklenmiyor. Railway, Fly.io veya VPS kullanın.',
+      error:
+        'WhatsApp için Worker servisi gerekli. WHATSAPP_WORKER_URL ayarlayın — docs/WHATSAPP-WORKER.md',
     });
     return;
   }

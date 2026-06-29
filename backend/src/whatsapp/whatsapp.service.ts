@@ -108,7 +108,7 @@ export async function sendTestMessage(
   toPhone: string,
   message: string
 ): Promise<{ success: boolean; error?: string }> {
-  const baileysStatus = getBaileysConnectionStatus(companyId);
+  const baileysStatus = await getBaileysConnectionStatus(companyId);
   if (baileysStatus.connected) {
     return sendBaileysMessage(companyId, toPhone, message);
   }

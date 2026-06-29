@@ -83,14 +83,16 @@ vercel.json
 
 ---
 
-## 5. WhatsApp (Baileys) Uyarısı
+## 5. WhatsApp (Baileys QR)
 
-Vercel **serverless** ortamıdır:
-- Kalıcı WebSocket bağlantısı desteklenmez
-- Oturum dosyaları saklanamaz
-- **Baileys QR WhatsApp bağlantısı Vercel'de çalışmaz**
+Vercel serverless Baileys çalıştıramaz. **WhatsApp Worker** servisi gerekir:
 
-Panel, AI yanıtlar, ticket, admin ve Supabase özellikleri çalışır. WhatsApp için ayrı bir sunucu (Railway, Fly.io, VPS) gerekir veya Meta Cloud API webhook kullanılabilir.
+1. Worker'ı Railway'de deploy edin → [WHATSAPP-WORKER.md](WHATSAPP-WORKER.md)
+2. Vercel'e ekleyin:
+   - `WHATSAPP_WORKER_URL` = Railway worker URL
+   - `WHATSAPP_WORKER_SECRET` = ortak gizli anahtar
+
+Panel → WhatsApp → QR ile bağlanın.
 
 ---
 
