@@ -7,7 +7,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Shield, MessageSquare, ArrowRight } from 'lucide-react';
 import { useAuthStore, getRedirectPath } from '@/store/authStore';
 import { isDemoMode } from '@/lib/env';
-import { AuthShowcase, AuthMobileBanner } from '@/components/auth/AuthShowcase';
+import { AuthPageLayout } from '@/components/auth/AuthPageLayout';
 import { AuthFormShell } from '@/components/auth/AuthFormShell';
 import { Button, Input, Label, Spinner } from '@/components/ui';
 
@@ -34,25 +34,19 @@ export function AdminLoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col lg:flex-row">
-      <AuthMobileBanner variant="admin" />
-
-      <div className="hidden min-h-screen w-1/2 lg:block">
-        <AuthShowcase variant="admin" />
-      </div>
-
+    <AuthPageLayout variant="admin">
       <AuthFormShell
-        icon={<Shield className="h-7 w-7 text-amber-700" />}
+        icon={<Shield className="h-7 w-7 text-amber-400" />}
         title="Admin Girişi"
         subtitle="Platform yönetici hesabınız"
         onSubmit={handleSubmit}
         accent="amber"
         footer={
-          <p className="text-center text-sm text-slate-500">
+          <p className="text-center text-sm">
             Şirket hesabı?{' '}
             <Link
               to="/login"
-              className="inline-flex items-center gap-1 font-semibold text-primary transition hover:underline"
+              className="inline-flex items-center gap-1 font-semibold text-amber-300 transition hover:text-amber-200 hover:underline"
             >
               <MessageSquare className="h-3.5 w-3.5" />
               Müşteri Girişi
@@ -115,10 +109,10 @@ export function AdminLoginPage() {
           )}
         </Button>
 
-        <p className="text-center text-xs text-slate-400">
+        <p className="text-center text-xs text-slate-500">
           Yalnızca yetkili platform yöneticileri erişebilir
         </p>
       </AuthFormShell>
-    </div>
+    </AuthPageLayout>
   );
 }

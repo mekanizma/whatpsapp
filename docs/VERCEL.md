@@ -1,32 +1,39 @@
-# Vercel Yayın Rehberi
+# Vercel Yayın Rehberi (Tek Platform)
 
-Tek Vercel projesi: **frontend (statik)** + **backend (serverless API)** aynı domainde çalışır.
+Frontend + Backend + WhatsApp **yalnızca Vercel** üzerinde çalışır.
 
 ```
-https://your-app.vercel.app/          → React panel
-https://your-app.vercel.app/api/v1/*  → Express API
-https://your-app.vercel.app/health    → Sağlık kontrolü
+https://your-app.vercel.app/              → React panel
+https://your-app.vercel.app/api/v1/*      → Express API
+https://your-app.vercel.app/webhook/whatsapp → Meta webhook
 ```
 
 ---
 
-## 1. Hızlı Kurulum
+## 1. Deploy
 
 1. [vercel.com](https://vercel.com) → **Add New Project**
-2. GitHub repo: `mekanizma/whatpsapp`
-3. **Framework Preset:** Other
-4. Root Directory: **boş bırakın** (repo kökü)
-5. Vercel `vercel.json` dosyasını otomatik okur
-6. Environment Variables ekleyin (aşağıya bakın)
-7. **Deploy**
+2. GitHub: `mekanizma/whatpsapp`
+3. **Framework:** Other (vercel.json otomatik okunur)
+4. **Root Directory:** boş
+5. Environment variables ekleyin (Bölüm 2)
+6. **Deploy**
 
 ---
 
-## 2. Ortam Değişkenleri (Vercel Dashboard)
+## 2. Environment Variables
 
-Tüm değişkenleri **Production**, **Preview** ve **Development** için ekleyin.
+Proje kökündeki `.env.vercel` dosyası tüm değerlerle hazır. Yükleme:
 
-### Backend (zorunlu)
+```powershell
+# Vercel CLI ile (önerilen)
+npm i -g vercel
+vercel login
+vercel link
+.\scripts\push-vercel-env.ps1
+```
+
+Veya Vercel Dashboard → **Settings → Environment Variables** → `.env.vercel` içeriğini kopyalayın.
 
 | Değişken | Açıklama |
 |----------|----------|
@@ -34,109 +41,82 @@ Tüm değişkenleri **Production**, **Preview** ve **Development** için ekleyin
 | `SUPABASE_ANON_KEY` | Anon key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Service role key |
 | `OPENAI_API_KEY` | OpenAI API key |
-| `WHATSAPP_VERIFY_TOKEN` | Webhook doğrulama token |
-| `NODE_ENV` | `production` |
-
-### Opsiyonel
-
-| Değişken | Varsayılan |
-|----------|------------|
 | `OPENAI_MODEL` | `gpt-4o-mini` |
+| `WHATSAPP_VERIFY_TOKEN` | Meta webhook doğrulama |
+| `WHATSAPP_API_VERSION` | `v21.0` |
+| `NODE_ENV` | `production` |
 | `DEMO_MODE` | `false` |
-| `CORS_ORIGIN` | Gerekmez (aynı domain) — özel domain için ekleyin |
+| `VITE_SUPABASE_URL` | Frontend build |
+| `VITE_SUPABASE_ANON_KEY` | Frontend build |
+| `VITE_DEMO_MODE` | `false` |
 
-### Frontend (build sırasında)
-
-| Değişken | Vercel'de değer |
-|----------|-----------------|
-| `VITE_SUPABASE_URL` | Supabase URL |
-| `VITE_SUPABASE_ANON_KEY` | Anon key |
-| `VITE_API_URL` | **Boş bırakın** veya `/api/v1` |
-
-> Aynı domainde olduğu için `VITE_API_URL` gerekmez — otomatik `/api/v1` kullanılır.
+`VITE_API_URL` **gerekmez** — otomatik `/api/v1`
 
 ---
 
-## 3. Supabase Auth Ayarları
+## 3. Supabase Auth
 
-Supabase → **Authentication → URL Configuration**
+**Authentication → URL Configuration:**
 
-- **Site URL:** `https://your-app.vercel.app`
-- **Redirect URLs:**
-  - `https://your-app.vercel.app/**`
-  - `https://*.vercel.app/**` (preview deploylar için)
-
----
-
-## 4. Mimari
-
-```
-vercel.json
-├── frontend/dist     → Statik dosyalar (Vite build)
-└── api/index.ts      → Express serverless handler
-    └── backend/dist/app.js
-```
-
-**Build sırası** (`npm run vercel-build`):
-1. `backend` → TypeScript derleme
-2. `frontend` → Vite production build
+- Site URL: `https://your-app.vercel.app`
+- Redirect URLs: `https://your-app.vercel.app/**`
+- Preview: `https://*.vercel.app/**`
 
 ---
 
-## 5. WhatsApp (Baileys QR)
+## 4. WhatsApp (Meta Cloud API)
 
-Vercel serverless Baileys çalıştıramaz. **WhatsApp Worker** servisi gerekir:
+Vercel serverless ortamında **QR (Baileys) çalışmaz**. Production'da **Meta Cloud API** kullanılır.
 
-1. Worker'ı Railway'de deploy edin → [WHATSAPP-WORKER.md](WHATSAPP-WORKER.md)
-2. Vercel'e ekleyin:
-   - `WHATSAPP_WORKER_URL` = Railway worker URL
-   - `WHATSAPP_WORKER_SECRET` = ortak gizli anahtar
+### Panelden bağlanma
 
-Panel → WhatsApp → QR ile bağlanın.
+1. Panel → **WhatsApp** sayfası
+2. Phone Number ID + Access Token girin
+3. **Cloud API ile Bağlan**
 
----
+### Meta Developer webhook
 
-## 6. Yerel Geliştirme
+1. [developers.facebook.com](https://developers.facebook.com) → Uygulamanız
+2. WhatsApp → Configuration → Webhook
+3. **Callback URL:** `https://your-app.vercel.app/webhook/whatsapp`
+4. **Verify Token:** Vercel'deki `WHATSAPP_VERIFY_TOKEN` değeri
+5. **messages** alanına abone olun
 
-```bash
-npm run install:all
-cp backend/.env.example backend/.env
-cp frontend/.env.example frontend/.env
-npm run dev
-```
+### Yerel geliştirme
 
-Vercel ortamını simüle etmek için:
-```bash
-npx vercel dev
-```
+`npm run dev` ile QR (Baileys) kullanılabilir.
 
 ---
 
-## 7. Özel Domain
+## 5. Dosya Yapısı
 
-1. Vercel → Project → **Domains** → domain ekleyin
-2. Supabase redirect URL'lerini güncelleyin
-3. `CORS_ORIGIN` = `https://yourdomain.com` (gerekirse)
+| Dosya | Görev |
+|-------|-------|
+| `vercel.json` | Build, routing, serverless API |
+| `api/index.ts` | Express serverless handler |
+| `frontend/dist` | Statik panel |
+| `.env.vercel` | Hazır env değerleri (git dışı) |
 
 ---
 
-## 8. Sorun Giderme
+## 6. Sorun Giderme
 
 | Sorun | Çözüm |
 |-------|-------|
-| API 404 | `vercel.json` rewrites kontrol edin, yeniden deploy |
-| `Cannot find module` | `installCommand` çalıştığından emin olun |
-| Giriş çalışmıyor | Supabase redirect URL'leri |
-| Build hatası | Vercel loglarında `vercel-build` çıktısına bakın |
-| WhatsApp QR | Vercel'de desteklenmez — ayrı sunucu gerekir |
+| API 404 | Redeploy, `vercel.json` rewrites kontrol |
+| Giriş çalışmıyor | Supabase redirect URL |
+| CORS | Aynı domain — ek ayar gerekmez |
+| QR çalışmıyor (Vercel) | Normal — Cloud API kullanın |
+| Webhook doğrulanmıyor | `WHATSAPP_VERIFY_TOKEN` Meta ile aynı mı? |
+| Build hatası | `npm run vercel-build` yerelde test edin |
 
 ---
 
-## 9. Render'dan Fark
+## 7. Komutlar
 
-| | Vercel | Render |
-|---|--------|--------|
-| Frontend + API | Tek proje, aynı URL | İki ayrı servis |
-| API tipi | Serverless | Sürekli çalışan Node |
-| WhatsApp Baileys | ❌ | ✅ (disk ile) |
-| Cold start | Var (~1-3 sn) | Free'de uyku |
+```bash
+npm run install:all
+npm run vercel-build    # Yerel build testi
+vercel --prod           # Production deploy
+vercel env ls           # Env listesi
+```

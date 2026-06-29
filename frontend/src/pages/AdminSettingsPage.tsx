@@ -41,10 +41,10 @@ export function AdminSettingsPage() {
     },
     {
       icon: Smartphone,
-      title: 'WhatsApp Worker',
-      value: settings?.whatsapp_worker ? 'Bağlı' : 'Yapılandırılmamış',
-      badge: settings?.whatsapp_worker ? 'success' as const : 'warning' as const,
-      sub: settings?.whatsapp_worker ? 'Railway worker aktif' : 'WHATSAPP_WORKER_URL gerekli',
+      title: 'WhatsApp',
+      value: settings?.whatsapp_mode === 'cloud_api' ? 'Cloud API (Vercel)' : 'QR / Baileys (Yerel)',
+      badge: 'success' as const,
+      sub: settings?.whatsapp_mode === 'cloud_api' ? 'Meta webhook' : 'Geliştirme modu',
     },
   ];
 

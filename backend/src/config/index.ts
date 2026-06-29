@@ -62,8 +62,6 @@ export const config = {
     baseUrl: `https://graph.facebook.com/${process.env.WHATSAPP_API_VERSION || 'v21.0'}`,
     embeddedSignupUrl: process.env.WHATSAPP_EMBEDDED_SIGNUP_URL || '',
     metaAppId: process.env.META_APP_ID || '',
-    workerUrl: process.env.WHATSAPP_WORKER_URL || '',
-    workerSecret: process.env.WHATSAPP_WORKER_SECRET || '',
   },
 
   cors: {

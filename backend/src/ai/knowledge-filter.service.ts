@@ -33,7 +33,7 @@ export function filterRelevantKnowledge(
   customerMessage: string
 ): string {
   if (!items.length) {
-    return 'Bilgi bankası boş. Genel sorulara nazikçe cevap ver, detay için TRANSFER_TO_HUMAN yaz.';
+    return 'Bilgi bankası boş. Şirket bilgilerine dayanarak genel ve yardımcı cevaplar ver; müşteri temsilcisine yönlendirme yapma.';
   }
 
   const keywords = extractKeywords(customerMessage);

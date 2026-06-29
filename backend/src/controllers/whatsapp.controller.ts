@@ -13,7 +13,6 @@ import {
   cancelQrSession,
   getBaileysConnectionStatus,
   disconnectBaileys,
-  isWhatsAppWorkerEnabled,
 } from '../whatsapp/qr.service';
 import { logActivity } from '../services/log.service';
 
@@ -145,16 +144,19 @@ export async function getWhatsAppStatus(req: AuthRequest, res: Response): Promis
       phone_number: data?.phone_number,
       is_configured: isBaileys || isCloudApi,
       connection_type: isBaileys ? 'qr' : isCloudApi ? 'api' : null,
+      supports_qr: !config.isVercel,
+      webhook_url: config.isVercel && process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}/webhook/whatsapp`
+        : null,
     },
   });
 }
 
 export async function startQr(req: AuthRequest, res: Response): Promise<void> {
-  if (config.isVercel && !isWhatsAppWorkerEnabled()) {
-    res.status(503).json({
+  if (config.isVercel) {
+    res.status(400).json({
       success: false,
-      error:
-        'WhatsApp için Worker servisi gerekli. WHATSAPP_WORKER_URL ayarlayın — docs/WHATSAPP-WORKER.md',
+      error: 'Vercel ortamında Meta WhatsApp Cloud API kullanın. Aşağıdaki API ayarlarını doldurun.',
     });
     return;
   }
@@ -184,7 +186,9 @@ export async function cancelQr(req: AuthRequest, res: Response): Promise<void> {
 }
 
 export async function disconnectWhatsApp(req: AuthRequest, res: Response): Promise<void> {
-  await disconnectBaileys(req.companyId!);
+  if (!config.isVercel) {
+    await disconnectBaileys(req.companyId!);
+  }
 
   if (!config.demoMode) {
     await adminClient

@@ -17,5 +17,11 @@
     { "source": "/webhook/(.*)", "destination": "/api" },
     { "source": "/health", "destination": "/api" },
     { "source": "/((?!api/|webhook|health|assets/|favicon\\.svg|icons\\.svg).*)", "destination": "/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [{ "key": "Cache-Control", "value": "no-store" }]
+    }
   ]
 }

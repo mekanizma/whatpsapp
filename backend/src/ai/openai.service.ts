@@ -11,24 +11,15 @@ import OpenAI from 'openai';
 import { config } from '../config';
 import { adminClient } from '../database/supabase';
 import { Company, KnowledgeItem } from '../types';
-import { preAIGate, TRANSFER_REPLY_MESSAGE } from './ai-gate.service';
+import { preAIGate } from './ai-gate.service';
 import { getCachedResponse, setCachedResponse } from './ai-cache.service';
 import { filterRelevantKnowledge } from './knowledge-filter.service';
 import {
   checkAIQuota,
-  hasActiveTransferTicket,
   logAIUsage,
 } from './ai-quota.service';
 
 const openai = new OpenAI({ apiKey: config.openai.apiKey });
-
-const TRANSFER_KEYWORDS = [
-  'transfer_to_human',
-  'insan desteği',
-  'müşteri temsilcisi',
-  'yetkiliye aktar',
-  'canlı destek',
-];
 
 export interface AIResponse {
   message: string;
@@ -86,24 +77,14 @@ export async function generateAIResponse(
     };
   }
 
-  // 2) Aktif ticket varsa AI devre dışı — ek mesaj gönderme
-  if (await hasActiveTransferTicket(companyId, customerPhone)) {
-    await logAIUsage({
-      companyId, customerPhone,
-      promptTokens: 0, completionTokens: 0, totalTokens: 0,
-      cached: false, skipped: true, skipReason: 'active_ticket', model: config.openai.model,
-    });
-    return { message: '', shouldTransfer: false, skippedAI: true, skipReason: 'active_ticket', tokensUsed: 0 };
-  }
-
-  // 3) Kota kontrolü
+  // 2) Kota kontrolü
   const quota = await checkAIQuota(companyId);
   if (!quota.allowed) {
     const msg = 'Mesaj limitinize ulaşıldı. Lütfen yöneticinizle iletişime geçin.';
     return { message: msg, shouldTransfer: true, skippedAI: true, skipReason: 'quota_exceeded', tokensUsed: 0 };
   }
 
-  // 4) Önbellek kontrolü
+  // 3) Önbellek kontrolü
   const cached = getCachedResponse(companyId, trimmed);
   if (cached) {
     await logAIUsage({
@@ -111,10 +92,10 @@ export async function generateAIResponse(
       promptTokens: 0, completionTokens: 0, totalTokens: 0,
       cached: true, skipped: false, model: config.openai.model,
     });
-    return { ...cached, skippedAI: false, tokensUsed: 0 };
+    return { ...cached, shouldTransfer: false, skippedAI: false, tokensUsed: 0 };
   }
 
-  // 5) OpenAI çağrısı — optimize edilmiş context
+  // 4) OpenAI çağrısı — optimize edilmiş context
   const [company, knowledgeResult, historyResult] = await Promise.all([
     getCompany(companyId),
     adminClient
@@ -168,30 +149,44 @@ export async function generateAIResponse(
     cached: false, skipped: false, model: config.openai.model,
   });
 
-  const responseText = completion.choices[0]?.message?.content?.trim() || '';
-  const shouldTransfer = TRANSFER_KEYWORDS.some((kw) =>
-    responseText.toLowerCase().includes(kw.toLowerCase())
-  );
+  const rawResponse = completion.choices[0]?.message?.content?.trim() || '';
+  const finalMessage = sanitizeAIResponse(rawResponse, company);
 
-  const finalMessage = shouldTransfer ? TRANSFER_REPLY_MESSAGE : responseText;
-
-  if (!shouldTransfer && finalMessage) {
+  if (finalMessage) {
     setCachedResponse(companyId, trimmed, finalMessage, false);
   }
 
   return {
     message: finalMessage,
-    shouldTransfer,
+    shouldTransfer: false,
     skippedAI: false,
     tokensUsed: totalTokens,
   };
 }
 
+function sanitizeAIResponse(response: string, company: Company): string {
+  const cleaned = response
+    .replace(/transfer_to_human/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (cleaned) return cleaned;
+
+  const contact = [company.phone, company.email].filter(Boolean).join(' / ');
+  return contact
+    ? `Bu konuda elimde kesin bilgi yok. Daha detaylı bilgi için bize ulaşabilirsiniz: ${contact}`
+    : 'Bu konuda elimde kesin bilgi yok. Sorunuzu biraz daha detaylandırırsanız yardımcı olmaya çalışırım.';
+}
+
 /** Kısa sistem promptu — token tasarrufu */
 function buildCompactSystemPrompt(company: Company, knowledge: string): string {
-  return `Sen ${company.company_name} müşteri temsilcisisin. Türkçe, kısa ve nazik cevap ver.
-Kurallar: Sadece verilen bilgileri kullan. Uydurma. Emin değilsen "TRANSFER_TO_HUMAN" yaz.
-Tel:${company.phone || '-'} | ${company.category}
-Bilgi:
+  return `Sen ${company.company_name} dijital asistanısın. Türkçe, kısa ve nazik cevap ver.
+Kurallar:
+- Verilen bilgilere dayanarak cevap ver; bilgi bankasında olmayan konularda da mantıklı ve yardımcı ol.
+- Kesin bilgin yoksa bunu açıkça söyle, mümkünse alternatif öner veya iletişim bilgisi ver.
+- Müşteri temsilcisine veya canlı desteğe yönlendirme yapma; her zaman kendin cevap ver.
+- Fiyat, randevu gibi kesin bilgi gerektiren konularda uydurma; "Bu bilgi için ${company.phone || 'bizimle iletişime geçmenizi'} öneririm" de.
+Tel: ${company.phone || '-'} | E-posta: ${company.email || '-'} | ${company.category}
+Bilgi bankası:
 ${knowledge}`;
 }

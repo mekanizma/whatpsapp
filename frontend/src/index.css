@@ -30,6 +30,11 @@
   h1, h2, h3 {
     @apply tracking-tight text-slate-900;
   }
+  .auth-page h1,
+  .auth-page h2,
+  .auth-page h3 {
+    color: inherit;
+  }
 }
 
 @layer utilities {
@@ -44,14 +49,20 @@
     @apply rounded-2xl border border-slate-200/80 bg-white shadow-[var(--shadow-card)];
   }
   .auth-gradient {
-    background: linear-gradient(135deg, #0f172a 0%, #134e4a 50%, #0f766e 100%);
+    background-color: #0f172a;
+    background-image:
+      radial-gradient(circle at 20% 80%, rgb(45 212 191 / 0.15) 0%, transparent 50%),
+      radial-gradient(circle at 80% 20%, rgb(37 211 102 / 0.1) 0%, transparent 45%),
+      linear-gradient(135deg, #0f172a 0%, #134e4a 50%, #0f766e 100%);
   }
   .auth-pattern {
-    background-image: radial-gradient(circle at 20% 80%, rgb(45 212 191 / 0.15) 0%, transparent 50%),
-      radial-gradient(circle at 80% 20%, rgb(37 211 102 / 0.1) 0%, transparent 45%);
+    /* auth-gradient ile birleştirildi — geriye dönük uyumluluk */
   }
   .auth-admin-gradient {
-    background: linear-gradient(145deg, #020617 0%, #0f172a 40%, #1c1917 100%);
+    background-color: #020617;
+    background-image:
+      radial-gradient(circle at 25% 75%, rgb(245 158 11 / 0.12) 0%, transparent 50%),
+      linear-gradient(145deg, #020617 0%, #0f172a 40%, #1c1917 100%);
   }
   .auth-grid-pattern {
     background-image: linear-gradient(rgb(255 255 255 / 0.03) 1px, transparent 1px),
@@ -116,6 +127,14 @@
     animation: bar-grow 1s ease-out both;
     transform-origin: bottom;
   }
+  .animate-chat-in {
+    animation: chat-in 0.35s ease-out both;
+  }
+
+  @keyframes chat-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
 
   @keyframes marquee {
     from { transform: translateX(0); }
@@ -148,6 +167,7 @@
     .animate-marquee-reverse,
     .animate-float,
     .animate-float-slow,
+    .animate-chat-in,
     .auth-orb {
       animation: none;
     }

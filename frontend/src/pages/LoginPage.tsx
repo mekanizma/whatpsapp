@@ -7,7 +7,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { MessageSquare, Shield, ArrowRight } from 'lucide-react';
 import { useAuthStore, getRedirectPath } from '@/store/authStore';
 import { isDemoMode } from '@/lib/env';
-import { AuthShowcase, AuthMobileBanner } from '@/components/auth/AuthShowcase';
+import { AuthPageLayout } from '@/components/auth/AuthPageLayout';
 import { AuthFormShell } from '@/components/auth/AuthFormShell';
 import { Button, Input, Label, Spinner } from '@/components/ui';
 
@@ -35,26 +35,20 @@ export function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col lg:flex-row">
-      <AuthMobileBanner variant="customer" />
-
-      <div className="hidden min-h-screen w-1/2 lg:block">
-        <AuthShowcase variant="customer" />
-      </div>
-
+    <AuthPageLayout variant="customer">
       <AuthFormShell
-        icon={<MessageSquare className="h-7 w-7 text-primary" />}
+        icon={<MessageSquare className="h-7 w-7 text-teal-400" />}
         title="Müşteri Paneli"
         subtitle="Şirket hesabınızla giriş yapın"
         onSubmit={handleSubmit}
         accent="teal"
         footer={
-          <div className="space-y-3 text-center text-sm text-slate-500">
+          <div className="space-y-3 text-center text-sm">
             <p>
               Platform yöneticisi?{' '}
               <Link
                 to="/admin/login"
-                className="inline-flex items-center gap-1 font-semibold text-slate-800 transition hover:text-primary"
+                className="inline-flex items-center gap-1 font-semibold text-teal-300 transition hover:text-teal-200"
               >
                 <Shield className="h-3.5 w-3.5" />
                 Admin Girişi
@@ -63,7 +57,7 @@ export function LoginPage() {
             </p>
             <p>
               Hesabınız yok mu?{' '}
-              <Link to="/register" className="font-semibold text-primary hover:underline">
+              <Link to="/register" className="font-semibold text-teal-300 hover:text-teal-200 hover:underline">
                 Kayıt Ol
               </Link>
             </p>
@@ -125,6 +119,6 @@ export function LoginPage() {
           )}
         </Button>
       </AuthFormShell>
-    </div>
+    </AuthPageLayout>
   );
 }

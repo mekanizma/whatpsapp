@@ -96,7 +96,7 @@ export interface PlatformSettings {
   ai_cache_enabled: boolean;
   node_env: string;
   supabase_connected: boolean;
-  whatsapp_worker: boolean;
+  whatsapp_mode: 'cloud_api' | 'baileys';
 }
 
 export interface DashboardStats {
