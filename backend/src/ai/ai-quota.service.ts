@@ -1,0 +1,100 @@
+/**
+ * AI kota kontrolü — limit aşıldığında API çağrısı yapılmaz
+ */
+
+import { adminClient } from '../database/supabase';
+import { config } from '../config';
+import { normalizePhoneNumber } from '../whatsapp/message.handler';
+
+export interface QuotaStatus {
+  allowed: boolean;
+  messagesUsed: number;
+  messagesLimit: number;
+  aiCallsUsed: number;
+  aiCallsLimit: number;
+}
+
+export async function checkAIQuota(companyId: string): Promise<QuotaStatus> {
+  if (config.demoMode) {
+    return { allowed: true, messagesUsed: 0, messagesLimit: 9999, aiCallsUsed: 0, aiCallsLimit: 9999 };
+  }
+
+  const { data: sub } = await adminClient
+    .from('subscriptions')
+    .select('messages_used, messages_limit')
+    .eq('company_id', companyId)
+    .single();
+
+  const messagesUsed = sub?.messages_used || 0;
+  const messagesLimit = sub?.messages_limit || 1000;
+
+  // AI çağrıları mesaj limitinin %80'i ile sınırlı (güvenlik marjı)
+  const aiCallsLimit = Math.floor(messagesLimit * 0.8);
+
+  const { count: aiCallsUsed } = await adminClient
+    .from('ai_usage_logs')
+    .select('id', { count: 'exact', head: true })
+    .eq('company_id', companyId)
+    .eq('skipped', false)
+    .eq('cached', false)
+    .gte('created_at', new Date(new Date().setDate(1)).toISOString());
+
+  const aiUsed = aiCallsUsed || 0;
+  const allowed = messagesUsed < messagesLimit && aiUsed < aiCallsLimit;
+
+  return {
+    allowed,
+    messagesUsed,
+    messagesLimit,
+    aiCallsUsed: aiUsed,
+    aiCallsLimit,
+  };
+}
+
+export async function hasActiveTransferTicket(
+  companyId: string,
+  customerPhone: string
+): Promise<boolean> {
+  if (config.demoMode) return false;
+
+  const phone = normalizePhoneNumber(customerPhone) || customerPhone.replace(/\D/g, '');
+
+  const { count } = await adminClient
+    .from('tickets')
+    .select('id', { count: 'exact', head: true })
+    .eq('company_id', companyId)
+    .eq('customer_phone', phone)
+    .in('status', ['open', 'in_progress']);
+
+  return (count || 0) > 0;
+}
+
+export async function logAIUsage(params: {
+  companyId: string;
+  customerPhone: string;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  cached: boolean;
+  skipped: boolean;
+  skipReason?: string;
+  model: string;
+}): Promise<void> {
+  if (config.demoMode) return;
+
+  try {
+    await adminClient.from('ai_usage_logs').insert({
+      company_id: params.companyId,
+      customer_phone: params.customerPhone,
+      prompt_tokens: params.promptTokens,
+      completion_tokens: params.completionTokens,
+      total_tokens: params.totalTokens,
+      cached: params.cached,
+      skipped: params.skipped,
+      skip_reason: params.skipReason || null,
+      model: params.model,
+    });
+  } catch {
+    // Tablo yoksa sessizce geç (migration öncesi uyumluluk)
+  }
+}

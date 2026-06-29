@@ -1,0 +1,17 @@
+node_modules/
+dist/
+build/
+sessions/
+backend/sessions/
+supabase/.temp/
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.local
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.cursor/

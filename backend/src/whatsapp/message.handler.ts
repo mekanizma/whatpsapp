@@ -1,0 +1,264 @@
+/**
+ * Gelen WhatsApp mesaj işleyici — AI kredi optimize
+ */
+
+import { adminClient } from '../database/supabase';
+import { config } from '../config';
+import { generateAIResponse } from '../ai/openai.service';
+import { logActivity } from '../services/log.service';
+
+const DEBOUNCE_MS = 3000;
+const TRANSFER_REPLY_COOLDOWN_MS = 60_000;
+
+const recentMessages = new Map<string, { text: string; time: number }>();
+const processedWaIds = new Set<string>();
+const recentTransferReplies = new Map<string, number>();
+const customerLocks = new Map<string, Promise<void>>();
+
+export function normalizePhoneNumber(phone: string): string | null {
+  let digits = phone.replace(/\D/g, '');
+  if (!digits) return null;
+
+  if (digits.startsWith('0')) {
+    digits = `90${digits.slice(1)}`;
+  }
+  if (digits.length === 10 && digits.startsWith('5')) {
+    digits = `90${digits}`;
+  }
+
+  if (digits.length < 10 || digits.length > 15) return null;
+  return digits;
+}
+
+function resolveCustomerPhone(phone: string): string {
+  return normalizePhoneNumber(phone) || phone.replace(/\D/g, '');
+}
+
+async function withCustomerLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const prev = customerLocks.get(key) || Promise.resolve();
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const chain = prev.then(() => gate);
+  customerLocks.set(key, chain);
+
+  await prev;
+  try {
+    return await fn();
+  } finally {
+    release();
+    if (customerLocks.get(key) === chain) {
+      customerLocks.delete(key);
+    }
+  }
+}
+
+function markProcessedWaId(companyId: string, messageId: string): void {
+  processedWaIds.add(`${companyId}:${messageId}`);
+  if (processedWaIds.size > 2000) {
+    const oldest = processedWaIds.values().next().value;
+    if (oldest) processedWaIds.delete(oldest);
+  }
+}
+
+async function isMessageAlreadyStored(companyId: string, messageId: string): Promise<boolean> {
+  const memKey = `${companyId}:${messageId}`;
+  if (processedWaIds.has(memKey)) return true;
+
+  const { count } = await adminClient
+    .from('messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('company_id', companyId)
+    .eq('whatsapp_message_id', messageId);
+
+  return (count || 0) > 0;
+}
+
+async function ensureOpenTransferTicket(
+  companyId: string,
+  customerPhone: string,
+  customerName: string | null,
+  subject: string
+): Promise<void> {
+  const { error } = await adminClient.from('tickets').insert({
+    company_id: companyId,
+    customer_phone: customerPhone,
+    customer_name: customerName,
+    subject,
+    priority: 'medium',
+    status: 'open',
+  });
+
+  if (error && error.code !== '23505') {
+    console.error('Ticket oluşturma hatası:', error.message);
+  }
+}
+
+function shouldSkipTransferReply(companyId: string, phone: string): boolean {
+  const last = recentTransferReplies.get(`${companyId}:${phone}`);
+  return !!(last && Date.now() - last < TRANSFER_REPLY_COOLDOWN_MS);
+}
+
+function markTransferReply(companyId: string, phone: string): void {
+  recentTransferReplies.set(`${companyId}:${phone}`, Date.now());
+}
+
+export function clearTransferState(companyId: string, customerPhone: string): void {
+  const phone = resolveCustomerPhone(customerPhone);
+  recentTransferReplies.delete(`${companyId}:${phone}`);
+  recentMessages.delete(`${companyId}:${phone}`);
+}
+
+export async function processInboundMessage(
+  companyId: string,
+  customerPhone: string,
+  customerName: string | null,
+  messageText: string,
+  whatsappMessageId?: string
+): Promise<string> {
+  const trimmed = messageText.trim();
+  const phone = resolveCustomerPhone(customerPhone);
+
+  if (config.demoMode) {
+    return `Merhaba! Mesajınızı aldık. Demo Klinik olarak yardımcı olmaktan mutluluk duyarız.`;
+  }
+
+  return withCustomerLock(`${companyId}:${phone}`, async () => {
+    if (whatsappMessageId && (await isMessageAlreadyStored(companyId, whatsappMessageId))) {
+      return '';
+    }
+
+    const debounceKey = `${companyId}:${phone}`;
+    const recent = recentMessages.get(debounceKey);
+    const now = Date.now();
+    if (recent && now - recent.time < DEBOUNCE_MS && recent.text === trimmed) {
+      return '';
+    }
+    recentMessages.set(debounceKey, { text: trimmed, time: now });
+
+    const { error: insertError } = await adminClient.from('messages').insert({
+      company_id: companyId,
+      customer_phone: phone,
+      customer_name: customerName,
+      message: trimmed,
+      sender_type: 'customer',
+      status: 'open',
+      whatsapp_message_id: whatsappMessageId || null,
+    });
+
+    if (insertError?.code === '23505') {
+      if (whatsappMessageId) markProcessedWaId(companyId, whatsappMessageId);
+      return '';
+    }
+
+    if (insertError) {
+      console.error('[WhatsApp] Mesaj kayıt hatası:', insertError.message);
+      return '';
+    }
+
+    if (whatsappMessageId) markProcessedWaId(companyId, whatsappMessageId);
+
+    let aiResponse;
+    try {
+      aiResponse = await generateAIResponse(companyId, trimmed, phone);
+    } catch (err) {
+      console.error('[WhatsApp] AI hatası:', err);
+      return 'Üzgünüz, şu an yanıt veremiyoruz. Lütfen kısa süre sonra tekrar deneyin.';
+    }
+
+    await incrementMessageUsage(companyId);
+
+    let replyMessage = aiResponse.message;
+
+    if (aiResponse.shouldTransfer) {
+      await ensureOpenTransferTicket(
+        companyId,
+        phone,
+        customerName,
+        `Canlı destek: ${trimmed.substring(0, 100)}`
+      );
+
+      if (!replyMessage || shouldSkipTransferReply(companyId, phone)) {
+        replyMessage = '';
+      } else {
+        markTransferReply(companyId, phone);
+      }
+    }
+
+    if (!replyMessage) {
+      if (aiResponse.skipReason === 'active_ticket') {
+        console.log(`[WhatsApp] Aktif ticket — AI yanıtı bekletildi: ${phone}`);
+      }
+      return '';
+    }
+
+    await adminClient.from('messages').insert({
+      company_id: companyId,
+      customer_phone: phone,
+      customer_name: customerName,
+      message: replyMessage,
+      sender_type: 'ai',
+      status: aiResponse.shouldTransfer ? 'transferred' : 'open',
+    });
+
+    await logActivity({
+      companyId,
+      action: aiResponse.shouldTransfer ? 'message_transferred' : 'ai_response_sent',
+      entityType: 'message',
+      metadata: {
+        customer_phone: phone,
+        skipped_ai: aiResponse.skippedAI,
+        skip_reason: aiResponse.skipReason,
+        tokens_used: aiResponse.tokensUsed,
+      },
+    });
+
+    console.log(`[WhatsApp] Yanıt gönderildi → ${phone} (${aiResponse.skipReason || 'ai'})`);
+    return replyMessage;
+  });
+}
+
+async function incrementMessageUsage(companyId: string): Promise<void> {
+  const { data: sub } = await adminClient
+    .from('subscriptions')
+    .select('id, messages_used')
+    .eq('company_id', companyId)
+    .single();
+
+  if (sub) {
+    await adminClient
+      .from('subscriptions')
+      .update({ messages_used: sub.messages_used + 1 })
+      .eq('id', sub.id);
+  }
+}
+
+export function formatPhoneToJid(phone: string): string {
+  const normalized = normalizePhoneNumber(phone);
+  if (!normalized) throw new Error('Geçersiz telefon numarası');
+  return `${normalized}@s.whatsapp.net`;
+}
+
+export function jidToPhone(jid: string): string {
+  return jid.replace('@s.whatsapp.net', '').replace('@c.us', '').replace(/:\d+$/, '').replace('@lid', '');
+}
+
+/** Baileys mesajından müşteri telefonu çıkar (LID desteği) */
+export function extractPhoneFromMessage(key: {
+  remoteJid?: string | null;
+  senderPn?: string | null;
+  participantPn?: string | null;
+}): string {
+  const pn = key.senderPn || key.participantPn;
+  if (pn) {
+    const fromPn = normalizePhoneNumber(jidToPhone(pn));
+    if (fromPn) return fromPn;
+  }
+  if (key.remoteJid && !key.remoteJid.endsWith('@g.us')) {
+    const fromJid = normalizePhoneNumber(jidToPhone(key.remoteJid));
+    if (fromJid) return fromJid;
+    return jidToPhone(key.remoteJid);
+  }
+  return '';
+}
