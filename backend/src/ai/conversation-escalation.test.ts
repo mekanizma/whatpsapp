@@ -29,7 +29,7 @@ describe('conversation-escalation', () => {
   });
 
   it('müşteri açıkça temsilci isterse aktarım yapılır', () => {
-    const g = preAIGate('Temsilciye aktarır mısınız', offerHistory);
+    const g = preAIGate('Temsilciye aktarır mısınız', []);
     assert.equal(g.shouldTransfer, true);
     assert.equal(g.reason, 'human_transfer_request');
   });

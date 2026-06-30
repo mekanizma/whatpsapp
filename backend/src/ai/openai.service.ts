@@ -12,6 +12,8 @@ import { detectConversationLanguage } from './language.service';
 import { logAIUsage } from './ai-quota.service';
 import { getAllActivePromptContentsForAI } from '../services/prompt.service';
 import { getAppointmentContextForAI } from '../services/appointment.service';
+import { preAIGate } from './ai-gate.service';
+import { stripTransferMarker } from './transfer.service';
 
 export interface AIResponse {
   message: string;
@@ -78,6 +80,29 @@ export async function generateAIResponse(
   const conversationLang = detectConversationLanguage(trimmed, history);
   const knowledge = formatKnowledge((knowledgeResult.data || []) as KnowledgeItem[]);
 
+  const gate = preAIGate(trimmed, history, conversationLang);
+  if (gate.skipAI && gate.response) {
+    await logAIUsage({
+      companyId,
+      customerPhone,
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      cached: false,
+      skipped: true,
+      skipReason: gate.reason,
+      model: config.openai.model,
+    });
+
+    return {
+      message: gate.response,
+      shouldTransfer: gate.shouldTransfer ?? false,
+      skippedAI: true,
+      skipReason: gate.reason,
+      tokensUsed: 0,
+    };
+  }
+
   const systemPrompt = await buildAdminPanelPrompt(company, {
     knowledge,
     appointmentContext,
@@ -125,10 +150,14 @@ export async function generateAIResponse(
     model: config.openai.model,
   });
 
+  const raw = completion.choices[0]?.message?.content?.trim() || '';
+  const { message, shouldTransfer } = stripTransferMarker(raw);
+
   return {
-    message: completion.choices[0]?.message?.content?.trim() || '',
-    shouldTransfer: false,
+    message,
+    shouldTransfer,
     skippedAI: false,
+    skipReason: shouldTransfer ? 'ai_transfer' : undefined,
     tokensUsed: totalTokens,
   };
 }

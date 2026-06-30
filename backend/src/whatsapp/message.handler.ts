@@ -5,6 +5,8 @@
 import { adminClient } from '../database/supabase';
 import { config } from '../config';
 import { generateAIResponse } from '../ai/openai.service';
+import { buildTransferTicketSubject } from '../ai/transfer.service';
+import { hasActiveTransferTicket } from '../ai/ai-quota.service';
 import { logActivity } from '../services/log.service';
 
 const DEBOUNCE_MS = 3000;
@@ -186,8 +188,46 @@ export async function processInboundMessage(
 
     await incrementMessageUsage(companyId);
 
-    const replyMessage = aiResponse.message;
+    let replyMessage = aiResponse.message;
     if (!replyMessage) return '';
+
+    const messageStatus = aiResponse.shouldTransfer ? 'transferred' : 'open';
+
+    if (aiResponse.shouldTransfer) {
+      const hasTicket = await hasActiveTransferTicket(companyId, phone);
+      if (hasTicket && shouldSkipTransferReply(companyId, phone)) {
+        return '';
+      }
+
+      await ensureOpenTransferTicket(
+        companyId,
+        phone,
+        customerName,
+        buildTransferTicketSubject(trimmed, aiResponse.skipReason)
+      );
+
+      await adminClient
+        .from('messages')
+        .update({ status: 'transferred' })
+        .eq('company_id', companyId)
+        .eq('customer_phone', phone)
+        .eq('status', 'open');
+
+      markTransferReply(companyId, phone);
+
+      await logActivity({
+        companyId,
+        action: 'conversation_transferred',
+        entityType: 'ticket',
+        metadata: {
+          customer_phone: phone,
+          skip_reason: aiResponse.skipReason,
+          skipped_ai: aiResponse.skippedAI,
+        },
+      });
+
+      console.log(`[WhatsApp] Temsilciye aktarıldı → ${phone}`);
+    }
 
     await adminClient.from('messages').insert({
       company_id: companyId,
@@ -195,7 +235,7 @@ export async function processInboundMessage(
       customer_name: customerName,
       message: replyMessage,
       sender_type: 'ai',
-      status: 'open',
+      status: messageStatus,
     });
 
     await logActivity({
@@ -207,6 +247,7 @@ export async function processInboundMessage(
         skipped_ai: aiResponse.skippedAI,
         skip_reason: aiResponse.skipReason,
         tokens_used: aiResponse.tokensUsed,
+        transferred: aiResponse.shouldTransfer,
       },
     });
 

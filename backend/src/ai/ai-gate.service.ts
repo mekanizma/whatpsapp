@@ -37,18 +37,35 @@ export function normalizeForGate(text: string): string {
 
 const HUMAN_TRANSFER_PATTERNS = [
   /canli destek/,
+  /canli (biri|kisi|temsilci)/,
   /canliya (bagla|aktar|yonlendir)/,
   /musteri hizmetleri/,
   /musteri temsilci(sine|si|ye)?/,
-  /temsilci(ye|yi)? (bagla|aktar|istiyorum)/,
+  /temsilci(ye|yi|sine|sini)?(\s|$)/,
+  /temsilci(ye|yi)?\s*(bagla|aktar|istiyorum|ulas)/,
+  /yetkili(ye|yi)?(\s|$)/,
   /yetkili(ye|yi)? (bagla|istiyorum|gorus)/,
   /operator (istiyorum|ile|le|a|e)/,
-  /insan(la| ile) (konus|gorus)/,
+  /insan(la| ile)?\s*(konus|gorus)/,
+  /insan\s+istiyorum/,
   /gercek (insan|kisi|biri)/,
   /biriyle gorusmek istiyorum/,
+  /gorusmek istiyorum.*(insan|temsilci|yetkili)/,
   /temsilci istiyorum/,
   /baglar misiniz/,
   /baglayin/,
+  /bagla(r)?\s*(misiniz|mısınız|lutfen|lütfen)?/,
+  /aktar(ir|in|abilir)?\s*(misiniz|mısınız|lutfen)?/,
+  /live (agent|support|representative|person)/,
+  /human (agent|support|representative)/,
+  /real (person|human|agent)/,
+  /speak (to|with) (a |an )?(real |live )?(person|agent|human|representative)/,
+  /talk to (someone|a person|an agent|a human)/,
+  /connect me (to|with)/,
+  /transfer me (to|to a)/,
+  /customer (service|support)/,
+  /representative (please|now)/,
+  /i want (a |an )?(human|agent|representative)/,
 ];
 
 const PAYMENT_PATTERNS =
@@ -66,11 +83,28 @@ const PROMPT_INJECTION_PATTERNS =
 const TRANSFER_CONFIRM_PATTERNS = [
   /^evet\b/,
   /^tamam\b/,
+  /^olur\b/,
+  /^tabii\b/,
+  /^peki\b/,
+  /^isterim\b/,
+  /^lutfen\b/,
+  /^yes\b/,
+  /^ok\b/,
+  /^okay\b/,
+  /^sure\b/,
+  /^please\b/,
   /temsilci(ye|yi)?\s*(aktar|bagla)/,
-  /aktar(in|ın|abilirsiniz)?$/,
-  /bagla(r|yın|yin)\b/,
+  /aktar(in|ın|abilirsiniz|ir misiniz)?$/,
+  /bagla(r|yın|yin|misiniz)?\b/,
   /canliya\s*(aktar|bagla)/,
+  /baglamani\s*isterim/,
+  /transfer (me|please)/,
+  /connect (me|please)/,
+  /go ahead/,
 ];
+
+const AI_TRANSFER_OFFER_PATTERNS =
+  /aktarabilirim|temsilci|canli destek|canli temsilci|bagliyorum|baglamam[iı] ister|transfer you|representative|live support|live agent|connect you|weiterleiten|transférer|transfere|knowledge base.*(connect|transfer|temsilci)/i;
 
 function confirmsTransferAfterOffer(
   normalized: string,
@@ -80,9 +114,7 @@ function confirmsTransferAfterOffer(
   const lastAi = [...history].reverse().find((m) => m.sender_type === 'ai');
   if (!lastAi) return false;
   const aiNorm = normalizeForGate(lastAi.message);
-  return /aktarabilirim|temsilci|canli destek|bagliyorum|transfer you|representative|live support|weiterleiten|transférer|transfere/i.test(
-    aiNorm
-  );
+  return AI_TRANSFER_OFFER_PATTERNS.test(aiNorm);
 }
 
 function wantsHumanTransfer(normalized: string): boolean {
@@ -147,21 +179,21 @@ export function preAIGate(
     };
   }
 
-  if (wantsHumanTransfer(normalized)) {
-    return {
-      skipAI: true,
-      shouldTransfer: true,
-      response: t(conversationLang, 'human_transfer'),
-      reason: 'human_transfer_request',
-    };
-  }
-
   if (confirmsTransferAfterOffer(normalized, history)) {
     return {
       skipAI: true,
       shouldTransfer: true,
       response: t(conversationLang, 'human_transfer'),
       reason: 'transfer_confirmed',
+    };
+  }
+
+  if (wantsHumanTransfer(normalized)) {
+    return {
+      skipAI: true,
+      shouldTransfer: true,
+      response: t(conversationLang, 'human_transfer'),
+      reason: 'human_transfer_request',
     };
   }
 
