@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import {
   filterRelevantKnowledge,
   isBroadKnowledgeQuery,
+  isAppointmentIntent,
+  isKnowledgeQuestion,
   extractKeywords,
 } from './knowledge-filter.service';
 import {
@@ -60,6 +62,30 @@ describe('knowledge-filter', () => {
   it('fiyat sorusunda fiyat kaydı seçilir', () => {
     const r = filterRelevantKnowledge(SAMPLE_KB, 'Dolgu ne kadar');
     assert.equal(r.items[0].title, 'Fiyat Bilgileri');
+  });
+
+  it('tek kelime eşleşmesinde de kayıt döner', () => {
+    const r = filterRelevantKnowledge(SAMPLE_KB, 'diş tedavisi var mı');
+    assert.equal(r.hasRelevantContent, true);
+    assert.ok(r.items.length > 0);
+  });
+
+  it('Türkçe eklerle eşleşir (saatleriniz → saat)', () => {
+    const kb: KnowledgeItem[] = [
+      { title: 'Çalışma Saatleri', content: 'Pazartesi - Cuma: 09:00 - 18:00', category: 'genel' },
+    ];
+    const r = filterRelevantKnowledge(kb, 'çalışma saatleriniz nedir');
+    assert.equal(r.hasRelevantContent, true);
+    assert.equal(r.items[0].title, 'Çalışma Saatleri');
+  });
+
+  it('randevu geçmişinden sonra bilgi sorusu randevu sayılmaz', () => {
+    const history = [
+      { sender_type: 'ai', message: 'Randevu için ad soyad ve telefon alabilir miyim?' },
+      { sender_type: 'customer', message: 'tamam' },
+    ];
+    assert.equal(isAppointmentIntent('dolgu fiyatı nedir', history), false);
+    assert.equal(isKnowledgeQuestion('dolgu fiyatı nedir'), true);
   });
 });
 

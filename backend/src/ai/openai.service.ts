@@ -8,7 +8,7 @@ import { createChatCompletion } from './openai-client';
 import { adminClient } from '../database/supabase';
 import { Company, KnowledgeItem } from '../types';
 import { preAIGate } from './ai-gate.service';
-import { filterRelevantKnowledge, isAppointmentIntent } from './knowledge-filter.service';
+import { filterRelevantKnowledge, isAppointmentIntent, isKnowledgeQuestion, isOffTopicQuery } from './knowledge-filter.service';
 import { detectConversationEscalation, getTransferOfferMsg } from './conversation-escalation.service';
 import { formatConciseKnowledgeAnswer, localizeKnowledgeAnswer } from './kb-answer.service';
 import { buildAppointmentOnlyPrompt } from './appointment-prompt';
@@ -112,7 +112,8 @@ export async function generateAIResponse(
 
   const kbFilter = filterRelevantKnowledge(knowledge, trimmed);
   const appointmentFlow = isAppointmentIntent(trimmed, history);
-  const kbWillFail = !kbFilter.hasRelevantContent && !appointmentFlow;
+  const kbWillFail =
+    !kbFilter.hasRelevantContent && !appointmentFlow && !isKnowledgeQuestion(trimmed);
 
   const escalation = detectConversationEscalation(trimmed, history, kbWillFail, conversationLang);
   if (escalation.escalate && escalation.response) {
@@ -130,8 +131,8 @@ export async function generateAIResponse(
     };
   }
 
-  // ─── BİLGİ SORUSU: KB — kısa ve konuya özel ───
-  if (kbFilter.hasRelevantContent && !appointmentFlow) {
+  // ─── BİLGİ SORUSU: KB — kısa ve konuya özel (randevu akışından önce) ───
+  if (kbFilter.hasRelevantContent && (!appointmentFlow || isKnowledgeQuestion(trimmed))) {
     const rawAnswer = formatConciseKnowledgeAnswer(kbFilter.items, trimmed, {
       isBroadQuery: kbFilter.isBroadQuery,
       lang: conversationLang,
@@ -148,6 +149,48 @@ export async function generateAIResponse(
       shouldTransfer: false,
       skippedAI: true,
       skipReason: 'kb_direct',
+      tokensUsed: 0,
+    };
+  }
+
+  // Eşleşme yok ama bilgi sorusu — konu menüsü veya kapsam dışı için temsilci teklifi
+  if (
+    !kbFilter.hasRelevantContent &&
+    isKnowledgeQuestion(trimmed) &&
+    knowledge.length > 0 &&
+    !appointmentFlow
+  ) {
+    if (isOffTopicQuery(trimmed)) {
+      const transferOffer = getTransferOfferMsg(conversationLang);
+      await logAIUsage({
+        companyId, customerPhone,
+        promptTokens: 0, completionTokens: 0, totalTokens: 0,
+        cached: false, skipped: true, skipReason: 'kb_off_topic', model: config.openai.model,
+      });
+      return {
+        message: transferOffer,
+        shouldTransfer: false,
+        skippedAI: true,
+        skipReason: 'kb_off_topic',
+        tokensUsed: 0,
+      };
+    }
+
+    const rawAnswer = formatConciseKnowledgeAnswer(knowledge, trimmed, {
+      isBroadQuery: true,
+      lang: conversationLang,
+    });
+    const answer = await localizeKnowledgeAnswer(rawAnswer, conversationLang);
+    await logAIUsage({
+      companyId, customerPhone,
+      promptTokens: 0, completionTokens: 0, totalTokens: 0,
+      cached: false, skipped: true, skipReason: 'kb_topic_menu', model: config.openai.model,
+    });
+    return {
+      message: answer,
+      shouldTransfer: false,
+      skippedAI: true,
+      skipReason: 'kb_topic_menu',
       tokensUsed: 0,
     };
   }
