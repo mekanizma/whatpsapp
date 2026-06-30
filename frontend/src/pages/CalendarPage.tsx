@@ -67,6 +67,7 @@ interface FormState {
   customer_phone: string;
   customer_name: string;
   title: string;
+  preferred_doctor: string;
   notes: string;
   date: string;
   startTime: string;
@@ -83,6 +84,7 @@ function emptyForm(date: Date): FormState {
     customer_phone: '',
     customer_name: '',
     title: '',
+    preferred_doctor: '',
     notes: '',
     date: toDateInputValue(date),
     startTime: toTimeInputValue(start),
@@ -98,6 +100,7 @@ function formFromAppointment(a: Appointment): FormState {
     customer_phone: a.customer_phone,
     customer_name: a.customer_name || '',
     title: a.title,
+    preferred_doctor: a.preferred_doctor || '',
     notes: a.notes || '',
     date: toDateInputValue(start),
     startTime: toTimeInputValue(start),
@@ -218,6 +221,14 @@ export function CalendarPage() {
       setFormError(t('calendar.errors.phoneRequired'));
       return;
     }
+    if (!form.customer_name.trim()) {
+      setFormError(t('calendar.errors.nameRequired'));
+      return;
+    }
+    if (!form.title.trim()) {
+      setFormError(t('calendar.errors.titleRequired'));
+      return;
+    }
     const starts_at = buildIso(form.date, form.startTime);
     const ends_at = buildIso(form.date, form.endTime);
     if (new Date(ends_at) <= new Date(starts_at)) {
@@ -228,6 +239,7 @@ export function CalendarPage() {
       customer_phone: form.customer_phone.trim(),
       customer_name: form.customer_name.trim() || null,
       title: form.title.trim() || t('calendar.defaultTitle'),
+      preferred_doctor: form.preferred_doctor.trim() || null,
       notes: form.notes.trim() || null,
       starts_at,
       ends_at,
@@ -382,6 +394,11 @@ export function CalendarPage() {
                                 {a.customer_phone}
                               </span>
                             </div>
+                            {a.preferred_doctor && (
+                              <p className="text-xs font-medium text-sky-700">
+                                {t('calendar.doctor')}: {a.preferred_doctor}
+                              </p>
+                            )}
                             {a.notes && (
                               <p className="text-xs text-slate-500 line-clamp-2">{a.notes}</p>
                             )}
@@ -463,12 +480,22 @@ export function CalendarPage() {
                     />
                   </div>
                   <div className="space-y-1.5 sm:col-span-2">
-                    <Label htmlFor="cal-title">{t('calendar.appointmentTitle')}</Label>
+                    <Label htmlFor="cal-title">{t('calendar.appointmentTitle')} *</Label>
                     <Input
                       id="cal-title"
                       value={form.title}
                       onChange={(e) => setForm({ ...form, title: e.target.value })}
                       placeholder={t('calendar.defaultTitle')}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label htmlFor="cal-doctor">{t('calendar.doctor')}</Label>
+                    <Input
+                      id="cal-doctor"
+                      value={form.preferred_doctor}
+                      onChange={(e) => setForm({ ...form, preferred_doctor: e.target.value })}
+                      placeholder={t('calendar.doctorPlaceholder')}
                     />
                   </div>
                   <div className="space-y-1.5">

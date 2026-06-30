@@ -148,6 +148,9 @@
     "titles": {
       "dashboard": "Dashboard",
       "messages": "Mesajlar",
+      "todayActivity": "Bugünkü Aktivite",
+      "aiInsights": "AI Asistan Özeti",
+      "customers": "Müşteriler",
       "knowledge": "Bilgi Bankası",
       "tickets": "Destek Talepleri",
       "calendar": "Randevu Takvimi",
@@ -182,12 +185,41 @@
     "percentUsed": "%{{percent}} kullanıldı",
     "quotaWarning": "Mesaj kotanız dolmak üzere. Kesintisiz hizmet için paketinizi yükseltmeyi düşünebilirsiniz.",
     "quotaDetails": "Paket ve kullanım detayları",
+    "viewDetails": "Detayları gör",
     "quotaStatus": {
       "critical": "Kotanız neredeyse doldu",
       "high": "Kullanım yükseliyor",
       "normal": "Normal kullanım",
       "low": "Bol mesaj hakkınız var"
     }
+  },
+  "aiInsights": {
+    "title": "AI Asistan Performansı",
+    "description": "Otomatik yanıtlar, token kullanımı ve aktarım istatistikleri",
+    "apiCalls": "API çağrısı",
+    "cached": "Önbellekten",
+    "skipped": "Atlanan",
+    "tokens": "Token kullanımı",
+    "viewTickets": "Destek taleplerine git",
+    "viewCustomers": "Müşterileri gör",
+    "editKnowledge": "Bilgi bankasını düzenle"
+  },
+  "customers": {
+    "title": "Aktif Müşteriler",
+    "description": "Son dönemde WhatsApp üzerinden yazışılan müşteriler",
+    "count": "{{count}} müşteri",
+    "empty": "Henüz müşteri yok",
+    "emptyDesc": "WhatsApp bağlantısı kurulduğunda müşteriler burada listelenir",
+    "transferred": "Aktarıldı"
+  },
+  "todayActivity": {
+    "title": "Bugünkü Mesajlar",
+    "description": "Bugün gelen ve giden mesajların özeti",
+    "activeChats": "Bugün {{count}} aktif konuşma",
+    "empty": "Bugün henüz mesaj yok",
+    "emptyDesc": "Yeni mesajlar geldikçe burada görünür",
+    "recentChats": "Bugünkü konuşmalar",
+    "allMessages": "Tüm konuşmalar"
   },
   "messages": {
     "title": "Konuşmalar",
@@ -233,6 +265,8 @@
     "startTime": "Başlangıç",
     "endTime": "Bitiş",
     "notes": "Notlar",
+    "doctor": "Doktor",
+    "doctorPlaceholder": "Örn. Dr. Ayşe Kaya (opsiyonel)",
     "statusLabel": "Durum",
     "create": "Oluştur",
     "cancel": "İptal Et",
@@ -247,6 +281,8 @@
     },
     "errors": {
       "phoneRequired": "Telefon numarası gerekli",
+      "nameRequired": "Ad soyad gerekli",
+      "titleRequired": "İşlem özeti gerekli",
       "invalidTime": "Bitiş saati başlangıçtan sonra olmalı"
     }
   },

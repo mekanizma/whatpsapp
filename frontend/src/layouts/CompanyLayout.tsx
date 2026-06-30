@@ -62,6 +62,12 @@ const pageTitleKeys: Record<string, string> = {
 
   '/panel/messages': 'layout.titles.messages',
 
+  '/panel/activity/today': 'layout.titles.todayActivity',
+
+  '/panel/ai-insights': 'layout.titles.aiInsights',
+
+  '/panel/customers': 'layout.titles.customers',
+
   '/panel/knowledge': 'layout.titles.knowledge',
 
   '/panel/tickets': 'layout.titles.tickets',

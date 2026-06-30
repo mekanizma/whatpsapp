@@ -22,6 +22,9 @@ import { WhatsAppPage } from '@/pages/WhatsAppPage';
 import { SubscriptionPage } from '@/pages/SubscriptionPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { CalendarPage } from '@/pages/CalendarPage';
+import { AiInsightsPage } from '@/pages/AiInsightsPage';
+import { CustomersPage } from '@/pages/CustomersPage';
+import { TodayActivityPage } from '@/pages/TodayActivityPage';
 import { AdminPage } from '@/pages/AdminPage';
 import { AdminCompaniesPage } from '@/pages/AdminCompaniesPage';
 import { AdminCompanyDetailPage } from '@/pages/AdminCompanyDetailPage';
@@ -76,6 +79,9 @@ function AppRoutes() {
         <Route index element={<Navigate to="/panel/dashboard" replace />} />
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="messages" element={<MessagesPage />} />
+        <Route path="activity/today" element={<TodayActivityPage />} />
+        <Route path="ai-insights" element={<AiInsightsPage />} />
+        <Route path="customers" element={<CustomersPage />} />
         <Route path="knowledge" element={<KnowledgePage />} />
         <Route path="tickets" element={<TicketsPage />} />
         <Route path="calendar" element={<CalendarPage />} />

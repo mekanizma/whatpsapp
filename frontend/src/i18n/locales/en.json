@@ -148,6 +148,9 @@
     "titles": {
       "dashboard": "Dashboard",
       "messages": "Messages",
+      "todayActivity": "Today's Activity",
+      "aiInsights": "AI Assistant Summary",
+      "customers": "Customers",
       "knowledge": "Knowledge Base",
       "tickets": "Support Tickets",
       "calendar": "Appointment Calendar",
@@ -182,12 +185,41 @@
     "percentUsed": "{{percent}}% used",
     "quotaWarning": "Your message quota is almost full. Consider upgrading your plan for uninterrupted service.",
     "quotaDetails": "Plan and usage details",
+    "viewDetails": "View details",
     "quotaStatus": {
       "critical": "Quota almost full",
       "high": "Usage increasing",
       "normal": "Normal usage",
       "low": "Plenty of messages left"
     }
+  },
+  "aiInsights": {
+    "title": "AI Assistant Performance",
+    "description": "Auto-replies, token usage and transfer statistics",
+    "apiCalls": "API calls",
+    "cached": "From cache",
+    "skipped": "Skipped",
+    "tokens": "Tokens used",
+    "viewTickets": "View support tickets",
+    "viewCustomers": "View customers",
+    "editKnowledge": "Edit knowledge base"
+  },
+  "customers": {
+    "title": "Active Customers",
+    "description": "Customers who messaged on WhatsApp recently",
+    "count": "{{count}} customers",
+    "empty": "No customers yet",
+    "emptyDesc": "Customers will appear here once WhatsApp is connected",
+    "transferred": "Transferred"
+  },
+  "todayActivity": {
+    "title": "Today's Messages",
+    "description": "Summary of messages sent and received today",
+    "activeChats": "{{count}} active chats today",
+    "empty": "No messages today yet",
+    "emptyDesc": "New messages will appear here as they arrive",
+    "recentChats": "Today's conversations",
+    "allMessages": "All conversations"
   },
   "messages": {
     "title": "Conversations",
@@ -233,6 +265,8 @@
     "startTime": "Start",
     "endTime": "End",
     "notes": "Notes",
+    "doctor": "Doctor",
+    "doctorPlaceholder": "e.g. Dr. Jane Doe (optional)",
     "statusLabel": "Status",
     "create": "Create",
     "cancel": "Cancel appointment",
@@ -247,6 +281,8 @@
     },
     "errors": {
       "phoneRequired": "Phone number is required",
+      "nameRequired": "Full name is required",
+      "titleRequired": "Appointment summary is required",
       "invalidTime": "End time must be after start time"
     }
   },

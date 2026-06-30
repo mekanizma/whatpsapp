@@ -102,6 +102,7 @@ export interface Appointment {
   customer_name: string | null;
   title: string;
   notes: string | null;
+  preferred_doctor: string | null;
   starts_at: string;
   ends_at: string;
   status: AppointmentStatus;

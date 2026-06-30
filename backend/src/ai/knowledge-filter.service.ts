@@ -1,6 +1,5 @@
 /**
  * Bilgi bankası filtreleme — yalnızca ilgili içerik OpenAI'ya gönderilir
- * Tüm KB yerine keyword eşleşmesi ile token tasarrufu
  */
 
 import { KnowledgeItem } from '../types';
@@ -10,6 +9,12 @@ const STOP_WORDS = new Set([
   'bir', 've', 'ile', 'için', 'mi', 'mı', 'mu', 'mü', 'ne', 'nasıl',
   'kaç', 'var', 'yok', 'bu', 'şu', 'de', 'da', 'ki', 'ben', 'siz',
 ]);
+
+export interface KnowledgeFilterResult {
+  context: string;
+  hasRelevantContent: boolean;
+  kbEmpty: boolean;
+}
 
 function extractKeywords(text: string): string[] {
   return text
@@ -31,9 +36,9 @@ function scoreItem(item: KnowledgeItem, keywords: string[]): number {
 export function filterRelevantKnowledge(
   items: KnowledgeItem[],
   customerMessage: string
-): string {
+): KnowledgeFilterResult {
   if (!items.length) {
-    return 'Bilgi bankası boş. Şirket bilgilerine dayanarak genel ve yardımcı cevaplar ver; müşteri temsilcisine yönlendirme yapma.';
+    return { context: '', hasRelevantContent: false, kbEmpty: true };
   }
 
   const keywords = extractKeywords(customerMessage);
@@ -41,8 +46,7 @@ export function filterRelevantKnowledge(
   let selected: KnowledgeItem[];
 
   if (keywords.length === 0) {
-    // Anahtar kelime yoksa sadece ilk 2 madde (token tasarrufu)
-    selected = items.slice(0, 2);
+    selected = [];
   } else {
     selected = items
       .map((item) => ({ item, score: scoreItem(item, keywords) }))
@@ -50,21 +54,41 @@ export function filterRelevantKnowledge(
       .sort((a, b) => b.score - a.score)
       .slice(0, config.ai.maxKnowledgeItems)
       .map((x) => x.item);
+  }
 
-    // Eşleşme yoksa en genel 2 madde
-    if (!selected.length) {
-      selected = items.slice(0, 2);
-    }
+  if (!selected.length) {
+    return { context: '', hasRelevantContent: false, kbEmpty: false };
   }
 
   let context = selected
     .map((k) => `### ${k.title}\n${k.content}`)
     .join('\n\n');
 
-  // Karakter sınırı — token patlamasını önler
   if (context.length > config.ai.maxKnowledgeChars) {
     context = context.slice(0, config.ai.maxKnowledgeChars) + '\n...[kısaltıldı]';
   }
 
-  return context;
+  return { context, hasRelevantContent: true, kbEmpty: false };
+}
+
+/** Randevu süreci — bilgi bankası eşleşmesi olmasa da AI devreye girebilir */
+export function isAppointmentIntent(
+  message: string,
+  history: { sender_type: string; message: string }[] = []
+): boolean {
+  const historyTexts = history.map((m) => m.message);
+  const combined = [message, ...historyTexts].join(' ').toLowerCase();
+
+  if (/randevu|rezervasyon|appointment|müsait|musait|uygun saat|boş saat|bos saat|tarih al|saat al|görüşme|gorusme/.test(combined)) {
+    return true;
+  }
+
+  const recent = history.slice(-8);
+  const recentText = recent.map((m) => m.message).join(' ').toLowerCase();
+  const aiAskedAppointment = recent.some(
+    (m) => m.sender_type === 'ai' && /randevu|ad soyad|cep telefon|işlem|doktor|tarih|saat|onay/.test(m.message.toLowerCase())
+  );
+  const customerReplying = /^(evet|hayır|hayir|tamam|onay|ok|olur|uygun|[\p{L}\s]{2,})$/iu.test(message.trim());
+
+  return aiAskedAppointment && (customerReplying || message.trim().length < 80);
 }

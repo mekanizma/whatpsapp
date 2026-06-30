@@ -6,6 +6,7 @@ import { adminClient } from '../database/supabase';
 import { Appointment, AppointmentSource, AppointmentStatus } from '../types';
 
 const APPOINTMENT_BLOCK_RE = /\[APPOINTMENT\]([\s\S]*?)\[\/APPOINTMENT\]/gi;
+const FALSE_SUCCESS_RE = /randevu(nuz)?\s+(başarıyla\s+|basariyla\s+)?(oluşturuldu|olusturuldu|alındı|alindi|onaylandı|onaylandi|kaydedildi)/i;
 
 export const APPOINTMENT_MARKER = '[APPOINTMENT]';
 
@@ -14,6 +15,7 @@ export interface AppointmentInput {
   customer_name?: string | null;
   title?: string;
   notes?: string | null;
+  preferred_doctor?: string | null;
   starts_at: string;
   ends_at: string;
   status?: AppointmentStatus;
@@ -23,8 +25,12 @@ export interface AppointmentInput {
 export interface ParsedAppointmentAction {
   starts_at: string;
   ends_at: string;
+  customer_name?: string;
+  customer_phone?: string;
   title?: string;
   notes?: string;
+  doctor_name?: string;
+  preferred_doctor?: string;
 }
 
 function formatSlot(start: Date, end: Date, locale = 'tr-TR'): string {
@@ -32,6 +38,45 @@ function formatSlot(start: Date, end: Date, locale = 'tr-TR'): string {
   const t1 = start.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
   const t2 = end.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
   return `${day} ${t1}-${t2}`;
+}
+
+function normalizePhone(phone: string): string {
+  return phone.replace(/\D/g, '');
+}
+
+function buildNotes(action: ParsedAppointmentAction): string | null {
+  const parts: string[] = [];
+  if (action.notes?.trim()) parts.push(action.notes.trim());
+  return parts.length > 0 ? parts.join('\n') : null;
+}
+
+function getDoctorName(action: ParsedAppointmentAction): string | null {
+  return action.doctor_name?.trim() || action.preferred_doctor?.trim() || null;
+}
+
+export function validateAppointmentAction(
+  action: ParsedAppointmentAction,
+  fallbackPhone: string
+): string | null {
+  if (!action.customer_name?.trim()) {
+    return 'Ad soyad bilgisi eksik. Lütfen adınızı ve soyadınızı yazın.';
+  }
+  const phone = normalizePhone(action.customer_phone?.trim() || fallbackPhone);
+  if (!phone || phone.length < 10) {
+    return 'Geçerli bir cep telefonu numarası gerekli.';
+  }
+  if (!action.title?.trim()) {
+    return 'Yapılacak işlem özeti eksik. Lütfen randevu konusunu kısaca yazın.';
+  }
+  if (!action.starts_at || !action.ends_at) {
+    return 'Randevu tarih ve saati eksik.';
+  }
+  const start = new Date(action.starts_at);
+  const end = new Date(action.ends_at);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+    return 'Randevu saati geçersiz.';
+  }
+  return null;
 }
 
 export async function listAppointments(
@@ -86,10 +131,11 @@ export async function createAppointment(
     .from('appointments')
     .insert({
       company_id: companyId,
-      customer_phone: input.customer_phone,
-      customer_name: input.customer_name || null,
+      customer_phone: normalizePhone(input.customer_phone),
+      customer_name: input.customer_name?.trim() || null,
       title: input.title || 'Randevu',
       notes: input.notes || null,
+      preferred_doctor: input.preferred_doctor?.trim() || null,
       starts_at: input.starts_at,
       ends_at: input.ends_at,
       status: input.status || 'confirmed',
@@ -112,9 +158,14 @@ export async function updateAppointment(
     if (conflict) throw new Error('Bu saat aralığında başka bir randevu var.');
   }
 
+  const payload = { ...updates };
+  if (payload.customer_phone) {
+    payload.customer_phone = normalizePhone(payload.customer_phone);
+  }
+
   const { data, error } = await adminClient
     .from('appointments')
-    .update(updates)
+    .update(payload)
     .eq('id', id)
     .eq('company_id', companyId)
     .select()
@@ -150,7 +201,8 @@ export async function getAppointmentContextForAI(companyId: string): Promise<str
     const start = new Date(a.starts_at);
     const end = new Date(a.ends_at);
     const who = a.customer_name || a.customer_phone;
-    return `- ${formatSlot(start, end)}: ${who} — ${a.title} [${a.status}]`;
+    const doctor = a.preferred_doctor ? ` | Doktor: ${a.preferred_doctor}` : '';
+    return `- ${formatSlot(start, end)}: ${who} — ${a.title}${doctor} [${a.status}]`;
   });
 
   const more = items.length > 25 ? `\n... ve ${items.length - 25} randevu daha` : '';
@@ -166,8 +218,9 @@ export function parseAppointmentAction(text: string): ParsedAppointmentAction | 
   APPOINTMENT_BLOCK_RE.lastIndex = 0;
   if (!match?.[1]) return null;
 
+  const raw = match[1].trim();
   try {
-    const parsed = JSON.parse(match[1].trim()) as ParsedAppointmentAction;
+    const parsed = JSON.parse(raw) as ParsedAppointmentAction;
     if (!parsed.starts_at || !parsed.ends_at) return null;
     const start = new Date(parsed.starts_at);
     const end = new Date(parsed.ends_at);
@@ -176,8 +229,29 @@ export function parseAppointmentAction(text: string): ParsedAppointmentAction | 
     }
     return parsed;
   } catch {
+    console.warn('[Randevu] APPOINTMENT JSON parse hatası:', raw.slice(0, 120));
     return null;
   }
+}
+
+function fixFalseSuccessMessage(
+  message: string,
+  appointment: Appointment | null,
+  hadMarker: boolean
+): string {
+  if (appointment) return message;
+
+  const claimsSuccess = FALSE_SUCCESS_RE.test(message);
+  if (!claimsSuccess) return message;
+
+  if (hadMarker) {
+    return 'Randevu kaydı tamamlanamadı. Lütfen ad soyad, cep telefonu ve işlem özetinizi tekrar paylaşır mısınız?';
+  }
+
+  return message.replace(
+    FALSE_SUCCESS_RE,
+    'randevu bilgilerinizi aldım, kayıt için onayınızı bekliyorum'
+  );
 }
 
 export async function processAIAppointmentBooking(
@@ -186,36 +260,62 @@ export async function processAIAppointmentBooking(
   customerName: string | null,
   rawResponse: string
 ): Promise<{ message: string; appointment: Appointment | null }> {
+  const hadMarker = rawResponse.includes(APPOINTMENT_MARKER);
   const action = parseAppointmentAction(rawResponse);
   let message = stripAppointmentMarkers(rawResponse);
 
   if (!action) {
+    message = fixFalseSuccessMessage(message, null, hadMarker);
+    if (hadMarker && !action) {
+      console.error('[Randevu] Marker var ama JSON okunamadı — token kesilmiş olabilir');
+    }
     return { message, appointment: null };
+  }
+
+  const mergedAction: ParsedAppointmentAction = {
+    ...action,
+    customer_name: action.customer_name?.trim() || customerName?.trim() || undefined,
+    customer_phone: action.customer_phone?.trim() || customerPhone,
+  };
+
+  const validationError = validateAppointmentAction(mergedAction, customerPhone);
+  if (validationError) {
+    console.warn('[Randevu] Doğrulama hatası:', validationError);
+    return {
+      message: validationError,
+      appointment: null,
+    };
   }
 
   try {
     const appointment = await createAppointment(companyId, {
-      customer_phone: customerPhone,
-      customer_name: customerName,
-      title: action.title || 'Randevu',
-      notes: action.notes || null,
-      starts_at: new Date(action.starts_at).toISOString(),
-      ends_at: new Date(action.ends_at).toISOString(),
+      customer_phone: mergedAction.customer_phone || customerPhone,
+      customer_name: mergedAction.customer_name!.trim(),
+      title: mergedAction.title!.trim(),
+      notes: buildNotes(mergedAction),
+      preferred_doctor: getDoctorName(mergedAction),
+      starts_at: new Date(mergedAction.starts_at).toISOString(),
+      ends_at: new Date(mergedAction.ends_at).toISOString(),
       status: 'confirmed',
       source: 'ai',
     });
 
-    if (!message) {
-      const start = new Date(appointment.starts_at);
-      message = `Randevunuz kaydedildi: ${formatSlot(start, new Date(appointment.ends_at))}.`;
+    const start = new Date(appointment.starts_at);
+    const doctorPart = appointment.preferred_doctor ? ` Doktor: ${appointment.preferred_doctor}.` : '';
+    const confirmMsg = `Randevunuz kaydedildi: ${formatSlot(start, new Date(appointment.ends_at))}.${doctorPart} ${appointment.title}`;
+
+    if (!message || FALSE_SUCCESS_RE.test(message)) {
+      message = confirmMsg;
     }
 
+    console.log(`[Randevu] Oluşturuldu: ${appointment.id} | ${appointment.customer_name} | ${appointment.title}`);
     return { message, appointment };
   } catch (err) {
     const errMsg = (err as Error).message;
-    if (!message) {
-      message = `Randevu kaydedilemedi: ${errMsg}. Lütfen başka bir saat önerin.`;
-    }
-    return { message, appointment: null };
+    console.error('[Randevu] Kayıt hatası:', errMsg);
+    return {
+      message: `Randevu kaydedilemedi: ${errMsg} Lütfen başka bir saat önerin.`,
+      appointment: null,
+    };
   }
 }

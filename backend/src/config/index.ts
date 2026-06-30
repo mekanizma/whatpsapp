@@ -57,7 +57,7 @@ export const config = {
   },
 
   ai: {
-    maxTokens: parseInt(process.env.AI_MAX_TOKENS || '250', 10),
+    maxTokens: parseInt(process.env.AI_MAX_TOKENS || '500', 10),
     maxHistoryMessages: parseInt(process.env.AI_MAX_HISTORY || '4', 10),
     maxKnowledgeItems: parseInt(process.env.AI_MAX_KNOWLEDGE_ITEMS || '3', 10),
     maxKnowledgeChars: parseInt(process.env.AI_MAX_KNOWLEDGE_CHARS || '1500', 10),

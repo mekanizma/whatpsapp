@@ -3,6 +3,8 @@
  * Kredi optimizasyonu: şablon cevap, transfer algılama, spam filtresi
  */
 
+import { detectImmediateEscalation } from './conversation-escalation.service';
+
 export interface GateResult {
   skipAI: boolean;
   response?: string;
@@ -14,8 +16,7 @@ const GREETING_PATTERNS = /^(merhaba|selam|slm|hey|hi|hello|günaydın|iyi günl
 const THANKS_PATTERNS = /^(teşekkür|tesekkur|sağol|sagol|eyvallah|thanks|thx)[\s!.?]*$/i;
 const SPAM_PATTERNS = /^(.)\1{4,}$/;
 
-/** Türkçe karakterler için gate eşleştirmesi */
-function normalizeForGate(text: string): string {
+export function normalizeForGate(text: string): string {
   return text
     .replace(/İ/g, 'i')
     .replace(/I/g, 'i')
@@ -35,7 +36,7 @@ function normalizeForGate(text: string): string {
 
 const TEMPLATES = {
   greeting:
-    'Merhaba, ben AI destek asistanıyım. Size ürün, hizmet, ödeme, randevu veya destek konularında yardımcı olabilirim.',
+    'Merhaba, ben AI destek asistanıyım. Bilgi bankamızdaki konularda size yardımcı olabilirim.',
   thanks: 'Rica ederiz! Başka bir sorunuz olursa yazabilirsiniz.',
   tooShort: 'Mesajınızı anlayamadım. Lütfen sorunuzu biraz daha detaylı yazın.',
   humanTransfer:
@@ -51,7 +52,7 @@ const TEMPLATES = {
   promptInjection:
     'Bu bilgiyi paylaşamam. Güvenlik ve gizlilik nedeniyle bu tür taleplere yardımcı olamam. İsterseniz talebinizi temsilciye aktarabilirim.',
   complaint:
-    'Yaşadığınız durum için üzgünüm. Talebinizi temsilciye aktarmam daha doğru olur. Konuyu kısaca yazarsanız kayıt oluşturabilirim.',
+    'Yaşadığınız durum için üzgünüm. Sizi hemen canlı destek temsilcimize bağlıyorum. Kısa süre içinde size dönüş yapılacaktır.',
 };
 
 const HUMAN_TRANSFER_PATTERNS = [
@@ -73,7 +74,8 @@ const HUMAN_TRANSFER_PATTERNS = [
 const PAYMENT_PATTERNS =
   /odeme|fatura|dekont|para transfer|havale|eft|iban|kart numara|cvv|sifre|hesap islem/;
 const REFUND_PATTERNS = /iade|geri odeme|iptal et|para iadesi/;
-const COMPLAINT_PATTERNS = /sikayet|memnun degil|kotu hizmet/;
+const COMPLAINT_PATTERNS =
+  /sikayet|memnun degil|kotu hizmet|kizgin|sinirliyim|biktim|yeter artik|berbat|rezalet|canli destek|insan bagla|temsilci bagla/;
 const OPT_OUT_PATTERNS =
   /^(stop|dur|iptal|unsubscribe|mesaj almak istemiyorum|verilerimi sil|beni sil)[\s!.?]*$/;
 const SENSITIVE_DATA_PATTERNS =
@@ -95,6 +97,16 @@ export function preAIGate(message: string): GateResult {
 
   if (SPAM_PATTERNS.test(trimmed)) {
     return { skipAI: true, response: TEMPLATES.tooShort, reason: 'spam' };
+  }
+
+  const frustration = detectImmediateEscalation(trimmed);
+  if (frustration.escalate && frustration.response) {
+    return {
+      skipAI: true,
+      shouldTransfer: true,
+      response: frustration.response,
+      reason: frustration.reason,
+    };
   }
 
   if (PROMPT_INJECTION_PATTERNS.test(normalized)) {
