@@ -37,11 +37,14 @@ router.get('/admin/ai-usage', authenticate, requireRole('super_admin'), adminCtr
 router.get('/admin/activity', authenticate, requireRole('super_admin'), adminCtrl.getLogs);
 router.get('/admin/settings', authenticate, requireRole('super_admin'), adminCtrl.getPlatformSettings);
 router.get('/admin/prompts', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.getPrompts));
+router.get('/admin/prompt-roles', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.getPromptRoles));
 router.get('/admin/prompts/:key', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.getPrompt));
 router.post('/admin/prompts', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.createPrompt));
 router.put('/admin/prompts/:key', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.updatePrompt));
+router.delete('/admin/prompts/:key', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.deletePrompt));
 router.post('/admin/prompts/:key/reset', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.resetPrompt));
 router.post('/admin/prompts-reset-all', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.resetAllPrompts));
+router.post('/admin/prompts-cleanup', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.cleanupPrompts));
 router.post('/admin/prompts-seed', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.seedPrompts));
 
 // Company

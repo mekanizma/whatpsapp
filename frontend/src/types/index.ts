@@ -102,16 +102,20 @@ export interface PlatformSettings {
 export interface AIPromptTemplate {
   id: string;
   prompt_key: string;
+  prompt_role: 'greeting' | 'system' | 'appointment' | 'language' | 'translation' | 'custom';
   name: string;
   description: string | null;
   category: string;
   content: string;
   variables: string[];
   is_active: boolean;
+  sort_order: number;
   version: number;
   created_at: string;
   updated_at: string;
 }
+
+export type PromptRole = AIPromptTemplate['prompt_role'];
 
 export interface DashboardStats {
   total_messages: number;

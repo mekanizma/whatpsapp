@@ -4,8 +4,8 @@
 
 import { Company } from '../types';
 import { TRANSFER_MARKER } from './system-prompt';
-import { ConversationLang, getLanguagePromptBlock } from './language.service';
-import { getPromptContent, renderPromptTemplate } from '../services/prompt.service';
+import { ConversationLang, getLanguagePromptBlock, LANG_NAMES } from './language.service';
+import { getPromptContent, getExtensionPromptContents, renderPromptTemplate } from '../services/prompt.service';
 
 export async function buildAppointmentOnlyPrompt(
   company: Company,
@@ -22,7 +22,7 @@ export async function buildAppointmentOnlyPrompt(
     getPromptContent('appointment'),
   ]);
 
-  const systemPart = renderPromptTemplate(systemTemplate, {
+  const sharedVars: Record<string, string> = {
     companyName: company.company_name,
     category: company.category || '-',
     transferMarker: TRANSFER_MARKER,
@@ -31,16 +31,25 @@ export async function buildAppointmentOnlyPrompt(
     knowledge: hasKb
       ? knowledge
       : 'Kayıt yok. Müşteriye bilgi bankası dışında hiçbir bilgi verme.',
-  });
+    collectedContext: collectedContext ? `${collectedContext}\n` : '',
+    languageBlock,
+    langName: LANG_NAMES[lang],
+  };
+
+  const systemPart = renderPromptTemplate(systemTemplate, sharedVars);
 
   const appointmentPart = renderPromptTemplate(appointmentTemplate, {
-    collectedContext: collectedContext ? `${collectedContext}\n` : '',
+    ...sharedVars,
     appointmentContext: appointmentContext || 'Yok',
     kbEmptySuffix: hasKb ? '' : ' (boş)',
     knowledge: hasKb ? knowledge : `Çalışma saati yok — saat önerme, ${TRANSFER_MARKER}`,
-    languageBlock,
-    transferMarker: TRANSFER_MARKER,
   });
 
-  return `${systemPart}\n\n${appointmentPart}`;
+  const extensions = await getExtensionPromptContents();
+  const extensionBlock =
+    extensions.length > 0
+      ? `\n\n--- EK PROMPT KURALLARI ---\n${extensions.map((e) => renderPromptTemplate(e, sharedVars)).join('\n\n')}`
+      : '';
+
+  return `${systemPart}\n\n${appointmentPart}${extensionBlock}`;
 }

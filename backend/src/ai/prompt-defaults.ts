@@ -4,6 +4,7 @@
 
 export interface PromptTemplateDefault {
   prompt_key: string;
+  prompt_role: import('./prompt-roles').PromptRole;
   name: string;
   description: string;
   category: string;
@@ -14,6 +15,7 @@ export interface PromptTemplateDefault {
 export const DEFAULT_PROMPTS: PromptTemplateDefault[] = [
   {
     prompt_key: 'greeting',
+    prompt_role: 'greeting',
     name: 'Selamlama Mesajı',
     description: 'Müşteri merhaba/selam yazdığında gönderilen karşılama metni',
     category: 'ai_system',
@@ -23,6 +25,7 @@ export const DEFAULT_PROMPTS: PromptTemplateDefault[] = [
   },
   {
     prompt_key: 'system',
+    prompt_role: 'system',
     name: 'WhatsApp AI Destek Asistanı',
     description:
       'İlk verilen genel asistan kuralları — kimlik, bilgi bankası, randevu, temsilciye aktarım ve güvenlik',
@@ -76,6 +79,7 @@ BİLGİ BANKASI{{kbEmptySuffix}}:
   },
   {
     prompt_key: 'appointment',
+    prompt_role: 'appointment',
     name: 'Randevu Alma Asistanı',
     description: 'Randevu toplama sırası — ad, telefon, işlem, doktor, tarih/saat ve onay kuralları',
     category: 'appointment',
@@ -119,6 +123,7 @@ BİLGİ BANKASI{{kbEmptySuffix}}:
   },
   {
     prompt_key: 'language_block',
+    prompt_role: 'language',
     name: 'Dil Kuralı Bloğu',
     description: 'Müşteri diline göre yanıt verme kuralı — randevu promptuna eklenir',
     category: 'language',
@@ -131,6 +136,7 @@ BİLGİ BANKASI{{kbEmptySuffix}}:
   },
   {
     prompt_key: 'kb_translate',
+    prompt_role: 'translation',
     name: 'Bilgi Bankası Çeviri',
     description: 'Bilgi bankası cevabını müşteri diline çevirme promptu',
     category: 'translation',

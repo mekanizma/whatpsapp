@@ -26,7 +26,11 @@ import {
   updatePromptTemplate,
   resetPromptToDefault,
   resetAllPromptsToDefault,
+  cleanupAndReseedPrompts,
+  deletePromptTemplate,
   seedDefaultPrompts,
+  CORE_PROMPT_ROLES,
+  PROMPT_ROLE_META,
 } from '../services/prompt.service';
 
 export async function getCompanies(req: AuthRequest, res: Response): Promise<void> {
@@ -312,6 +316,47 @@ export async function resetAllPrompts(req: AuthRequest, res: Response): Promise<
   } catch (err) {
     res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'Hata' });
   }
+}
+
+export async function cleanupPrompts(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const result = await cleanupAndReseedPrompts();
+    await logActivity({
+      userId: req.userId,
+      action: 'prompts_cleanup',
+      entityType: 'ai_prompt',
+      metadata: result,
+    });
+    res.json({ success: true, data: result });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'Hata' });
+  }
+}
+
+export async function deletePrompt(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const key = req.params.key as string;
+    await deletePromptTemplate(key);
+    await logActivity({
+      userId: req.userId,
+      action: 'prompt_deleted',
+      entityType: 'ai_prompt',
+      metadata: { prompt_key: key },
+    });
+    res.json({ success: true, data: { prompt_key: key } });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'Hata' });
+  }
+}
+
+export async function getPromptRoles(_req: AuthRequest, res: Response): Promise<void> {
+  res.json({
+    success: true,
+    data: {
+      roles: CORE_PROMPT_ROLES,
+      meta: PROMPT_ROLE_META,
+    },
+  });
 }
 
 export async function seedPrompts(_req: AuthRequest, res: Response): Promise<void> {
