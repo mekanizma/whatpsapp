@@ -2,8 +2,9 @@
  * OpenAI AI Chat Engine — bilgi bankası zorunlu mod
  */
 
-import OpenAI from 'openai';
+import type OpenAI from 'openai';
 import { config } from '../config';
+import { createChatCompletion } from './openai-client';
 import { adminClient } from '../database/supabase';
 import { Company, KnowledgeItem } from '../types';
 import { preAIGate } from './ai-gate.service';
@@ -24,8 +25,6 @@ import {
 } from './ai-quota.service';
 import { TRANSFER_MARKER } from './system-prompt';
 import { getAppointmentContextForAI, stripAppointmentMarkers, APPOINTMENT_MARKER } from '../services/appointment.service';
-
-const openai = new OpenAI({ apiKey: config.openai.apiKey });
 
 export interface AIResponse {
   message: string;
@@ -171,12 +170,7 @@ export async function generateAIResponse(
     { role: 'user', content: trimmed.slice(0, 500) },
   ];
 
-  const completion = await openai.chat.completions.create({
-    model: config.openai.model,
-    messages: chatMessages,
-    temperature: 0,
-    max_tokens: config.ai.maxTokens,
-  });
+  const completion = await createChatCompletion(chatMessages);
 
   const usage = completion.usage;
   const totalTokens = usage?.total_tokens || 0;

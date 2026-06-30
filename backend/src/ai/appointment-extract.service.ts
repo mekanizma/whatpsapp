@@ -2,8 +2,7 @@
  * Randevu — yapılandırılmış çıkarma ile güvenilir kayıt
  */
 
-import OpenAI from 'openai';
-import { config } from '../config';
+import { createChatCompletion } from './openai-client';
 import {
   ParsedAppointmentAction,
   processAIAppointmentBooking,
@@ -26,8 +25,6 @@ import {
 } from './appointment-slot.service';
 import { ConversationLang, detectConversationLanguage, t } from './language.service';
 
-const openai = new OpenAI({ apiKey: config.openai.apiKey });
-
 const CONFIRM_RE = /^(evet|onayl?[iıİI]yorum|onaylıyorum|onayliyorum|onay|tamam|uygun|olur|kabul|ok|yes)\b/iu;
 
 export function isAppointmentConfirmation(message: string): boolean {
@@ -43,12 +40,8 @@ export async function extractAppointmentFromConversation(
     .map((m) => `${m.sender_type === 'customer' ? 'Müşteri' : 'Asistan'}: ${m.message}`)
     .join('\n');
 
-  const completion = await openai.chat.completions.create({
-    model: config.openai.model,
-    temperature: 0,
-    max_tokens: 400,
-    response_format: { type: 'json_object' },
-    messages: [
+  const completion = await createChatCompletion(
+    [
       {
         role: 'system',
         content: `Konuşmadan randevu bilgilerini çıkar. JSON:
@@ -66,7 +59,8 @@ Eksik varsa ready:false`,
         content: `${transcript}\nMüşteri: ${latestMessage}`,
       },
     ],
-  });
+    { maxTokens: 400, temperature: 0, responseFormat: { type: 'json_object' } }
+  );
 
   const raw = completion.choices[0]?.message?.content?.trim();
   if (!raw) return null;

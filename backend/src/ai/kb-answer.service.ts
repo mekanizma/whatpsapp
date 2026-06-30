@@ -2,14 +2,12 @@
  * Bilgi bankasından kısa, konuya özel yanıt — gereksiz içerik dökülmez
  */
 
-import OpenAI from 'openai';
-import { config } from '../config';
 import { KnowledgeItem } from '../types';
+import { config } from '../config';
 import { ConversationLang, LANG_NAMES, t } from './language.service';
 import { extractKeywords } from './knowledge-filter.service';
 import { getPromptContent, renderPromptTemplate } from '../services/prompt.service';
-
-const openai = new OpenAI({ apiKey: config.openai.apiKey });
+import { createChatCompletion } from './openai-client';
 
 function truncateSmart(text: string, maxChars: number): string {
   const trimmed = text.trim();
@@ -146,18 +144,13 @@ export async function localizeKnowledgeAnswer(
   const translatePrompt = await getPromptContent('kb_translate');
   const systemContent = renderPromptTemplate(translatePrompt, { langName: LANG_NAMES[lang] });
 
-  const completion = await openai.chat.completions.create({
-    model: config.openai.model,
-    temperature: 0,
-    max_tokens: 500,
-    messages: [
-      {
-        role: 'system',
-        content: systemContent,
-      },
+  const completion = await createChatCompletion(
+    [
+      { role: 'system', content: systemContent },
       { role: 'user', content: text },
     ],
-  });
+    { maxTokens: 500, temperature: 0 }
+  );
 
   return completion.choices[0]?.message?.content?.trim() || text;
 }

@@ -179,7 +179,8 @@ export async function processInboundMessage(
     try {
       aiResponse = await generateAIResponse(companyId, trimmed, phone, customerName);
     } catch (err) {
-      console.error('[WhatsApp] AI hatası:', err);
+      const detail = err instanceof Error ? err.message : String(err);
+      console.error('[WhatsApp] AI hatası:', detail);
       return 'Üzgünüz, şu an yanıt veremiyoruz. Lütfen kısa süre sonra tekrar deneyin.';
     }
 
