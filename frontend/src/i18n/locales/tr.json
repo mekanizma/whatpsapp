@@ -302,7 +302,7 @@
     "edit": "Bilgi Düzenle",
     "new": "Yeni Bilgi Ekle",
     "upload": "Dosyadan yükle",
-    "uploadHint": "PDF, Word (.docx) veya Excel (.xlsx, .xls) — içerik otomatik okunur",
+    "uploadHint": "PDF, Word (.docx), Excel (.xlsx, .xls), Markdown (.md) veya metin (.txt) — içerik otomatik okunur ve AI için parçalara bölünür",
     "reading": "Okunuyor...",
     "selectFile": "Dosya Seç",
     "charsRead": "{{count}} karakter okundu",
@@ -314,7 +314,16 @@
     "categoryPlaceholder": "Fiyatlar",
     "content": "İçerik",
     "contentPlaceholder": "Metin yazın veya yukarıdan dosya yükleyin...",
-    "contentHint": "AI yanıtları bu metne göre verilir. Dosyadan okunan içeriği kaydetmeden önce kontrol edin."
+    "contentHint": "Kaydettikten sonra içerik otomatik olarak parçalara bölünür ve vektör indeksine eklenir. Markdown dosyalarında ## başlıkları chunk sınırı olarak kullanılır.",
+    "chunkEstimate": "~{{count}} parça",
+    "chunks": "{{count}} parça",
+    "reindex": "Yeniden indeksle",
+    "indexStatus": {
+      "pending": "Bekliyor",
+      "indexing": "İndeksleniyor",
+      "ready": "Hazır",
+      "failed": "Hata"
+    }
   },
   "whatsapp": {
     "title": "WhatsApp Bağlantısı",

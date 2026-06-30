@@ -5,10 +5,11 @@
 import mammoth from 'mammoth';
 import * as XLSX from 'xlsx';
 import { PDFParse } from 'pdf-parse';
+import { chunkText } from './chunking.service';
 
-const MAX_EXTRACTED_CHARS = 50_000;
+const MAX_EXTRACTED_CHARS = 200_000;
 
-const ALLOWED_EXTENSIONS = new Set(['.pdf', '.docx', '.xlsx', '.xls']);
+const ALLOWED_EXTENSIONS = new Set(['.pdf', '.docx', '.xlsx', '.xls', '.md', '.txt', '.markdown']);
 
 export function getFileExtension(filename: string): string {
   const dot = filename.lastIndexOf('.');
@@ -80,6 +81,7 @@ export interface ParsedDocument {
   file_type: string;
   truncated: boolean;
   char_count: number;
+  chunk_estimate: number;
 }
 
 export async function parseKnowledgeDocument(
@@ -89,7 +91,7 @@ export async function parseKnowledgeDocument(
   const ext = getFileExtension(originalFilename);
 
   if (!ALLOWED_EXTENSIONS.has(ext)) {
-    throw new Error('Desteklenen formatlar: PDF, Word (.docx), Excel (.xlsx, .xls)');
+    throw new Error('Desteklenen formatlar: PDF, Word (.docx), Excel (.xlsx, .xls), Markdown (.md), Metin (.txt)');
   }
 
   let raw = '';
@@ -105,6 +107,11 @@ export async function parseKnowledgeDocument(
     case '.xls':
       raw = parseExcel(buffer);
       break;
+    case '.md':
+    case '.markdown':
+    case '.txt':
+      raw = buffer.toString('utf8');
+      break;
     default:
       throw new Error('Desteklenmeyen dosya türü');
   }
@@ -115,13 +122,16 @@ export async function parseKnowledgeDocument(
   }
 
   const { text, truncated } = truncateText(normalized);
+  const docTitle = titleFromFilename(originalFilename);
+  const chunkEstimate = chunkText(text, docTitle).length;
 
   return {
-    title: titleFromFilename(originalFilename),
+    title: docTitle,
     content: text,
     source_filename: originalFilename,
     file_type: ext.replace('.', '').toUpperCase(),
     truncated,
     char_count: text.length,
+    chunk_estimate: chunkEstimate,
   };
 }

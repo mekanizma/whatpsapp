@@ -14,6 +14,7 @@ import { getAllActivePromptContentsForAI } from '../services/prompt.service';
 import { getAppointmentContextForAI } from '../services/appointment.service';
 import { preAIGate } from './ai-gate.service';
 import { stripTransferMarker } from './transfer.service';
+import { retrieveKnowledgeContext } from '../services/knowledge-retrieval.service';
 
 export interface AIResponse {
   message: string;
@@ -40,11 +41,11 @@ async function getCompany(companyId: string): Promise<Company> {
   return company;
 }
 
-function formatKnowledge(items: KnowledgeItem[]): string {
+function formatKnowledgeFallback(items: KnowledgeItem[]): string {
   if (!items.length) return '';
   const text = items.map((k) => `### ${k.title}\n${k.content}`).join('\n\n');
-  return text.length > config.ai.maxKnowledgeChars
-    ? `${text.slice(0, config.ai.maxKnowledgeChars)}\n...[kısaltıldı]`
+  return text.length > config.rag.maxContextChars
+    ? `${text.slice(0, config.rag.maxContextChars)}\n...[kısaltıldı]`
     : text;
 }
 
@@ -78,7 +79,16 @@ export async function generateAIResponse(
     .filter((m) => m.message !== trimmed);
 
   const conversationLang = detectConversationLanguage(trimmed, history);
-  const knowledge = formatKnowledge((knowledgeResult.data || []) as KnowledgeItem[]);
+  const allKnowledge = (knowledgeResult.data || []) as KnowledgeItem[];
+
+  const retrieval = await retrieveKnowledgeContext(companyId, trimmed, allKnowledge);
+  const knowledge = retrieval.context || formatKnowledgeFallback(allKnowledge);
+
+  if (retrieval.usedRag) {
+    console.log(
+      `[RAG] ${retrieval.chunks.length} chunk retrieved (top score: ${retrieval.chunks[0]?.combined_score?.toFixed(3) ?? 'n/a'})`
+    );
+  }
 
   const gate = preAIGate(trimmed, history, conversationLang);
   if (gate.skipAI && gate.response) {

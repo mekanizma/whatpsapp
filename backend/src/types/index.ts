@@ -56,6 +56,8 @@ export interface WhatsAppConfig {
   updated_at: string;
 }
 
+export type KnowledgeIndexStatus = 'pending' | 'indexing' | 'ready' | 'failed';
+
 export interface KnowledgeItem {
   id: string;
   company_id: string;
@@ -63,8 +65,25 @@ export interface KnowledgeItem {
   content: string;
   category: string | null;
   is_active: boolean;
+  index_status?: KnowledgeIndexStatus;
+  chunk_count?: number;
+  index_error?: string | null;
+  source_filename?: string | null;
+  char_count?: number | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface RetrievedKnowledgeChunk {
+  id: string;
+  document_id: string;
+  knowledge_base_id: string;
+  chunk_index: number;
+  heading: string | null;
+  content: string;
+  similarity: number;
+  text_rank: number;
+  combined_score: number;
 }
 
 export interface Message {

@@ -302,7 +302,7 @@
     "edit": "Edit Entry",
     "new": "Add New Entry",
     "upload": "Upload from file",
-    "uploadHint": "PDF, Word (.docx) or Excel (.xlsx, .xls) — content is read automatically",
+    "uploadHint": "PDF, Word (.docx), Excel (.xlsx, .xls), Markdown (.md) or text (.txt) — content is read and split into chunks for AI",
     "reading": "Reading...",
     "selectFile": "Choose File",
     "charsRead": "{{count}} characters read",
@@ -314,7 +314,16 @@
     "categoryPlaceholder": "Pricing",
     "content": "Content",
     "contentPlaceholder": "Type text or upload a file above...",
-    "contentHint": "AI replies are based on this text. Review file content before saving."
+    "contentHint": "After saving, content is automatically chunked and added to the vector index. In Markdown files, ## headings define chunk boundaries.",
+    "chunkEstimate": "~{{count}} chunks",
+    "chunks": "{{count}} chunks",
+    "reindex": "Re-index",
+    "indexStatus": {
+      "pending": "Pending",
+      "indexing": "Indexing",
+      "ready": "Ready",
+      "failed": "Failed"
+    }
   },
   "whatsapp": {
     "title": "WhatsApp Connection",

@@ -56,6 +56,19 @@ export const config = {
     model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
   },
 
+  rag: {
+    embeddingModel: process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small',
+    embeddingDimensions: parseInt(process.env.OPENAI_EMBEDDING_DIMENSIONS || '1536', 10),
+    chunkSize: parseInt(process.env.RAG_CHUNK_SIZE || '1200', 10),
+    chunkOverlap: parseInt(process.env.RAG_CHUNK_OVERLAP || '150', 10),
+    topK: parseInt(process.env.RAG_TOP_K || '10', 10),
+    matchThreshold: parseFloat(process.env.RAG_MATCH_THRESHOLD || '0.5'),
+    vectorWeight: parseFloat(process.env.RAG_VECTOR_WEIGHT || '0.7'),
+    textWeight: parseFloat(process.env.RAG_TEXT_WEIGHT || '0.3'),
+    maxContextChars: parseInt(process.env.RAG_MAX_CONTEXT_CHARS || '6000', 10),
+    indexBatchSize: parseInt(process.env.RAG_INDEX_BATCH_SIZE || '50', 10),
+  },
+
   ai: {
     maxTokens: parseInt(process.env.AI_MAX_TOKENS || '500', 10),
     maxHistoryMessages: parseInt(process.env.AI_MAX_HISTORY || '60', 10),

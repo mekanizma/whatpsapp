@@ -37,6 +37,14 @@ services:
         value: gpt-4o
       - key: AI_MAX_HISTORY
         value: "60"
+      - key: OPENAI_EMBEDDING_MODEL
+        value: text-embedding-3-small
+      - key: RAG_TOP_K
+        value: "10"
+      - key: RAG_MATCH_THRESHOLD
+        value: "0.5"
+      - key: RAG_MAX_CONTEXT_CHARS
+        value: "6000"
       - key: WHATSAPP_VERIFY_TOKEN
         sync: false
       - key: WHATSAPP_API_VERSION

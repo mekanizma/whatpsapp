@@ -156,6 +156,11 @@ export interface KnowledgeItem {
   content: string;
   category: string | null;
   is_active: boolean;
+  index_status?: 'pending' | 'indexing' | 'ready' | 'failed';
+  chunk_count?: number;
+  index_error?: string | null;
+  source_filename?: string | null;
+  char_count?: number | null;
   created_at: string;
 }
 
@@ -166,6 +171,12 @@ export interface ParsedKnowledgeFile {
   file_type: string;
   truncated: boolean;
   char_count: number;
+  chunk_estimate: number;
+}
+
+export interface KnowledgeChunkPreview {
+  chunk_count: number;
+  previews: { index: number; heading: string | null; preview: string }[];
 }
 
 export interface Ticket {
