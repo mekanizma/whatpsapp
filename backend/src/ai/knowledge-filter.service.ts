@@ -12,6 +12,7 @@ const STOP_WORDS = new Set([
 
 export interface KnowledgeFilterResult {
   context: string;
+  items: KnowledgeItem[];
   hasRelevantContent: boolean;
   kbEmpty: boolean;
 }
@@ -38,7 +39,7 @@ export function filterRelevantKnowledge(
   customerMessage: string
 ): KnowledgeFilterResult {
   if (!items.length) {
-    return { context: '', hasRelevantContent: false, kbEmpty: true };
+    return { context: '', items: [], hasRelevantContent: false, kbEmpty: true };
   }
 
   const keywords = extractKeywords(customerMessage);
@@ -57,7 +58,7 @@ export function filterRelevantKnowledge(
   }
 
   if (!selected.length) {
-    return { context: '', hasRelevantContent: false, kbEmpty: false };
+    return { context: '', items: [], hasRelevantContent: false, kbEmpty: false };
   }
 
   let context = selected
@@ -68,7 +69,7 @@ export function filterRelevantKnowledge(
     context = context.slice(0, config.ai.maxKnowledgeChars) + '\n...[kısaltıldı]';
   }
 
-  return { context, hasRelevantContent: true, kbEmpty: false };
+  return { context, items: selected, hasRelevantContent: true, kbEmpty: false };
 }
 
 /** Randevu süreci — bilgi bankası eşleşmesi olmasa da AI devreye girebilir */

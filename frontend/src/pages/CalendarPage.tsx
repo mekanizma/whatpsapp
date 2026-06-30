@@ -26,7 +26,8 @@ function startOfMonth(d: Date): Date {
 }
 
 function endOfMonth(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth() + 1, 0, 23, 59, 59, 999);
+  const next = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+  return next;
 }
 
 function sameDay(a: Date, b: Date): boolean {
@@ -127,6 +128,12 @@ export function CalendarPage() {
   const rangeFrom = startOfMonth(viewMonth).toISOString();
   const rangeTo = endOfMonth(viewMonth).toISOString();
 
+  const { data: upcoming, isLoading: upcomingLoading } = useQuery({
+    queryKey: ['appointments-upcoming'],
+    queryFn: () => api.get<Appointment[]>('/appointments?upcoming=true&days=90'),
+    refetchInterval: 30000,
+  });
+
   const { data: appointments, isLoading } = useQuery({
     queryKey: ['appointments', rangeFrom, rangeTo],
     queryFn: () =>
@@ -150,7 +157,7 @@ export function CalendarPage() {
 
   const calendarCells = useMemo(() => {
     const first = startOfMonth(viewMonth);
-    const last = endOfMonth(viewMonth);
+    const daysInMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 0).getDate();
     const startPad = (first.getDay() + 6) % 7;
     const cells: { date: Date; inMonth: boolean }[] = [];
 
@@ -159,7 +166,7 @@ export function CalendarPage() {
       d.setDate(d.getDate() - i - 1);
       cells.push({ date: d, inMonth: false });
     }
-    for (let d = 1; d <= last.getDate(); d++) {
+    for (let d = 1; d <= daysInMonth; d++) {
       cells.push({ date: new Date(viewMonth.getFullYear(), viewMonth.getMonth(), d), inMonth: true });
     }
     while (cells.length % 7 !== 0) {
@@ -177,6 +184,7 @@ export function CalendarPage() {
         : api.post<Appointment>('/appointments', payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      queryClient.invalidateQueries({ queryKey: ['appointments-upcoming'] });
       closeForm();
     },
     onError: (err: Error) => setFormError(err.message),
@@ -186,13 +194,17 @@ export function CalendarPage() {
     mutationFn: (id: string) => api.delete(`/appointments/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      queryClient.invalidateQueries({ queryKey: ['appointments-upcoming'] });
       closeForm();
     },
   });
 
   const cancelMutation = useMutation({
     mutationFn: (id: string) => api.put<Appointment>(`/appointments/${id}`, { status: 'cancelled' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['appointments'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['appointments'] });
+      queryClient.invalidateQueries({ queryKey: ['appointments-upcoming'] });
+    },
   });
 
   function closeForm() {
@@ -265,6 +277,50 @@ export function CalendarPage() {
           </Button>
         }
       />
+
+      {(upcomingLoading || (upcoming && upcoming.length > 0)) && (
+        <Card>
+          <CardContent className="p-4 sm:p-5">
+            <h3 className="mb-3 text-sm font-semibold text-slate-800">{t('calendar.upcoming')}</h3>
+            {upcomingLoading ? (
+              <div className="flex justify-center py-4"><Spinner className="h-6 w-6" /></div>
+            ) : (
+              <div className="space-y-2">
+                {upcoming?.slice(0, 8).map((a) => {
+                  const start = new Date(a.starts_at);
+                  const end = new Date(a.ends_at);
+                  return (
+                    <button
+                      key={a.id}
+                      type="button"
+                      onClick={() => {
+                        setViewMonth(startOfMonth(start));
+                        setSelectedDate(start);
+                      }}
+                      className="flex w-full items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/80 p-3 text-left transition-colors hover:border-primary/25 hover:bg-white"
+                    >
+                      <div className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-lg bg-primary/10 text-primary">
+                        <span className="text-xs font-bold leading-none">{start.getDate()}</span>
+                        <span className="text-[10px] uppercase">{start.toLocaleDateString(locale, { month: 'short' })}</span>
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-medium text-slate-900">{a.title}</p>
+                        <p className="text-xs text-slate-500">
+                          {a.customer_name || a.customer_phone} ·{' '}
+                          {start.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
+                          {' – '}
+                          {end.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
+                      {a.source === 'ai' && <Badge variant="info">{t('calendar.sourceAi')}</Badge>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-5">
         <Card className="lg:col-span-3">

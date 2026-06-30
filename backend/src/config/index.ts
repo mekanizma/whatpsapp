@@ -62,7 +62,7 @@ export const config = {
     maxKnowledgeItems: parseInt(process.env.AI_MAX_KNOWLEDGE_ITEMS || '3', 10),
     maxKnowledgeChars: parseInt(process.env.AI_MAX_KNOWLEDGE_CHARS || '1500', 10),
     temperature: parseFloat(process.env.AI_TEMPERATURE || '0.2'),
-    cacheEnabled: process.env.AI_CACHE_ENABLED !== 'false',
+    cacheEnabled: process.env.AI_CACHE_ENABLED === 'true',
     cacheTtlMs: parseInt(process.env.AI_CACHE_TTL_MS || '3600000', 10), // 1 saat
   },
 

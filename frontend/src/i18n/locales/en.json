@@ -271,6 +271,7 @@
     "create": "Create",
     "cancel": "Cancel appointment",
     "sourceAi": "AI",
+    "upcoming": "Upcoming Appointments",
     "prevMonth": "Previous month",
     "nextMonth": "Next month",
     "status": {

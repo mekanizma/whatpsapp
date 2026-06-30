@@ -7,6 +7,7 @@ import { AuthRequest } from '../middleware/auth.middleware';
 import { logActivity } from '../services/log.service';
 import {
   listAppointments,
+  listUpcomingAppointments,
   createAppointment,
   updateAppointment,
   deleteAppointment,
@@ -15,6 +16,18 @@ import { AppointmentStatus } from '../types';
 
 export async function getAppointments(req: AuthRequest, res: Response): Promise<void> {
   const companyId = req.companyId as string;
+
+  if (req.query.upcoming === 'true') {
+    const days = parseInt(String(req.query.days || '60'), 10) || 60;
+    try {
+      const data = await listUpcomingAppointments(companyId, days);
+      res.json({ success: true, data });
+    } catch (err) {
+      res.status(400).json({ success: false, error: (err as Error).message });
+    }
+    return;
+  }
+
   const from = (req.query.from as string) || new Date().toISOString();
   const to =
     (req.query.to as string) ||

@@ -89,12 +89,24 @@ export async function listAppointments(
     .select('*')
     .eq('company_id', companyId)
     .gte('starts_at', from)
-    .lte('starts_at', to)
+    .lt('starts_at', to)
     .neq('status', 'cancelled')
     .order('starts_at', { ascending: true });
 
   if (error) throw new Error(error.message);
   return (data || []) as Appointment[];
+}
+
+/** Panel için yaklaşan randevular */
+export async function listUpcomingAppointments(
+  companyId: string,
+  daysAhead = 60
+): Promise<Appointment[]> {
+  const now = new Date().toISOString();
+  const until = new Date();
+  until.setDate(until.getDate() + daysAhead);
+
+  return listAppointments(companyId, now, until.toISOString());
 }
 
 export async function hasConflict(
