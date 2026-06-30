@@ -4,6 +4,7 @@
 
 import { useState, FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Shield, MessageSquare, ArrowRight } from 'lucide-react';
 import { useAuthStore, getRedirectPath } from '@/store/authStore';
 import { isDemoMode } from '@/lib/env';
@@ -12,6 +13,7 @@ import { AuthFormShell } from '@/components/auth/AuthFormShell';
 import { Button, Input, Label, Spinner } from '@/components/ui';
 
 export function AdminLoginPage() {
+  const { t } = useTranslation();
   const [email, setEmail] = useState(isDemoMode ? 'admin@demo.com' : '');
   const [password, setPassword] = useState(isDemoMode ? 'demo123' : '');
   const [error, setError] = useState('');
@@ -27,7 +29,7 @@ export function AdminLoginPage() {
       await login(email, password, 'admin');
       navigate(getRedirectPath('super_admin'));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Giriş başarısız');
+      setError(err instanceof Error ? err.message : t('common.loginFailed'));
     } finally {
       setLoading(false);
     }
@@ -37,19 +39,19 @@ export function AdminLoginPage() {
     <AuthPageLayout variant="admin">
       <AuthFormShell
         icon={<Shield className="h-7 w-7 text-amber-400" />}
-        title="Admin Girişi"
-        subtitle="Platform yönetici hesabınız"
+        title={t('auth.adminLogin')}
+        subtitle={t('auth.adminSubtitle')}
         onSubmit={handleSubmit}
         accent="amber"
         footer={
           <p className="text-center text-sm">
-            Şirket hesabı?{' '}
+            {t('auth.customerAccount')}{' '}
             <Link
               to="/login"
               className="inline-flex items-center gap-1 font-semibold text-amber-300 transition hover:text-amber-200 hover:underline"
             >
               <MessageSquare className="h-3.5 w-3.5" />
-              Müşteri Girişi
+              {t('auth.customerLogin')}
               <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </p>
@@ -57,7 +59,7 @@ export function AdminLoginPage() {
       >
         {isDemoMode && (
           <div className="rounded-xl border border-amber-200/80 bg-gradient-to-r from-amber-50 to-orange-50 p-4 text-sm text-amber-900">
-            <strong>Demo:</strong> admin@demo.com / demo123
+            {t('auth.demoAdmin')}
           </div>
         )}
 
@@ -68,20 +70,20 @@ export function AdminLoginPage() {
         )}
 
         <div className="space-y-2">
-          <Label htmlFor="admin-email">E-posta</Label>
+          <Label htmlFor="admin-email">{t('common.email')}</Label>
           <Input
             id="admin-email"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="admin@platform.com"
+            placeholder={t('auth.adminEmailPlaceholder')}
             className="transition focus:ring-2 focus:ring-amber-500/20"
             required
           />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="admin-password">Şifre</Label>
+          <Label htmlFor="admin-password">{t('common.password')}</Label>
           <Input
             id="admin-password"
             type="password"
@@ -103,14 +105,14 @@ export function AdminLoginPage() {
             <Spinner />
           ) : (
             <>
-              Admin Paneline Giriş
+              {t('auth.adminPanelLogin')}
               <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
             </>
           )}
         </Button>
 
         <p className="text-center text-xs text-slate-500">
-          Yalnızca yetkili platform yöneticileri erişebilir
+          {t('auth.adminOnly')}
         </p>
       </AuthFormShell>
     </AuthPageLayout>

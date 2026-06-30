@@ -3,6 +3,7 @@
  */
 
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, UserX } from 'lucide-react';
 import { api } from '@/services/api';
@@ -10,6 +11,7 @@ import { Button, Input, Label, Card, CardContent, CardHeader, CardTitle, Spinner
 import type { StaffMember } from '@/types';
 
 export function StaffPage() {
+  const { t } = useTranslation();
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -39,33 +41,33 @@ export function StaffPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Personel</h1>
-          <p className="text-gray-500">Firma çalışanlarını yönetin</p>
+          <h1 className="text-2xl font-bold">{t('staff.title')}</h1>
+          <p className="text-gray-500">{t('staff.description')}</p>
         </div>
         <Button onClick={() => setShowForm(true)}>
-          <Plus className="h-4 w-4" /> Personel Ekle
+          <Plus className="h-4 w-4" /> {t('staff.add')}
         </Button>
       </div>
 
       {showForm && (
         <Card>
-          <CardHeader><CardTitle>Yeni Personel</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t('staff.new')}</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label>Ad Soyad</Label>
+                <Label>{t('staff.fullName')}</Label>
                 <Input value={name} onChange={(e) => setName(e.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label>E-posta</Label>
+                <Label>{t('common.email')}</Label>
                 <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
               </div>
             </div>
             <div className="flex gap-2">
               <Button onClick={() => createMutation.mutate({ name, email })} disabled={createMutation.isPending}>
-                {createMutation.isPending ? <Spinner /> : 'Ekle'}
+                {createMutation.isPending ? <Spinner /> : t('common.add')}
               </Button>
-              <Button variant="outline" onClick={() => setShowForm(false)}>İptal</Button>
+              <Button variant="outline" onClick={() => setShowForm(false)}>{t('common.cancel')}</Button>
             </div>
           </CardContent>
         </Card>
@@ -81,7 +83,9 @@ export function StaffPage() {
                 <div>
                   <p className="font-medium">{member.name}</p>
                   <p className="text-sm text-gray-500">{member.email}</p>
-                  <Badge variant="info" className="mt-1">{member.role}</Badge>
+                  <Badge variant="info" className="mt-1">
+                    {t(`common.roles.${member.role}`, { defaultValue: member.role })}
+                  </Badge>
                 </div>
                 <button onClick={() => deleteMutation.mutate(member.id)} className="p-2 hover:bg-red-50 rounded-lg">
                   <UserX className="h-4 w-4 text-red-500" />

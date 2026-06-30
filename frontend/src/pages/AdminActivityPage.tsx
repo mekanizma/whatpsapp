@@ -3,6 +3,7 @@
  */
 
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { Activity } from 'lucide-react';
 import { api } from '@/services/api';
@@ -10,17 +11,9 @@ import { PageHeader } from '@/components/PageHeader';
 import { Button, Card, CardContent, Spinner, Badge } from '@/components/ui';
 import type { ActivityLog } from '@/types';
 
-const ACTION_LABELS: Record<string, string> = {
-  company_created: 'Şirket oluşturuldu',
-  company_updated: 'Şirket güncellendi',
-  subscription_updated: 'Abonelik güncellendi',
-  login: 'Giriş',
-  message_sent: 'Mesaj gönderildi',
-  ticket_created: 'Talep oluşturuldu',
-  ticket_resolved: 'Talep çözüldü',
-};
-
 export function AdminActivityPage() {
+  const { t, i18n } = useTranslation();
+  const locale = i18n.language?.startsWith('en') ? 'en-US' : 'tr-TR';
   const [page, setPage] = useState(1);
 
   const { data, isLoading } = useQuery({
@@ -31,11 +24,14 @@ export function AdminActivityPage() {
   const logs = data?.data || [];
   const pagination = data?.pagination;
 
+  const actionLabel = (action: string) =>
+    t(`admin.activity.actions.${action}`, { defaultValue: action });
+
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Aktivite Logları"
-        description="Platform genelinde yapılan işlemlerin kaydı"
+        title={t('admin.activity.title')}
+        description={t('admin.activity.description')}
       />
 
       {isLoading ? (
@@ -46,7 +42,7 @@ export function AdminActivityPage() {
             {logs.length === 0 ? (
               <Card>
                 <CardContent className="py-12 text-center text-slate-500">
-                  Henüz aktivite kaydı yok
+                  {t('admin.activity.empty')}
                 </CardContent>
               </Card>
             ) : (
@@ -58,11 +54,9 @@ export function AdminActivityPage() {
                         <Activity className="h-4 w-4 text-slate-600" />
                       </div>
                       <div>
-                        <p className="font-medium text-slate-900">
-                          {ACTION_LABELS[log.action] || log.action}
-                        </p>
+                        <p className="font-medium text-slate-900">{actionLabel(log.action)}</p>
                         <p className="text-xs text-slate-500">
-                          {new Date(log.created_at).toLocaleString('tr-TR')}
+                          {new Date(log.created_at).toLocaleString(locale)}
                           {log.entity_type && ` · ${log.entity_type}`}
                           {log.company_id && ` · ${log.company_id.slice(0, 8)}…`}
                         </p>
@@ -77,24 +71,14 @@ export function AdminActivityPage() {
 
           {pagination && pagination.totalPages > 1 && (
             <div className="flex items-center justify-center gap-3">
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page <= 1}
-                onClick={() => setPage((p) => p - 1)}
-              >
-                Önceki
+              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+                {t('admin.activity.prev')}
               </Button>
               <span className="text-sm text-slate-500">
                 {page} / {pagination.totalPages}
               </span>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={page >= pagination.totalPages}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                Sonraki
+              <Button variant="outline" size="sm" disabled={page >= pagination.totalPages} onClick={() => setPage((p) => p + 1)}>
+                {t('admin.activity.next')}
               </Button>
             </div>
           )}

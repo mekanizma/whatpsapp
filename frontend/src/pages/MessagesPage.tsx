@@ -3,6 +3,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Send, Search, Phone, Bot, User, CheckCircle2, Headphones, MessageSquare, ChevronLeft } from 'lucide-react';
@@ -13,6 +14,8 @@ import { cn } from '@/lib/utils';
 import type { Conversation, Message, Ticket } from '@/types';
 
 export function MessagesPage() {
+  const { t, i18n } = useTranslation();
+  const locale = i18n.language?.startsWith('en') ? 'en-US' : 'tr-TR';
   const [searchParams, setSearchParams] = useSearchParams();
   const phoneParam = searchParams.get('phone');
   const ticketParam = searchParams.get('ticket');
@@ -58,7 +61,7 @@ export function MessagesPage() {
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
     },
     onError: (err: Error) => {
-      setReplyError(err.message || 'Mesaj gönderilemedi');
+      setReplyError(err.message || t('messages.sendFailed'));
     },
   });
 
@@ -91,22 +94,27 @@ export function MessagesPage() {
     staff: 'bg-primary text-white rounded-tr-sm shadow-md shadow-primary/20',
   };
 
+  const senderLabel = (type: string) => {
+    if (type === 'customer') return t('messages.customer');
+    if (type === 'ai') return t('messages.ai');
+    return t('messages.agent');
+  };
+
   return (
     <div className="flex h-[calc(100vh-11rem)] min-h-[420px] overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[var(--shadow-card)]">
-      {/* Sidebar */}
       <div className={cn('flex w-full flex-col border-r border-slate-100 bg-slate-50/50 md:w-80 lg:w-[22rem]', selectedPhone && 'hidden md:flex')}>
         <div className="border-b border-slate-100 bg-white p-4">
-          <h2 className="mb-3 text-sm font-semibold text-slate-900">Konuşmalar</h2>
+          <h2 className="mb-3 text-sm font-semibold text-slate-900">{t('messages.title')}</h2>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <Input className="border-slate-200 bg-slate-50 pl-9" placeholder="İsim veya numara ara..." value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Input className="border-slate-200 bg-slate-50 pl-9" placeholder={t('messages.search')} value={search} onChange={(e) => setSearch(e.target.value)} />
           </div>
         </div>
         <div className="flex-1 overflow-y-auto scrollbar-thin p-2">
           {isLoading ? (
             <div className="flex justify-center p-8"><Spinner /></div>
           ) : filtered?.length === 0 ? (
-            <EmptyState icon={MessageSquare} title="Henüz mesaj yok" description="WhatsApp bağlantısı kurulduğunda konuşmalar burada görünür" className="m-2 border-none bg-transparent" />
+            <EmptyState icon={MessageSquare} title={t('messages.empty')} description={t('messages.emptyDesc')} className="m-2 border-none bg-transparent" />
           ) : (
             filtered?.map((conv) => (
               <button
@@ -135,7 +143,6 @@ export function MessagesPage() {
         </div>
       </div>
 
-      {/* Chat */}
       <div className={cn('flex min-w-0 flex-1 flex-col', !selectedPhone && 'hidden md:flex')}>
         {selectedPhone ? (
           <>
@@ -163,7 +170,7 @@ export function MessagesPage() {
                     disabled={resolveMutation.isPending}
                   >
                     <CheckCircle2 className="h-4 w-4" />
-                    <span className="hidden sm:inline">Çözüldü</span>
+                    <span className="hidden sm:inline">{t('messages.resolved')}</span>
                   </Button>
                 )}
               </div>
@@ -171,7 +178,7 @@ export function MessagesPage() {
                 <div className="flex items-center gap-2 border-t border-amber-100 bg-amber-50/80 px-4 py-2.5 text-xs text-amber-900">
                   <Headphones className="h-4 w-4 shrink-0 text-amber-600" />
                   <span className="truncate font-medium">{activeTicket.subject}</span>
-                  <Badge variant="warning" className="ml-auto shrink-0">Canlı Destek</Badge>
+                  <Badge variant="warning" className="ml-auto shrink-0">{t('messages.liveSupport')}</Badge>
                 </div>
               )}
             </div>
@@ -184,12 +191,12 @@ export function MessagesPage() {
                       {msg.sender_type === 'ai' && <Bot className="h-3 w-3 text-violet-500" />}
                       {msg.sender_type === 'staff' && <User className="h-3 w-3 text-white/80" />}
                       <span className={cn('text-[10px] font-semibold uppercase tracking-wide', msg.sender_type === 'staff' ? 'text-white/70' : 'text-slate-400')}>
-                        {msg.sender_type === 'customer' ? 'Müşteri' : msg.sender_type === 'ai' ? 'AI' : 'Temsilci'}
+                        {senderLabel(msg.sender_type)}
                       </span>
                     </div>
                     <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.message}</p>
                     <p className={cn('mt-1.5 text-[10px] text-right', msg.sender_type === 'staff' ? 'text-white/60' : 'text-slate-400')}>
-                      {new Date(msg.created_at).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                      {new Date(msg.created_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
                 </div>
@@ -205,7 +212,7 @@ export function MessagesPage() {
               <div className="flex gap-2">
                 <Input
                   className="flex-1"
-                  placeholder={hasActiveTicket ? 'Müşteriye yanıt yazın...' : 'Mesaj yazın...'}
+                  placeholder={hasActiveTicket ? t('messages.replyPlaceholder') : t('messages.messagePlaceholder')}
                   value={replyText}
                   onChange={(e) => {
                     setReplyText(e.target.value);
@@ -224,8 +231,8 @@ export function MessagesPage() {
             <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-sm ring-1 ring-slate-200/80">
               <MessageSquare className="h-8 w-8 text-slate-300" />
             </div>
-            <p className="mt-4 font-medium text-slate-600">Bir konuşma seçin</p>
-            <p className="mt-1 text-sm text-slate-400">Sol listeden müşteri sohbetini açın</p>
+            <p className="mt-4 font-medium text-slate-600">{t('messages.selectChat')}</p>
+            <p className="mt-1 text-sm text-slate-400">{t('messages.selectChatDesc')}</p>
           </div>
         )}
       </div>

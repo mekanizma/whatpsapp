@@ -3,6 +3,7 @@
  */
 
 import { Request, Response, NextFunction } from 'express';
+import multer from 'multer';
 
 export class AppError extends Error {
   constructor(
@@ -25,6 +26,20 @@ export function errorHandler(
       success: false,
       error: err.message,
     });
+    return;
+  }
+
+  if (err instanceof multer.MulterError) {
+    const message =
+      err.code === 'LIMIT_FILE_SIZE'
+        ? 'Dosya boyutu en fazla 10 MB olabilir'
+        : 'Dosya yüklenemedi';
+    res.status(400).json({ success: false, error: message });
+    return;
+  }
+
+  if (err.message?.includes('Desteklenen formatlar')) {
+    res.status(400).json({ success: false, error: err.message });
     return;
   }
 

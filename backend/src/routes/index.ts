@@ -15,6 +15,8 @@ import * as messagesCtrl from '../controllers/messages.controller';
 import * as ticketsCtrl from '../controllers/tickets.controller';
 import * as staffCtrl from '../controllers/staff.controller';
 import * as subscriptionCtrl from '../controllers/subscription.controller';
+import * as appointmentsCtrl from '../controllers/appointments.controller';
+import { knowledgeFileUpload } from '../middleware/upload.middleware';
 
 const router = Router();
 
@@ -52,6 +54,19 @@ router.post('/whatsapp/disconnect', authenticate, requireRole('company_admin'), 
 
 // Knowledge Base
 router.get('/knowledge', authenticate, requireCompany, knowledgeCtrl.getKnowledgeItems);
+router.post(
+  '/knowledge/parse-file',
+  authenticate,
+  requireRole('company_admin'),
+  requireCompany,
+  (req, res, next) => {
+    knowledgeFileUpload.single('file')(req, res, (err) => {
+      if (err) next(err);
+      else next();
+    });
+  },
+  knowledgeCtrl.parseKnowledgeFile
+);
 router.post('/knowledge', authenticate, requireRole('company_admin'), requireCompany, knowledgeCtrl.createKnowledgeItem);
 router.put('/knowledge/:id', authenticate, requireRole('company_admin'), requireCompany, knowledgeCtrl.updateKnowledgeItem);
 router.delete('/knowledge/:id', authenticate, requireRole('company_admin'), requireCompany, knowledgeCtrl.deleteKnowledgeItem);
@@ -74,6 +89,12 @@ router.get('/staff', authenticate, requireCompany, staffCtrl.getStaff);
 router.post('/staff', authenticate, requireRole('company_admin'), requireCompany, staffCtrl.createStaff);
 router.put('/staff/:id', authenticate, requireRole('company_admin'), requireCompany, staffCtrl.updateStaff);
 router.delete('/staff/:id', authenticate, requireRole('company_admin'), requireCompany, staffCtrl.deleteStaff);
+
+// Appointments
+router.get('/appointments', authenticate, requireCompany, appointmentsCtrl.getAppointments);
+router.post('/appointments', authenticate, requireCompany, appointmentsCtrl.createAppointmentHandler);
+router.put('/appointments/:id', authenticate, requireCompany, appointmentsCtrl.updateAppointmentHandler);
+router.delete('/appointments/:id', authenticate, requireRole('company_admin'), requireCompany, appointmentsCtrl.deleteAppointmentHandler);
 
 // Subscriptions
 router.get('/subscriptions/current', authenticate, requireCompany, subscriptionCtrl.getCurrentSubscription);

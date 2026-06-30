@@ -20,6 +20,8 @@ import { TicketsPage } from '@/pages/TicketsPage';
 import { StaffPage } from '@/pages/StaffPage';
 import { WhatsAppPage } from '@/pages/WhatsAppPage';
 import { SubscriptionPage } from '@/pages/SubscriptionPage';
+import { SettingsPage } from '@/pages/SettingsPage';
+import { CalendarPage } from '@/pages/CalendarPage';
 import { AdminPage } from '@/pages/AdminPage';
 import { AdminCompaniesPage } from '@/pages/AdminCompaniesPage';
 import { AdminCompanyDetailPage } from '@/pages/AdminCompanyDetailPage';
@@ -76,9 +78,11 @@ function AppRoutes() {
         <Route path="messages" element={<MessagesPage />} />
         <Route path="knowledge" element={<KnowledgePage />} />
         <Route path="tickets" element={<TicketsPage />} />
+        <Route path="calendar" element={<CalendarPage />} />
         <Route path="staff" element={<StaffPage />} />
         <Route path="whatsapp" element={<WhatsAppPage />} />
         <Route path="subscription" element={<SubscriptionPage />} />
+        <Route path="settings" element={<SettingsPage />} />
       </Route>
 
       {/* Eski URL yönlendirmeleri */}

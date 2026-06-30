@@ -2,6 +2,7 @@
  * Super admin — platform ayarları (salt okunur özet)
  */
 
+import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { Settings, ExternalLink, Database, Cpu, Shield, Smartphone } from 'lucide-react';
 import { api } from '@/services/api';
@@ -10,6 +11,8 @@ import { Card, CardContent, CardHeader, CardTitle, Spinner, Badge } from '@/comp
 import type { PlatformSettings } from '@/types';
 
 export function AdminSettingsPage() {
+  const { t } = useTranslation();
+
   const { data: settings, isLoading } = useQuery({
     queryKey: ['admin-settings'],
     queryFn: () => api.get<PlatformSettings>('/admin/settings'),
@@ -22,50 +25,68 @@ export function AdminSettingsPage() {
   const items = [
     {
       icon: Database,
-      title: 'Veritabanı',
-      value: settings?.supabase_connected ? 'Supabase bağlı' : 'Demo modu',
+      titleKey: 'admin.settings.database',
+      value: settings?.supabase_connected ? t('admin.settings.dbConnected') : t('admin.settings.dbDemo'),
       badge: settings?.supabase_connected ? 'success' as const : 'warning' as const,
     },
     {
       icon: Cpu,
-      title: 'AI Modeli',
+      titleKey: 'admin.settings.aiModel',
       value: settings?.ai_model || '—',
-      sub: `Max token: ${settings?.ai_max_tokens} · Önbellek: ${settings?.ai_cache_enabled ? 'Açık' : 'Kapalı'}`,
+      sub: t('admin.settings.aiModelSub', {
+        max: settings?.ai_max_tokens,
+        cache: settings?.ai_cache_enabled ? t('admin.settings.cacheEnabled') : t('admin.settings.cacheDisabled'),
+      }),
     },
     {
       icon: Shield,
-      title: 'Ortam',
+      titleKey: 'admin.settings.environment',
       value: settings?.node_env || 'development',
       badge: settings?.demo_mode ? 'warning' as const : 'success' as const,
-      sub: settings?.demo_mode ? 'Demo modu aktif' : 'Canlı mod',
+      sub: settings?.demo_mode ? t('admin.settings.demoActive') : t('admin.settings.liveMode'),
     },
     {
       icon: Smartphone,
-      title: 'WhatsApp',
-      value: settings?.whatsapp_mode === 'cloud_api' ? 'Cloud API (Vercel)' : 'QR / Baileys (Yerel)',
+      titleKey: 'admin.settings.whatsappMode',
+      value: settings?.whatsapp_mode === 'cloud_api' ? t('admin.settings.cloudApi') : t('admin.settings.qrLocal'),
       badge: 'success' as const,
-      sub: settings?.whatsapp_mode === 'cloud_api' ? 'Meta webhook' : 'Geliştirme modu',
+      sub: settings?.whatsapp_mode === 'cloud_api' ? t('admin.settings.metaWebhook') : t('admin.settings.devMode'),
     },
+  ];
+
+  const guideItems = [
+    t('admin.settings.newCompanyGuide'),
+    t('admin.settings.quotaGuide'),
+    t('admin.settings.suspendGuide'),
+  ];
+
+  const billingItems = [
+    t('admin.settings.usagePage'),
+    t('admin.settings.openaiDashboard'),
   ];
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Platform Ayarları"
-        description="Sistem yapılandırması özeti — hassas anahtarlar sunucu .env dosyasında tutulur"
+        title={t('admin.settings.title')}
+        description={t('admin.settings.description')}
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {items.map((item) => (
-          <Card key={item.title}>
+          <Card key={item.titleKey}>
             <CardContent className="p-5">
               <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100">
                 <item.icon className="h-5 w-5 text-slate-600" />
               </div>
-              <p className="text-xs font-semibold uppercase text-slate-500">{item.title}</p>
+              <p className="text-xs font-semibold uppercase text-slate-500">{t(item.titleKey)}</p>
               <div className="mt-1 flex flex-wrap items-center gap-2">
                 <p className="font-semibold text-slate-900">{item.value}</p>
-                {item.badge && <Badge variant={item.badge}>{item.badge === 'success' ? 'OK' : 'Demo'}</Badge>}
+                {item.badge && (
+                  <Badge variant={item.badge}>
+                    {item.badge === 'success' ? t('admin.settings.ok') : t('admin.settings.demoBadge')}
+                  </Badge>
+                )}
               </div>
               {item.sub && <p className="mt-1 text-xs text-slate-500">{item.sub}</p>}
             </CardContent>
@@ -77,24 +98,25 @@ export function AdminSettingsPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
             <Settings className="h-5 w-5" />
-            Yönetim Kılavuzu
+            {t('admin.settings.guide')}
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4 text-sm text-slate-600">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="rounded-xl border border-slate-100 p-4">
-              <p className="font-semibold text-slate-800">Şirket İşlemleri</p>
+              <p className="font-semibold text-slate-800">{t('admin.settings.companyOps')}</p>
               <ul className="mt-2 list-inside list-disc space-y-1 text-slate-500">
-                <li>Yeni şirket: Şirketler → Yeni Şirket</li>
-                <li>Paket/kota: Şirket detay → Abonelik</li>
-                <li>Askıya alma: Şirket listesinden</li>
+                {guideItems.map((text) => (
+                  <li key={text}>{text}</li>
+                ))}
               </ul>
             </div>
             <div className="rounded-xl border border-slate-100 p-4">
-              <p className="font-semibold text-slate-800">AI & Faturalandırma</p>
+              <p className="font-semibold text-slate-800">{t('admin.settings.aiBilling')}</p>
               <ul className="mt-2 list-inside list-disc space-y-1 text-slate-500">
-                <li>Panel: AI Kullanımı sayfası</li>
-                <li>Gerçek fatura: OpenAI dashboard</li>
+                {billingItems.map((text) => (
+                  <li key={text}>{text}</li>
+                ))}
               </ul>
               <a
                 href="https://platform.openai.com/usage"
@@ -102,14 +124,11 @@ export function AdminSettingsPage() {
                 rel="noopener noreferrer"
                 className="mt-3 inline-flex items-center gap-1 text-teal-600 hover:underline"
               >
-                OpenAI Usage <ExternalLink className="h-3 w-3" />
+                {t('admin.settings.openaiUsage')} <ExternalLink className="h-3 w-3" />
               </a>
             </div>
           </div>
-          <p className="text-xs text-slate-400">
-            API anahtarları (OpenAI, Supabase, WhatsApp) yalnızca backend .env üzerinden değiştirilir.
-            Değişiklik sonrası sunucuyu yeniden başlatın.
-          </p>
+          <p className="text-xs text-slate-400">{t('admin.settings.envNote')}</p>
         </CardContent>
       </Card>
     </div>

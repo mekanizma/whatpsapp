@@ -141,6 +141,15 @@ export interface KnowledgeItem {
   created_at: string;
 }
 
+export interface ParsedKnowledgeFile {
+  title: string;
+  content: string;
+  source_filename: string;
+  file_type: string;
+  truncated: boolean;
+  char_count: number;
+}
+
 export interface Ticket {
   id: string;
   customer_phone: string;
@@ -151,6 +160,24 @@ export interface Ticket {
   assigned_staff: string | null;
   staff?: { name: string; email: string };
   created_at: string;
+}
+
+export type AppointmentStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
+export type AppointmentSource = 'ai' | 'manual' | 'panel';
+
+export interface Appointment {
+  id: string;
+  company_id: string;
+  customer_phone: string;
+  customer_name: string | null;
+  title: string;
+  notes: string | null;
+  starts_at: string;
+  ends_at: string;
+  status: AppointmentStatus;
+  source: AppointmentSource;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface StaffMember {

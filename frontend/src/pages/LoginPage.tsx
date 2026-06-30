@@ -4,6 +4,7 @@
 
 import { useState, FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { MessageSquare, Shield, ArrowRight } from 'lucide-react';
 import { useAuthStore, getRedirectPath } from '@/store/authStore';
 import { isDemoMode } from '@/lib/env';
@@ -12,6 +13,7 @@ import { AuthFormShell } from '@/components/auth/AuthFormShell';
 import { Button, Input, Label, Spinner } from '@/components/ui';
 
 export function LoginPage() {
+  const { t } = useTranslation();
   const [email, setEmail] = useState(isDemoMode ? 'firma@demo.com' : '');
   const [password, setPassword] = useState(isDemoMode ? 'demo123' : '');
   const [error, setError] = useState('');
@@ -28,7 +30,7 @@ export function LoginPage() {
       const user = useAuthStore.getState().user;
       navigate(getRedirectPath(user?.role));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Giriş başarısız');
+      setError(err instanceof Error ? err.message : t('common.loginFailed'));
     } finally {
       setLoading(false);
     }
@@ -38,27 +40,27 @@ export function LoginPage() {
     <AuthPageLayout variant="customer">
       <AuthFormShell
         icon={<MessageSquare className="h-7 w-7 text-teal-400" />}
-        title="Müşteri Paneli"
-        subtitle="Şirket hesabınızla giriş yapın"
+        title={t('auth.customerPanel')}
+        subtitle={t('auth.customerSubtitle')}
         onSubmit={handleSubmit}
         accent="teal"
         footer={
           <div className="space-y-3 text-center text-sm">
             <p>
-              Platform yöneticisi?{' '}
+              {t('auth.platformAdmin')}{' '}
               <Link
                 to="/admin/login"
                 className="inline-flex items-center gap-1 font-semibold text-teal-300 transition hover:text-teal-200"
               >
                 <Shield className="h-3.5 w-3.5" />
-                Admin Girişi
+                {t('auth.adminLogin')}
                 <ArrowRight className="h-3.5 w-3.5" />
               </Link>
             </p>
             <p>
-              Hesabınız yok mu?{' '}
+              {t('auth.noAccount')}{' '}
               <Link to="/register" className="font-semibold text-teal-300 hover:text-teal-200 hover:underline">
-                Kayıt Ol
+                {t('auth.register')}
               </Link>
             </p>
           </div>
@@ -66,8 +68,8 @@ export function LoginPage() {
       >
         {isDemoMode && (
           <div className="rounded-xl border border-amber-200/80 bg-gradient-to-r from-amber-50 to-orange-50 p-4 text-sm text-amber-900">
-            <p className="font-semibold">Demo hesaplar</p>
-            <p className="mt-1 text-amber-800">firma@demo.com / personel@demo.com — demo123</p>
+            <p className="font-semibold">{t('auth.demoAccounts')}</p>
+            <p className="mt-1 text-amber-800">{t('auth.demoHint')}</p>
           </div>
         )}
 
@@ -78,20 +80,20 @@ export function LoginPage() {
         )}
 
         <div className="space-y-2">
-          <Label htmlFor="email">E-posta</Label>
+          <Label htmlFor="email">{t('common.email')}</Label>
           <Input
             id="email"
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="ornek@sirket.com"
+            placeholder={t('auth.emailPlaceholder')}
             className="transition focus:ring-2 focus:ring-primary/20"
             required
           />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="password">Şifre</Label>
+          <Label htmlFor="password">{t('common.password')}</Label>
           <Input
             id="password"
             type="password"
@@ -113,7 +115,7 @@ export function LoginPage() {
             <Spinner />
           ) : (
             <>
-              Giriş Yap
+              {t('auth.login')}
               <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
             </>
           )}

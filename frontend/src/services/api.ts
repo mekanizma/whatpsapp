@@ -109,4 +109,36 @@ export const api = {
     request<T>(endpoint, { method: 'PATCH', body: JSON.stringify(body) }),
   delete: <T>(endpoint: string) =>
     request<T>(endpoint, { method: 'DELETE' }),
+
+  upload: async <T>(endpoint: string, file: File): Promise<T> => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const authHeaders = await getAuthHeaders();
+    const { 'Content-Type': _ct, ...headers } = authHeaders as Record<string, string>;
+
+    let response: Response;
+    try {
+      response = await fetch(`${API_URL}${endpoint}`, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+    } catch {
+      throw new Error('Sunucuya bağlanılamadı. Backend çalışıyor mu?');
+    }
+
+    let data: ApiResponse<T>;
+    try {
+      data = await response.json();
+    } catch {
+      throw new Error(`Sunucu geçersiz yanıt döndü (${response.status})`);
+    }
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || `Yükleme başarısız (${response.status})`);
+    }
+
+    return data.data as T;
+  },
 };

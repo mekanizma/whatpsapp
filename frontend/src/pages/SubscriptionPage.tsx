@@ -2,6 +2,7 @@
  * Subscription and usage page
  */
 
+import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { CreditCard, Check } from 'lucide-react';
 import { api } from '@/services/api';
@@ -19,6 +20,9 @@ interface Plan {
 }
 
 export function SubscriptionPage() {
+  const { t, i18n } = useTranslation();
+  const locale = i18n.language?.startsWith('en') ? 'en-US' : 'tr-TR';
+
   const { data: usage, isLoading: usageLoading } = useQuery({
     queryKey: ['subscription-usage'],
     queryFn: () => api.get<SubscriptionUsage>('/subscriptions/usage'),
@@ -36,29 +40,31 @@ export function SubscriptionPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Abonelik</h1>
-        <p className="text-gray-500">Paket ve kullanım bilgileri</p>
+        <h1 className="text-2xl font-bold">{t('subscription.title')}</h1>
+        <p className="text-gray-500">{t('subscription.description')}</p>
       </div>
 
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <CreditCard className="h-5 w-5" /> Mevcut Kullanım
+            <CreditCard className="h-5 w-5" /> {t('subscription.currentUsage')}
           </CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid gap-6 sm:grid-cols-2">
             <div>
-              <p className="text-sm text-gray-500 mb-1">Mesaj Kullanımı</p>
+              <p className="text-sm text-gray-500 mb-1">{t('subscription.messageUsage')}</p>
               <p className="text-2xl font-bold">{usage?.messages_used} / {usage?.messages_limit}</p>
               <div className="mt-2 h-2 w-full rounded-full bg-gray-100">
                 <div className="h-2 rounded-full bg-primary" style={{ width: `${usage?.messages_percentage ?? 0}%` }} />
               </div>
             </div>
             <div>
-              <p className="text-sm text-gray-500 mb-1">Kullanıcı Sayısı</p>
+              <p className="text-sm text-gray-500 mb-1">{t('subscription.userCount')}</p>
               <p className="text-2xl font-bold">{usage?.users_used} / {usage?.users_limit}</p>
-              <Badge variant="info" className="mt-2">{usage?.status}</Badge>
+              <Badge variant="info" className="mt-2">
+                {usage?.status ? t(`common.status.${usage.status}`, { defaultValue: usage.status }) : ''}
+              </Badge>
             </div>
           </div>
         </CardContent>
@@ -71,16 +77,20 @@ export function SubscriptionPage() {
               <h3 className="text-lg font-bold">{plan.name}</h3>
               <p className="text-sm text-gray-500 mb-4">{plan.description}</p>
               <p className="text-3xl font-bold mb-4">
-                ₺{plan.price_monthly}<span className="text-sm font-normal text-gray-500">/ay</span>
+                ₺{plan.price_monthly}<span className="text-sm font-normal text-gray-500">{t('subscription.perMonth')}</span>
               </p>
               <ul className="space-y-2 text-sm">
                 <li className="flex items-center gap-2">
                   <Check className="h-4 w-4 text-primary" />
-                  {plan.message_limit >= 999999 ? 'Sınırsız mesaj' : `${plan.message_limit.toLocaleString()} mesaj`}
+                  {plan.message_limit >= 999999
+                    ? t('subscription.unlimitedMessages')
+                    : t('subscription.messages', { count: plan.message_limit.toLocaleString(locale) })}
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="h-4 w-4 text-primary" />
-                  {plan.user_limit >= 999 ? 'Sınırsız kullanıcı' : `${plan.user_limit} kullanıcı`}
+                  {plan.user_limit >= 999
+                    ? t('subscription.unlimitedUsers')
+                    : t('subscription.users', { count: plan.user_limit })}
                 </li>
               </ul>
             </CardContent>

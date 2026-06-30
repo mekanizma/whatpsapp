@@ -3,6 +3,7 @@
  */
 
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -18,20 +19,12 @@ import {
 import type { CompanyDetail } from '@/types';
 import { cn } from '@/lib/utils';
 
-const PLANS = [
-  { value: 'starter', label: 'Starter' },
-  { value: 'business', label: 'Business' },
-  { value: 'enterprise', label: 'Enterprise' },
-];
-
-const STATUSES = [
-  { value: 'trial', label: 'Deneme' },
-  { value: 'active', label: 'Aktif' },
-  { value: 'suspended', label: 'Askıda' },
-  { value: 'inactive', label: 'Pasif' },
-];
+const PLAN_VALUES = ['starter', 'business', 'enterprise'];
+const STATUS_VALUES = ['trial', 'active', 'suspended', 'inactive', 'cancelled'];
 
 export function AdminCompanyDetailPage() {
+  const { t, i18n } = useTranslation();
+  const locale = i18n.language?.startsWith('en') ? 'en-US' : 'tr-TR';
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<'genel' | 'abonelik' | 'kullanicilar'>('genel');
@@ -62,9 +55,9 @@ export function AdminCompanyDetailPage() {
   if (error || !data) {
     return (
       <div className="space-y-4 text-center">
-        <p className="text-rose-600">Şirket bulunamadı</p>
+        <p className="text-rose-600">{t('admin.companyDetail.notFound')}</p>
         <Button variant="outline" asChild>
-          <Link to="/admin/companies"><ArrowLeft className="h-4 w-4" /> Geri</Link>
+          <Link to="/admin/companies"><ArrowLeft className="h-4 w-4" /> {t('common.back')}</Link>
         </Button>
       </div>
     );
@@ -81,10 +74,12 @@ export function AdminCompanyDetailPage() {
   };
 
   const tabs = [
-    { id: 'genel' as const, label: 'Genel Bilgiler' },
-    { id: 'abonelik' as const, label: 'Abonelik & Kota' },
-    { id: 'kullanicilar' as const, label: 'Kullanıcılar' },
+    { id: 'genel' as const, labelKey: 'admin.companyDetail.tabs.general' },
+    { id: 'abonelik' as const, labelKey: 'admin.companyDetail.tabs.subscription' },
+    { id: 'kullanicilar' as const, labelKey: 'admin.companyDetail.tabs.users' },
   ];
+
+  const planLabel = t(`common.plans.${company.subscription_plan}`, { defaultValue: company.subscription_plan });
 
   return (
     <div className="space-y-6">
@@ -94,101 +89,88 @@ export function AdminCompanyDetailPage() {
         </Button>
         <PageHeader
           title={company.company_name}
-          description={`ID: ${company.id.slice(0, 8)}… · ${company.subscription_plan} paket`}
+          description={t('admin.companyDetail.headerDesc', {
+            id: company.id.slice(0, 8),
+            plan: planLabel,
+          })}
         />
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard title="Mesajlar" value={stats.total_messages} icon={MessageSquare} color="text-blue-600" bgColor="bg-blue-50" />
-        <StatCard title="AI Yanıt" value={stats.ai_responses} icon={Zap} color="text-teal-600" bgColor="bg-teal-50" />
-        <StatCard title="Transfer" value={stats.transferred} icon={Ticket} color="text-amber-600" bgColor="bg-amber-50" />
-        <StatCard title="Personel" value={staff_count} icon={Users} color="text-violet-600" bgColor="bg-violet-50" />
+        <StatCard title={t('admin.companyDetail.messages')} value={stats.total_messages} icon={MessageSquare} color="text-blue-600" bgColor="bg-blue-50" />
+        <StatCard title={t('admin.companyDetail.aiResponse')} value={stats.ai_responses} icon={Zap} color="text-teal-600" bgColor="bg-teal-50" />
+        <StatCard title={t('admin.companyDetail.transfer')} value={stats.transferred} icon={Ticket} color="text-amber-600" bgColor="bg-amber-50" />
+        <StatCard title={t('admin.companyDetail.staff')} value={staff_count} icon={Users} color="text-violet-600" bgColor="bg-violet-50" />
       </div>
 
       <Card>
         <CardContent className="flex flex-wrap items-center gap-3 p-4">
           <Smartphone className="h-5 w-5 text-slate-400" />
           <span className="text-sm">
-            WhatsApp:{' '}
+            {t('admin.companyDetail.whatsappLabel')}:{' '}
             <Badge variant={whatsapp?.status === 'connected' ? 'success' : 'warning'}>
               {whatsapp?.status === 'connected'
-                ? whatsapp.phone_number || 'Bağlı'
-                : 'Bağlı değil'}
+                ? whatsapp.phone_number || t('common.connected')
+                : t('common.notConnected')}
             </Badge>
           </span>
           <span className="text-sm text-slate-500">
-            AI token (ay): {stats.ai_tokens_used.toLocaleString('tr-TR')}
+            {t('admin.companyDetail.aiTokensMonth')} {stats.ai_tokens_used.toLocaleString(locale)}
           </span>
         </CardContent>
       </Card>
 
       <div className="flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1">
-        {tabs.map((t) => (
+        {tabs.map((tabItem) => (
           <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
+            key={tabItem.id}
+            onClick={() => setTab(tabItem.id)}
             className={cn(
               'shrink-0 rounded-lg px-4 py-2 text-sm font-medium transition',
-              tab === t.id ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'
+              tab === tabItem.id ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-50'
             )}
           >
-            {t.label}
+            {t(tabItem.labelKey)}
           </button>
         ))}
       </div>
 
       {tab === 'genel' && (
         <Card>
-          <CardHeader><CardTitle>Şirket Bilgileri</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t('admin.companyDetail.companyInfo')}</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label>Şirket Adı</Label>
-                <Input
-                  value={companyForm.company_name}
-                  onChange={(e) => setForm({ ...form, company_name: e.target.value })}
-                />
+                <Label>{t('admin.companyDetail.companyName')}</Label>
+                <Input value={companyForm.company_name} onChange={(e) => setForm({ ...form, company_name: e.target.value })} />
               </div>
               <div className="space-y-2">
-                <Label>Durum</Label>
+                <Label>{t('admin.companyDetail.status')}</Label>
                 <select
                   className="flex h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
                   value={companyForm.status}
                   onChange={(e) => setForm({ ...form, status: e.target.value })}
                 >
-                  {STATUSES.map((s) => (
-                    <option key={s.value} value={s.value}>{s.label}</option>
+                  {STATUS_VALUES.map((value) => (
+                    <option key={value} value={value}>{t(`common.status.${value}`)}</option>
                   ))}
                 </select>
               </div>
               <div className="space-y-2">
-                <Label>E-posta</Label>
-                <Input
-                  type="email"
-                  value={companyForm.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                />
+                <Label>{t('common.email')}</Label>
+                <Input type="email" value={companyForm.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
               </div>
               <div className="space-y-2">
-                <Label>Telefon</Label>
-                <Input
-                  value={companyForm.phone}
-                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                />
+                <Label>{t('settings.phone')}</Label>
+                <Input value={companyForm.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
               </div>
               <div className="space-y-2 sm:col-span-2">
-                <Label>Adres</Label>
-                <Input
-                  value={companyForm.address}
-                  onChange={(e) => setForm({ ...form, address: e.target.value })}
-                />
+                <Label>{t('admin.companyDetail.address')}</Label>
+                <Input value={companyForm.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
               </div>
             </div>
-            <Button
-              onClick={() => updateMutation.mutate(companyForm)}
-              disabled={updateMutation.isPending}
-            >
-              {updateMutation.isPending ? <Spinner /> : <><Save className="h-4 w-4" /> Kaydet</>}
+            <Button onClick={() => updateMutation.mutate(companyForm)} disabled={updateMutation.isPending}>
+              {updateMutation.isPending ? <Spinner /> : <><Save className="h-4 w-4" /> {t('common.save')}</>}
             </Button>
           </CardContent>
         </Card>
@@ -196,66 +178,62 @@ export function AdminCompanyDetailPage() {
 
       {tab === 'abonelik' && subscription && (
         <Card>
-          <CardHeader><CardTitle>Abonelik & Mesaj Kotası</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t('admin.companyDetail.subscription')}</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label>Paket</Label>
+                <Label>{t('admin.companyDetail.package')}</Label>
                 <select
                   className="flex h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
                   defaultValue={subscription.plan?.plan_type || company.subscription_plan}
                   onChange={(e) => subMutation.mutate({ plan_type: e.target.value })}
                 >
-                  {PLANS.map((p) => (
-                    <option key={p.value} value={p.value}>{p.label}</option>
+                  {PLAN_VALUES.map((value) => (
+                    <option key={value} value={value}>{t(`common.plans.${value}`)}</option>
                   ))}
                 </select>
               </div>
               <div className="space-y-2">
-                <Label>Abonelik Durumu</Label>
+                <Label>{t('admin.companyDetail.subStatus')}</Label>
                 <select
                   className="flex h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
                   defaultValue={subscription.status}
                   onChange={(e) => subMutation.mutate({ status: e.target.value })}
                 >
-                  <option value="trial">Deneme</option>
-                  <option value="active">Aktif</option>
-                  <option value="cancelled">İptal</option>
+                  {['trial', 'active', 'cancelled'].map((value) => (
+                    <option key={value} value={value}>{t(`common.status.${value}`)}</option>
+                  ))}
                 </select>
               </div>
               <div className="space-y-2">
-                <Label>Mesaj Limiti</Label>
+                <Label>{t('admin.companyDetail.messageLimit')}</Label>
                 <Input
                   type="number"
                   defaultValue={subscription.messages_limit}
-                  onBlur={(e) =>
-                    subMutation.mutate({ messages_limit: parseInt(e.target.value) || 0 })
-                  }
+                  onBlur={(e) => subMutation.mutate({ messages_limit: parseInt(e.target.value) || 0 })}
                 />
               </div>
               <div className="space-y-2">
-                <Label>Kullanılan Mesaj</Label>
+                <Label>{t('admin.companyDetail.messagesUsed')}</Label>
                 <div className="flex gap-2">
                   <Input
                     type="number"
                     defaultValue={subscription.messages_used}
-                    onBlur={(e) =>
-                      subMutation.mutate({ messages_used: parseInt(e.target.value) || 0 })
-                    }
+                    onBlur={(e) => subMutation.mutate({ messages_used: parseInt(e.target.value) || 0 })}
                   />
-                  <Button
-                    variant="outline"
-                    onClick={() => subMutation.mutate({ messages_used: 0 })}
-                    disabled={subMutation.isPending}
-                  >
-                    <RotateCcw className="h-4 w-4" /> Sıfırla
+                  <Button variant="outline" onClick={() => subMutation.mutate({ messages_used: 0 })} disabled={subMutation.isPending}>
+                    <RotateCcw className="h-4 w-4" /> {t('admin.companyDetail.reset')}
                   </Button>
                 </div>
               </div>
             </div>
             <p className="text-sm text-slate-500">
-              Kullanıcı limiti: {subscription.users_limit} · Bu ay AI API: {stats.ai_api_calls} çağrı
-              · Önbellek: {stats.ai_cached_hits} · Atlanan: {stats.ai_skipped}
+              {t('admin.companyDetail.usageHint', {
+                usersLimit: subscription.users_limit,
+                apiCalls: stats.ai_api_calls,
+                cached: stats.ai_cached_hits,
+                skipped: stats.ai_skipped,
+              })}
             </p>
           </CardContent>
         </Card>
@@ -263,10 +241,10 @@ export function AdminCompanyDetailPage() {
 
       {tab === 'kullanicilar' && (
         <Card>
-          <CardHeader><CardTitle>Panel Kullanıcıları</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t('admin.companyDetail.users')}</CardTitle></CardHeader>
           <CardContent>
             {users.length === 0 ? (
-              <p className="text-sm text-slate-500">Henüz kullanıcı yok. Şirket oluştururken admin ekleyebilirsiniz.</p>
+              <p className="text-sm text-slate-500">{t('admin.companyDetail.noUsers')}</p>
             ) : (
               <div className="divide-y divide-slate-100">
                 {users.map((u) => (
@@ -274,11 +252,11 @@ export function AdminCompanyDetailPage() {
                     <div>
                       <p className="font-medium">{u.full_name}</p>
                       <p className="text-xs text-slate-500">
-                        {u.role} · {new Date(u.created_at).toLocaleDateString('tr-TR')}
+                        {t(`common.roles.${u.role}`, { defaultValue: u.role })} · {new Date(u.created_at).toLocaleDateString(locale)}
                       </p>
                     </div>
                     <Badge variant={u.is_active ? 'success' : 'warning'}>
-                      {u.is_active ? 'Aktif' : 'Pasif'}
+                      {u.is_active ? t('common.active') : t('common.inactive')}
                     </Badge>
                   </div>
                 ))}

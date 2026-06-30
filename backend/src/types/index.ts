@@ -14,6 +14,8 @@ export type MessageSenderType = 'customer' | 'ai' | 'staff';
 export type MessageStatus = 'open' | 'closed' | 'transferred';
 export type TicketPriority = 'low' | 'medium' | 'high' | 'urgent';
 export type TicketStatus = 'open' | 'in_progress' | 'resolved' | 'closed';
+export type AppointmentStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
+export type AppointmentSource = 'ai' | 'manual' | 'panel';
 
 export interface Profile {
   id: string;
@@ -91,6 +93,21 @@ export interface Ticket {
   created_at: string;
   updated_at: string;
   closed_at: string | null;
+}
+
+export interface Appointment {
+  id: string;
+  company_id: string;
+  customer_phone: string;
+  customer_name: string | null;
+  title: string;
+  notes: string | null;
+  starts_at: string;
+  ends_at: string;
+  status: AppointmentStatus;
+  source: AppointmentSource;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface StaffMember {

@@ -25,6 +25,9 @@ interface AuthState {
   register: (email: string, password: string, fullName: string) => Promise<void>;
   logout: () => Promise<void>;
   fetchProfile: () => Promise<void>;
+  updateProfile: (data: { full_name?: string }) => Promise<Profile>;
+  updateCompany: (data: Partial<Company>) => Promise<Company>;
+  changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   initialize: () => Promise<void>;
 }
 
@@ -33,7 +36,7 @@ export function getRedirectPath(role?: UserRole): string {
   return '/panel/dashboard';
 }
 
-export const useAuthStore = create<AuthState>((set) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   company: null,
   isLoading: true,
@@ -108,11 +111,49 @@ export const useAuthStore = create<AuthState>((set) => ({
     }
   },
 
+  updateProfile: async (data) => {
+    const updated = await api.put<Profile>('/auth/profile', data);
+    set((state) => ({
+      user: state.user ? { ...state.user, ...updated } : updated,
+    }));
+    return updated;
+  },
+
+  updateCompany: async (data) => {
+    const company = get().company;
+    if (!company?.id) throw new Error('Şirket bilgisi bulunamadı');
+    const updated = await api.put<Company>(`/companies/${company.id}`, data);
+    set({ company: { ...company, ...updated } });
+    return updated;
+  },
+
+  changePassword: async (currentPassword, newPassword) => {
+    if (isDemoMode) {
+      throw new Error('Demo modda şifre değiştirilemez.');
+    }
+    if (!supabaseConfigured) {
+      throw new Error('Supabase yapılandırılmamış.');
+    }
+
+    const { data: { user } } = await supabase.auth.getUser();
+    const email = user?.email;
+    if (!email) throw new Error('Oturum bilgisi alınamadı. Lütfen tekrar giriş yapın.');
+
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password: currentPassword,
+    });
+    if (signInError) throw new Error('Mevcut şifre hatalı.');
+
+    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+    if (updateError) throw new Error(updateError.message);
+  },
+
   initialize: async () => {
     if (isDemoMode) {
       const token = localStorage.getItem('wa_demo_token');
       if (token) {
-        await useAuthStore.getState().fetchProfile();
+        await get().fetchProfile();
       } else {
         set({ isLoading: false });
       }
@@ -127,7 +168,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        await useAuthStore.getState().fetchProfile();
+        await get().fetchProfile();
       } else {
         set({ isLoading: false });
       }

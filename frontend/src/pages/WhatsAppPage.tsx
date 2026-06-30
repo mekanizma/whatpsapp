@@ -4,6 +4,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Smartphone, Wifi, WifiOff, QrCode, Send, Unplug, Cloud, Copy, Check,
@@ -38,9 +39,10 @@ interface WaConfig {
 }
 
 export function WhatsAppPage() {
+  const { t } = useTranslation();
   const [session, setSession] = useState<QrSession | null>(null);
   const [testPhone, setTestPhone] = useState('');
-  const [testMessage, setTestMessage] = useState('Merhaba! Test mesajı.');
+  const [testMessage, setTestMessage] = useState('');
   const [testFeedback, setTestFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [copied, setCopied] = useState(false);
   const [cloudForm, setCloudForm] = useState({
@@ -49,6 +51,10 @@ export function WhatsAppPage() {
     access_token: '',
   });
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    setTestMessage(t('whatsapp.defaultTestMsg'));
+  }, [t]);
 
   const { data: status } = useQuery({
     queryKey: ['whatsapp-status'],
@@ -75,6 +81,7 @@ export function WhatsAppPage() {
   const isConnected = status?.is_configured || status?.status === 'connected';
   const useCloudApi = status?.supports_qr === false;
   const webhookUrl = status?.webhook_url || `${window.location.origin}/webhook/whatsapp`;
+  const webhookSteps = t('whatsapp.webhookSteps', { returnObjects: true }) as string[];
 
   const startQrMutation = useMutation({
     mutationFn: () => api.post<QrSession>('/whatsapp/qr/start'),
@@ -123,7 +130,7 @@ export function WhatsAppPage() {
 
   const testMutation = useMutation({
     mutationFn: () => api.post('/whatsapp/test', { to_phone: testPhone, message: testMessage }),
-    onSuccess: () => setTestFeedback({ type: 'success', text: 'Test mesajı gönderildi!' }),
+    onSuccess: () => setTestFeedback({ type: 'success', text: t('whatsapp.testSent') }),
     onError: (err) => setTestFeedback({ type: 'error', text: (err as Error).message }),
   });
 
@@ -144,18 +151,18 @@ export function WhatsAppPage() {
     <div className="space-y-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold">WhatsApp Bağlantısı</h1>
+          <h1 className="text-2xl font-bold">{t('whatsapp.title')}</h1>
           <p className="text-gray-500">
-            {useCloudApi ? 'Meta WhatsApp Cloud API' : 'QR kod ile iş hattınızı bağlayın'}
+            {useCloudApi ? t('whatsapp.cloudApiDesc') : t('whatsapp.description')}
           </p>
         </div>
         {isConnected ? (
           <Badge variant="success" className="self-start px-3 py-1.5 text-sm">
-            <Wifi className="mr-1 h-4 w-4" /> Bağlı
+            <Wifi className="mr-1 h-4 w-4" /> {t('whatsapp.connected')}
           </Badge>
         ) : (
           <Badge variant="danger" className="self-start px-3 py-1.5 text-sm">
-            <WifiOff className="mr-1 h-4 w-4" /> Bağlı Değil
+            <WifiOff className="mr-1 h-4 w-4" /> {t('whatsapp.disconnected')}
           </Badge>
         )}
       </div>
@@ -171,13 +178,13 @@ export function WhatsAppPage() {
                 <div>
                   <p className="text-lg font-semibold">{status?.phone_number}</p>
                   <p className="text-sm text-gray-500">
-                    {status?.connection_type === 'qr' ? 'QR ile bağlandı' : 'Cloud API ile bağlandı'}
+                    {status?.connection_type === 'qr' ? t('whatsapp.qrConnected') : t('whatsapp.cloudConnected')}
                   </p>
                 </div>
               </div>
               <Button variant="outline" onClick={() => disconnectMutation.mutate()} disabled={disconnectMutation.isPending}>
                 <Unplug className="h-4 w-4" />
-                Bağlantıyı Kes
+                {t('whatsapp.disconnect')}
               </Button>
             </div>
           </CardContent>
@@ -188,33 +195,33 @@ export function WhatsAppPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Cloud className="h-5 w-5" />
-                Meta Cloud API Bağlantısı
+                {t('whatsapp.cloudApi')}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label>İş Telefonu</Label>
+                <Label>{t('whatsapp.businessPhone')}</Label>
                 <Input
                   value={cloudForm.phone_number}
                   onChange={(e) => setCloudForm({ ...cloudForm, phone_number: e.target.value })}
-                  placeholder="+905551234567"
+                  placeholder={t('whatsapp.phonePlaceholder')}
                 />
               </div>
               <div className="space-y-2">
-                <Label>Phone Number ID</Label>
+                <Label>{t('whatsapp.phoneNumberId')}</Label>
                 <Input
                   value={cloudForm.business_account_id}
                   onChange={(e) => setCloudForm({ ...cloudForm, business_account_id: e.target.value })}
-                  placeholder="Meta Developer → WhatsApp → Phone Number ID"
+                  placeholder={t('whatsapp.phoneNumberIdPlaceholder')}
                 />
               </div>
               <div className="space-y-2">
-                <Label>Access Token</Label>
+                <Label>{t('whatsapp.accessToken')}</Label>
                 <Input
                   type="password"
                   value={cloudForm.access_token}
                   onChange={(e) => setCloudForm({ ...cloudForm, access_token: e.target.value })}
-                  placeholder="Permanent veya System User token"
+                  placeholder={t('whatsapp.accessTokenPlaceholder')}
                 />
               </div>
               {cloudConnectMutation.isError && (
@@ -227,17 +234,17 @@ export function WhatsAppPage() {
                 onClick={() => cloudConnectMutation.mutate()}
                 disabled={cloudConnectMutation.isPending || !cloudForm.access_token}
               >
-                {cloudConnectMutation.isPending ? <Spinner /> : 'Cloud API ile Bağlan'}
+                {cloudConnectMutation.isPending ? <Spinner /> : t('whatsapp.connectCloud')}
               </Button>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader><CardTitle>Webhook Ayarları (Meta)</CardTitle></CardHeader>
+            <CardHeader><CardTitle>{t('whatsapp.webhookTitle')}</CardTitle></CardHeader>
             <CardContent className="space-y-4 text-sm text-gray-600">
-              <p>Meta Developer Console → WhatsApp → Configuration → Webhook:</p>
+              <p>{t('whatsapp.webhookDesc')}</p>
               <div className="space-y-2">
-                <Label>Callback URL</Label>
+                <Label>{t('whatsapp.callbackUrl')}</Label>
                 <div className="flex gap-2">
                   <Input readOnly value={webhookUrl} className="text-xs" />
                   <Button type="button" variant="outline" size="icon" onClick={copyWebhook}>
@@ -246,14 +253,13 @@ export function WhatsAppPage() {
                 </div>
               </div>
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-900">
-                <p className="font-medium">Verify Token</p>
-                <p className="mt-1">Vercel&apos;deki <code className="text-xs">WHATSAPP_VERIFY_TOKEN</code> değerini Meta webhook doğrulamasına girin.</p>
+                <p className="font-medium">{t('whatsapp.verifyToken')}</p>
+                <p className="mt-1">{t('whatsapp.webhookHint')}</p>
               </div>
               <ol className="list-inside list-decimal space-y-1">
-                <li>developers.facebook.com → uygulamanız</li>
-                <li>WhatsApp → API Setup → Webhook</li>
-                <li>URL ve Verify Token kaydedin</li>
-                <li><strong>messages</strong> alanına abone olun</li>
+                {webhookSteps.map((step) => (
+                  <li key={step}>{step}</li>
+                ))}
               </ol>
             </CardContent>
           </Card>
@@ -264,7 +270,7 @@ export function WhatsAppPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <QrCode className="h-5 w-5" />
-                QR Kod ile Bağlan
+                {t('whatsapp.qrConnect')}
               </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col items-center space-y-4">
@@ -279,7 +285,11 @@ export function WhatsAppPage() {
                     </div>
                   )}
                   <Button onClick={() => startQrMutation.mutate()} disabled={startQrMutation.isPending} className="w-full max-w-xs">
-                    {startQrMutation.isPending ? <span className="flex items-center gap-2"><Spinner /> QR oluşturuluyor...</span> : 'QR Kod Oluştur'}
+                    {startQrMutation.isPending ? (
+                      <span className="flex items-center gap-2"><Spinner /> {t('whatsapp.generatingQr')}</span>
+                    ) : (
+                      t('whatsapp.generateQr')
+                    )}
                   </Button>
                 </>
               ) : (
@@ -287,17 +297,17 @@ export function WhatsAppPage() {
                   <img src={session.qr_data_url} alt="WhatsApp QR" className="h-56 w-56 rounded-2xl border-2 p-3" />
                   <StatusLabel status={session.status} />
                   <div className="flex w-full max-w-xs gap-2">
-                    <Button variant="outline" className="flex-1" onClick={() => startQrMutation.mutate()}>Yenile</Button>
-                    <Button variant="ghost" className="flex-1" onClick={cancelQr}>İptal</Button>
+                    <Button variant="outline" className="flex-1" onClick={() => startQrMutation.mutate()}>{t('whatsapp.refresh')}</Button>
+                    <Button variant="ghost" className="flex-1" onClick={cancelQr}>{t('common.cancel')}</Button>
                   </div>
                 </>
               )}
             </CardContent>
           </Card>
           <Card>
-            <CardHeader><CardTitle>Nasıl Çalışır?</CardTitle></CardHeader>
+            <CardHeader><CardTitle>{t('whatsapp.howItWorks')}</CardTitle></CardHeader>
             <CardContent className="text-sm text-gray-600">
-              <p>Yerel geliştirmede QR ile bağlanın. Production (Vercel) ortamında Meta Cloud API kullanılır.</p>
+              <p>{t('whatsapp.howItWorksDesc')}</p>
             </CardContent>
           </Card>
         </div>
@@ -305,15 +315,15 @@ export function WhatsAppPage() {
 
       {isConnected && (
         <Card>
-          <CardHeader><CardTitle>Test Mesajı</CardTitle></CardHeader>
+          <CardHeader><CardTitle>{t('whatsapp.testMessage')}</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label>Alıcı Telefon</Label>
+                <Label>{t('whatsapp.recipientPhone')}</Label>
                 <Input value={testPhone} onChange={(e) => { setTestPhone(e.target.value); setTestFeedback(null); }} placeholder="905551234567" />
               </div>
               <div className="space-y-2">
-                <Label>Mesaj</Label>
+                <Label>{t('whatsapp.message')}</Label>
                 <Input value={testMessage} onChange={(e) => setTestMessage(e.target.value)} />
               </div>
             </div>
@@ -324,7 +334,7 @@ export function WhatsAppPage() {
             )}
             <Button onClick={() => { setTestFeedback(null); testMutation.mutate(); }} disabled={!testPhone || testMutation.isPending}>
               <Send className="h-4 w-4" />
-              {testMutation.isPending ? 'Gönderiliyor...' : 'Test Gönder'}
+              {testMutation.isPending ? t('whatsapp.sending') : t('whatsapp.sendTest')}
             </Button>
           </CardContent>
         </Card>
@@ -334,13 +344,21 @@ export function WhatsAppPage() {
 }
 
 function StatusLabel({ status }: { status: string }) {
-  const labels: Record<string, { text: string; color: string }> = {
-    pending: { text: 'QR kodu tarayın', color: 'text-gray-600' },
-    scanned: { text: 'Bağlanıyor...', color: 'text-primary' },
-    connected: { text: 'Bağlantı başarılı!', color: 'text-green-600' },
-    expired: { text: 'QR süresi doldu', color: 'text-red-600' },
-    failed: { text: 'Bağlantı başarısız', color: 'text-red-600' },
+  const { t } = useTranslation();
+  const keys: Record<string, string> = {
+    pending: 'whatsapp.qrScan',
+    scanned: 'whatsapp.qrConnecting',
+    connected: 'whatsapp.qrSuccess',
+    expired: 'whatsapp.qrExpired',
+    failed: 'whatsapp.qrFailed',
   };
-  const info = labels[status] || labels.pending;
-  return <p className={cn('font-medium', info.color)}>{info.text}</p>;
+  const colorMap: Record<string, string> = {
+    pending: 'text-gray-600',
+    scanned: 'text-primary',
+    connected: 'text-green-600',
+    expired: 'text-red-600',
+    failed: 'text-red-600',
+  };
+  const key = keys[status] || keys.pending;
+  return <p className={cn('font-medium', colorMap[status] || colorMap.pending)}>{t(key)}</p>;
 }

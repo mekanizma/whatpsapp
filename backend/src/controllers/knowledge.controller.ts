@@ -7,6 +7,7 @@ import { config } from '../config';
 import { adminClient } from '../database/supabase';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { logActivity } from '../services/log.service';
+import { parseKnowledgeDocument } from '../services/document-parser.service';
 
 export async function getKnowledgeItems(req: AuthRequest, res: Response): Promise<void> {
   if (config.demoMode) {
@@ -85,4 +86,34 @@ export async function deleteKnowledgeItem(req: AuthRequest, res: Response): Prom
   }
 
   res.json({ success: true, message: 'Bilgi silindi' });
+}
+
+export async function parseKnowledgeFile(req: AuthRequest, res: Response): Promise<void> {
+  const file = req.file;
+
+  if (!file) {
+    res.status(400).json({ success: false, error: 'Lütfen bir dosya seçin' });
+    return;
+  }
+
+  try {
+    const parsed = await parseKnowledgeDocument(file.buffer, file.originalname);
+
+    await logActivity({
+      userId: req.userId,
+      companyId: req.companyId,
+      action: 'knowledge_file_parsed',
+      entityType: 'knowledge_base',
+      metadata: {
+        filename: parsed.source_filename,
+        file_type: parsed.file_type,
+        char_count: parsed.char_count,
+        truncated: parsed.truncated,
+      },
+    });
+
+    res.json({ success: true, data: parsed });
+  } catch (err) {
+    res.status(400).json({ success: false, error: (err as Error).message });
+  }
 }

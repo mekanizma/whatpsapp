@@ -4,39 +4,42 @@
 
 import { useState } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { Shield, Building2, BarChart3, LogOut, Menu, X, Settings, Zap, Activity } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui';
+import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 
 const adminNav = [
-  { to: '/admin', icon: BarChart3, label: 'Platform Özeti', end: true },
-  { to: '/admin/companies', icon: Building2, label: 'Şirketler' },
-  { to: '/admin/usage', icon: Zap, label: 'AI Kullanımı' },
-  { to: '/admin/activity', icon: Activity, label: 'Aktivite' },
-  { to: '/admin/settings', icon: Settings, label: 'Ayarlar' },
+  { to: '/admin', icon: BarChart3, labelKey: 'layout.nav.adminOverview', end: true },
+  { to: '/admin/companies', icon: Building2, labelKey: 'layout.nav.companies' },
+  { to: '/admin/usage', icon: Zap, labelKey: 'layout.nav.usage' },
+  { to: '/admin/activity', icon: Activity, labelKey: 'layout.nav.activity' },
+  { to: '/admin/settings', icon: Settings, labelKey: 'layout.nav.adminSettings' },
 ];
 
-function resolvePageTitle(pathname: string): string {
+function resolvePageTitleKey(pathname: string): string {
   if (pathname.startsWith('/admin/companies/') && pathname !== '/admin/companies') {
-    return 'Şirket Detayı';
+    return 'layout.nav.companyDetail';
   }
   const map: Record<string, string> = {
-    '/admin': 'Platform Özeti',
-    '/admin/companies': 'Şirketler',
-    '/admin/usage': 'AI Kullanımı',
-    '/admin/activity': 'Aktivite',
-    '/admin/settings': 'Ayarlar',
+    '/admin': 'layout.nav.adminOverview',
+    '/admin/companies': 'layout.nav.companies',
+    '/admin/usage': 'layout.nav.usage',
+    '/admin/activity': 'layout.nav.activity',
+    '/admin/settings': 'layout.nav.adminSettings',
   };
-  return map[pathname] || 'Admin';
+  return map[pathname] || 'layout.adminPanel';
 }
 
 export function AdminLayout() {
+  const { t } = useTranslation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
-  const pageTitle = resolvePageTitle(location.pathname);
+  const pageTitle = t(resolvePageTitleKey(location.pathname));
 
   const handleLogout = async () => {
     await logout();
@@ -60,8 +63,8 @@ export function AdminLayout() {
             <Shield className="h-5 w-5 text-amber-400" />
           </div>
           <div>
-            <h1 className="text-sm font-bold">Admin Panel</h1>
-            <p className="text-xs text-slate-500">Platform Yönetimi</p>
+            <h1 className="text-sm font-bold">{t('layout.adminPanel')}</h1>
+            <p className="text-xs text-slate-500">{t('layout.platformManagement')}</p>
           </div>
           <button className="ml-auto lg:hidden" onClick={() => setSidebarOpen(false)}>
             <X className="h-5 w-5" />
@@ -69,7 +72,7 @@ export function AdminLayout() {
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-          <p className="px-3 pb-2 pt-1 text-[10px] font-bold uppercase tracking-widest text-slate-600">Yönetim</p>
+          <p className="px-3 pb-2 pt-1 text-[10px] font-bold uppercase tracking-widest text-slate-600">{t('layout.management')}</p>
           {adminNav.map((item) => (
             <NavLink
               key={item.to}
@@ -86,7 +89,7 @@ export function AdminLayout() {
               }
             >
               <item.icon className="h-5 w-5 shrink-0" />
-              {item.label}
+              {t(item.labelKey)}
             </NavLink>
           ))}
         </nav>
@@ -94,7 +97,7 @@ export function AdminLayout() {
         <div className="border-t border-white/10 p-3">
           <div className="mb-2 rounded-xl bg-white/5 px-3 py-2.5">
             <p className="truncate text-sm font-semibold">{user?.full_name}</p>
-            <p className="text-xs text-amber-400">Super Admin</p>
+            <p className="text-xs text-amber-400">{t('common.roles.super_admin')}</p>
           </div>
           <Button
             variant="ghost"
@@ -102,17 +105,20 @@ export function AdminLayout() {
             onClick={handleLogout}
           >
             <LogOut className="h-4 w-4" />
-            Çıkış Yap
+            {t('common.logout')}
           </Button>
         </div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="flex h-14 items-center gap-3 border-b border-slate-200/80 bg-white/80 px-4 backdrop-blur-md sm:px-6">
-          <button className="rounded-lg p-2 hover:bg-slate-100 lg:hidden" onClick={() => setSidebarOpen(true)}>
-            <Menu className="h-5 w-5" />
-          </button>
-          <h2 className="text-sm font-semibold text-slate-800 sm:text-base">{pageTitle}</h2>
+        <header className="flex h-14 items-center justify-between gap-3 border-b border-slate-200/80 bg-white/80 px-4 backdrop-blur-md sm:px-6">
+          <div className="flex items-center gap-3">
+            <button className="rounded-lg p-2 hover:bg-slate-100 lg:hidden" onClick={() => setSidebarOpen(true)}>
+              <Menu className="h-5 w-5" />
+            </button>
+            <h2 className="text-sm font-semibold text-slate-800 sm:text-base">{pageTitle}</h2>
+          </div>
+          <LanguageSwitcher variant="light" />
         </header>
 
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">

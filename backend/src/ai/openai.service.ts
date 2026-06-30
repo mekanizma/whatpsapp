@@ -19,6 +19,8 @@ import {
   hasActiveTransferTicket,
   logAIUsage,
 } from './ai-quota.service';
+import { buildSystemPrompt, TRANSFER_MARKER } from './system-prompt';
+import { getAppointmentContextForAI, processAIAppointmentBooking, stripAppointmentMarkers } from '../services/appointment.service';
 
 const openai = new OpenAI({ apiKey: config.openai.apiKey });
 
@@ -51,7 +53,8 @@ async function getCompany(companyId: string): Promise<Company> {
 export async function generateAIResponse(
   companyId: string,
   customerMessage: string,
-  customerPhone: string
+  customerPhone: string,
+  customerName: string | null = null
 ): Promise<AIResponse> {
   const trimmed = customerMessage.trim();
 
@@ -108,7 +111,7 @@ export async function generateAIResponse(
   }
 
   // 4) OpenAI çağrısı — optimize edilmiş context
-  const [company, knowledgeResult, historyResult] = await Promise.all([
+  const [company, knowledgeResult, historyResult, appointmentContext] = await Promise.all([
     getCompany(companyId),
     adminClient
       .from('knowledge_base')
@@ -122,6 +125,7 @@ export async function generateAIResponse(
       .eq('customer_phone', customerPhone)
       .order('created_at', { ascending: false })
       .limit(config.ai.maxHistoryMessages),
+    getAppointmentContextForAI(companyId).catch(() => 'Takvim bilgisi şu an alınamadı.'),
   ]);
 
   const knowledge = (knowledgeResult.data || []) as KnowledgeItem[];
@@ -130,7 +134,7 @@ export async function generateAIResponse(
     .filter((m) => m.message !== trimmed); // Mükerrer mesajı çıkar
 
   const knowledgeContext = filterRelevantKnowledge(knowledge, trimmed);
-  const systemPrompt = buildCompactSystemPrompt(company, knowledgeContext);
+  const systemPrompt = buildSystemPrompt(company, knowledgeContext, appointmentContext);
 
   const chatMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: 'system', content: systemPrompt },
@@ -162,43 +166,49 @@ export async function generateAIResponse(
   });
 
   const rawResponse = completion.choices[0]?.message?.content?.trim() || '';
-  const finalMessage = sanitizeAIResponse(rawResponse, company);
+  const { message: afterBooking, appointment } = await processAIAppointmentBooking(
+    companyId,
+    customerPhone,
+    customerName,
+    rawResponse
+  );
+  const { message: finalMessage, shouldTransfer } = sanitizeAIResponse(afterBooking, company);
 
-  if (finalMessage) {
+  if (appointment) {
+    console.log(`[AI] Randevu oluşturuldu: ${appointment.id} → ${customerPhone}`);
+  }
+
+  if (finalMessage && !shouldTransfer) {
     setCachedResponse(companyId, trimmed, finalMessage, false);
   }
 
   return {
     message: finalMessage,
-    shouldTransfer: false,
+    shouldTransfer,
     skippedAI: false,
     tokensUsed: totalTokens,
   };
 }
 
-function sanitizeAIResponse(response: string, company: Company): string {
-  const cleaned = response
-    .replace(/transfer_to_human/gi, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+function sanitizeAIResponse(
+  response: string,
+  company: Company
+): { message: string; shouldTransfer: boolean } {
+  const shouldTransfer = response.includes(TRANSFER_MARKER);
+  const cleaned = stripAppointmentMarkers(
+    response
+      .replace(new RegExp(TRANSFER_MARKER.replace(/[[\]]/g, '\\$&'), 'g'), '')
+      .replace(/transfer_to_human/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+  );
 
-  if (cleaned) return cleaned;
+  if (cleaned) return { message: cleaned, shouldTransfer };
 
-  const contact = [company.phone, company.email].filter(Boolean).join(' / ');
-  return contact
-    ? `Bu konuda elimde kesin bilgi yok. Daha detaylı bilgi için bize ulaşabilirsiniz: ${contact}`
-    : 'Bu konuda elimde kesin bilgi yok. Sorunuzu biraz daha detaylandırırsanız yardımcı olmaya çalışırım.';
-}
-
-/** Kısa sistem promptu — token tasarrufu */
-function buildCompactSystemPrompt(company: Company, knowledge: string): string {
-  return `Sen ${company.company_name} dijital asistanısın. Türkçe, kısa ve nazik cevap ver.
-Kurallar:
-- Verilen bilgilere dayanarak cevap ver; bilgi bankasında olmayan konularda da mantıklı ve yardımcı ol.
-- Kesin bilgin yoksa bunu açıkça söyle, mümkünse alternatif öner veya iletişim bilgisi ver.
-- Müşteri temsilcisine veya canlı desteğe yönlendirme yapma; her zaman kendin cevap ver.
-- Fiyat, randevu gibi kesin bilgi gerektiren konularda uydurma; "Bu bilgi için ${company.phone || 'bizimle iletişime geçmenizi'} öneririm" de.
-Tel: ${company.phone || '-'} | E-posta: ${company.email || '-'} | ${company.category}
-Bilgi bankası:
-${knowledge}`;
+  return {
+    message: shouldTransfer
+      ? 'Bu konu için sizi temsilciye aktarmam daha doğru olur. Talebinizi kayıt altına alıyorum. Lütfen konuyu kısaca yazar mısınız?'
+      : 'Bu konuda net bilgiye ulaşamadım. Yanlış yönlendirmemek için sizi temsilciye aktarabilirim.',
+    shouldTransfer: true,
+  };
 }

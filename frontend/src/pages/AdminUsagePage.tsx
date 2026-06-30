@@ -3,6 +3,7 @@
  */
 
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { Zap, ExternalLink } from 'lucide-react';
 import { api } from '@/services/api';
@@ -12,6 +13,9 @@ import type { AIUsageRow, PlatformStats } from '@/types';
 import { cn } from '@/lib/utils';
 
 export function AdminUsagePage() {
+  const { t, i18n } = useTranslation();
+  const locale = i18n.language?.startsWith('en') ? 'en-US' : 'tr-TR';
+
   const { data: usage, isLoading } = useQuery({
     queryKey: ['admin-ai-usage'],
     queryFn: () => api.get<AIUsageRow[]>('/admin/ai-usage'),
@@ -30,8 +34,8 @@ export function AdminUsagePage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="AI Kullanımı"
-        description="Şirket bazında token tüketimi ve optimizasyon istatistikleri (bu ay)"
+        title={t('admin.usage.title')}
+        description={t('admin.usage.description')}
         action={
           <a
             href="https://platform.openai.com/usage"
@@ -39,7 +43,7 @@ export function AdminUsagePage() {
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 text-sm font-medium text-teal-600 hover:underline"
           >
-            OpenAI Faturalandırma <ExternalLink className="h-4 w-4" />
+            {t('admin.usage.billing')} <ExternalLink className="h-4 w-4" />
           </a>
         }
       />
@@ -47,22 +51,22 @@ export function AdminUsagePage() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card>
           <CardContent className="p-5">
-            <p className="text-xs font-semibold uppercase text-slate-500">Toplam Token</p>
-            <p className="text-2xl font-bold tabular-nums">{totalTokens.toLocaleString('tr-TR')}</p>
-            <p className="text-xs text-slate-400">Model: {stats?.ai_model || '—'}</p>
+            <p className="text-xs font-semibold uppercase text-slate-500">{t('admin.usage.totalTokens')}</p>
+            <p className="text-2xl font-bold tabular-nums">{totalTokens.toLocaleString(locale)}</p>
+            <p className="text-xs text-slate-400">{t('admin.overview.modelTrend', { model: stats?.ai_model || '—' })}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-5">
-            <p className="text-xs font-semibold uppercase text-slate-500">API Çağrıları</p>
-            <p className="text-2xl font-bold tabular-nums">{totalApi.toLocaleString('tr-TR')}</p>
+            <p className="text-xs font-semibold uppercase text-slate-500">{t('admin.usage.apiCalls')}</p>
+            <p className="text-2xl font-bold tabular-nums">{totalApi.toLocaleString(locale)}</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-5">
-            <p className="text-xs font-semibold uppercase text-slate-500">Tasarruf Edilen</p>
-            <p className="text-2xl font-bold tabular-nums text-emerald-600">{totalSaved.toLocaleString('tr-TR')}</p>
-            <p className="text-xs text-slate-400">Önbellek + ön filtre</p>
+            <p className="text-xs font-semibold uppercase text-slate-500">{t('admin.usage.saved')}</p>
+            <p className="text-2xl font-bold tabular-nums text-emerald-600">{totalSaved.toLocaleString(locale)}</p>
+            <p className="text-xs text-slate-400">{t('admin.usage.savedHint')}</p>
           </CardContent>
         </Card>
       </div>
@@ -74,7 +78,7 @@ export function AdminUsagePage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base">
               <Zap className="h-5 w-5 text-amber-500" />
-              Şirket Bazında Kullanım
+              {t('admin.usage.byCompany')}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
@@ -82,24 +86,21 @@ export function AdminUsagePage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-slate-100 bg-slate-50/80 text-left text-xs uppercase text-slate-500">
-                    <th className="px-4 py-3 font-semibold">Şirket</th>
-                    <th className="px-4 py-3 font-semibold">Token</th>
-                    <th className="px-4 py-3 font-semibold">API Çağrı</th>
-                    <th className="px-4 py-3 font-semibold">Tasarruf</th>
+                    <th className="px-4 py-3 font-semibold">{t('admin.usage.company')}</th>
+                    <th className="px-4 py-3 font-semibold">{t('admin.usage.token')}</th>
+                    <th className="px-4 py-3 font-semibold">{t('admin.usage.apiCall')}</th>
+                    <th className="px-4 py-3 font-semibold">{t('admin.usage.savings')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((row) => (
                     <tr key={row.company_id} className="border-b border-slate-50 hover:bg-slate-50/50">
                       <td className="px-4 py-3">
-                        <Link
-                          to={`/admin/companies/${row.company_id}`}
-                          className="font-medium text-teal-600 hover:underline"
-                        >
+                        <Link to={`/admin/companies/${row.company_id}`} className="font-medium text-teal-600 hover:underline">
                           {row.company_name}
                         </Link>
                       </td>
-                      <td className="px-4 py-3 tabular-nums">{row.tokens.toLocaleString('tr-TR')}</td>
+                      <td className="px-4 py-3 tabular-nums">{row.tokens.toLocaleString(locale)}</td>
                       <td className="px-4 py-3 tabular-nums">{row.api_calls}</td>
                       <td className="px-4 py-3">
                         <Badge variant={row.saved > 0 ? 'success' : 'info'}>{row.saved}</Badge>
@@ -119,16 +120,18 @@ export function AdminUsagePage() {
                 >
                   <p className="font-medium">{row.company_name}</p>
                   <div className="mt-2 grid grid-cols-3 gap-2 text-xs text-slate-500">
-                    <span>{row.tokens.toLocaleString('tr-TR')} token</span>
-                    <span>{row.api_calls} API</span>
-                    <span className={cn(row.saved > 0 && 'text-emerald-600')}>{row.saved} tasarruf</span>
+                    <span>{t('admin.usage.tokenMobile', { count: row.tokens.toLocaleString(locale) })}</span>
+                    <span>{t('admin.usage.apiMobile', { count: row.api_calls })}</span>
+                    <span className={cn(row.saved > 0 && 'text-emerald-600')}>
+                      {t('admin.usage.savedMobile', { count: row.saved })}
+                    </span>
                   </div>
                 </Link>
               ))}
             </div>
 
             {rows.length === 0 && (
-              <p className="p-6 text-center text-sm text-slate-500">Bu ay henüz AI kullanımı yok</p>
+              <p className="p-6 text-center text-sm text-slate-500">{t('admin.usage.empty')}</p>
             )}
           </CardContent>
         </Card>

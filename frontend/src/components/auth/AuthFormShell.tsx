@@ -5,6 +5,7 @@
 import type { ReactNode, FormEvent } from 'react';
 import { cn } from '@/lib/utils';
 import { Card, CardContent } from '@/components/ui';
+import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 
 interface AuthFormShellProps {
   icon: ReactNode;
@@ -49,6 +50,10 @@ export function AuthFormShell({
           isAmber ? 'bg-orange-500/10' : 'bg-emerald-500/15'
         )}
       />
+
+      <div className="absolute right-4 top-4 z-20 sm:right-6 sm:top-6">
+        <LanguageSwitcher variant="dark" />
+      </div>
 
       <div className="relative z-10 w-full max-w-md space-y-6 sm:space-y-8">
         <div className="text-center lg:text-left">

@@ -2,6 +2,7 @@
  * Tickets / live support page
  */
 
+import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Ticket, Clock, UserCheck, MessageSquare, CheckCircle2 } from 'lucide-react';
@@ -18,13 +19,6 @@ const priorityVariant: Record<string, 'default' | 'info' | 'warning' | 'danger'>
   urgent: 'danger',
 };
 
-const statusLabels: Record<string, string> = {
-  open: 'Açık',
-  in_progress: 'İşlemde',
-  resolved: 'Çözüldü',
-  closed: 'Kapalı',
-};
-
 const statusBadge: Record<string, 'info' | 'warning' | 'success' | 'default'> = {
   open: 'info',
   in_progress: 'warning',
@@ -33,6 +27,8 @@ const statusBadge: Record<string, 'info' | 'warning' | 'success' | 'default'> = 
 };
 
 export function TicketsPage() {
+  const { t, i18n } = useTranslation();
+  const locale = i18n.language?.startsWith('en') ? 'en-US' : 'tr-TR';
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -60,9 +56,9 @@ export function TicketsPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title="Destek Talepleri"
-        description="Müşterilerden personele aktarılan canlı destek istekleri"
-        action={openCount > 0 ? <Badge variant="warning">{openCount} bekleyen</Badge> : undefined}
+        title={t('tickets.title')}
+        description={t('tickets.description')}
+        action={openCount > 0 ? <Badge variant="warning">{t('tickets.pending', { count: openCount })}</Badge> : undefined}
       />
 
       {isLoading ? (
@@ -70,8 +66,8 @@ export function TicketsPage() {
       ) : tickets?.length === 0 ? (
         <EmptyState
           icon={Ticket}
-          title="Açık destek talebi yok"
-          description="Müşteriler insan temsilcisi istediğinde talepler burada listelenir"
+          title={t('tickets.empty')}
+          description={t('tickets.emptyDesc')}
         />
       ) : (
         <div className="space-y-3">
@@ -88,18 +84,18 @@ export function TicketsPage() {
                         <h3 className="font-semibold text-slate-900">{ticket.subject}</h3>
                         <Badge variant={priorityVariant[ticket.priority]}>{ticket.priority}</Badge>
                         <Badge variant={statusBadge[ticket.status] || 'default'}>
-                          {statusLabels[ticket.status] || ticket.status}
+                          {t(`common.status.${ticket.status}`, { defaultValue: ticket.status })}
                         </Badge>
                       </div>
                       <p className="text-sm font-medium text-slate-600">
                         {ticket.customer_name || ticket.customer_phone}
                       </p>
                       {ticket.staff && (
-                        <p className="text-xs text-slate-400">Atanan: {ticket.staff.name}</p>
+                        <p className="text-xs text-slate-400">{t('tickets.assigned', { name: ticket.staff.name })}</p>
                       )}
                       <div className="flex items-center gap-1 text-xs text-slate-400">
                         <Clock className="h-3 w-3" />
-                        {new Date(ticket.created_at).toLocaleString('tr-TR')}
+                        {new Date(ticket.created_at).toLocaleString(locale)}
                       </div>
                     </div>
                   </div>
@@ -107,7 +103,7 @@ export function TicketsPage() {
                     {ticket.status === 'open' && (
                       <Button size="sm" onClick={() => claimMutation.mutate(ticket)} disabled={claimMutation.isPending}>
                         <UserCheck className="h-4 w-4" />
-                        Bana Ata
+                        {t('tickets.claim')}
                       </Button>
                     )}
                     {ticket.status === 'in_progress' && (
@@ -118,7 +114,7 @@ export function TicketsPage() {
                           onClick={() => navigate(`/panel/messages?phone=${encodeURIComponent(ticket.customer_phone)}&ticket=${ticket.id}`)}
                         >
                           <MessageSquare className="h-4 w-4" />
-                          Sohbete Git
+                          {t('tickets.goToChat')}
                         </Button>
                         <Button
                           size="sm"
@@ -128,7 +124,7 @@ export function TicketsPage() {
                           disabled={resolveMutation.isPending}
                         >
                           <CheckCircle2 className="h-4 w-4" />
-                          Çözüldü
+                          {t('tickets.markResolved')}
                         </Button>
                       </>
                     )}

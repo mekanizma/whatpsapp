@@ -5,9 +5,15 @@
 import { Response } from 'express';
 import { config } from '../config';
 import { adminClient } from '../database/supabase';
-import { demoCompany, demoProfilesByToken } from '../demo/mockData';
+import { demoCompany, demoProfilesByToken, DEMO_TOKENS } from '../demo/mockData';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { logActivity } from '../services/log.service';
+
+const DEMO_EMAILS: Record<string, string> = {
+  [DEMO_TOKENS.admin]: 'admin@demo.com',
+  [DEMO_TOKENS.company]: 'firma@demo.com',
+  [DEMO_TOKENS.staff]: 'personel@demo.com',
+};
 
 export async function getMe(req: AuthRequest, res: Response): Promise<void> {
   if (config.demoMode && req.accessToken && demoProfilesByToken[req.accessToken]) {
@@ -17,6 +23,7 @@ export async function getMe(req: AuthRequest, res: Response): Promise<void> {
       data: {
         profile,
         company: profile.company_id ? demoCompany : null,
+        email: DEMO_EMAILS[req.accessToken] || '',
       },
     });
     return;
@@ -24,6 +31,12 @@ export async function getMe(req: AuthRequest, res: Response): Promise<void> {
 
   const profile = req.profile;
   let company = null;
+  let email: string | null = null;
+
+  if (req.accessToken) {
+    const { data: { user } } = await adminClient.auth.getUser(req.accessToken);
+    email = user?.email || null;
+  }
 
   if (profile?.company_id) {
     const { data } = await adminClient
@@ -36,12 +49,20 @@ export async function getMe(req: AuthRequest, res: Response): Promise<void> {
 
   res.json({
     success: true,
-    data: { profile, company },
+    data: { profile, company, email },
   });
 }
 
 export async function updateProfile(req: AuthRequest, res: Response): Promise<void> {
   const { full_name, avatar_url } = req.body;
+
+  if (config.demoMode && req.accessToken && demoProfilesByToken[req.accessToken]) {
+    const profile = demoProfilesByToken[req.accessToken];
+    if (full_name !== undefined) profile.full_name = full_name;
+    if (avatar_url !== undefined) profile.avatar_url = avatar_url;
+    res.json({ success: true, data: profile });
+    return;
+  }
 
   const { data, error } = await adminClient
     .from('profiles')
