@@ -43,13 +43,7 @@ const ROLE_DESC: Record<PromptRole, string> = {
   custom: 'admin.prompts.roleCustomDesc',
 };
 
-const DEFAULT_KEYS = new Set([
-  'greeting',
-  'system',
-  'appointment',
-  'language_block',
-  'kb_translate',
-]);
+const DEFAULT_KEYS = new Set(['system']);
 
 const EMPTY_FORM = {
   prompt_key: '',

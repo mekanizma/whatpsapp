@@ -148,6 +148,22 @@ function sortTemplates(list: PromptTemplate[]): PromptTemplate[] {
   });
 }
 
+function isPromptTableMissing(err: unknown): boolean {
+  const msg =
+    err && typeof err === 'object' && 'message' in err
+      ? String((err as { message: string }).message)
+      : String(err);
+  return /ai_prompt_templates|schema cache|PGRST205/i.test(msg);
+}
+
+function defaultContentForRole(role: PromptRole | null, legacyKey: string): string {
+  if (role) {
+    const byRole = DEFAULT_PROMPTS.find((p) => p.prompt_role === role);
+    if (byRole) return byRole.content;
+  }
+  return getDefaultContent(legacyKey);
+}
+
 async function loadActiveContentByRole(role: PromptRole): Promise<string | null> {
   if (config.demoMode) {
     const match = [...initDemoStore().values()]
@@ -166,7 +182,11 @@ async function loadActiveContentByRole(role: PromptRole): Promise<string | null>
     .limit(1)
     .maybeSingle();
 
-  if (error || !data?.content) return null;
+  if (error) {
+    if (isPromptTableMissing(error)) return defaultContentForRole(role, roleToLegacyKey(role));
+    return null;
+  }
+  if (!data?.content) return null;
   return String(data.content);
 }
 
@@ -190,13 +210,15 @@ export async function getPromptContent(keyOrRole: string): Promise<string> {
     content = initDemoStore().get(legacyKey)?.content || getDefaultContent(legacyKey);
   } else if (!content) {
     const legacyKey = role ? roleToLegacyKey(role) : keyOrRole;
-    const { data } = await adminClient
+    const { data, error } = await adminClient
       .from('ai_prompt_templates')
       .select('content, is_active')
       .eq('prompt_key', legacyKey)
       .maybeSingle();
 
-    if (data?.is_active && data.content) {
+    if (error && isPromptTableMissing(error)) {
+      content = defaultContentForRole(role, legacyKey);
+    } else if (data?.is_active && data.content) {
       content = String(data.content);
     } else {
       content = getDefaultContent(legacyKey);
@@ -234,7 +256,13 @@ export async function getExtensionPromptContents(): Promise<string[]> {
     .order('sort_order', { ascending: true })
     .order('name');
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (isPromptTableMissing(error)) {
+      contentCache.set('extensions', { content: '', expires: Date.now() + CACHE_TTL_MS });
+      return [];
+    }
+    throw new Error(error.message);
+  }
   const contents = (data || []).map((r) => String(r.content));
   contentCache.set('extensions', {
     content: contents.join('\x1e'),
@@ -268,7 +296,12 @@ export async function listPromptTemplates(): Promise<PromptTemplate[]> {
 
   const { data, error } = await adminClient.from('ai_prompt_templates').select('*');
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (isPromptTableMissing(error)) {
+      return sortTemplates(Array.from(initDemoStore().values()));
+    }
+    throw new Error(error.message);
+  }
 
   if (!data?.length) {
     await seedDefaultPrompts();
@@ -607,7 +640,7 @@ export async function resetAllPromptsToDefault(): Promise<{ reset: number; seede
   return { reset, seeded };
 }
 
-/** Ek promptları sil, varsayılan 5 promptu sıfırla */
+/** Ek promptları sil, varsayılan sistem promptunu sıfırla */
 export async function cleanupAndReseedPrompts(): Promise<{
   removed: number;
   reset: number;

@@ -272,9 +272,9 @@ export function detectConversationLanguage(
 
 
 export async function getLanguagePromptBlock(lang: ConversationLang): Promise<string> {
-  const name = LANG_NAMES[lang];
   const template = await getPromptContent('language_block');
-  return renderPromptTemplate(template, { langName: name });
+  if (!template.trim()) return '';
+  return renderPromptTemplate(template, { langName: LANG_NAMES[lang] });
 }
 
 export function localeForLang(lang: ConversationLang): string {

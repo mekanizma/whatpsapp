@@ -1,5 +1,5 @@
 /**
- * Randevu odaklı AI prompt — admin panelden yönetilen system + appointment şablonları
+ * AI prompt birleştirme — admin panelden yönetilen şablonlar
  */
 
 import { Company } from '../types';
@@ -27,29 +27,45 @@ export async function buildAppointmentOnlyPrompt(
     category: company.category || '-',
     transferMarker: TRANSFER_MARKER,
     appointmentContext: appointmentContext || 'Takvim bilgisi yok.',
-    kbEmptySuffix: hasKb ? '' : ' (BOŞ — bilgi verme, temsilciye aktar)',
-    knowledge: hasKb
-      ? knowledge
-      : 'Kayıt yok. Müşteriye bilgi bankası dışında hiçbir bilgi verme.',
+    kbEmptySuffix: hasKb ? '' : ' (BOŞ)',
+    knowledge: hasKb ? knowledge : 'Kayıt yok.',
     collectedContext: collectedContext ? `${collectedContext}\n` : '',
     languageBlock,
     langName: LANG_NAMES[lang],
   };
 
-  const systemPart = renderPromptTemplate(systemTemplate, sharedVars);
+  const parts: string[] = [];
 
-  const appointmentPart = renderPromptTemplate(appointmentTemplate, {
-    ...sharedVars,
-    appointmentContext: appointmentContext || 'Yok',
-    kbEmptySuffix: hasKb ? '' : ' (boş)',
-    knowledge: hasKb ? knowledge : `Çalışma saati yok — saat önerme, ${TRANSFER_MARKER}`,
-  });
+  if (systemTemplate.trim()) {
+    parts.push(renderPromptTemplate(systemTemplate, sharedVars));
+  }
+
+  if (appointmentTemplate.trim()) {
+    parts.push(
+      renderPromptTemplate(appointmentTemplate, {
+        ...sharedVars,
+        appointmentContext: appointmentContext || 'Yok',
+        kbEmptySuffix: hasKb ? '' : ' (boş)',
+        knowledge: hasKb ? knowledge : 'Kayıt yok.',
+      })
+    );
+  }
 
   const extensions = await getExtensionPromptContents();
-  const extensionBlock =
-    extensions.length > 0
-      ? `\n\n--- EK PROMPT KURALLARI ---\n${extensions.map((e) => renderPromptTemplate(e, sharedVars)).join('\n\n')}`
-      : '';
+  if (extensions.length > 0) {
+    parts.push(
+      `--- EK PROMPT KURALLARI ---\n${extensions.map((e) => renderPromptTemplate(e, sharedVars)).join('\n\n')}`
+    );
+  }
 
-  return `${systemPart}\n\n${appointmentPart}${extensionBlock}`;
+  const dataContext = [
+    collectedContext.trim(),
+    appointmentContext ? `TAKVİM:\n${appointmentContext}` : '',
+  ].filter(Boolean);
+
+  if (dataContext.length > 0) {
+    parts.push(dataContext.join('\n\n'));
+  }
+
+  return parts.join('\n\n');
 }

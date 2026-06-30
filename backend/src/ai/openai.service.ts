@@ -9,9 +9,8 @@ import { adminClient } from '../database/supabase';
 import { Company, KnowledgeItem } from '../types';
 import { getGreetingMessage } from '../services/prompt.service';
 import { preAIGate, isGreetingMessage, normalizeForGate } from './ai-gate.service';
-import { filterRelevantKnowledge, isAppointmentIntent, isKnowledgeQuestion, isOffTopicQuery } from './knowledge-filter.service';
+import { filterRelevantKnowledge, isAppointmentIntent, isKnowledgeQuestion, isOffTopicQuery, buildKnowledgeContextForAI } from './knowledge-filter.service';
 import { detectConversationEscalation, getTransferOfferMsg } from './conversation-escalation.service';
-import { formatConciseKnowledgeAnswer, localizeKnowledgeAnswer } from './kb-answer.service';
 import { buildAppointmentOnlyPrompt } from './appointment-prompt';
 import { blockBookingIfIncomplete, buildCollectedFieldsContext, getMissingRequiredFields, parseCollectedFields } from './appointment-collect.service';
 import { handleAppointmentBooking } from './appointment-extract.service';
@@ -165,66 +164,23 @@ export async function generateAIResponse(
     };
   }
 
-  // ─── BİLGİ SORUSU: KB — kısa ve konuya özel (randevu akışından önce) ───
-  if (kbFilter.hasRelevantContent && (!appointmentFlow || isKnowledgeQuestion(effectiveMessage))) {
-    const rawAnswer = formatConciseKnowledgeAnswer(kbFilter.items, effectiveMessage, {
-      isBroadQuery: kbFilter.isBroadQuery,
-      lang: conversationLang,
-    });
-    const answer = await localizeKnowledgeAnswer(rawAnswer, conversationLang);
-    const kbMissMsg = getTransferOfferMsg(conversationLang);
-    await logAIUsage({
-      companyId, customerPhone,
-      promptTokens: 0, completionTokens: 0, totalTokens: 0,
-      cached: false, skipped: true, skipReason: 'kb_direct', model: config.openai.model,
-    });
-    return {
-      message: answer || kbMissMsg,
-      shouldTransfer: false,
-      skippedAI: true,
-      skipReason: 'kb_direct',
-      tokensUsed: 0,
-    };
-  }
-
-  // Eşleşme yok ama bilgi sorusu — konu menüsü veya kapsam dışı için temsilci teklifi
+  // Kapsam dışı soru — şablon yanıt
   if (
     !kbFilter.hasRelevantContent &&
     isKnowledgeQuestion(effectiveMessage) &&
-    knowledge.length > 0 &&
-    !appointmentFlow
+    isOffTopicQuery(effectiveMessage)
   ) {
-    if (isOffTopicQuery(effectiveMessage)) {
-      const transferOffer = getTransferOfferMsg(conversationLang);
-      await logAIUsage({
-        companyId, customerPhone,
-        promptTokens: 0, completionTokens: 0, totalTokens: 0,
-        cached: false, skipped: true, skipReason: 'kb_off_topic', model: config.openai.model,
-      });
-      return {
-        message: transferOffer,
-        shouldTransfer: false,
-        skippedAI: true,
-        skipReason: 'kb_off_topic',
-        tokensUsed: 0,
-      };
-    }
-
-    const rawAnswer = formatConciseKnowledgeAnswer(knowledge, effectiveMessage, {
-      isBroadQuery: true,
-      lang: conversationLang,
-    });
-    const answer = await localizeKnowledgeAnswer(rawAnswer, conversationLang);
+    const transferOffer = getTransferOfferMsg(conversationLang);
     await logAIUsage({
       companyId, customerPhone,
       promptTokens: 0, completionTokens: 0, totalTokens: 0,
-      cached: false, skipped: true, skipReason: 'kb_topic_menu', model: config.openai.model,
+      cached: false, skipped: true, skipReason: 'kb_off_topic', model: config.openai.model,
     });
     return {
-      message: answer,
+      message: transferOffer,
       shouldTransfer: false,
       skippedAI: true,
-      skipReason: 'kb_topic_menu',
+      skipReason: 'kb_off_topic',
       tokensUsed: 0,
     };
   }
@@ -252,12 +208,36 @@ export async function generateAIResponse(
     }
   }
 
-  // ─── RANDEVU: sınırlı OpenAI (yalnızca randevu toplama) ───
+  // ─── OpenAI: bilgi bankası + randevu (doğal kısa yanıt) ───
   const company = await getCompany(companyId);
-  const collectedContext = buildCollectedFieldsContext(history, trimmed, conversationLang);
+  const collectedContext = appointmentFlow
+    ? buildCollectedFieldsContext(history, trimmed, conversationLang)
+    : '';
+  const knowledgeContext = buildKnowledgeContextForAI(kbFilter, knowledge, effectiveMessage);
+
+  if (
+    !appointmentFlow &&
+    isKnowledgeQuestion(effectiveMessage) &&
+    !knowledgeContext.trim()
+  ) {
+    const transferOffer = getTransferOfferMsg(conversationLang);
+    await logAIUsage({
+      companyId, customerPhone,
+      promptTokens: 0, completionTokens: 0, totalTokens: 0,
+      cached: false, skipped: true, skipReason: 'kb_no_match', model: config.openai.model,
+    });
+    return {
+      message: transferOffer,
+      shouldTransfer: false,
+      skippedAI: true,
+      skipReason: 'kb_no_match',
+      tokensUsed: 0,
+    };
+  }
+
   const systemPrompt = await buildAppointmentOnlyPrompt(
     company,
-    kbFilter.context,
+    knowledgeContext,
     appointmentContext,
     collectedContext,
     conversationLang
@@ -272,7 +252,9 @@ export async function generateAIResponse(
     { role: 'user', content: trimmed.slice(0, 500) },
   ];
 
-  const completion = await createChatCompletion(chatMessages, { maxTokens: 2000 });
+  const completion = await createChatCompletion(chatMessages, {
+    maxTokens: appointmentFlow ? 2000 : config.ai.maxTokens,
+  });
 
   const usage = completion.usage;
   const totalTokens = usage?.total_tokens || 0;

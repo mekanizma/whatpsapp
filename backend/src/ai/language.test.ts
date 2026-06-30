@@ -33,9 +33,8 @@ describe('language.service', () => {
     assert.match(promptForMissingField('name', 'tr'), /ad ve soyad/i);
   });
 
-  it('prompt bloğu hedef dili içerir', async () => {
-    assert.match(await getLanguagePromptBlock('en'), /English/i);
-    assert.match(await getLanguagePromptBlock('de'), /German/i);
+  it('dil promptu yoksa boş blok döner', async () => {
+    assert.equal(await getLanguagePromptBlock('en'), '');
   });
 
   it('preAIGate İngilizce selamda İngilizce yanıt verir', () => {

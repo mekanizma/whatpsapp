@@ -224,7 +224,9 @@ export async function localizeKnowledgeAnswer(
   if (!text || lang === 'tr') return text;
 
   const translatePrompt = await getPromptContent('kb_translate');
-  const systemContent = renderPromptTemplate(translatePrompt, { langName: LANG_NAMES[lang] });
+  const systemContent = translatePrompt.trim()
+    ? renderPromptTemplate(translatePrompt, { langName: LANG_NAMES[lang] })
+    : `Translate the following customer support text to ${LANG_NAMES[lang]}. Keep it concise. Do not add information. Output ONLY the translation.`;
 
   const completion = await createChatCompletion(
     [

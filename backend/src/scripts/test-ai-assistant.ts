@@ -5,7 +5,7 @@
 
 import 'dotenv/config';
 import { preAIGate } from '../ai/ai-gate.service';
-import { buildSystemPrompt, TRANSFER_MARKER } from '../ai/system-prompt';
+import { buildSystemPrompt } from '../ai/system-prompt';
 import { generateAIResponse } from '../ai/openai.service';
 
 const COMPANY_ID = 'a0000000-0000-0000-0000-000000000001';
@@ -117,30 +117,12 @@ function runGateTests(): { passed: number; failed: number } {
 async function runPromptTest(): Promise<boolean> {
   console.log('\n=== Sistem Prompt Testi ===\n');
 
-  const prompt = await buildSystemPrompt(
-    {
-      id: 'test',
-      company_name: 'Test Klinik',
-      category: 'klinik',
-      phone: '05551234567',
-      email: 'info@test.com',
-      address: 'Lefkoşa',
-      working_hours: {},
-      logo: null,
-      subscription_plan: 'starter',
-      status: 'active',
-      created_at: '',
-      updated_at: '',
-    },
-    '- Randevu: Hafta içi 09:00-18:00'
-  );
+  const prompt = buildSystemPrompt('- Randevu: Hafta içi 09:00-18:00');
 
   const checks = [
-    ['AI destek asistanı', prompt.includes('AI destek asistanı')],
-    ['TRANSFER_MARKER', prompt.includes(TRANSFER_MARKER)],
-    ['bilgi bankası', prompt.includes('BİLGİ BANKASI')],
-    ['güvenlik kuralları', prompt.includes('GÜVENLİK')],
-    ['şirket adı', prompt.includes('Test Klinik')],
+    ['bilgi bankası kuralı', prompt.includes('bilgi bankasına bakarak')],
+    ['BİLGİ BANKASI', prompt.includes('BİLGİ BANKASI')],
+    ['KB içeriği', prompt.includes('09:00-18:00')],
   ] as const;
 
   let ok = true;

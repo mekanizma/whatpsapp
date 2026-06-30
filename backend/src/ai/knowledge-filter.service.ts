@@ -283,6 +283,35 @@ export function filterRelevantKnowledge(
   };
 }
 
+/** AI'ya verilecek bilgi bankası bağlamı — genel sorularda tam içerik */
+export function buildKnowledgeContextForAI(
+  kbFilter: KnowledgeFilterResult,
+  allItems: KnowledgeItem[],
+  customerMessage: string
+): string {
+  if (kbFilter.isBroadQuery && allItems.length > 0) {
+    const full = allItems.map((k) => `### ${k.title}\n${k.content}`).join('\n\n');
+    return full.length > config.ai.maxKnowledgeChars
+      ? `${full.slice(0, config.ai.maxKnowledgeChars)}\n...[kısaltıldı]`
+      : full;
+  }
+
+  if (kbFilter.context.trim()) {
+    return kbFilter.context;
+  }
+
+  if (allItems.length > 0 && isKnowledgeQuestion(customerMessage)) {
+    const fallback = allItems
+      .map((k) => `### ${k.title}\n${k.content}`)
+      .join('\n\n');
+    return fallback.length > config.ai.maxKnowledgeChars
+      ? `${fallback.slice(0, config.ai.maxKnowledgeChars)}\n...[kısaltıldı]`
+      : fallback;
+  }
+
+  return '';
+}
+
 const APPOINTMENT_CONFIRM_RE =
   /^(evet|onayl?[iıİI]yorum|onaylıyorum|onayliyorum|onay|tamam|uygun|olur|kabul|ok|yes|hayır|hayir)$/iu;
 const APPOINTMENT_TIME_RE =
