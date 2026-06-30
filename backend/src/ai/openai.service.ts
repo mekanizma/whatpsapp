@@ -7,12 +7,13 @@ import { config } from '../config';
 import { createChatCompletion } from './openai-client';
 import { adminClient } from '../database/supabase';
 import { Company, KnowledgeItem } from '../types';
-import { preAIGate } from './ai-gate.service';
+import { getGreetingMessage } from '../services/prompt.service';
+import { preAIGate, isGreetingMessage, normalizeForGate } from './ai-gate.service';
 import { filterRelevantKnowledge, isAppointmentIntent, isKnowledgeQuestion, isOffTopicQuery } from './knowledge-filter.service';
 import { detectConversationEscalation, getTransferOfferMsg } from './conversation-escalation.service';
 import { formatConciseKnowledgeAnswer, localizeKnowledgeAnswer } from './kb-answer.service';
 import { buildAppointmentOnlyPrompt } from './appointment-prompt';
-import { buildCollectedFieldsContext } from './appointment-collect.service';
+import { blockBookingIfIncomplete, buildCollectedFieldsContext, getMissingRequiredFields, parseCollectedFields } from './appointment-collect.service';
 import { handleAppointmentBooking } from './appointment-extract.service';
 import {
   detectConversationLanguage,
@@ -94,6 +95,36 @@ export async function generateAIResponse(
 
   const conversationLang = detectConversationLanguage(trimmed, history);
 
+  let effectiveMessage = trimmed;
+  const normalizedComplaint = normalizeForGate(trimmed);
+  if (/sordu(u|g)um soruya|cevap ver|yanlis(soyluyor)?|dogru degil|baska soru/.test(normalizedComplaint)) {
+    const lastQ = [...history]
+      .reverse()
+      .find(
+        (m) =>
+          m.sender_type === 'customer' &&
+          m.message !== trimmed &&
+          isKnowledgeQuestion(m.message)
+      );
+    if (lastQ) effectiveMessage = lastQ.message;
+  }
+
+  if (isGreetingMessage(trimmed)) {
+    const greeting = await getGreetingMessage(conversationLang);
+    await logAIUsage({
+      companyId, customerPhone,
+      promptTokens: 0, completionTokens: 0, totalTokens: 0,
+      cached: false, skipped: true, skipReason: 'greeting_template', model: config.openai.model,
+    });
+    return {
+      message: greeting,
+      shouldTransfer: false,
+      skippedAI: true,
+      skipReason: 'greeting_template',
+      tokensUsed: 0,
+    };
+  }
+
   const gate = preAIGate(trimmed, history, conversationLang);
   if (gate.skipAI && gate.response) {
     await logAIUsage({
@@ -110,13 +141,16 @@ export async function generateAIResponse(
     };
   }
 
-  const kbFilter = filterRelevantKnowledge(knowledge, trimmed);
+  const kbFilter = filterRelevantKnowledge(knowledge, effectiveMessage);
   const appointmentFlow = isAppointmentIntent(trimmed, history);
   const kbWillFail =
-    !kbFilter.hasRelevantContent && !appointmentFlow && !isKnowledgeQuestion(trimmed);
+    !kbFilter.hasRelevantContent && !appointmentFlow && !isKnowledgeQuestion(effectiveMessage);
 
-  const escalation = detectConversationEscalation(trimmed, history, kbWillFail, conversationLang);
-  if (escalation.escalate && escalation.response) {
+  const escalation =
+    effectiveMessage === trimmed
+      ? detectConversationEscalation(trimmed, history, kbWillFail, conversationLang)
+      : { escalate: false, shouldTransfer: false, reason: '' };
+  if (escalation.escalate && escalation.response && !appointmentFlow) {
     await logAIUsage({
       companyId, customerPhone,
       promptTokens: 0, completionTokens: 0, totalTokens: 0,
@@ -132,8 +166,8 @@ export async function generateAIResponse(
   }
 
   // ─── BİLGİ SORUSU: KB — kısa ve konuya özel (randevu akışından önce) ───
-  if (kbFilter.hasRelevantContent && (!appointmentFlow || isKnowledgeQuestion(trimmed))) {
-    const rawAnswer = formatConciseKnowledgeAnswer(kbFilter.items, trimmed, {
+  if (kbFilter.hasRelevantContent && (!appointmentFlow || isKnowledgeQuestion(effectiveMessage))) {
+    const rawAnswer = formatConciseKnowledgeAnswer(kbFilter.items, effectiveMessage, {
       isBroadQuery: kbFilter.isBroadQuery,
       lang: conversationLang,
     });
@@ -156,11 +190,11 @@ export async function generateAIResponse(
   // Eşleşme yok ama bilgi sorusu — konu menüsü veya kapsam dışı için temsilci teklifi
   if (
     !kbFilter.hasRelevantContent &&
-    isKnowledgeQuestion(trimmed) &&
+    isKnowledgeQuestion(effectiveMessage) &&
     knowledge.length > 0 &&
     !appointmentFlow
   ) {
-    if (isOffTopicQuery(trimmed)) {
+    if (isOffTopicQuery(effectiveMessage)) {
       const transferOffer = getTransferOfferMsg(conversationLang);
       await logAIUsage({
         companyId, customerPhone,
@@ -176,7 +210,7 @@ export async function generateAIResponse(
       };
     }
 
-    const rawAnswer = formatConciseKnowledgeAnswer(knowledge, trimmed, {
+    const rawAnswer = formatConciseKnowledgeAnswer(knowledge, effectiveMessage, {
       isBroadQuery: true,
       lang: conversationLang,
     });
@@ -195,9 +229,34 @@ export async function generateAIResponse(
     };
   }
 
+  // ─── RANDEVU: eksik bilgi toplama (OpenAI öncesi — boş yanıt riskini önler) ───
+  if (appointmentFlow) {
+    const collected = parseCollectedFields(history, trimmed);
+    const missing = getMissingRequiredFields(collected);
+    if (missing.length > 0 || /randevu|rezervasyon|appointment|alabilirmiyim|almak istiyorum/.test(trimmed.toLowerCase())) {
+      const gate = blockBookingIfIncomplete(history, trimmed, undefined, conversationLang);
+      if (gate.message) {
+        await logAIUsage({
+          companyId, customerPhone,
+          promptTokens: 0, completionTokens: 0, totalTokens: 0,
+          cached: false, skipped: true, skipReason: 'appointment_collect', model: config.openai.model,
+        });
+        return {
+          message: gate.message,
+          shouldTransfer: false,
+          skippedAI: true,
+          skipReason: 'appointment_collect',
+          tokensUsed: 0,
+        };
+      }
+    }
+  }
+
   // ─── RANDEVU: sınırlı OpenAI (yalnızca randevu toplama) ───
+  const company = await getCompany(companyId);
   const collectedContext = buildCollectedFieldsContext(history, trimmed, conversationLang);
   const systemPrompt = await buildAppointmentOnlyPrompt(
+    company,
     kbFilter.context,
     appointmentContext,
     collectedContext,
@@ -213,7 +272,7 @@ export async function generateAIResponse(
     { role: 'user', content: trimmed.slice(0, 500) },
   ];
 
-  const completion = await createChatCompletion(chatMessages);
+  const completion = await createChatCompletion(chatMessages, { maxTokens: 2000 });
 
   const usage = completion.usage;
   const totalTokens = usage?.total_tokens || 0;
@@ -226,7 +285,12 @@ export async function generateAIResponse(
     cached: false, skipped: false, model: config.openai.model,
   });
 
-  const rawResponse = completion.choices[0]?.message?.content?.trim() || '';
+  let rawResponse = completion.choices[0]?.message?.content?.trim() || '';
+
+  if (!rawResponse && appointmentFlow) {
+    const gate = blockBookingIfIncomplete(history, trimmed, undefined, conversationLang);
+    if (gate.message) rawResponse = gate.message;
+  }
   let { message: afterBooking, appointment } = await handleAppointmentBooking(
     companyId,
     customerPhone,
@@ -250,7 +314,11 @@ export async function generateAIResponse(
     const slot = formatSlotLocalized(appointment.starts_at, appointment.ends_at, conversationLang);
     afterBooking = t(conversationLang, 'appointment_saved', { slot, title: appointment.title });
   }
-  const { message: finalMessage, shouldTransfer } = sanitizeAIResponse(afterBooking, conversationLang);
+  const { message: finalMessage, shouldTransfer } = sanitizeAIResponse(
+    afterBooking,
+    conversationLang,
+    appointmentFlow
+  );
 
   if (appointment) {
     console.log(`[AI] Randevu oluşturuldu: ${appointment.id} → ${appointment.customer_phone}`);
@@ -268,7 +336,8 @@ export async function generateAIResponse(
 
 function sanitizeAIResponse(
   response: string,
-  lang: ConversationLang = 'tr'
+  lang: ConversationLang = 'tr',
+  appointmentFlow = false
 ): { message: string; shouldTransfer: boolean } {
   const shouldTransfer = response.includes(TRANSFER_MARKER);
   const cleaned = stripAppointmentMarkers(
@@ -280,6 +349,13 @@ function sanitizeAIResponse(
   );
 
   if (cleaned) return { message: cleaned, shouldTransfer };
+
+  if (appointmentFlow) {
+    return {
+      message: t(lang, 'appointment_missing_default'),
+      shouldTransfer: false,
+    };
+  }
 
   return {
     message: shouldTransfer

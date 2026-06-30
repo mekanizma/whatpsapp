@@ -5,7 +5,12 @@
 import { KnowledgeItem } from '../types';
 import { config } from '../config';
 import { ConversationLang, LANG_NAMES, t } from './language.service';
-import { extractKeywords } from './knowledge-filter.service';
+import {
+  extractKeywords,
+  haystackMatchesKeyword,
+  isPriceQuery,
+  isGeneralPriceListQuery,
+} from './knowledge-filter.service';
 import { getPromptContent, renderPromptTemplate } from '../services/prompt.service';
 import { createChatCompletion } from './openai-client';
 
@@ -18,23 +23,90 @@ function truncateSmart(text: string, maxChars: number): string {
   return `${base.trim()}…`;
 }
 
-/** FAQ / paragraf bloklarından soruya en uygun kısmı çıkar */
+function expandPriceKeywords(keywords: string[], message: string): string[] {
+  const extra = [...keywords];
+  const n = message.toLowerCase();
+  if (/taş|tas/.test(n) && /temiz/.test(n)) {
+    extra.push('temizlik', 'temizliği', 'temizligi');
+  }
+  if (/çekim|cekim/.test(n)) extra.push('çekim', 'cekim', 'çekimi', 'cekim');
+  return [...new Set(extra)];
+}
+
+/** Fiyat listesinden ilgili satırı çıkar */
+function extractPriceLineAnswer(
+  content: string,
+  keywords: string[],
+  message: string,
+  maxChars: number
+): string {
+  const expanded = expandPriceKeywords(keywords, message);
+  const lines = content.split('\n').map((l) => l.trim()).filter(Boolean);
+  const priceLines = lines.filter((l) => /\d+\s*(tl|₺|try)/i.test(l));
+
+  if (priceLines.length === 0) {
+    return truncateSmart(content, maxChars);
+  }
+
+  if (isGeneralPriceListQuery(message)) {
+    return truncateSmart(priceLines.join('\n'), maxChars);
+  }
+
+  const scored = priceLines
+    .map((line) => {
+      const lower = line.toLowerCase();
+      let score = 0;
+      for (const kw of expanded) {
+        if (haystackMatchesKeyword(lower, kw)) score += kw.length > 4 ? 2 : 1;
+      }
+      return { line, score };
+    })
+    .filter((x) => x.score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  if (scored.length > 0) {
+    return scored[0].line;
+  }
+
+  return truncateSmart(priceLines.join('\n'), maxChars);
+}
+
+/** FAQ / paragraf bloklarından soruya en uygun TEK kısmı çıkar */
 export function extractRelevantSnippet(
   content: string,
   keywords: string[],
-  maxChars: number
+  maxChars: number,
+  options?: { priceQuery?: boolean; customerMessage?: string }
 ): string {
+  const priceQuery = options?.priceQuery ?? false;
+  const message = options?.customerMessage ?? '';
+
+  if (priceQuery || (message && isPriceQuery(message))) {
+    const priceAnswer = extractPriceLineAnswer(content, keywords, message, maxChars);
+    if (priceAnswer) return priceAnswer;
+  }
+
   const blocks = content.split(/\n\n+/).map((b) => b.trim()).filter(Boolean);
   if (blocks.length === 0) return '';
 
   if (blocks.length === 1 && blocks[0].includes('\n')) {
     const lines = blocks[0].split('\n').map((l) => l.trim()).filter(Boolean);
     if (lines.length > 2 && keywords.length > 0) {
-      const matched = lines.filter((line) =>
-        keywords.some((kw) => line.toLowerCase().includes(kw))
-      );
-      if (matched.length > 0) {
-        return truncateSmart(matched.join('\n'), maxChars);
+      const scoredPairs: { text: string; score: number }[] = [];
+      for (let i = 0; i < lines.length - 1; i++) {
+        const q = lines[i];
+        const a = lines[i + 1];
+        if (!q.includes('?') || !a || a.endsWith('?')) continue;
+        const combined = `${q}\n${a}`.toLowerCase();
+        let score = 0;
+        for (const kw of keywords) {
+          if (haystackMatchesKeyword(combined, kw)) score += 1;
+        }
+        if (score > 0) scoredPairs.push({ text: `${q}\n\n${a}`, score });
+      }
+      scoredPairs.sort((a, b) => b.score - a.score);
+      if (scoredPairs.length > 0) {
+        return truncateSmart(scoredPairs[0].text, maxChars);
       }
     }
   }
@@ -43,32 +115,37 @@ export function extractRelevantSnippet(
     return truncateSmart(blocks[0], maxChars);
   }
 
-  const scored = blocks
+  const mergedBlocks: string[] = [];
+  for (let i = 0; i < blocks.length; i++) {
+    const curr = blocks[i];
+    const next = blocks[i + 1];
+    if (curr.endsWith('?') && next && !next.endsWith('?')) {
+      mergedBlocks.push(`${curr}\n\n${next}`);
+      i++;
+    } else {
+      mergedBlocks.push(curr);
+    }
+  }
+
+  const scored = mergedBlocks
     .map((block) => {
       const lower = block.toLowerCase();
       let score = 0;
       for (const kw of keywords) {
-        if (lower.includes(kw)) score += kw.length > 4 ? 2 : 1;
+        if (haystackMatchesKeyword(lower, kw)) score += kw.length > 4 ? 2 : 1;
       }
+      if (priceQuery && /\d+\s*(tl|₺|try)/i.test(block)) score += 3;
+      if (priceQuery && /ne kadar sür|süre|sure|seans/.test(lower)) score -= 2;
       return { block, score };
     })
     .sort((a, b) => b.score - a.score);
 
-  const relevant = scored.filter((s) => s.score > 0);
-  if (relevant.length === 0) {
+  const best = scored[0];
+  if (!best || best.score <= 0) {
     return truncateSmart(blocks[0], maxChars);
   }
 
-  let result = '';
-  for (const { block } of relevant) {
-    const next = result ? `${result}\n\n${block}` : block;
-    if (next.length > maxChars) {
-      if (!result) return truncateSmart(block, maxChars);
-      break;
-    }
-    result = next;
-  }
-  return result || truncateSmart(relevant[0].block, maxChars);
+  return truncateSmart(best.block, maxChars);
 }
 
 /** Genel soruda konu menüsü — tüm KB içeriği dökülmez */
@@ -86,9 +163,14 @@ export function buildKnowledgeTopicMenu(
 function formatSingleItemAnswer(
   item: KnowledgeItem,
   keywords: string[],
-  maxChars: number
+  maxChars: number,
+  customerMessage: string
 ): string {
-  const snippet = extractRelevantSnippet(item.content.trim(), keywords, maxChars);
+  const priceQuery = isPriceQuery(customerMessage);
+  const snippet = extractRelevantSnippet(item.content.trim(), keywords, maxChars, {
+    priceQuery,
+    customerMessage,
+  });
   if (!snippet) return item.title ? `**${item.title}**` : '';
 
   const titleLower = (item.title || '').toLowerCase();
@@ -118,12 +200,12 @@ export function formatConciseKnowledgeAnswer(
 
   const keywords = extractKeywords(customerMessage);
   if (items.length === 1) {
-    return formatSingleItemAnswer(items[0], keywords, maxChars);
+    return formatSingleItemAnswer(items[0], keywords, maxChars, customerMessage);
   }
 
   const parts = items
     .slice(0, 1)
-    .map((k) => formatSingleItemAnswer(k, keywords, maxChars))
+    .map((k) => formatSingleItemAnswer(k, keywords, maxChars, customerMessage))
     .filter(Boolean);
 
   return parts.join('\n\n');

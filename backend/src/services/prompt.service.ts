@@ -133,6 +133,24 @@ export async function getPromptContent(promptKey: string): Promise<string> {
   return content;
 }
 
+export async function getGreetingMessage(
+  lang: import('../ai/language.service').ConversationLang
+): Promise<string> {
+  const { t, LANG_NAMES } = await import('../ai/language.service');
+  const template = await getPromptContent('greeting');
+  const fallback = getDefaultContent('greeting');
+
+  if (!template.trim() || (fallback && template === fallback)) {
+    return t(lang, 'greeting');
+  }
+
+  if (template.includes('{{langName}}')) {
+    return renderPromptTemplate(template, { langName: LANG_NAMES[lang] });
+  }
+
+  return template.trim();
+}
+
 export async function listPromptTemplates(): Promise<PromptTemplate[]> {
   if (config.demoMode) {
     return Array.from(initDemoStore().values()).sort((a, b) =>

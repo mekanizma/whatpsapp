@@ -89,6 +89,10 @@ function wantsHumanTransfer(normalized: string): boolean {
   return HUMAN_TRANSFER_PATTERNS.some((pattern) => pattern.test(normalized));
 }
 
+export function isGreetingMessage(message: string): boolean {
+  return GREETING_PATTERNS.test(message.trim());
+}
+
 export function preAIGate(
   message: string,
   history: { sender_type: string; message: string }[] = [],

@@ -30,7 +30,7 @@ export function stemTurkishWord(word: string): string {
   return w;
 }
 
-function haystackMatchesKeyword(haystack: string, keyword: string): boolean {
+export function haystackMatchesKeyword(haystack: string, keyword: string): boolean {
   const kw = keyword.toLowerCase();
   if (haystack.includes(kw)) return true;
   const stem = stemTurkishWord(kw);
@@ -79,6 +79,27 @@ function scoreItem(item: KnowledgeItem, keywords: string[]): number {
   return score;
 }
 
+/** Fiyat / ücret sorusu (süre sorusu değil) */
+export function isPriceQuery(message: string): boolean {
+  const n = message.toLowerCase();
+  const duration =
+    /ne kadar sür|surer|süre|sure|kaç seans|kac seans|kaç dakika|kac dakika|ne zaman biter/.test(n);
+  if (duration) return false;
+  return /fiyat|ücret|ucret|ne kadar|kaç tl|kac tl|kaça|kaca|\btl\b|₺|eur|euro|\$/.test(n);
+}
+
+/** Genel fiyat listesi talebi */
+export function isGeneralPriceListQuery(message: string): boolean {
+  return /fiyatlar|fiyat list|ücretler|ucretler|fiyatlarınız|fiyatlariniz|fiyat bilgi|ücret bilgi|fiyatlarınız|fiyatlariniz nedir|ücretleriniz|ucretleriniz/.test(
+    message.toLowerCase()
+  );
+}
+
+function isPriceKnowledgeItem(item: KnowledgeItem): boolean {
+  const meta = `${item.title} ${item.category || ''}`.toLowerCase();
+  return /fiyat|ücret|ucret|price/.test(meta) || /\d+\s*(tl|₺|try)/i.test(item.content);
+}
+
 /** Klinik bilgi bankası kapsamı dışı sorular */
 export function isOffTopicQuery(message: string): boolean {
   return /üniversite|universite|hava (durumu|nasil|nasıl)|restoran|otel|maç|mac sonucu|borsa|döviz|doviz|futbol|dizi|film öner/i.test(
@@ -123,6 +144,26 @@ export function filterRelevantKnowledge(
     };
   }
 
+  if (isGeneralPriceListQuery(customerMessage)) {
+    const priceItem = items.find(isPriceKnowledgeItem);
+    if (priceItem) {
+      const context = `### ${priceItem.title}\n${priceItem.content}`;
+      return {
+        context: context.slice(0, config.ai.maxKnowledgeChars),
+        items: [priceItem],
+        hasRelevantContent: true,
+        kbEmpty: false,
+        isBroadQuery: false,
+        keywords,
+      };
+    }
+  }
+
+  const searchPool =
+    isPriceQuery(customerMessage) && items.some(isPriceKnowledgeItem)
+      ? items.filter(isPriceKnowledgeItem)
+      : items;
+
   if (broad) {
     const titles = items.map((k) => k.title).filter(Boolean);
     const context = titles.map((t) => `• ${t}`).join('\n');
@@ -147,8 +188,12 @@ export function filterRelevantKnowledge(
     };
   }
 
-  const ranked = items
-    .map((item) => ({ item, score: scoreItem(item, keywords) }))
+  const ranked = searchPool
+    .map((item) => {
+      let score = scoreItem(item, keywords);
+      if (isPriceQuery(customerMessage) && isPriceKnowledgeItem(item)) score += 5;
+      return { item, score };
+    })
     .filter((x) => x.score > 0)
     .sort((a, b) => b.score - a.score);
 
@@ -256,7 +301,7 @@ export function isAppointmentIntent(
     return false;
   }
 
-  if (/randevu|rezervasyon|appointment|müsait|musait|uygun saat|boş saat|bos saat|tarih al|saat al|görüşme|gorusme/.test(msg)) {
+  if (/randevu|rezervasyon|appointment|müsait|musait|uygun saat|boş saat|bos saat|tarih al|saat al|görüşme|gorusme|alabilir\s*miyim|alabilirmiyim|almak istiyorum/.test(msg)) {
     return true;
   }
 

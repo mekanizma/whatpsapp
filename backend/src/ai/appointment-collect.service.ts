@@ -34,13 +34,35 @@ function extractPhone(text: string): string | null {
   return n.length >= 10 ? n : null;
 }
 
+const CONFIRM_WORDS = /^(evet|onayl?[iıİI]yorum|onaylıyorum|onayliyorum|onay|tamam|uygun|olur|kabul|ok|yes|hayır|hayir)$/iu;
+const APPOINTMENT_REQUEST_RE = /randevu|rezervasyon|appointment|müsait|musait|alabilir\s*miyim|alabilirmiyim|almak istiyorum/i;
+const PROCEDURE_HINT = /diş|dis\b|muayene|kontrol|çekim|cekim|temizlik|dolgu|kanal|implant|ortodont|randevu/i;
+
 function isValidFullName(name: string): boolean {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  return parts.length >= 2 && parts.every((p) => p.length >= 2);
+  const trimmed = name.trim();
+  if (
+    /^(verdim|tamam|evet|hayır|hayir|hey|merhaba|selam|ok|olur|zaten|canım|canim|bir daha|sorduğum|sordugum|cevap)/i.test(
+      trimmed
+    )
+  ) {
+    return false;
+  }
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+  if (parts.length < 2) return false;
+  const junk = new Set(['ya', 'de', 'da', 'mi', 'mı', 've', 'bir', 'bu', 'ne', 'ki']);
+  if (parts.every((p) => junk.has(p.toLowerCase()) || p.length < 3)) return false;
+  return parts.every((p) => p.length >= 2);
 }
 
-const CONFIRM_WORDS = /^(evet|onayl?[iıİI]yorum|onaylıyorum|onayliyorum|onay|tamam|uygun|olur|kabul|ok|yes|hayır|hayir)$/iu;
-const PROCEDURE_HINT = /diş|dis\b|muayene|kontrol|çekim|cekim|temizlik|dolgu|kanal|implant|ortodont|randevu/i;
+function isValidProcedureTitle(title: string): boolean {
+  const text = title.trim();
+  if (text.length < 3) return false;
+  if (APPOINTMENT_REQUEST_RE.test(text)) return false;
+  if (/sorduğum|sordugum|cevap ver|verdim|zaten|hey|merhaba|tamam|ne kadar|fiyat|ücret|ucret/i.test(text)) {
+    return false;
+  }
+  return true;
+}
 
 function looksLikeName(text: string): boolean {
   const t = text.trim();
@@ -110,6 +132,7 @@ export function parseCollectedFields(
       if (t.length < 2) continue;
       if (extractPhone(t)) continue;
       if (CONFIRM_WORDS.test(t)) continue;
+      if (APPOINTMENT_REQUEST_RE.test(t) && t.length < 60) continue;
       if (customer_name && t.toLocaleLowerCase('tr') === customer_name.toLocaleLowerCase('tr')) continue;
       if (looksLikeName(t)) continue;
       title = t;
@@ -161,7 +184,7 @@ export function getMissingRequiredFields(
   const missing: MissingAppointmentField[] = [];
   if (!isValidFullName(name)) missing.push('name');
   if (!phone || phone.length < 10) missing.push('phone');
-  if (!titleText || titleText.length < 2) missing.push('title');
+  if (!isValidProcedureTitle(titleText)) missing.push('title');
   return missing;
 }
 

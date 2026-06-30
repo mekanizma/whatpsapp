@@ -13,6 +13,15 @@ export interface PromptTemplateDefault {
 
 export const DEFAULT_PROMPTS: PromptTemplateDefault[] = [
   {
+    prompt_key: 'greeting',
+    name: 'Selamlama Mesajı',
+    description: 'Müşteri merhaba/selam yazdığında gönderilen karşılama metni',
+    category: 'ai_system',
+    variables: ['langName'],
+    content:
+      'Merhaba, ben AI destek asistanıyım. Bilgi bankamızdaki konularda size yardımcı olabilirim.',
+  },
+  {
     prompt_key: 'system',
     name: 'WhatsApp AI Destek Asistanı',
     description:
