@@ -72,6 +72,11 @@ export function renderPromptTemplate(
   return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => vars[key] ?? '');
 }
 
+function extractVariablesFromContent(content: string): string[] {
+  const matches = content.matchAll(/\{\{(\w+)\}\}/g);
+  return [...new Set([...matches].map((m) => m[1]))];
+}
+
 export function invalidatePromptCache(key?: string): void {
   if (key) {
     contentCache.delete(key);
@@ -145,7 +150,13 @@ export async function listPromptTemplates(): Promise<PromptTemplate[]> {
 
   if (!data?.length) {
     await seedDefaultPrompts();
-    return listPromptTemplates();
+    const { data: seeded, error: seedError } = await adminClient
+      .from('ai_prompt_templates')
+      .select('*')
+      .order('category')
+      .order('name');
+    if (seedError) throw new Error(seedError.message);
+    return (seeded || []).map((row) => rowToTemplate(row as Record<string, unknown>));
   }
 
   return data.map((row) => rowToTemplate(row as Record<string, unknown>));
@@ -206,7 +217,10 @@ export async function createPromptTemplate(input: CreatePromptInput): Promise<Pr
       description: input.description?.trim() || null,
       category: input.category?.trim() || 'custom',
       content: input.content.trim(),
-      variables: input.variables || [],
+      variables:
+        input.variables && input.variables.length > 0
+          ? input.variables
+          : extractVariablesFromContent(input.content),
     })
     .select()
     .single();
@@ -247,6 +261,17 @@ export async function updatePromptTemplate(
   if (input.content !== undefined) patch.content = input.content.trim();
   if (input.variables !== undefined) patch.variables = input.variables;
   if (input.is_active !== undefined) patch.is_active = input.is_active;
+
+  const { data: current, error: currentError } = await adminClient
+    .from('ai_prompt_templates')
+    .select('version')
+    .eq('prompt_key', promptKey)
+    .maybeSingle();
+
+  if (currentError) throw new Error(currentError.message);
+  if (!current) throw new Error('Prompt bulunamadı');
+
+  patch.version = (Number(current.version) || 1) + 1;
 
   const { data, error } = await adminClient
     .from('ai_prompt_templates')

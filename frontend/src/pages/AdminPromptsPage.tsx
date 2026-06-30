@@ -204,6 +204,11 @@ export function AdminPromptsPage() {
                       {t('common.cancel')}
                     </Button>
                   </div>
+                  {createMutation.isError && (
+                    <p className="text-sm font-medium text-red-600">
+                      {createMutation.error?.message}
+                    </p>
+                  )}
                 </form>
               </CardContent>
             </Card>

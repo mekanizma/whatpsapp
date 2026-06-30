@@ -5,6 +5,7 @@
 
 import { Router } from 'express';
 import { authenticate, requireRole, requireCompany } from '../middleware/auth.middleware';
+import { asyncHandler } from '../middleware/async.middleware';
 
 import * as authCtrl from '../controllers/auth.controller';
 import * as adminCtrl from '../controllers/admin.controller';
@@ -35,12 +36,12 @@ router.patch('/admin/companies/:id/subscription', authenticate, requireRole('sup
 router.get('/admin/ai-usage', authenticate, requireRole('super_admin'), adminCtrl.getAIUsage);
 router.get('/admin/activity', authenticate, requireRole('super_admin'), adminCtrl.getLogs);
 router.get('/admin/settings', authenticate, requireRole('super_admin'), adminCtrl.getPlatformSettings);
-router.get('/admin/prompts', authenticate, requireRole('super_admin'), adminCtrl.getPrompts);
-router.get('/admin/prompts/:key', authenticate, requireRole('super_admin'), adminCtrl.getPrompt);
-router.post('/admin/prompts', authenticate, requireRole('super_admin'), adminCtrl.createPrompt);
-router.put('/admin/prompts/:key', authenticate, requireRole('super_admin'), adminCtrl.updatePrompt);
-router.post('/admin/prompts/:key/reset', authenticate, requireRole('super_admin'), adminCtrl.resetPrompt);
-router.post('/admin/prompts-seed', authenticate, requireRole('super_admin'), adminCtrl.seedPrompts);
+router.get('/admin/prompts', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.getPrompts));
+router.get('/admin/prompts/:key', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.getPrompt));
+router.post('/admin/prompts', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.createPrompt));
+router.put('/admin/prompts/:key', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.updatePrompt));
+router.post('/admin/prompts/:key/reset', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.resetPrompt));
+router.post('/admin/prompts-seed', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.seedPrompts));
 
 // Company
 router.get('/companies/:id', authenticate, companyCtrl.getCompany);

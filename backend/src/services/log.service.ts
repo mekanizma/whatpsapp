@@ -17,7 +17,7 @@ interface LogParams {
 
 export async function logActivity(params: LogParams): Promise<void> {
   try {
-    await adminClient.from('activity_logs').insert({
+    const { error } = await adminClient.from('activity_logs').insert({
       company_id: params.companyId || null,
       user_id: params.userId || null,
       action: params.action,
@@ -26,6 +26,7 @@ export async function logActivity(params: LogParams): Promise<void> {
       metadata: params.metadata || {},
       ip_address: params.ipAddress || null,
     });
+    if (error) console.error('Failed to log activity:', error.message);
   } catch (error) {
     console.error('Failed to log activity:', error);
   }
