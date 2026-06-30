@@ -17,11 +17,12 @@ describe('language.service', () => {
     assert.equal(detectConversationLanguage('Merhaba randevu almak istiyorum', []), 'tr');
   });
 
-  it('geçmişteki müşteri diline göre algılar', () => {
+  it('yalnızca son mesajın diline göre algılar — geçmiş önemsiz', () => {
     const history = [
       { sender_type: 'customer', message: 'Hello, what are your working hours?' },
       { sender_type: 'ai', message: 'We are open 9-18' },
     ];
+    assert.equal(detectConversationLanguage('Teşekkürler', history), 'tr');
     assert.equal(detectConversationLanguage('Thanks', history), 'en');
   });
 
@@ -32,9 +33,9 @@ describe('language.service', () => {
     assert.match(promptForMissingField('name', 'tr'), /ad ve soyad/i);
   });
 
-  it('prompt bloğu hedef dili içerir', () => {
-    assert.match(getLanguagePromptBlock('en'), /English/i);
-    assert.match(getLanguagePromptBlock('de'), /German/i);
+  it('prompt bloğu hedef dili içerir', async () => {
+    assert.match(await getLanguagePromptBlock('en'), /English/i);
+    assert.match(await getLanguagePromptBlock('de'), /German/i);
   });
 
   it('preAIGate İngilizce selamda İngilizce yanıt verir', () => {

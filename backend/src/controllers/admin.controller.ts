@@ -19,6 +19,14 @@ import {
   getActivityLogs,
   PLAN_LIMITS,
 } from '../services/admin.service';
+import {
+  listPromptTemplates,
+  getPromptTemplate,
+  createPromptTemplate,
+  updatePromptTemplate,
+  resetPromptToDefault,
+  seedDefaultPrompts,
+} from '../services/prompt.service';
 
 export async function getCompanies(req: AuthRequest, res: Response): Promise<void> {
   if (config.demoMode) {
@@ -218,4 +226,83 @@ export async function getPlatformSettings(_req: AuthRequest, res: Response): Pro
       whatsapp_mode: config.isVercel ? 'cloud_api' : 'baileys',
     },
   });
+}
+
+export async function getPrompts(_req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const data = await listPromptTemplates();
+    res.json({ success: true, data });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'Hata' });
+  }
+}
+
+export async function getPrompt(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const data = await getPromptTemplate(req.params.key as string);
+    if (!data) {
+      res.status(404).json({ success: false, error: 'Prompt bulunamadı' });
+      return;
+    }
+    res.json({ success: true, data });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'Hata' });
+  }
+}
+
+export async function createPrompt(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const data = await createPromptTemplate(req.body);
+    await logActivity({
+      userId: req.userId,
+      action: 'prompt_created',
+      entityType: 'ai_prompt',
+      entityId: data.id,
+      metadata: { prompt_key: data.prompt_key, name: data.name },
+    });
+    res.status(201).json({ success: true, data });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'Hata' });
+  }
+}
+
+export async function updatePrompt(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const data = await updatePromptTemplate(req.params.key as string, req.body);
+    await logActivity({
+      userId: req.userId,
+      action: 'prompt_updated',
+      entityType: 'ai_prompt',
+      entityId: data.id,
+      metadata: { prompt_key: data.prompt_key, version: data.version },
+    });
+    res.json({ success: true, data });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'Hata' });
+  }
+}
+
+export async function resetPrompt(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const data = await resetPromptToDefault(req.params.key as string);
+    await logActivity({
+      userId: req.userId,
+      action: 'prompt_reset',
+      entityType: 'ai_prompt',
+      entityId: data.id,
+      metadata: { prompt_key: data.prompt_key },
+    });
+    res.json({ success: true, data });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'Hata' });
+  }
+}
+
+export async function seedPrompts(_req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const count = await seedDefaultPrompts();
+    res.json({ success: true, data: { inserted: count } });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'Hata' });
+  }
 }

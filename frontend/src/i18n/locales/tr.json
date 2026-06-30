@@ -142,6 +142,7 @@
       "companies": "Şirketler",
       "usage": "AI Kullanımı",
       "activity": "Aktivite",
+      "prompts": "AI Promptları",
       "adminSettings": "Ayarlar",
       "companyDetail": "Şirket Detayı"
     },
@@ -489,7 +490,10 @@
         "ticket_resolved": "Talep çözüldü",
         "profile_updated": "Profil güncellendi",
         "knowledge_created": "Bilgi eklendi",
-        "knowledge_file_parsed": "Dosya okundu"
+        "knowledge_file_parsed": "Dosya okundu",
+        "prompt_created": "Prompt oluşturuldu",
+        "prompt_updated": "Prompt güncellendi",
+        "prompt_reset": "Prompt varsayılana döndürüldü"
       }
     },
     "settings": {
@@ -524,6 +528,31 @@
       "ok": "OK",
       "demoBadge": "Demo",
       "openaiUsage": "OpenAI Usage"
+    },
+    "prompts": {
+      "title": "AI Promptları",
+      "description": "WhatsApp asistanının kullandığı tüm promptları buradan yönetin. Değişiklikler anında AI işlemine yansır.",
+      "addNew": "Yeni Prompt",
+      "listTitle": "Kayıtlı Promptlar",
+      "createTitle": "Yeni Prompt Ekle",
+      "key": "Anahtar (key)",
+      "name": "Ad",
+      "fieldDescription": "Açıklama",
+      "content": "Prompt İçeriği",
+      "variables": "Kullanılabilir Değişkenler",
+      "variablesHint": "Bu değişkenler çalışma anında otomatik doldurulur.",
+      "reset": "Varsayılana Dön",
+      "saved": "Prompt kaydedildi — AI artık bu sürümü kullanıyor.",
+      "liveNote": "Kaydettiğinizde AI bir sonraki mesajda bu promptu kullanır",
+      "updatedAt": "Son güncelleme:",
+      "selectHint": "Düzenlemek için bir prompt seçin",
+      "selectHintSub": "Soldaki listeden mevcut promptları görüntüleyin veya yeni ekleyin.",
+      "catSystem": "Sistem",
+      "catAppointment": "Randevu",
+      "catLanguage": "Dil",
+      "catTranslation": "Çeviri",
+      "catCustom": "Özel",
+      "catGeneral": "Genel"
     },
     "companyDetail": {
       "notFound": "Şirket bulunamadı",

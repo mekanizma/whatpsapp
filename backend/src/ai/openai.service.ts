@@ -155,7 +155,7 @@ export async function generateAIResponse(
 
   // ─── RANDEVU: sınırlı OpenAI (yalnızca randevu toplama) ───
   const collectedContext = buildCollectedFieldsContext(history, trimmed, conversationLang);
-  const systemPrompt = buildAppointmentOnlyPrompt(
+  const systemPrompt = await buildAppointmentOnlyPrompt(
     kbFilter.context,
     appointmentContext,
     collectedContext,

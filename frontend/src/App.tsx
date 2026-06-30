@@ -31,6 +31,7 @@ import { AdminCompanyDetailPage } from '@/pages/AdminCompanyDetailPage';
 import { AdminUsagePage } from '@/pages/AdminUsagePage';
 import { AdminActivityPage } from '@/pages/AdminActivityPage';
 import { AdminSettingsPage } from '@/pages/AdminSettingsPage';
+import { AdminPromptsPage } from '@/pages/AdminPromptsPage';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30000 } },
@@ -64,6 +65,7 @@ function AppRoutes() {
         <Route path="companies/:id" element={<AdminCompanyDetailPage />} />
         <Route path="usage" element={<AdminUsagePage />} />
         <Route path="activity" element={<AdminActivityPage />} />
+        <Route path="prompts" element={<AdminPromptsPage />} />
         <Route path="settings" element={<AdminSettingsPage />} />
       </Route>
 

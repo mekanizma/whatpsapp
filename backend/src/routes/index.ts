@@ -35,6 +35,12 @@ router.patch('/admin/companies/:id/subscription', authenticate, requireRole('sup
 router.get('/admin/ai-usage', authenticate, requireRole('super_admin'), adminCtrl.getAIUsage);
 router.get('/admin/activity', authenticate, requireRole('super_admin'), adminCtrl.getLogs);
 router.get('/admin/settings', authenticate, requireRole('super_admin'), adminCtrl.getPlatformSettings);
+router.get('/admin/prompts', authenticate, requireRole('super_admin'), adminCtrl.getPrompts);
+router.get('/admin/prompts/:key', authenticate, requireRole('super_admin'), adminCtrl.getPrompt);
+router.post('/admin/prompts', authenticate, requireRole('super_admin'), adminCtrl.createPrompt);
+router.put('/admin/prompts/:key', authenticate, requireRole('super_admin'), adminCtrl.updatePrompt);
+router.post('/admin/prompts/:key/reset', authenticate, requireRole('super_admin'), adminCtrl.resetPrompt);
+router.post('/admin/prompts-seed', authenticate, requireRole('super_admin'), adminCtrl.seedPrompts);
 
 // Company
 router.get('/companies/:id', authenticate, companyCtrl.getCompany);

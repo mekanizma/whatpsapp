@@ -114,10 +114,10 @@ function runGateTests(): { passed: number; failed: number } {
   return { passed, failed };
 }
 
-function runPromptTest(): boolean {
+async function runPromptTest(): Promise<boolean> {
   console.log('\n=== Sistem Prompt Testi ===\n');
 
-  const prompt = buildSystemPrompt(
+  const prompt = await buildSystemPrompt(
     {
       id: 'test',
       company_name: 'Test Klinik',
@@ -181,7 +181,7 @@ async function main(): Promise<void> {
   console.log('🧪 AI Asistan Test Paketi\n');
 
   const gate = runGateTests();
-  const promptOk = runPromptTest();
+  const promptOk = await runPromptTest();
   await runLiveAITest();
 
   const totalFailed = gate.failed + (promptOk ? 0 : 1);

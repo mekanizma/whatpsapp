@@ -2,6 +2,8 @@
  * Konuşma dili algılama ve şablon çevirileri
  */
 
+import { getPromptContent, renderPromptTemplate } from '../services/prompt.service';
+
 export type ConversationLang = 'tr' | 'en' | 'de' | 'ar' | 'ru' | 'fr' | 'es';
 
 export const LANG_NAMES: Record<ConversationLang, string> = {
@@ -239,29 +241,27 @@ const LANG_HINTS: Record<ConversationLang, RegExp> = {
   es: /\b(hola|gracias|cita|sí|si|no|por favor)\b/gi,
 };
 
-/** Müşteri mesajlarından konuşma dilini algıla */
+/** Müşterinin yalnızca son mesajından dil algıla — geçmiş konuşma dikkate alınmaz */
 export function detectConversationLanguage(
   message: string,
-  history: { sender_type: string; message: string }[] = []
+  _history: { sender_type: string; message: string }[] = []
 ): ConversationLang {
-  const customerTexts = [
-    message,
-    ...history.filter((m) => m.sender_type === 'customer').slice(-6).map((m) => m.message),
-  ].join('\n');
+  const text = message.trim();
+  if (!text) return 'tr';
 
-  if (/[\u0600-\u06FF]/.test(customerTexts)) return 'ar';
-  if (/[\u0400-\u04FF]/.test(customerTexts)) return 'ru';
+  if (/[\u0600-\u06FF]/.test(text)) return 'ar';
+  if (/[\u0400-\u04FF]/.test(text)) return 'ru';
 
   const scores: Record<ConversationLang, number> = {
     tr: 0, en: 0, de: 0, ar: 0, ru: 0, fr: 0, es: 0,
   };
 
   for (const lang of Object.keys(LANG_HINTS) as ConversationLang[]) {
-    const matches = customerTexts.match(LANG_HINTS[lang]);
+    const matches = text.match(LANG_HINTS[lang]);
     scores[lang] = matches ? matches.length : 0;
   }
 
-  if (/[ğüşöçıİĞÜŞÖÇ]/.test(customerTexts)) scores.tr += 4;
+  if (/[ğüşöçıİĞÜŞÖÇ]/.test(text)) scores.tr += 4;
 
   const ranked = (Object.entries(scores) as [ConversationLang, number][])
     .sort((a, b) => b[1] - a[1]);
@@ -270,12 +270,11 @@ export function detectConversationLanguage(
   return ranked[0][0];
 }
 
-export function getLanguagePromptBlock(lang: ConversationLang): string {
+
+export async function getLanguagePromptBlock(lang: ConversationLang): Promise<string> {
   const name = LANG_NAMES[lang];
-  return `DİL — KESİN KURAL:
-- Müşteri ${name} konuşuyor. TÜM yanıtlarını ${name} dilinde yaz.
-- Müşteri dili değiştirirse onun son kullandığı dile geç.
-- Bilgi bankası metnini aynı dilde aktar; başka dilde bilgi ekleme.`;
+  const template = await getPromptContent('language_block');
+  return renderPromptTemplate(template, { langName: name });
 }
 
 export function localeForLang(lang: ConversationLang): string {

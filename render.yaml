@@ -34,7 +34,7 @@ services:
       - key: OPENAI_API_KEY
         sync: false
       - key: OPENAI_MODEL
-        value: gpt-4o-mini
+        value: gpt-5-mini
       - key: WHATSAPP_VERIFY_TOKEN
         sync: false
       - key: WHATSAPP_API_VERSION

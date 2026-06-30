@@ -99,6 +99,20 @@ export interface PlatformSettings {
   whatsapp_mode: 'cloud_api' | 'baileys';
 }
 
+export interface AIPromptTemplate {
+  id: string;
+  prompt_key: string;
+  name: string;
+  description: string | null;
+  category: string;
+  content: string;
+  variables: string[];
+  is_active: boolean;
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface DashboardStats {
   total_messages: number;
   today_messages: number;

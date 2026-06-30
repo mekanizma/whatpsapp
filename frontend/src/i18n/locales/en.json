@@ -142,6 +142,7 @@
       "companies": "Companies",
       "usage": "AI Usage",
       "activity": "Activity",
+      "prompts": "AI Prompts",
       "adminSettings": "Settings",
       "companyDetail": "Company Detail"
     },
@@ -489,7 +490,10 @@
         "ticket_resolved": "Ticket resolved",
         "profile_updated": "Profile updated",
         "knowledge_created": "Knowledge added",
-        "knowledge_file_parsed": "File parsed"
+        "knowledge_file_parsed": "File parsed",
+        "prompt_created": "Prompt created",
+        "prompt_updated": "Prompt updated",
+        "prompt_reset": "Prompt reset to default"
       }
     },
     "settings": {
@@ -524,6 +528,31 @@
       "ok": "OK",
       "demoBadge": "Demo",
       "openaiUsage": "OpenAI Usage"
+    },
+    "prompts": {
+      "title": "AI Prompts",
+      "description": "Manage all prompts used by the WhatsApp assistant. Changes apply to AI processing immediately.",
+      "addNew": "New Prompt",
+      "listTitle": "Saved Prompts",
+      "createTitle": "Add New Prompt",
+      "key": "Key",
+      "name": "Name",
+      "fieldDescription": "Description",
+      "content": "Prompt Content",
+      "variables": "Available Variables",
+      "variablesHint": "These placeholders are filled automatically at runtime.",
+      "reset": "Reset to Default",
+      "saved": "Prompt saved — AI will use this version now.",
+      "liveNote": "After saving, AI uses this prompt on the next message",
+      "updatedAt": "Last updated:",
+      "selectHint": "Select a prompt to edit",
+      "selectHintSub": "View existing prompts from the list or add a new one.",
+      "catSystem": "System",
+      "catAppointment": "Appointment",
+      "catLanguage": "Language",
+      "catTranslation": "Translation",
+      "catCustom": "Custom",
+      "catGeneral": "General"
     },
     "companyDetail": {
       "notFound": "Company not found",

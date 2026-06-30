@@ -53,12 +53,12 @@ export const config = {
 
   openai: {
     apiKey: requireEnv('OPENAI_API_KEY'),
-    model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+    model: process.env.OPENAI_MODEL || 'gpt-5-mini',
   },
 
   ai: {
     maxTokens: parseInt(process.env.AI_MAX_TOKENS || '500', 10),
-    maxHistoryMessages: parseInt(process.env.AI_MAX_HISTORY || '20', 10),
+    maxHistoryMessages: parseInt(process.env.AI_MAX_HISTORY || '60', 10),
     maxKnowledgeItems: parseInt(process.env.AI_MAX_KNOWLEDGE_ITEMS || '3', 10),
     maxKnowledgeChars: parseInt(process.env.AI_MAX_KNOWLEDGE_CHARS || '1500', 10),
     maxKbAnswerChars: parseInt(process.env.AI_MAX_KB_ANSWER_CHARS || '650', 10),

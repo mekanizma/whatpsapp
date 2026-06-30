@@ -7,6 +7,7 @@ import { config } from '../config';
 import { KnowledgeItem } from '../types';
 import { ConversationLang, LANG_NAMES, t } from './language.service';
 import { extractKeywords } from './knowledge-filter.service';
+import { getPromptContent, renderPromptTemplate } from '../services/prompt.service';
 
 const openai = new OpenAI({ apiKey: config.openai.apiKey });
 
@@ -142,6 +143,9 @@ export async function localizeKnowledgeAnswer(
 ): Promise<string> {
   if (!text || lang === 'tr') return text;
 
+  const translatePrompt = await getPromptContent('kb_translate');
+  const systemContent = renderPromptTemplate(translatePrompt, { langName: LANG_NAMES[lang] });
+
   const completion = await openai.chat.completions.create({
     model: config.openai.model,
     temperature: 0,
@@ -149,7 +153,7 @@ export async function localizeKnowledgeAnswer(
     messages: [
       {
         role: 'system',
-        content: `Translate the following customer support text to ${LANG_NAMES[lang]}. Keep it concise. Do not add information. Output ONLY the translation.`,
+        content: systemContent,
       },
       { role: 'user', content: text },
     ],
