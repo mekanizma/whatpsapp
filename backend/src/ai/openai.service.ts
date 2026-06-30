@@ -8,10 +8,16 @@ import { adminClient } from '../database/supabase';
 import { Company, KnowledgeItem } from '../types';
 import { preAIGate } from './ai-gate.service';
 import { filterRelevantKnowledge, isAppointmentIntent } from './knowledge-filter.service';
-import { detectConversationEscalation, TRANSFER_OFFER_MSG } from './conversation-escalation.service';
-import { formatKnowledgeOnlyAnswer } from './kb-answer.service';
+import { detectConversationEscalation, getTransferOfferMsg } from './conversation-escalation.service';
+import { formatConciseKnowledgeAnswer, localizeKnowledgeAnswer } from './kb-answer.service';
 import { buildAppointmentOnlyPrompt } from './appointment-prompt';
+import { buildCollectedFieldsContext } from './appointment-collect.service';
 import { handleAppointmentBooking } from './appointment-extract.service';
+import {
+  detectConversationLanguage,
+  t,
+  ConversationLang,
+} from './language.service';
 import {
   checkAIQuota,
   logAIUsage,
@@ -20,8 +26,6 @@ import { TRANSFER_MARKER } from './system-prompt';
 import { getAppointmentContextForAI, stripAppointmentMarkers, APPOINTMENT_MARKER } from '../services/appointment.service';
 
 const openai = new OpenAI({ apiKey: config.openai.apiKey });
-
-const KB_MISS_MSG = TRANSFER_OFFER_MSG;
 
 export interface AIResponse {
   message: string;
@@ -58,8 +62,9 @@ export async function generateAIResponse(
 
   const quota = await checkAIQuota(companyId);
   if (!quota.allowed) {
+    const lang = detectConversationLanguage(trimmed, []);
     return {
-      message: 'Mesaj limitinize ulaşıldı. Lütfen yöneticinizle iletişime geçin.',
+      message: t(lang, 'quota_exceeded'),
       shouldTransfer: true,
       skippedAI: true,
       skipReason: 'quota_exceeded',
@@ -88,7 +93,9 @@ export async function generateAIResponse(
     .reverse()
     .filter((m) => m.message !== trimmed);
 
-  const gate = preAIGate(trimmed, history);
+  const conversationLang = detectConversationLanguage(trimmed, history);
+
+  const gate = preAIGate(trimmed, history, conversationLang);
   if (gate.skipAI && gate.response) {
     await logAIUsage({
       companyId, customerPhone,
@@ -108,7 +115,7 @@ export async function generateAIResponse(
   const appointmentFlow = isAppointmentIntent(trimmed, history);
   const kbWillFail = !kbFilter.hasRelevantContent && !appointmentFlow;
 
-  const escalation = detectConversationEscalation(trimmed, history, kbWillFail);
+  const escalation = detectConversationEscalation(trimmed, history, kbWillFail, conversationLang);
   if (escalation.escalate && escalation.response) {
     await logAIUsage({
       companyId, customerPhone,
@@ -124,16 +131,21 @@ export async function generateAIResponse(
     };
   }
 
-  // ─── BİLGİ SORUSU: OpenAI YOK — doğrudan bilgi bankası metni ───
+  // ─── BİLGİ SORUSU: KB — kısa ve konuya özel ───
   if (kbFilter.hasRelevantContent && !appointmentFlow) {
-    const answer = formatKnowledgeOnlyAnswer(kbFilter.items);
+    const rawAnswer = formatConciseKnowledgeAnswer(kbFilter.items, trimmed, {
+      isBroadQuery: kbFilter.isBroadQuery,
+      lang: conversationLang,
+    });
+    const answer = await localizeKnowledgeAnswer(rawAnswer, conversationLang);
+    const kbMissMsg = getTransferOfferMsg(conversationLang);
     await logAIUsage({
       companyId, customerPhone,
       promptTokens: 0, completionTokens: 0, totalTokens: 0,
       cached: false, skipped: true, skipReason: 'kb_direct', model: config.openai.model,
     });
     return {
-      message: answer || KB_MISS_MSG,
+      message: answer || kbMissMsg,
       shouldTransfer: false,
       skippedAI: true,
       skipReason: 'kb_direct',
@@ -142,7 +154,13 @@ export async function generateAIResponse(
   }
 
   // ─── RANDEVU: sınırlı OpenAI (yalnızca randevu toplama) ───
-  const systemPrompt = buildAppointmentOnlyPrompt(kbFilter.context, appointmentContext);
+  const collectedContext = buildCollectedFieldsContext(history, trimmed, conversationLang);
+  const systemPrompt = buildAppointmentOnlyPrompt(
+    kbFilter.context,
+    appointmentContext,
+    collectedContext,
+    conversationLang
+  );
 
   const chatMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
     { role: 'system', content: systemPrompt },
@@ -178,23 +196,24 @@ export async function generateAIResponse(
     customerName,
     rawResponse,
     history,
-    trimmed
+    trimmed,
+    conversationLang
   );
 
   // AI özür/geri dönüş mesajlarını engelle — eksik bilgi varsa net soru sor
-  if (!appointment && /unuttum|özür|ozur|almayı unuttum/i.test(afterBooking)) {
+  if (!appointment && /unuttum|özür|ozur|almayı unuttum|forgot|sorry/i.test(afterBooking)) {
     const { blockBookingIfIncomplete } = await import('./appointment-collect.service');
-    const gate = blockBookingIfIncomplete(history, trimmed);
-    if (gate.message) afterBooking = gate.message;
+    const bookingGate = blockBookingIfIncomplete(history, trimmed, undefined, conversationLang);
+    if (bookingGate.message) afterBooking = bookingGate.message;
   }
 
   // Kayıt oluştuysa her zaman DB'deki gerçek saati göster
   if (appointment) {
-    const { formatSlotTurkish } = await import('./appointment-slot.service');
-    const slot = formatSlotTurkish(appointment.starts_at, appointment.ends_at);
-    afterBooking = `Randevunuz kaydedildi: ${slot}. ${appointment.title}`;
+    const { formatSlotLocalized } = await import('./appointment-slot.service');
+    const slot = formatSlotLocalized(appointment.starts_at, appointment.ends_at, conversationLang);
+    afterBooking = t(conversationLang, 'appointment_saved', { slot, title: appointment.title });
   }
-  const { message: finalMessage, shouldTransfer } = sanitizeAIResponse(afterBooking);
+  const { message: finalMessage, shouldTransfer } = sanitizeAIResponse(afterBooking, conversationLang);
 
   if (appointment) {
     console.log(`[AI] Randevu oluşturuldu: ${appointment.id} → ${appointment.customer_phone}`);
@@ -211,7 +230,8 @@ export async function generateAIResponse(
 }
 
 function sanitizeAIResponse(
-  response: string
+  response: string,
+  lang: ConversationLang = 'tr'
 ): { message: string; shouldTransfer: boolean } {
   const shouldTransfer = response.includes(TRANSFER_MARKER);
   const cleaned = stripAppointmentMarkers(
@@ -226,8 +246,8 @@ function sanitizeAIResponse(
 
   return {
     message: shouldTransfer
-      ? 'Sizi canlı destek temsilcimize bağlıyorum.'
-      : KB_MISS_MSG,
+      ? t(lang, 'transfer_connect')
+      : getTransferOfferMsg(lang),
     shouldTransfer: true,
   };
 }

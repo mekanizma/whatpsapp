@@ -3,6 +3,7 @@
  */
 
 import { HistoryMsg } from './appointment-collect.service';
+import { ConversationLang, localeForLang } from './language.service';
 
 const CLINIC_TZ = 'Europe/Istanbul';
 const TR_OFFSET_MS = 3 * 60 * 60 * 1000;
@@ -138,20 +139,29 @@ export function slotsRoughlyMatch(a: string, b: string, toleranceMin = 5): boole
 }
 
 export function formatSlotTurkish(startsAt: string, endsAt: string): string {
+  return formatSlotLocalized(startsAt, endsAt, 'tr');
+}
+
+export function formatSlotLocalized(
+  startsAt: string,
+  endsAt: string,
+  lang: ConversationLang = 'tr'
+): string {
+  const locale = localeForLang(lang);
   const start = new Date(startsAt);
   const end = new Date(endsAt);
-  const day = start.toLocaleDateString('tr-TR', {
+  const day = start.toLocaleDateString(locale, {
     timeZone: CLINIC_TZ,
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
   });
-  const t1 = start.toLocaleTimeString('tr-TR', {
+  const t1 = start.toLocaleTimeString(locale, {
     timeZone: CLINIC_TZ,
     hour: '2-digit',
     minute: '2-digit',
   });
-  const t2 = end.toLocaleTimeString('tr-TR', {
+  const t2 = end.toLocaleTimeString(locale, {
     timeZone: CLINIC_TZ,
     hour: '2-digit',
     minute: '2-digit',

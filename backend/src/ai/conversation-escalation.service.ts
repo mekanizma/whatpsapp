@@ -3,6 +3,7 @@
  */
 
 import { normalizeForGate } from './ai-gate.service';
+import { ConversationLang, detectConversationLanguage, t } from './language.service';
 
 export interface ConversationMessage {
   sender_type: string;
@@ -17,15 +18,12 @@ export interface EscalationResult {
   response?: string;
 }
 
-export const TRANSFER_OFFER_MSG =
-  'Bu konuda net bilgiye ulaşamadım. Yanlış yönlendirmemek için sizi temsilciye aktarabilirim. Başka bir sorunuz varsa yine yardımcı olmaya devam edebilirim.';
+export function getTransferOfferMsg(lang: ConversationLang = 'tr'): string {
+  return t(lang, 'transfer_offer');
+}
 
-export const ESCALATION_TEMPLATES = {
-  frustration:
-    'Yaşadığınız olumsuz deneyim için üzgünüm. Sizi hemen canlı destek temsilcimize bağlıyorum. Kısa süre içinde size dönüş yapılacaktır.',
-  repeatedFailure: TRANSFER_OFFER_MSG,
-  wrongAnswer: TRANSFER_OFFER_MSG,
-};
+/** Geriye dönük uyumluluk — varsayılan Türkçe */
+export const TRANSFER_OFFER_MSG = getTransferOfferMsg('tr');
 
 const FRUSTRATION_PATTERNS = [
   /kizgin|sinirliyim|sinir oldum|cildirdim|cildir/,
@@ -53,6 +51,9 @@ const AI_UNHELPFUL_PATTERNS = [
   /net bilgiye ulasamadim/,
   /yanlis yonlendirmemek icin/,
   /temsilciye aktarabilirim/,
+  /could not find clear information/,
+  /transfer you to a representative/,
+  /avoid misguiding you/,
 ];
 
 
@@ -67,7 +68,10 @@ function countUnhelpfulAiReplies(history: ConversationMessage[]): number {
 }
 
 /** Mevcut mesajda kızgınlık — canlı destek (açık talep) */
-export function detectImmediateEscalation(message: string): EscalationResult {
+export function detectImmediateEscalation(
+  message: string,
+  lang: ConversationLang = 'tr'
+): EscalationResult {
   const normalized = normalizeForGate(message.trim());
 
   if (FRUSTRATION_PATTERNS.some((p) => p.test(normalized))) {
@@ -75,7 +79,7 @@ export function detectImmediateEscalation(message: string): EscalationResult {
       escalate: true,
       shouldTransfer: true,
       reason: 'customer_frustration',
-      response: ESCALATION_TEMPLATES.frustration,
+      response: t(lang, 'frustration'),
     };
   }
 
@@ -86,10 +90,14 @@ export function detectImmediateEscalation(message: string): EscalationResult {
 export function detectConversationEscalation(
   message: string,
   history: ConversationMessage[],
-  kbWillFail: boolean
+  kbWillFail: boolean,
+  lang?: ConversationLang
 ): EscalationResult {
-  const immediate = detectImmediateEscalation(message);
+  const conversationLang = lang ?? detectConversationLanguage(message, history);
+  const immediate = detectImmediateEscalation(message, conversationLang);
   if (immediate.escalate) return immediate;
+
+  const transferOffer = getTransferOfferMsg(conversationLang);
 
   // Memnuniyetsizlik → yumuşak teklif, cevap vermeye devam
   const normalized = normalizeForGate(message.trim());
@@ -98,7 +106,7 @@ export function detectConversationEscalation(
       escalate: true,
       shouldTransfer: false,
       reason: 'customer_dissatisfaction',
-      response: TRANSFER_OFFER_MSG,
+      response: transferOffer,
     };
   }
 
@@ -110,7 +118,7 @@ export function detectConversationEscalation(
       escalate: true,
       shouldTransfer: false,
       reason: unhelpfulCount >= 1 ? 'repeated_kb_miss' : 'kb_miss',
-      response: TRANSFER_OFFER_MSG,
+      response: transferOffer,
     };
   }
 

@@ -3,8 +3,14 @@
  */
 
 import { TRANSFER_MARKER } from './system-prompt';
+import { ConversationLang, getLanguagePromptBlock } from './language.service';
 
-export function buildAppointmentOnlyPrompt(knowledge: string, appointmentContext: string): string {
+export function buildAppointmentOnlyPrompt(
+  knowledge: string,
+  appointmentContext: string,
+  collectedContext = '',
+  lang: ConversationLang = 'tr'
+): string {
   const hasKb = knowledge.trim().length > 0;
 
   return `Sen randevu alma asistanısın.
@@ -29,10 +35,14 @@ YASAKLAR:
 [APPOINTMENT]{"customer_name":"Ad Soyad","customer_phone":"905551234567","title":"işlem özeti","doctor_name":"","notes":"","starts_at":"ISO","ends_at":"ISO"}[/APPOINTMENT]
 
 Her adımda TEK soru sor. Kısa yaz.
+Zaten toplanmış bilgiyi tekrar isteme.
 
+${collectedContext ? collectedContext + '\n' : ''}
 TAKVİM (dolu saatler):
 ${appointmentContext || 'Yok'}
 
 BİLGİ BANKASI${hasKb ? '' : ' (boş)'}:
-${hasKb ? knowledge : 'Çalışma saati yok — saat önerme, ' + TRANSFER_MARKER}`;
+${hasKb ? knowledge : 'Çalışma saati yok — saat önerme, ' + TRANSFER_MARKER}
+
+${getLanguagePromptBlock(lang)}`;
 }

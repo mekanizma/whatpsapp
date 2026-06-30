@@ -60,4 +60,19 @@ describe('appointment-collect.service', () => {
     const gate = blockBookingIfIncomplete(history, 'onaylıyorum');
     assert.equal(gate.blocked, true);
   });
+
+  it('kısıtlı geçmişte (son 4 mesaj) ad soyad yine bulunur', () => {
+    const full = [
+      { sender_type: 'ai', message: 'Randevu oluşturabilmem için önce ad ve soyadınızı yazar mısınız?' },
+      { sender_type: 'customer', message: 'gurcem semercioglu' },
+      { sender_type: 'ai', message: 'Teşekkürler. Randevu için cep telefon numaranızı yazar mısınız?' },
+      { sender_type: 'customer', message: '05338507761' },
+      { sender_type: 'ai', message: 'Hangi işlem veya muayene için randevu almak istediğinizi kısaca yazar mısınız?' },
+    ];
+    const truncated = full.slice(-4);
+    const gate = blockBookingIfIncomplete(truncated, 'diş çekimi');
+    assert.equal(gate.blocked, false);
+    assert.equal(gate.collected.customer_name, 'gurcem semercioglu');
+    assert.equal(gate.collected.title, 'diş çekimi');
+  });
 });

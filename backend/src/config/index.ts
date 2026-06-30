@@ -58,9 +58,10 @@ export const config = {
 
   ai: {
     maxTokens: parseInt(process.env.AI_MAX_TOKENS || '500', 10),
-    maxHistoryMessages: parseInt(process.env.AI_MAX_HISTORY || '4', 10),
+    maxHistoryMessages: parseInt(process.env.AI_MAX_HISTORY || '20', 10),
     maxKnowledgeItems: parseInt(process.env.AI_MAX_KNOWLEDGE_ITEMS || '3', 10),
     maxKnowledgeChars: parseInt(process.env.AI_MAX_KNOWLEDGE_CHARS || '1500', 10),
+    maxKbAnswerChars: parseInt(process.env.AI_MAX_KB_ANSWER_CHARS || '650', 10),
     temperature: parseFloat(process.env.AI_TEMPERATURE || '0.2'),
     cacheEnabled: process.env.AI_CACHE_ENABLED === 'true',
     cacheTtlMs: parseInt(process.env.AI_CACHE_TTL_MS || '3600000', 10), // 1 saat

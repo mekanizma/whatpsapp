@@ -2,6 +2,8 @@
  * Randevu bilgisi toplama — kayıt öncesi zorunlu alan kontrolü
  */
 
+import { ConversationLang, detectConversationLanguage, t } from './language.service';
+
 export interface HistoryMsg {
   sender_type: string;
   message: string;
@@ -37,6 +39,20 @@ function isValidFullName(name: string): boolean {
   return parts.length >= 2 && parts.every((p) => p.length >= 2);
 }
 
+const CONFIRM_WORDS = /^(evet|onayl?[iıİI]yorum|onaylıyorum|onayliyorum|onay|tamam|uygun|olur|kabul|ok|yes|hayır|hayir)$/iu;
+const PROCEDURE_HINT = /diş|dis\b|muayene|kontrol|çekim|cekim|temizlik|dolgu|kanal|implant|ortodont|randevu/i;
+
+function looksLikeName(text: string): boolean {
+  const t = text.trim();
+  if (!t || /^\d+$/.test(t) || extractPhone(t) || PROCEDURE_HINT.test(t)) return false;
+  const parts = t.split(/\s+/).filter(Boolean);
+  return parts.length >= 2 && parts.every((p) => p.length >= 2 && /^[\p{L}'-]+$/u.test(p));
+}
+
+function isAiSender(senderType: string): boolean {
+  return senderType === 'ai' || senderType === 'assistant';
+}
+
 /** Konuşma geçmişinden toplanan bilgileri çıkar */
 export function parseCollectedFields(
   history: HistoryMsg[],
@@ -51,13 +67,13 @@ export function parseCollectedFields(
   for (let i = 0; i < messages.length - 1; i++) {
     const curr = messages[i];
     const next = messages[i + 1];
-    if (curr.sender_type !== 'ai' || next.sender_type !== 'customer') continue;
+    if (!isAiSender(curr.sender_type) || next.sender_type !== 'customer') continue;
 
     const ai = curr.message.toLocaleLowerCase('tr');
     const cust = next.message.trim();
     if (!cust || cust.length < 2) continue;
 
-    if (/ad.{0,25}soyad|isminiz|adınız|ad soyad/.test(ai) && !/^\d+$/.test(cust)) {
+    if (/ad.{0,30}soyad|soyad.{0,15}ad|isminiz|adınız|adiniz|ad soyad/.test(ai) && looksLikeName(cust)) {
       customer_name = cust;
     }
     if (/telefon|numara|cep/.test(ai)) {
@@ -65,21 +81,69 @@ export function parseCollectedFields(
       if (p) customer_phone = p;
     }
     if (/işlem|islem|konu|muayene|hizmet|ne için|ne icin|hangi işlem/.test(ai)) {
-      if (!extractPhone(cust)) title = cust;
+      if (!extractPhone(cust) && !CONFIRM_WORDS.test(cust)) title = cust;
     }
     if (/doktor|hekim|doktor tercih/.test(ai) && !/^(yok|hayır|hayir|farketmez|yoktur)$/i.test(cust)) {
       doctor_name = cust;
     }
   }
 
-  // Müşteri mesajlarında doğrudan telefon
   for (const m of messages) {
     if (m.sender_type !== 'customer') continue;
     const p = extractPhone(m.message);
-    if (p && !customer_phone) customer_phone = p;
+    if (p) customer_phone = p;
+  }
+
+  if (!customer_name) {
+    for (const m of messages) {
+      if (m.sender_type === 'customer' && looksLikeName(m.message)) {
+        customer_name = m.message.trim();
+        break;
+      }
+    }
+  }
+
+  if (!title) {
+    const customerMsgs = messages.filter((m) => m.sender_type === 'customer');
+    for (let i = customerMsgs.length - 1; i >= 0; i--) {
+      const t = customerMsgs[i].message.trim();
+      if (t.length < 2) continue;
+      if (extractPhone(t)) continue;
+      if (CONFIRM_WORDS.test(t)) continue;
+      if (customer_name && t.toLocaleLowerCase('tr') === customer_name.toLocaleLowerCase('tr')) continue;
+      if (looksLikeName(t)) continue;
+      title = t;
+      break;
+    }
   }
 
   return { customer_name, customer_phone, title, doctor_name };
+}
+
+/** Prompt'a eklenecek özet — AI aynı soruyu tekrar sormasın */
+export function buildCollectedFieldsContext(
+  history: HistoryMsg[],
+  latestMessage: string,
+  lang?: ConversationLang
+): string {
+  const conversationLang = lang ?? detectConversationLanguage(latestMessage, history);
+  const c = parseCollectedFields(history, latestMessage);
+  const lines = [
+    `Ad soyad: ${c.customer_name || '(eksik)'}`,
+    `Telefon: ${c.customer_phone || '(eksik)'}`,
+    `İşlem: ${c.title || '(eksik)'}`,
+    c.doctor_name ? `Doktor: ${c.doctor_name}` : '',
+  ].filter(Boolean);
+
+  const missing = getMissingRequiredFields(c);
+  let next = '';
+  if (missing.length > 0) {
+    next = `\nSIRADAKİ TEK SORU: ${promptForMissingField(missing[0], conversationLang)}\nZaten alınan bilgileri TEKRAR SORMA.`;
+  } else {
+    next = '\nTüm bilgiler tamam — tarih/saat öner veya onay bekle.';
+  }
+
+  return `TOPLANAN RANDEVU BİLGİLERİ:\n${lines.join('\n')}${next}`;
 }
 
 export function getMissingRequiredFields(
@@ -101,26 +165,30 @@ export function getMissingRequiredFields(
   return missing;
 }
 
-export function promptForMissingField(field: MissingAppointmentField): string {
+export function promptForMissingField(
+  field: MissingAppointmentField,
+  lang: ConversationLang = 'tr'
+): string {
   switch (field) {
     case 'name':
-      return 'Randevu oluşturabilmem için önce ad ve soyadınızı yazar mısınız?';
+      return t(lang, 'appointment_name');
     case 'phone':
-      return 'Teşekkürler. Randevu için cep telefon numaranızı yazar mısınız?';
+      return t(lang, 'appointment_phone');
     case 'title':
-      return 'Hangi işlem veya muayene için randevu almak istediğinizi kısaca yazar mısınız?';
+      return t(lang, 'appointment_title');
     default:
-      return 'Randevu için eksik bilgileri tamamlayalım. Ad soyad, telefon ve işlem özetinizi yazar mısınız?';
+      return t(lang, 'appointment_missing_default');
   }
 }
 
 export function getFirstMissingPrompt(
   collected: CollectedAppointmentFields,
-  fromAction?: { customer_name?: string; customer_phone?: string; title?: string }
+  fromAction?: { customer_name?: string; customer_phone?: string; title?: string },
+  lang: ConversationLang = 'tr'
 ): string | null {
   const missing = getMissingRequiredFields(collected, fromAction);
   if (missing.length === 0) return null;
-  return promptForMissingField(missing[0]);
+  return promptForMissingField(missing[0], lang);
 }
 
 export function mergeCollectedWithAction<T extends {
@@ -146,10 +214,12 @@ export function mergeCollectedWithAction<T extends {
 export function blockBookingIfIncomplete(
   history: HistoryMsg[],
   latestMessage: string,
-  fromAction?: { customer_name?: string; customer_phone?: string; title?: string }
+  fromAction?: { customer_name?: string; customer_phone?: string; title?: string },
+  lang?: ConversationLang
 ): { blocked: boolean; message: string | null; collected: CollectedAppointmentFields } {
+  const conversationLang = lang ?? detectConversationLanguage(latestMessage, history);
   const collected = parseCollectedFields(history, latestMessage);
-  const prompt = getFirstMissingPrompt(collected, fromAction);
+  const prompt = getFirstMissingPrompt(collected, fromAction, conversationLang);
   if (prompt) {
     return { blocked: true, message: prompt, collected };
   }

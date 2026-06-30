@@ -4,6 +4,7 @@
  */
 
 import { detectImmediateEscalation } from './conversation-escalation.service';
+import { ConversationLang, detectConversationLanguage, t } from './language.service';
 
 export interface GateResult {
   skipAI: boolean;
@@ -33,27 +34,6 @@ export function normalizeForGate(text: string): string {
     .replace(/ı/g, 'i')
     .toLowerCase();
 }
-
-const TEMPLATES = {
-  greeting:
-    'Merhaba, ben AI destek asistanıyım. Bilgi bankamızdaki konularda size yardımcı olabilirim.',
-  thanks: 'Rica ederiz! Başka bir sorunuz olursa yazabilirsiniz.',
-  tooShort: 'Mesajınızı anlayamadım. Lütfen sorunuzu biraz daha detaylı yazın.',
-  humanTransfer:
-    'Elbette. Sizi temsilciye aktarıyorum. Talebinizi doğru yönlendirebilmem için konuyu kısaca yazar mısınız?',
-  payment:
-    'Ödeme konularında güvenliğiniz için kart veya şifre bilgisi paylaşmayın. Bu konuda sizi temsilciye aktarabilirim. Başka bir sorunuz varsa yardımcı olmaya devam edebilirim.',
-  refund:
-    'İade işlemleri talep detayına göre kontrol edilmelidir. Sizi temsilciye aktarabilirim. Başka bir konuda yardımcı olabilirim.',
-  optOut:
-    'Talebiniz alındı. Size tekrar bilgilendirme mesajı gönderilmemesi için gerekli kayıt oluşturulacaktır.',
-  sensitiveData:
-    'Güvenliğiniz için bu tür bilgileri WhatsApp üzerinden paylaşmayın. Bu konu için sizi temsilciye aktarabilirim.',
-  promptInjection:
-    'Bu bilgiyi paylaşamam. Güvenlik ve gizlilik nedeniyle bu tür taleplere yardımcı olamam. İsterseniz talebinizi temsilciye aktarabilirim.',
-  complaint:
-    'Yaşadığınız durum için üzgünüm. Sizi temsilciye aktarabilirim. İsterseniz başka bir konuda da yardımcı olabilirim.',
-};
 
 const HUMAN_TRANSFER_PATTERNS = [
   /canli destek/,
@@ -100,7 +80,9 @@ function confirmsTransferAfterOffer(
   const lastAi = [...history].reverse().find((m) => m.sender_type === 'ai');
   if (!lastAi) return false;
   const aiNorm = normalizeForGate(lastAi.message);
-  return /aktarabilirim|temsilci|canli destek|bagliyorum/.test(aiNorm);
+  return /aktarabilirim|temsilci|canli destek|bagliyorum|transfer you|representative|live support|weiterleiten|transférer|transfere/i.test(
+    aiNorm
+  );
 }
 
 function wantsHumanTransfer(normalized: string): boolean {
@@ -109,20 +91,22 @@ function wantsHumanTransfer(normalized: string): boolean {
 
 export function preAIGate(
   message: string,
-  history: { sender_type: string; message: string }[] = []
+  history: { sender_type: string; message: string }[] = [],
+  lang?: ConversationLang
 ): GateResult {
   const trimmed = message.trim();
   const normalized = normalizeForGate(trimmed);
+  const conversationLang = lang ?? detectConversationLanguage(trimmed, history);
 
   if (!trimmed || trimmed.length < 2) {
-    return { skipAI: true, response: TEMPLATES.tooShort, reason: 'too_short' };
+    return { skipAI: true, response: t(conversationLang, 'too_short'), reason: 'too_short' };
   }
 
   if (SPAM_PATTERNS.test(trimmed)) {
-    return { skipAI: true, response: TEMPLATES.tooShort, reason: 'spam' };
+    return { skipAI: true, response: t(conversationLang, 'too_short'), reason: 'spam' };
   }
 
-  const frustration = detectImmediateEscalation(trimmed);
+  const frustration = detectImmediateEscalation(trimmed, conversationLang);
   if (frustration.escalate && frustration.response) {
     return {
       skipAI: true,
@@ -135,7 +119,7 @@ export function preAIGate(
   if (PROMPT_INJECTION_PATTERNS.test(normalized)) {
     return {
       skipAI: true,
-      response: TEMPLATES.promptInjection,
+      response: t(conversationLang, 'prompt_injection'),
       shouldTransfer: true,
       reason: 'prompt_injection',
     };
@@ -144,7 +128,7 @@ export function preAIGate(
   if (SENSITIVE_DATA_PATTERNS.test(trimmed)) {
     return {
       skipAI: true,
-      response: TEMPLATES.sensitiveData,
+      response: t(conversationLang, 'sensitive_data'),
       shouldTransfer: true,
       reason: 'sensitive_data',
     };
@@ -153,7 +137,7 @@ export function preAIGate(
   if (OPT_OUT_PATTERNS.test(normalized)) {
     return {
       skipAI: true,
-      response: TEMPLATES.optOut,
+      response: t(conversationLang, 'opt_out'),
       shouldTransfer: true,
       reason: 'opt_out',
     };
@@ -163,7 +147,7 @@ export function preAIGate(
     return {
       skipAI: true,
       shouldTransfer: true,
-      response: TEMPLATES.humanTransfer,
+      response: t(conversationLang, 'human_transfer'),
       reason: 'human_transfer_request',
     };
   }
@@ -172,7 +156,7 @@ export function preAIGate(
     return {
       skipAI: true,
       shouldTransfer: true,
-      response: TEMPLATES.humanTransfer,
+      response: t(conversationLang, 'human_transfer'),
       reason: 'transfer_confirmed',
     };
   }
@@ -181,7 +165,7 @@ export function preAIGate(
     return {
       skipAI: true,
       shouldTransfer: false,
-      response: TEMPLATES.complaint,
+      response: t(conversationLang, 'complaint'),
       reason: 'complaint',
     };
   }
@@ -190,7 +174,7 @@ export function preAIGate(
     return {
       skipAI: true,
       shouldTransfer: false,
-      response: TEMPLATES.payment,
+      response: t(conversationLang, 'payment'),
       reason: 'payment_inquiry',
     };
   }
@@ -199,17 +183,17 @@ export function preAIGate(
     return {
       skipAI: true,
       shouldTransfer: false,
-      response: TEMPLATES.refund,
+      response: t(conversationLang, 'refund'),
       reason: 'refund_inquiry',
     };
   }
 
   if (GREETING_PATTERNS.test(trimmed)) {
-    return { skipAI: true, response: TEMPLATES.greeting, reason: 'greeting_template' };
+    return { skipAI: true, response: t(conversationLang, 'greeting'), reason: 'greeting_template' };
   }
 
   if (THANKS_PATTERNS.test(trimmed)) {
-    return { skipAI: true, response: TEMPLATES.thanks, reason: 'thanks_template' };
+    return { skipAI: true, response: t(conversationLang, 'thanks'), reason: 'thanks_template' };
   }
 
   return { skipAI: false, reason: 'needs_ai' };

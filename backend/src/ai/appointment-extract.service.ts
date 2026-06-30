@@ -21,9 +21,10 @@ import {
 } from './appointment-collect.service';
 import {
   extractOfferedSlotFromHistory,
-  formatSlotTurkish,
+  formatSlotLocalized,
   preferHistorySlot,
 } from './appointment-slot.service';
+import { ConversationLang, detectConversationLanguage, t } from './language.service';
 
 const openai = new OpenAI({ apiKey: config.openai.apiKey });
 
@@ -94,7 +95,8 @@ async function persistAppointment(
     preferred_doctor?: string;
     starts_at: string;
     ends_at: string;
-  }
+  },
+  lang: ConversationLang = 'tr'
 ): Promise<{ message: string; appointment: Appointment }> {
   const appointment = await createAppointment(companyId, {
     customer_phone: merged.customer_phone,
@@ -108,9 +110,9 @@ async function persistAppointment(
     source: 'ai',
   });
 
-  const slot = formatSlotTurkish(appointment.starts_at, appointment.ends_at);
+  const slot = formatSlotLocalized(appointment.starts_at, appointment.ends_at, lang);
   return {
-    message: `Randevunuz kaydedildi: ${slot}. ${appointment.title}`,
+    message: t(lang, 'appointment_saved', { slot, title: appointment.title }),
     appointment,
   };
 }
@@ -124,8 +126,9 @@ export async function bookFromConfirmation(
 ): Promise<{ message: string; appointment: Appointment | null } | null> {
   if (!isAppointmentConfirmation(latestMessage)) return null;
 
+  const lang = detectConversationLanguage(latestMessage, history);
   const collected = parseCollectedFields(history, latestMessage);
-  const gate = blockBookingIfIncomplete(history, latestMessage);
+  const gate = blockBookingIfIncomplete(history, latestMessage, undefined, lang);
   if (gate.blocked) {
     return { message: gate.message!, appointment: null };
   }
@@ -142,7 +145,7 @@ export async function bookFromConfirmation(
   if (err) return { message: err, appointment: null };
 
   try {
-    return await persistAppointment(companyId, merged);
+    return await persistAppointment(companyId, merged, lang);
   } catch (e) {
     return { message: `Randevu kaydedilemedi: ${(e as Error).message}`, appointment: null };
   }
@@ -156,13 +159,14 @@ export async function tryStructuredAppointmentBooking(
 ): Promise<{ message: string; appointment: Appointment | null } | null> {
   if (!isAppointmentConfirmation(latestMessage)) return null;
 
+  const lang = detectConversationLanguage(latestMessage, history);
   const fromHistory = await bookFromConfirmation(companyId, customerPhone, history, latestMessage);
   if (fromHistory?.appointment) return fromHistory;
 
   const extracted = await extractAppointmentFromConversation(history, latestMessage);
   if (!extracted) return fromHistory;
 
-  const gate = blockBookingIfIncomplete(history, latestMessage, extracted);
+  const gate = blockBookingIfIncomplete(history, latestMessage, extracted, lang);
   if (gate.blocked) {
     return { message: gate.message!, appointment: null };
   }
@@ -176,7 +180,7 @@ export async function tryStructuredAppointmentBooking(
   if (err) return { message: err, appointment: null };
 
   try {
-    return await persistAppointment(companyId, merged);
+    return await persistAppointment(companyId, merged, lang);
   } catch (e) {
     return { message: `Randevu kaydedilemedi: ${(e as Error).message}`, appointment: null };
   }
@@ -189,8 +193,11 @@ export async function handleAppointmentBooking(
   customerName: string | null,
   rawResponse: string,
   history: HistoryMsg[],
-  latestMessage: string
+  latestMessage: string,
+  lang?: ConversationLang
 ): Promise<{ message: string; appointment: Appointment | null }> {
+  const conversationLang = lang ?? detectConversationLanguage(latestMessage, history);
+
   if (isAppointmentConfirmation(latestMessage)) {
     const confirmed = await bookFromConfirmation(companyId, customerPhone, history, latestMessage);
     if (confirmed?.appointment) return confirmed;
@@ -207,8 +214,14 @@ export async function handleAppointmentBooking(
       })()
     : undefined;
 
-  const gate = blockBookingIfIncomplete(history, latestMessage, action);
-  if (gate.blocked && !isAppointmentConfirmation(latestMessage)) {
+  const gate = blockBookingIfIncomplete(history, latestMessage, action, conversationLang);
+
+  const isBookingAttempt =
+    isAppointmentConfirmation(latestMessage) ||
+    rawResponse.includes(APPOINTMENT_MARKER) ||
+    /randevu(nuz)?\s+.*(kayded|oluştur|olustur)/i.test(rawResponse);
+
+  if (gate.blocked && isBookingAttempt) {
     return { message: gate.message!, appointment: null };
   }
 
@@ -230,10 +243,6 @@ export async function handleAppointmentBooking(
       latestMessage
     );
     if (structured) return structured;
-  }
-
-  if (gate.blocked && gate.message) {
-    return { message: gate.message, appointment: null };
   }
 
   return fromMarker;
