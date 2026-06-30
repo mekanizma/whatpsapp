@@ -1,5 +1,5 @@
 /**
- * OpenAI AI Chat Engine — bilgi bankası zorunlu mod
+ * OpenAI Chat — yalnızca admin panel promptları
  */
 
 import type OpenAI from 'openai';
@@ -7,24 +7,11 @@ import { config } from '../config';
 import { createChatCompletion } from './openai-client';
 import { adminClient } from '../database/supabase';
 import { Company, KnowledgeItem } from '../types';
-import { getGreetingMessage } from '../services/prompt.service';
-import { preAIGate, isGreetingMessage, normalizeForGate } from './ai-gate.service';
-import { filterRelevantKnowledge, isAppointmentIntent, isKnowledgeQuestion, isOffTopicQuery, buildKnowledgeContextForAI } from './knowledge-filter.service';
-import { detectConversationEscalation, getTransferOfferMsg } from './conversation-escalation.service';
-import { buildAppointmentOnlyPrompt } from './appointment-prompt';
-import { blockBookingIfIncomplete, buildCollectedFieldsContext, getMissingRequiredFields, parseCollectedFields } from './appointment-collect.service';
-import { handleAppointmentBooking } from './appointment-extract.service';
-import {
-  detectConversationLanguage,
-  t,
-  ConversationLang,
-} from './language.service';
-import {
-  checkAIQuota,
-  logAIUsage,
-} from './ai-quota.service';
-import { TRANSFER_MARKER } from './system-prompt';
-import { getAppointmentContextForAI, stripAppointmentMarkers, APPOINTMENT_MARKER } from '../services/appointment.service';
+import { buildAdminPanelPrompt } from './admin-prompt-builder';
+import { detectConversationLanguage } from './language.service';
+import { logAIUsage } from './ai-quota.service';
+import { getAllActivePromptContentsForAI } from '../services/prompt.service';
+import { getAppointmentContextForAI } from '../services/appointment.service';
 
 export interface AIResponse {
   message: string;
@@ -51,32 +38,23 @@ async function getCompany(companyId: string): Promise<Company> {
   return company;
 }
 
+function formatKnowledge(items: KnowledgeItem[]): string {
+  if (!items.length) return '';
+  const text = items.map((k) => `### ${k.title}\n${k.content}`).join('\n\n');
+  return text.length > config.ai.maxKnowledgeChars
+    ? `${text.slice(0, config.ai.maxKnowledgeChars)}\n...[kısaltıldı]`
+    : text;
+}
+
 export async function generateAIResponse(
   companyId: string,
   customerMessage: string,
   customerPhone: string,
-  customerName: string | null = null
+  _customerName: string | null = null
 ): Promise<AIResponse> {
   const trimmed = customerMessage.trim();
 
-  const quota = await checkAIQuota(companyId);
-  if (!quota.allowed) {
-    const lang = detectConversationLanguage(trimmed, []);
-    return {
-      message: t(lang, 'quota_exceeded'),
-      shouldTransfer: true,
-      skippedAI: true,
-      skipReason: 'quota_exceeded',
-      tokensUsed: 0,
-    };
-  }
-
-  const [knowledgeResult, historyResult, appointmentContext] = await Promise.all([
-    adminClient
-      .from('knowledge_base')
-      .select('title, content, category')
-      .eq('company_id', companyId)
-      .eq('is_active', true),
+  const [historyResult, company, knowledgeResult, appointmentContext] = await Promise.all([
     adminClient
       .from('messages')
       .select('sender_type, message')
@@ -84,265 +62,73 @@ export async function generateAIResponse(
       .eq('customer_phone', customerPhone)
       .order('created_at', { ascending: false })
       .limit(config.ai.maxHistoryMessages),
-    getAppointmentContextForAI(companyId).catch(() => 'Takvim bilgisi yok.'),
+    getCompany(companyId),
+    adminClient
+      .from('knowledge_base')
+      .select('title, content, category')
+      .eq('company_id', companyId)
+      .eq('is_active', true),
+    getAppointmentContextForAI(companyId).catch(() => ''),
   ]);
 
-  const knowledge = (knowledgeResult.data || []) as KnowledgeItem[];
   const history = (historyResult.data || [])
     .reverse()
     .filter((m) => m.message !== trimmed);
 
   const conversationLang = detectConversationLanguage(trimmed, history);
+  const knowledge = formatKnowledge((knowledgeResult.data || []) as KnowledgeItem[]);
 
-  let effectiveMessage = trimmed;
-  const normalizedComplaint = normalizeForGate(trimmed);
-  if (/sordu(u|g)um soruya|cevap ver|yanlis(soyluyor)?|dogru degil|baska soru/.test(normalizedComplaint)) {
-    const lastQ = [...history]
-      .reverse()
-      .find(
-        (m) =>
-          m.sender_type === 'customer' &&
-          m.message !== trimmed &&
-          isKnowledgeQuestion(m.message)
-      );
-    if (lastQ) effectiveMessage = lastQ.message;
-  }
-
-  if (isGreetingMessage(trimmed)) {
-    const greeting = await getGreetingMessage(conversationLang);
-    await logAIUsage({
-      companyId, customerPhone,
-      promptTokens: 0, completionTokens: 0, totalTokens: 0,
-      cached: false, skipped: true, skipReason: 'greeting_template', model: config.openai.model,
-    });
-    return {
-      message: greeting,
-      shouldTransfer: false,
-      skippedAI: true,
-      skipReason: 'greeting_template',
-      tokensUsed: 0,
-    };
-  }
-
-  const gate = preAIGate(trimmed, history, conversationLang);
-  if (gate.skipAI && gate.response) {
-    await logAIUsage({
-      companyId, customerPhone,
-      promptTokens: 0, completionTokens: 0, totalTokens: 0,
-      cached: false, skipped: true, skipReason: gate.reason, model: config.openai.model,
-    });
-    return {
-      message: gate.response,
-      shouldTransfer: gate.shouldTransfer || false,
-      skippedAI: true,
-      skipReason: gate.reason,
-      tokensUsed: 0,
-    };
-  }
-
-  const kbFilter = filterRelevantKnowledge(knowledge, effectiveMessage);
-  const appointmentFlow = isAppointmentIntent(trimmed, history);
-  const kbWillFail =
-    !kbFilter.hasRelevantContent && !appointmentFlow && !isKnowledgeQuestion(effectiveMessage);
-
-  const escalation =
-    effectiveMessage === trimmed
-      ? detectConversationEscalation(trimmed, history, kbWillFail, conversationLang)
-      : { escalate: false, shouldTransfer: false, reason: '' };
-  if (escalation.escalate && escalation.response && !appointmentFlow) {
-    await logAIUsage({
-      companyId, customerPhone,
-      promptTokens: 0, completionTokens: 0, totalTokens: 0,
-      cached: false, skipped: true, model: config.openai.model,
-    });
-    return {
-      message: escalation.response,
-      shouldTransfer: escalation.shouldTransfer,
-      skippedAI: true,
-      skipReason: escalation.reason,
-      tokensUsed: 0,
-    };
-  }
-
-  // Kapsam dışı soru — şablon yanıt
-  if (
-    !kbFilter.hasRelevantContent &&
-    isKnowledgeQuestion(effectiveMessage) &&
-    isOffTopicQuery(effectiveMessage)
-  ) {
-    const transferOffer = getTransferOfferMsg(conversationLang);
-    await logAIUsage({
-      companyId, customerPhone,
-      promptTokens: 0, completionTokens: 0, totalTokens: 0,
-      cached: false, skipped: true, skipReason: 'kb_off_topic', model: config.openai.model,
-    });
-    return {
-      message: transferOffer,
-      shouldTransfer: false,
-      skippedAI: true,
-      skipReason: 'kb_off_topic',
-      tokensUsed: 0,
-    };
-  }
-
-  // ─── RANDEVU: eksik bilgi toplama (OpenAI öncesi — boş yanıt riskini önler) ───
-  if (appointmentFlow) {
-    const collected = parseCollectedFields(history, trimmed);
-    const missing = getMissingRequiredFields(collected);
-    if (missing.length > 0 || /randevu|rezervasyon|appointment|alabilirmiyim|almak istiyorum/.test(trimmed.toLowerCase())) {
-      const gate = blockBookingIfIncomplete(history, trimmed, undefined, conversationLang);
-      if (gate.message) {
-        await logAIUsage({
-          companyId, customerPhone,
-          promptTokens: 0, completionTokens: 0, totalTokens: 0,
-          cached: false, skipped: true, skipReason: 'appointment_collect', model: config.openai.model,
-        });
-        return {
-          message: gate.message,
-          shouldTransfer: false,
-          skippedAI: true,
-          skipReason: 'appointment_collect',
-          tokensUsed: 0,
-        };
-      }
-    }
-  }
-
-  // ─── OpenAI: bilgi bankası + randevu (doğal kısa yanıt) ───
-  const company = await getCompany(companyId);
-  const collectedContext = appointmentFlow
-    ? buildCollectedFieldsContext(history, trimmed, conversationLang)
-    : '';
-  const knowledgeContext = buildKnowledgeContextForAI(kbFilter, knowledge, effectiveMessage);
-
-  if (
-    !appointmentFlow &&
-    isKnowledgeQuestion(effectiveMessage) &&
-    !knowledgeContext.trim()
-  ) {
-    const transferOffer = getTransferOfferMsg(conversationLang);
-    await logAIUsage({
-      companyId, customerPhone,
-      promptTokens: 0, completionTokens: 0, totalTokens: 0,
-      cached: false, skipped: true, skipReason: 'kb_no_match', model: config.openai.model,
-    });
-    return {
-      message: transferOffer,
-      shouldTransfer: false,
-      skippedAI: true,
-      skipReason: 'kb_no_match',
-      tokensUsed: 0,
-    };
-  }
-
-  const systemPrompt = await buildAppointmentOnlyPrompt(
-    company,
-    knowledgeContext,
+  const systemPrompt = await buildAdminPanelPrompt(company, {
+    knowledge,
     appointmentContext,
-    collectedContext,
-    conversationLang
-  );
+    lang: conversationLang,
+  });
 
-  const chatMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-    { role: 'system', content: systemPrompt },
+  const activePrompts = await getAllActivePromptContentsForAI();
+  if (systemPrompt) {
+    console.log(
+      `[AI] Admin prompt: [${activePrompts.map((p) => p.prompt_key).join(', ')}] (${systemPrompt.length} karakter)`
+    );
+  } else {
+    console.warn('[AI] Aktif admin prompt yok — panelden prompt kaydedin');
+  }
+
+  const chatMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [];
+  if (systemPrompt) {
+    chatMessages.push({ role: 'system', content: systemPrompt });
+  }
+
+  chatMessages.push(
     ...history.map((m) => ({
       role: (m.sender_type === 'customer' ? 'user' : 'assistant') as 'user' | 'assistant',
-      content: m.message.slice(0, 300),
+      content: m.message.slice(0, 500),
     })),
-    { role: 'user', content: trimmed.slice(0, 500) },
-  ];
+    { role: 'user', content: trimmed.slice(0, 1000) }
+  );
 
   const completion = await createChatCompletion(chatMessages, {
-    maxTokens: appointmentFlow ? 2000 : config.ai.maxTokens,
+    maxTokens: config.ai.maxTokens,
+    temperature: config.ai.temperature,
   });
 
   const usage = completion.usage;
   const totalTokens = usage?.total_tokens || 0;
 
   await logAIUsage({
-    companyId, customerPhone,
+    companyId,
+    customerPhone,
     promptTokens: usage?.prompt_tokens || 0,
     completionTokens: usage?.completion_tokens || 0,
     totalTokens,
-    cached: false, skipped: false, model: config.openai.model,
+    cached: false,
+    skipped: false,
+    model: config.openai.model,
   });
 
-  let rawResponse = completion.choices[0]?.message?.content?.trim() || '';
-
-  if (!rawResponse && appointmentFlow) {
-    const gate = blockBookingIfIncomplete(history, trimmed, undefined, conversationLang);
-    if (gate.message) rawResponse = gate.message;
-  }
-  let { message: afterBooking, appointment } = await handleAppointmentBooking(
-    companyId,
-    customerPhone,
-    customerName,
-    rawResponse,
-    history,
-    trimmed,
-    conversationLang
-  );
-
-  // AI özür/geri dönüş mesajlarını engelle — eksik bilgi varsa net soru sor
-  if (!appointment && /unuttum|özür|ozur|almayı unuttum|forgot|sorry/i.test(afterBooking)) {
-    const { blockBookingIfIncomplete } = await import('./appointment-collect.service');
-    const bookingGate = blockBookingIfIncomplete(history, trimmed, undefined, conversationLang);
-    if (bookingGate.message) afterBooking = bookingGate.message;
-  }
-
-  // Kayıt oluştuysa her zaman DB'deki gerçek saati göster
-  if (appointment) {
-    const { formatSlotLocalized } = await import('./appointment-slot.service');
-    const slot = formatSlotLocalized(appointment.starts_at, appointment.ends_at, conversationLang);
-    afterBooking = t(conversationLang, 'appointment_saved', { slot, title: appointment.title });
-  }
-  const { message: finalMessage, shouldTransfer } = sanitizeAIResponse(
-    afterBooking,
-    conversationLang,
-    appointmentFlow
-  );
-
-  if (appointment) {
-    console.log(`[AI] Randevu oluşturuldu: ${appointment.id} → ${appointment.customer_phone}`);
-  } else if (rawResponse.includes(APPOINTMENT_MARKER)) {
-    console.warn('[AI] APPOINTMENT marker var ama kayıt oluşmadı — structured fallback denendi');
-  }
-
   return {
-    message: finalMessage,
-    shouldTransfer,
+    message: completion.choices[0]?.message?.content?.trim() || '',
+    shouldTransfer: false,
     skippedAI: false,
     tokensUsed: totalTokens,
-  };
-}
-
-function sanitizeAIResponse(
-  response: string,
-  lang: ConversationLang = 'tr',
-  appointmentFlow = false
-): { message: string; shouldTransfer: boolean } {
-  const shouldTransfer = response.includes(TRANSFER_MARKER);
-  const cleaned = stripAppointmentMarkers(
-    response
-      .replace(new RegExp(TRANSFER_MARKER.replace(/[[\]]/g, '\\$&'), 'g'), '')
-      .replace(/transfer_to_human/gi, '')
-      .replace(/\s+/g, ' ')
-      .trim()
-  );
-
-  if (cleaned) return { message: cleaned, shouldTransfer };
-
-  if (appointmentFlow) {
-    return {
-      message: t(lang, 'appointment_missing_default'),
-      shouldTransfer: false,
-    };
-  }
-
-  return {
-    message: shouldTransfer
-      ? t(lang, 'transfer_connect')
-      : getTransferOfferMsg(lang),
-    shouldTransfer: true,
   };
 }

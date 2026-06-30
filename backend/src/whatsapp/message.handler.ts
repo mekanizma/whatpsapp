@@ -186,29 +186,8 @@ export async function processInboundMessage(
 
     await incrementMessageUsage(companyId);
 
-    let replyMessage = aiResponse.message;
-
-    if (aiResponse.shouldTransfer) {
-      await ensureOpenTransferTicket(
-        companyId,
-        phone,
-        customerName,
-        `Canlı destek: ${trimmed.substring(0, 100)}`
-      );
-
-      if (!replyMessage || shouldSkipTransferReply(companyId, phone)) {
-        replyMessage = '';
-      } else {
-        markTransferReply(companyId, phone);
-      }
-    }
-
-    if (!replyMessage) {
-      if (aiResponse.skipReason === 'active_ticket') {
-        console.log(`[WhatsApp] Aktif ticket — AI yanıtı bekletildi: ${phone}`);
-      }
-      return '';
-    }
+    const replyMessage = aiResponse.message;
+    if (!replyMessage) return '';
 
     await adminClient.from('messages').insert({
       company_id: companyId,
@@ -216,12 +195,12 @@ export async function processInboundMessage(
       customer_name: customerName,
       message: replyMessage,
       sender_type: 'ai',
-      status: aiResponse.shouldTransfer ? 'transferred' : 'open',
+      status: 'open',
     });
 
     await logActivity({
       companyId,
-      action: aiResponse.shouldTransfer ? 'message_transferred' : 'ai_response_sent',
+      action: 'ai_response_sent',
       entityType: 'message',
       metadata: {
         customer_phone: phone,
@@ -231,7 +210,7 @@ export async function processInboundMessage(
       },
     });
 
-    console.log(`[WhatsApp] Yanıt gönderildi → ${phone} (${aiResponse.skipReason || 'ai'})`);
+    console.log(`[WhatsApp] Yanıt gönderildi → ${phone}`);
     return replyMessage;
   });
 }

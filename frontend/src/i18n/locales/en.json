@@ -569,6 +569,8 @@
       "resetAll": "Reset All",
       "resetAllConfirm": "All prompts will be reset to knowledge-base-only defaults. Continue?",
       "saved": "Prompt saved — AI will use this version now.",
+      "inactiveWarning": "This prompt is inactive. Saving will activate it for AI.",
+      "activeAiPrompt": "AI is currently using this prompt",
       "liveNote": "After saving, AI uses this prompt on the next message",
       "updatedAt": "Last updated:",
       "selectHint": "Select a prompt to edit",

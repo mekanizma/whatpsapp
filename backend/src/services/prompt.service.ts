@@ -271,6 +271,59 @@ export async function getExtensionPromptContents(): Promise<string[]> {
   return contents;
 }
 
+export interface ActivePromptSlice {
+  prompt_key: string;
+  prompt_role: PromptRole;
+  content: string;
+  sort_order: number;
+}
+
+/** AI motoru — kayıttan hemen sonra güncel içerik (önbellek yok) */
+export async function getAllActivePromptContentsForAI(): Promise<ActivePromptSlice[]> {
+  if (config.demoMode) {
+    return sortTemplates([...initDemoStore().values()])
+      .filter((p) => p.is_active && p.content.trim())
+      .map((p) => ({
+        prompt_key: p.prompt_key,
+        prompt_role: p.prompt_role,
+        content: p.content,
+        sort_order: p.sort_order,
+      }));
+  }
+
+  const { data, error } = await adminClient
+    .from('ai_prompt_templates')
+    .select('prompt_key, prompt_role, content, sort_order')
+    .eq('is_active', true);
+
+  if (error) {
+    if (isPromptTableMissing(error)) {
+      return DEFAULT_PROMPTS.filter((p) => p.content.trim()).map((p) => ({
+        prompt_key: p.prompt_key,
+        prompt_role: p.prompt_role,
+        content: p.content,
+        sort_order: 0,
+      }));
+    }
+    throw new Error(error.message);
+  }
+
+  return (data || [])
+    .map((row) => ({
+      prompt_key: String(row.prompt_key),
+      prompt_role: (row.prompt_role as PromptRole) || resolvePromptRole(String(row.prompt_key)) || 'custom',
+      content: String(row.content),
+      sort_order: Number(row.sort_order) || 0,
+    }))
+    .filter((p) => p.content.trim())
+    .sort((a, b) => {
+      const roleDiff = ROLE_SORT[a.prompt_role] - ROLE_SORT[b.prompt_role];
+      if (roleDiff !== 0) return roleDiff;
+      if (a.sort_order !== b.sort_order) return a.sort_order - b.sort_order;
+      return a.prompt_key.localeCompare(b.prompt_key, 'tr');
+    });
+}
+
 export async function getGreetingMessage(
   lang: import('../ai/language.service').ConversationLang
 ): Promise<string> {
@@ -406,7 +459,7 @@ export async function createPromptTemplate(input: CreatePromptInput): Promise<Pr
   if (error) throw new Error(error.message);
 
   await deactivateOtherRolePrompts(role, key);
-  invalidatePromptCache();
+  invalidatePromptCache(key);
   return rowToTemplate(data as Record<string, unknown>);
 }
 
@@ -418,6 +471,7 @@ export async function updatePromptTemplate(
     const store = initDemoStore();
     const existing = store.get(promptKey);
     if (!existing) throw new Error('Prompt bulunamadı');
+    const role = existing.prompt_role;
     const updated: PromptTemplate = {
       ...existing,
       name: input.name?.trim() || existing.name,
@@ -426,11 +480,21 @@ export async function updatePromptTemplate(
       category: input.category?.trim() || existing.category,
       content: input.content?.trim() || existing.content,
       variables: input.variables ?? existing.variables,
-      is_active: input.is_active ?? existing.is_active,
+      is_active:
+        role !== 'custom'
+          ? input.is_active === false
+            ? false
+            : true
+          : (input.is_active ?? existing.is_active),
       sort_order: input.sort_order ?? existing.sort_order,
       version: existing.version + 1,
       updated_at: new Date().toISOString(),
     };
+    if (role !== 'custom' && updated.is_active) {
+      for (const p of store.values()) {
+        if (p.prompt_role === role && p.prompt_key !== promptKey) p.is_active = false;
+      }
+    }
     store.set(promptKey, updated);
     invalidatePromptCache();
     return updated;
@@ -454,6 +518,12 @@ export async function updatePromptTemplate(
   if (currentError) throw new Error(currentError.message);
   if (!current) throw new Error('Prompt bulunamadı');
 
+  const role = (current.prompt_role as PromptRole) || 'custom';
+  // Kaydedilen çekirdek prompt AI'da kullanılsın — aynı rolde tek aktif
+  if (role !== 'custom' && input.is_active !== false) {
+    patch.is_active = true;
+  }
+
   patch.version = (Number(current.version) || 1) + 1;
 
   const { data, error } = await adminClient
@@ -465,12 +535,11 @@ export async function updatePromptTemplate(
 
   if (error) throw new Error(error.message);
 
-  const role = (current.prompt_role as PromptRole) || 'custom';
   if (input.is_active !== false && role !== 'custom') {
     await deactivateOtherRolePrompts(role, promptKey);
   }
 
-  invalidatePromptCache();
+  invalidatePromptCache(promptKey);
   return rowToTemplate(data as Record<string, unknown>);
 }
 
@@ -580,7 +649,7 @@ export async function resetPromptToDefault(promptKey: string): Promise<PromptTem
   if (error) throw new Error(error.message);
 
   await deactivateOtherRolePrompts(def.prompt_role, promptKey);
-  invalidatePromptCache();
+  invalidatePromptCache(promptKey);
   return rowToTemplate(data as Record<string, unknown>);
 }
 

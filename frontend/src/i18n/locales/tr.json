@@ -569,6 +569,8 @@
       "resetAll": "Tümünü Sıfırla",
       "resetAllConfirm": "Tüm promptlar bilgi-bankası odaklı varsayılanlara dönecek. Emin misiniz?",
       "saved": "Prompt kaydedildi — AI artık bu sürümü kullanıyor.",
+      "inactiveWarning": "Bu prompt pasif. Kaydettiğinizde AI için aktif hale gelir.",
+      "activeAiPrompt": "AI şu an bu promptu kullanıyor",
       "liveNote": "Kaydettiğinizde AI bir sonraki mesajda bu promptu kullanır",
       "updatedAt": "Son güncelleme:",
       "selectHint": "Düzenlemek için bir prompt seçin",

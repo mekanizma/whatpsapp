@@ -312,6 +312,23 @@ export function buildKnowledgeContextForAI(
   return '';
 }
 
+/** Admin promptunda KB yazılmasa bile her AI çağrısına eklenir */
+export function buildMandatoryKnowledgeContext(
+  allItems: KnowledgeItem[],
+  customerMessage: string,
+  kbFilter: KnowledgeFilterResult
+): string {
+  const filtered = buildKnowledgeContextForAI(kbFilter, allItems, customerMessage);
+  if (filtered.trim()) return filtered;
+
+  if (!allItems.length) return '';
+
+  const full = allItems.map((k) => `### ${k.title}\n${k.content}`).join('\n\n');
+  return full.length > config.ai.maxKnowledgeChars
+    ? `${full.slice(0, config.ai.maxKnowledgeChars)}\n...[kısaltıldı]`
+    : full;
+}
+
 const APPOINTMENT_CONFIRM_RE =
   /^(evet|onayl?[iıİI]yorum|onaylıyorum|onayliyorum|onay|tamam|uygun|olur|kabul|ok|yes|hayır|hayir)$/iu;
 const APPOINTMENT_TIME_RE =
