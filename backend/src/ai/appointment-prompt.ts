@@ -39,6 +39,7 @@ export async function buildAppointmentOnlyPrompt(
     kbEmptySuffix: hasKb ? '' : ' (boş)',
     knowledge: hasKb ? knowledge : `Çalışma saati yok — saat önerme, ${TRANSFER_MARKER}`,
     languageBlock,
+    transferMarker: TRANSFER_MARKER,
   });
 
   return `${systemPart}\n\n${appointmentPart}`;

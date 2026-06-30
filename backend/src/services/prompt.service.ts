@@ -348,3 +348,55 @@ export async function resetPromptToDefault(promptKey: string): Promise<PromptTem
     is_active: true,
   });
 }
+
+/** Tüm varsayılan promptları DB'ye yazar (eksik olanları ekler, mevcutları sıfırlar) */
+export async function resetAllPromptsToDefault(): Promise<{ reset: number; seeded: number }> {
+  let reset = 0;
+  let seeded = 0;
+
+  for (const p of DEFAULT_PROMPTS) {
+    if (config.demoMode) {
+      const store = initDemoStore();
+      const now = new Date().toISOString();
+      store.set(p.prompt_key, {
+        id: `demo-${p.prompt_key}`,
+        prompt_key: p.prompt_key,
+        name: p.name,
+        description: p.description,
+        category: p.category,
+        content: p.content,
+        variables: p.variables,
+        is_active: true,
+        version: (store.get(p.prompt_key)?.version || 0) + 1,
+        created_at: store.get(p.prompt_key)?.created_at || now,
+        updated_at: now,
+      });
+      reset++;
+      continue;
+    }
+
+    const { data: existing } = await adminClient
+      .from('ai_prompt_templates')
+      .select('id')
+      .eq('prompt_key', p.prompt_key)
+      .maybeSingle();
+
+    if (existing) {
+      await resetPromptToDefault(p.prompt_key);
+      reset++;
+    } else {
+      const { error } = await adminClient.from('ai_prompt_templates').insert({
+        prompt_key: p.prompt_key,
+        name: p.name,
+        description: p.description,
+        category: p.category,
+        content: p.content,
+        variables: p.variables,
+      });
+      if (!error) seeded++;
+    }
+  }
+
+  invalidatePromptCache();
+  return { reset, seeded };
+}

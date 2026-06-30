@@ -542,6 +542,8 @@
       "variables": "Available Variables",
       "variablesHint": "These placeholders are filled automatically at runtime.",
       "reset": "Reset to Default",
+      "resetAll": "Reset All",
+      "resetAllConfirm": "All prompts will be reset to knowledge-base-only defaults. Continue?",
       "saved": "Prompt saved — AI will use this version now.",
       "liveNote": "After saving, AI uses this prompt on the next message",
       "updatedAt": "Last updated:",

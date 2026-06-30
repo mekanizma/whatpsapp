@@ -25,6 +25,7 @@ import {
   createPromptTemplate,
   updatePromptTemplate,
   resetPromptToDefault,
+  resetAllPromptsToDefault,
   seedDefaultPrompts,
 } from '../services/prompt.service';
 
@@ -293,6 +294,21 @@ export async function resetPrompt(req: AuthRequest, res: Response): Promise<void
       metadata: { prompt_key: data.prompt_key },
     });
     res.json({ success: true, data });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'Hata' });
+  }
+}
+
+export async function resetAllPrompts(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const result = await resetAllPromptsToDefault();
+    await logActivity({
+      userId: req.userId,
+      action: 'prompts_reset_all',
+      entityType: 'ai_prompt',
+      metadata: result,
+    });
+    res.json({ success: true, data: result });
   } catch (err) {
     res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'Hata' });
   }

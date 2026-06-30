@@ -542,6 +542,8 @@
       "variables": "Kullanılabilir Değişkenler",
       "variablesHint": "Bu değişkenler çalışma anında otomatik doldurulur.",
       "reset": "Varsayılana Dön",
+      "resetAll": "Tümünü Sıfırla",
+      "resetAllConfirm": "Tüm promptlar bilgi-bankası odaklı varsayılanlara dönecek. Emin misiniz?",
       "saved": "Prompt kaydedildi — AI artık bu sürümü kullanıyor.",
       "liveNote": "Kaydettiğinizde AI bir sonraki mesajda bu promptu kullanır",
       "updatedAt": "Son güncelleme:",

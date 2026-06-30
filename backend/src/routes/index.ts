@@ -41,6 +41,7 @@ router.get('/admin/prompts/:key', authenticate, requireRole('super_admin'), asyn
 router.post('/admin/prompts', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.createPrompt));
 router.put('/admin/prompts/:key', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.updatePrompt));
 router.post('/admin/prompts/:key/reset', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.resetPrompt));
+router.post('/admin/prompts-reset-all', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.resetAllPrompts));
 router.post('/admin/prompts-seed', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.seedPrompts));
 
 // Company

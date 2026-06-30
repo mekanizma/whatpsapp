@@ -86,6 +86,24 @@ export function AdminPromptsPage() {
     },
   });
 
+  const resetAllMutation = useMutation({
+    mutationFn: () => api.post<{ reset: number; seeded: number }>('/admin/prompts-reset-all', {}),
+    onSuccess: async () => {
+      const refreshed = await queryClient.fetchQuery({
+        queryKey: ['admin-prompts'],
+        queryFn: () => api.get<AIPromptTemplate[]>('/admin/prompts'),
+      });
+      if (selectedKey) {
+        const p = refreshed?.find((x) => x.prompt_key === selectedKey);
+        if (p) {
+          setEditContent(p.content);
+          setEditName(p.name);
+          setEditDescription(p.description || '');
+        }
+      }
+    },
+  });
+
   const openPrompt = (p: AIPromptTemplate) => {
     setSelectedKey(p.prompt_key);
     setShowCreate(false);
@@ -131,17 +149,33 @@ export function AdminPromptsPage() {
         title={t('admin.prompts.title')}
         description={t('admin.prompts.description')}
         action={
-          <Button
-            size="sm"
-            className="w-full sm:w-auto"
-            onClick={() => {
-              setShowCreate(true);
-              setSelectedKey(null);
-            }}
-          >
-            <Plus className="h-4 w-4" />
-            {t('admin.prompts.addNew')}
-          </Button>
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full sm:w-auto"
+              onClick={() => {
+                if (window.confirm(t('admin.prompts.resetAllConfirm'))) {
+                  resetAllMutation.mutate();
+                }
+              }}
+              disabled={resetAllMutation.isPending}
+            >
+              <RotateCcw className="h-4 w-4" />
+              {t('admin.prompts.resetAll')}
+            </Button>
+            <Button
+              size="sm"
+              className="w-full sm:w-auto"
+              onClick={() => {
+                setShowCreate(true);
+                setSelectedKey(null);
+              }}
+            >
+              <Plus className="h-4 w-4" />
+              {t('admin.prompts.addNew')}
+            </Button>
+          </div>
         }
       />
 
