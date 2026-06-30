@@ -42,9 +42,9 @@ const TEMPLATES = {
   humanTransfer:
     'Elbette. Sizi temsilciye aktarıyorum. Talebinizi doğru yönlendirebilmem için konuyu kısaca yazar mısınız?',
   payment:
-    'Ödeme konularında güvenliğiniz için kart veya şifre bilgisi paylaşmayın. Bu konuda sizi temsilciye aktarmam daha doğru olur.',
+    'Ödeme konularında güvenliğiniz için kart veya şifre bilgisi paylaşmayın. Bu konuda sizi temsilciye aktarabilirim. Başka bir sorunuz varsa yardımcı olmaya devam edebilirim.',
   refund:
-    'İade işlemleri talep detayına göre kontrol edilmelidir. Sizi temsilciye aktarabilirim.',
+    'İade işlemleri talep detayına göre kontrol edilmelidir. Sizi temsilciye aktarabilirim. Başka bir konuda yardımcı olabilirim.',
   optOut:
     'Talebiniz alındı. Size tekrar bilgilendirme mesajı gönderilmemesi için gerekli kayıt oluşturulacaktır.',
   sensitiveData:
@@ -52,7 +52,7 @@ const TEMPLATES = {
   promptInjection:
     'Bu bilgiyi paylaşamam. Güvenlik ve gizlilik nedeniyle bu tür taleplere yardımcı olamam. İsterseniz talebinizi temsilciye aktarabilirim.',
   complaint:
-    'Yaşadığınız durum için üzgünüm. Sizi hemen canlı destek temsilcimize bağlıyorum. Kısa süre içinde size dönüş yapılacaktır.',
+    'Yaşadığınız durum için üzgünüm. Sizi temsilciye aktarabilirim. İsterseniz başka bir konuda da yardımcı olabilirim.',
 };
 
 const HUMAN_TRANSFER_PATTERNS = [
@@ -75,7 +75,7 @@ const PAYMENT_PATTERNS =
   /odeme|fatura|dekont|para transfer|havale|eft|iban|kart numara|cvv|sifre|hesap islem/;
 const REFUND_PATTERNS = /iade|geri odeme|iptal et|para iadesi/;
 const COMPLAINT_PATTERNS =
-  /sikayet|memnun degil|kotu hizmet|kizgin|sinirliyim|biktim|yeter artik|berbat|rezalet|canli destek|insan bagla|temsilci bagla/;
+  /sikayet|memnun degil|kotu hizmet|berbat|rezalet/;
 const OPT_OUT_PATTERNS =
   /^(stop|dur|iptal|unsubscribe|mesaj almak istemiyorum|verilerimi sil|beni sil)[\s!.?]*$/;
 const SENSITIVE_DATA_PATTERNS =
@@ -83,11 +83,34 @@ const SENSITIVE_DATA_PATTERNS =
 const PROMPT_INJECTION_PATTERNS =
   /sistem prompt|kurallari unut|onceki kurallar|admin sifre|api key.*ver|veritabanini goster|sql sorgu|gizli talimat|olusturan kurallar/;
 
+const TRANSFER_CONFIRM_PATTERNS = [
+  /^evet\b/,
+  /^tamam\b/,
+  /temsilci(ye|yi)?\s*(aktar|bagla)/,
+  /aktar(in|ın|abilirsiniz)?$/,
+  /bagla(r|yın|yin)\b/,
+  /canliya\s*(aktar|bagla)/,
+];
+
+function confirmsTransferAfterOffer(
+  normalized: string,
+  history: { sender_type: string; message: string }[]
+): boolean {
+  if (!TRANSFER_CONFIRM_PATTERNS.some((p) => p.test(normalized))) return false;
+  const lastAi = [...history].reverse().find((m) => m.sender_type === 'ai');
+  if (!lastAi) return false;
+  const aiNorm = normalizeForGate(lastAi.message);
+  return /aktarabilirim|temsilci|canli destek|bagliyorum/.test(aiNorm);
+}
+
 function wantsHumanTransfer(normalized: string): boolean {
   return HUMAN_TRANSFER_PATTERNS.some((pattern) => pattern.test(normalized));
 }
 
-export function preAIGate(message: string): GateResult {
+export function preAIGate(
+  message: string,
+  history: { sender_type: string; message: string }[] = []
+): GateResult {
   const trimmed = message.trim();
   const normalized = normalizeForGate(trimmed);
 
@@ -103,7 +126,7 @@ export function preAIGate(message: string): GateResult {
   if (frustration.escalate && frustration.response) {
     return {
       skipAI: true,
-      shouldTransfer: true,
+      shouldTransfer: frustration.shouldTransfer,
       response: frustration.response,
       reason: frustration.reason,
     };
@@ -145,10 +168,19 @@ export function preAIGate(message: string): GateResult {
     };
   }
 
-  if (COMPLAINT_PATTERNS.test(normalized)) {
+  if (confirmsTransferAfterOffer(normalized, history)) {
     return {
       skipAI: true,
       shouldTransfer: true,
+      response: TEMPLATES.humanTransfer,
+      reason: 'transfer_confirmed',
+    };
+  }
+
+  if (COMPLAINT_PATTERNS.test(normalized)) {
+    return {
+      skipAI: true,
+      shouldTransfer: false,
       response: TEMPLATES.complaint,
       reason: 'complaint',
     };
@@ -157,7 +189,7 @@ export function preAIGate(message: string): GateResult {
   if (PAYMENT_PATTERNS.test(normalized)) {
     return {
       skipAI: true,
-      shouldTransfer: true,
+      shouldTransfer: false,
       response: TEMPLATES.payment,
       reason: 'payment_inquiry',
     };
@@ -166,7 +198,7 @@ export function preAIGate(message: string): GateResult {
   if (REFUND_PATTERNS.test(normalized)) {
     return {
       skipAI: true,
-      shouldTransfer: true,
+      shouldTransfer: false,
       response: TEMPLATES.refund,
       reason: 'refund_inquiry',
     };

@@ -12,6 +12,8 @@
     "prestart": "npm run build",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
+    "test": "tsx --test src/**/*.test.ts",
+    "test:integration": "tsx src/scripts/test-appointment-integration.ts",
     "db:push": "cd .. && npx supabase db push --yes",
     "db:setup": "tsx src/scripts/setup-supabase.ts",
     "db:test": "tsx src/scripts/test-supabase.ts"

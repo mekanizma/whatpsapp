@@ -5,8 +5,12 @@
 import { adminClient } from '../database/supabase';
 import { Appointment, AppointmentSource, AppointmentStatus } from '../types';
 
+import { preferHistorySlot, formatSlotTurkish } from '../ai/appointment-slot.service';
+import type { HistoryMsg } from '../ai/appointment-collect.service';
+
 const APPOINTMENT_BLOCK_RE = /\[APPOINTMENT\]([\s\S]*?)\[\/APPOINTMENT\]/gi;
-const FALSE_SUCCESS_RE = /randevu(nuz)?\s+(başarıyla\s+|basariyla\s+)?(oluşturuldu|olusturuldu|alındı|alindi|onaylandı|onaylandi|kaydedildi)/i;
+const FALSE_SUCCESS_RE =
+  /randevu(nuz)?\s+(başarıyla\s+|basariyla\s+)?(oluşturuldu|olusturuldu|alındı|alindi|onaylandı|onaylandi|kaydedildi|kaydediyorum)/i;
 
 export const APPOINTMENT_MARKER = '[APPOINTMENT]';
 
@@ -56,17 +60,21 @@ function getDoctorName(action: ParsedAppointmentAction): string | null {
 
 export function validateAppointmentAction(
   action: ParsedAppointmentAction,
-  fallbackPhone: string
+  _fallbackPhone = ''
 ): string | null {
   if (!action.customer_name?.trim()) {
-    return 'Ad soyad bilgisi eksik. Lütfen adınızı ve soyadınızı yazın.';
+    return 'Randevu için ad ve soyadınızı yazar mısınız?';
   }
-  const phone = normalizePhone(action.customer_phone?.trim() || fallbackPhone);
+  const nameParts = action.customer_name.trim().split(/\s+/).filter(Boolean);
+  if (nameParts.length < 2) {
+    return 'Lütfen ad ve soyadınızı birlikte yazın (ör. Ali Yılmaz).';
+  }
+  const phone = normalizePhone(action.customer_phone?.trim() || '');
   if (!phone || phone.length < 10) {
-    return 'Geçerli bir cep telefonu numarası gerekli.';
+    return 'Randevu için cep telefon numaranızı yazar mısınız?';
   }
   if (!action.title?.trim()) {
-    return 'Yapılacak işlem özeti eksik. Lütfen randevu konusunu kısaca yazın.';
+    return 'Hangi işlem için randevu almak istediğinizi yazar mısınız?';
   }
   if (!action.starts_at || !action.ends_at) {
     return 'Randevu tarih ve saati eksik.';
@@ -269,8 +277,10 @@ function fixFalseSuccessMessage(
 export async function processAIAppointmentBooking(
   companyId: string,
   customerPhone: string,
-  customerName: string | null,
-  rawResponse: string
+  _customerName: string | null,
+  rawResponse: string,
+  collected?: { customer_name: string | null; customer_phone: string | null; title: string | null; doctor_name?: string | null },
+  history: HistoryMsg[] = []
 ): Promise<{ message: string; appointment: Appointment | null }> {
   const hadMarker = rawResponse.includes(APPOINTMENT_MARKER);
   const action = parseAppointmentAction(rawResponse);
@@ -279,24 +289,26 @@ export async function processAIAppointmentBooking(
   if (!action) {
     message = fixFalseSuccessMessage(message, null, hadMarker);
     if (hadMarker && !action) {
-      console.error('[Randevu] Marker var ama JSON okunamadı — token kesilmiş olabilir');
+      console.error('[Randevu] Marker var ama JSON okunamadı');
     }
     return { message, appointment: null };
   }
 
+  const slot = preferHistorySlot(history, action);
+  const actionWithSlot = slot ? { ...action, ...slot } : action;
+
   const mergedAction: ParsedAppointmentAction = {
-    ...action,
-    customer_name: action.customer_name?.trim() || customerName?.trim() || undefined,
-    customer_phone: action.customer_phone?.trim() || customerPhone,
+    ...actionWithSlot,
+    customer_name: actionWithSlot.customer_name?.trim() || collected?.customer_name?.trim() || undefined,
+    customer_phone: actionWithSlot.customer_phone?.trim() || collected?.customer_phone?.trim() || undefined,
+    title: actionWithSlot.title?.trim() || collected?.title?.trim() || undefined,
+    doctor_name: actionWithSlot.doctor_name || actionWithSlot.preferred_doctor || collected?.doctor_name || undefined,
   };
 
   const validationError = validateAppointmentAction(mergedAction, customerPhone);
   if (validationError) {
     console.warn('[Randevu] Doğrulama hatası:', validationError);
-    return {
-      message: validationError,
-      appointment: null,
-    };
+    return { message: validationError, appointment: null };
   }
 
   try {
@@ -314,11 +326,9 @@ export async function processAIAppointmentBooking(
 
     const start = new Date(appointment.starts_at);
     const doctorPart = appointment.preferred_doctor ? ` Doktor: ${appointment.preferred_doctor}.` : '';
-    const confirmMsg = `Randevunuz kaydedildi: ${formatSlot(start, new Date(appointment.ends_at))}.${doctorPart} ${appointment.title}`;
+    const confirmMsg = `Randevunuz kaydedildi: ${formatSlotTurkish(appointment.starts_at, appointment.ends_at)}.${doctorPart} ${appointment.title}`;
 
-    if (!message || FALSE_SUCCESS_RE.test(message)) {
-      message = confirmMsg;
-    }
+    message = confirmMsg;
 
     console.log(`[Randevu] Oluşturuldu: ${appointment.id} | ${appointment.customer_name} | ${appointment.title}`);
     return { message, appointment };

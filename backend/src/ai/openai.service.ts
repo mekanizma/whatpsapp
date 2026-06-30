@@ -8,13 +8,12 @@ import { adminClient } from '../database/supabase';
 import { Company, KnowledgeItem } from '../types';
 import { preAIGate } from './ai-gate.service';
 import { filterRelevantKnowledge, isAppointmentIntent } from './knowledge-filter.service';
-import { detectConversationEscalation } from './conversation-escalation.service';
+import { detectConversationEscalation, TRANSFER_OFFER_MSG } from './conversation-escalation.service';
 import { formatKnowledgeOnlyAnswer } from './kb-answer.service';
 import { buildAppointmentOnlyPrompt } from './appointment-prompt';
 import { handleAppointmentBooking } from './appointment-extract.service';
 import {
   checkAIQuota,
-  hasActiveTransferTicket,
   logAIUsage,
 } from './ai-quota.service';
 import { TRANSFER_MARKER } from './system-prompt';
@@ -22,7 +21,7 @@ import { getAppointmentContextForAI, stripAppointmentMarkers, APPOINTMENT_MARKER
 
 const openai = new OpenAI({ apiKey: config.openai.apiKey });
 
-const KB_MISS_MSG = 'Bu konuda bilgi bankamızda kayıt bulunmuyor.';
+const KB_MISS_MSG = TRANSFER_OFFER_MSG;
 
 export interface AIResponse {
   message: string;
@@ -57,32 +56,6 @@ export async function generateAIResponse(
 ): Promise<AIResponse> {
   const trimmed = customerMessage.trim();
 
-  if (await hasActiveTransferTicket(companyId, customerPhone)) {
-    return {
-      message: '',
-      shouldTransfer: false,
-      skippedAI: true,
-      skipReason: 'active_ticket',
-      tokensUsed: 0,
-    };
-  }
-
-  const gate = preAIGate(trimmed);
-  if (gate.skipAI && gate.response) {
-    await logAIUsage({
-      companyId, customerPhone,
-      promptTokens: 0, completionTokens: 0, totalTokens: 0,
-      cached: false, skipped: true, skipReason: gate.reason, model: config.openai.model,
-    });
-    return {
-      message: gate.response,
-      shouldTransfer: gate.shouldTransfer || false,
-      skippedAI: true,
-      skipReason: gate.reason,
-      tokensUsed: 0,
-    };
-  }
-
   const quota = await checkAIQuota(companyId);
   if (!quota.allowed) {
     return {
@@ -115,6 +88,22 @@ export async function generateAIResponse(
     .reverse()
     .filter((m) => m.message !== trimmed);
 
+  const gate = preAIGate(trimmed, history);
+  if (gate.skipAI && gate.response) {
+    await logAIUsage({
+      companyId, customerPhone,
+      promptTokens: 0, completionTokens: 0, totalTokens: 0,
+      cached: false, skipped: true, skipReason: gate.reason, model: config.openai.model,
+    });
+    return {
+      message: gate.response,
+      shouldTransfer: gate.shouldTransfer || false,
+      skippedAI: true,
+      skipReason: gate.reason,
+      tokensUsed: 0,
+    };
+  }
+
   const kbFilter = filterRelevantKnowledge(knowledge, trimmed);
   const appointmentFlow = isAppointmentIntent(trimmed, history);
   const kbWillFail = !kbFilter.hasRelevantContent && !appointmentFlow;
@@ -128,24 +117,9 @@ export async function generateAIResponse(
     });
     return {
       message: escalation.response,
-      shouldTransfer: true,
+      shouldTransfer: escalation.shouldTransfer,
       skippedAI: true,
       skipReason: escalation.reason,
-      tokensUsed: 0,
-    };
-  }
-
-  if (kbWillFail) {
-    await logAIUsage({
-      companyId, customerPhone,
-      promptTokens: 0, completionTokens: 0, totalTokens: 0,
-      cached: false, skipped: true, model: config.openai.model,
-    });
-    return {
-      message: KB_MISS_MSG,
-      shouldTransfer: false,
-      skippedAI: true,
-      skipReason: kbFilter.kbEmpty ? 'kb_empty' : 'kb_no_match',
       tokensUsed: 0,
     };
   }
@@ -198,7 +172,7 @@ export async function generateAIResponse(
   });
 
   const rawResponse = completion.choices[0]?.message?.content?.trim() || '';
-  const { message: afterBooking, appointment } = await handleAppointmentBooking(
+  let { message: afterBooking, appointment } = await handleAppointmentBooking(
     companyId,
     customerPhone,
     customerName,
@@ -206,6 +180,20 @@ export async function generateAIResponse(
     history,
     trimmed
   );
+
+  // AI özür/geri dönüş mesajlarını engelle — eksik bilgi varsa net soru sor
+  if (!appointment && /unuttum|özür|ozur|almayı unuttum/i.test(afterBooking)) {
+    const { blockBookingIfIncomplete } = await import('./appointment-collect.service');
+    const gate = blockBookingIfIncomplete(history, trimmed);
+    if (gate.message) afterBooking = gate.message;
+  }
+
+  // Kayıt oluştuysa her zaman DB'deki gerçek saati göster
+  if (appointment) {
+    const { formatSlotTurkish } = await import('./appointment-slot.service');
+    const slot = formatSlotTurkish(appointment.starts_at, appointment.ends_at);
+    afterBooking = `Randevunuz kaydedildi: ${slot}. ${appointment.title}`;
+  }
   const { message: finalMessage, shouldTransfer } = sanitizeAIResponse(afterBooking);
 
   if (appointment) {

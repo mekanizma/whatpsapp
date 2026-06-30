@@ -11,17 +11,20 @@ export interface ConversationMessage {
 
 export interface EscalationResult {
   escalate: boolean;
+  /** true yalnızca müşteri açıkça istediğinde veya ciddi kızgınlıkta */
+  shouldTransfer: boolean;
   reason: string;
   response?: string;
 }
 
+export const TRANSFER_OFFER_MSG =
+  'Bu konuda net bilgiye ulaşamadım. Yanlış yönlendirmemek için sizi temsilciye aktarabilirim. Başka bir sorunuz varsa yine yardımcı olmaya devam edebilirim.';
+
 export const ESCALATION_TEMPLATES = {
   frustration:
     'Yaşadığınız olumsuz deneyim için üzgünüm. Sizi hemen canlı destek temsilcimize bağlıyorum. Kısa süre içinde size dönüş yapılacaktır.',
-  repeatedFailure:
-    'Talebinize yeterince yardımcı olamadığım için üzgünüm. Sizi canlı bir temsilciye aktarıyorum.',
-  wrongAnswer:
-    'Önceki yanıtım yeterli olmadıysa özür dilerim. Sizi canlı destek temsilcimize aktarıyorum.',
+  repeatedFailure: TRANSFER_OFFER_MSG,
+  wrongAnswer: TRANSFER_OFFER_MSG,
 };
 
 const FRUSTRATION_PATTERNS = [
@@ -32,7 +35,7 @@ const FRUSTRATION_PATTERNS = [
   /berbat|rezalet|kotu hizmet|igrenc/,
   /yardimci olmuyor|cevap vermiyor|bos (konusuyor|yapiyor)/,
   /yanlis (bilgi|cevap)|hala ayni|tekrar( ediyor)?/,
-  /memnun degil|begenmedim|ise yaramiyor|faydasi yok/,
+  /begenmedim|ise yaramiyor|faydasi yok/,
   /ne sacmalik|dalga mi geciyor|oynuyor musun/,
   /sikayet( etmek)? istiyorum/,
 ];
@@ -47,19 +50,11 @@ const DISSATISFACTION_PATTERNS = [
 const AI_UNHELPFUL_PATTERNS = [
   /bilgi bankamizda kayit bulunmuyor/,
   /bilgi bankamiz henuz hazir degil/,
-  /temsilciye aktar/,
   /net bilgiye ulasamadim/,
   /yanlis yonlendirmemek icin/,
+  /temsilciye aktarabilirim/,
 ];
 
-function similarIntent(a: string, b: string): boolean {
-  if (!a || !b) return false;
-  if (a.includes(b) || b.includes(a)) return true;
-  const wordsA = a.split(/\s+/).filter((w) => w.length > 3);
-  const wordsB = new Set(b.split(/\s+/).filter((w) => w.length > 3));
-  const overlap = wordsA.filter((w) => wordsB.has(w)).length;
-  return overlap >= 2;
-}
 
 function countUnhelpfulAiReplies(history: ConversationMessage[]): number {
   return history
@@ -71,22 +66,23 @@ function countUnhelpfulAiReplies(history: ConversationMessage[]): number {
     ).length;
 }
 
-/** Mevcut mesajda kızgınlık / canlı destek talebi */
+/** Mevcut mesajda kızgınlık — canlı destek (açık talep) */
 export function detectImmediateEscalation(message: string): EscalationResult {
   const normalized = normalizeForGate(message.trim());
 
   if (FRUSTRATION_PATTERNS.some((p) => p.test(normalized))) {
-    return { escalate: true, reason: 'customer_frustration', response: ESCALATION_TEMPLATES.frustration };
+    return {
+      escalate: true,
+      shouldTransfer: true,
+      reason: 'customer_frustration',
+      response: ESCALATION_TEMPLATES.frustration,
+    };
   }
 
-  if (DISSATISFACTION_PATTERNS.some((p) => p.test(normalized))) {
-    return { escalate: true, reason: 'customer_dissatisfaction', response: ESCALATION_TEMPLATES.wrongAnswer };
-  }
-
-  return { escalate: false, reason: '' };
+  return { escalate: false, shouldTransfer: false, reason: '' };
 }
 
-/** Konuşma geçmişine göre tekrarlayan cevapsızlık */
+/** Konuşma geçmişine göre tekrarlayan cevapsızlık — yumuşak teklif, otomatik aktarım yok */
 export function detectConversationEscalation(
   message: string,
   history: ConversationMessage[],
@@ -95,29 +91,28 @@ export function detectConversationEscalation(
   const immediate = detectImmediateEscalation(message);
   if (immediate.escalate) return immediate;
 
+  // Memnuniyetsizlik → yumuşak teklif, cevap vermeye devam
+  const normalized = normalizeForGate(message.trim());
+  if (DISSATISFACTION_PATTERNS.some((p) => p.test(normalized))) {
+    return {
+      escalate: true,
+      shouldTransfer: false,
+      reason: 'customer_dissatisfaction',
+      response: TRANSFER_OFFER_MSG,
+    };
+  }
+
   const unhelpfulCount = countUnhelpfulAiReplies(history);
-  const recentCustomer = history
-    .filter((m) => m.sender_type === 'customer')
-    .slice(-3)
-    .map((m) => normalizeForGate(m.message));
 
-  // 2+ kez bilgi bankasında cevap bulunamadı
-  if (unhelpfulCount >= 2 || (unhelpfulCount >= 1 && kbWillFail)) {
-    return { escalate: true, reason: 'repeated_kb_miss', response: ESCALATION_TEMPLATES.repeatedFailure };
+  // KB'de yok → yumuşak temsilci teklifi (ticket açma)
+  if (kbWillFail) {
+    return {
+      escalate: true,
+      shouldTransfer: false,
+      reason: unhelpfulCount >= 1 ? 'repeated_kb_miss' : 'kb_miss',
+      response: TRANSFER_OFFER_MSG,
+    };
   }
 
-  // Müşteri aynı konuyu tekrar soruyor ve önce yardımsız cevap almış
-  if (recentCustomer.length >= 2 && unhelpfulCount >= 1) {
-    const [prev, last] = recentCustomer.slice(-2);
-    if (similarIntent(prev, last)) {
-      return { escalate: true, reason: 'repeated_question', response: ESCALATION_TEMPLATES.repeatedFailure };
-    }
-  }
-
-  // Mevcut soru da KB'de yok ve daha önce en az 1 yardımsız AI yanıtı var
-  if (kbWillFail && unhelpfulCount >= 1) {
-    return { escalate: true, reason: 'persistent_unanswered', response: ESCALATION_TEMPLATES.repeatedFailure };
-  }
-
-  return { escalate: false, reason: '' };
+  return { escalate: false, shouldTransfer: false, reason: '' };
 }
