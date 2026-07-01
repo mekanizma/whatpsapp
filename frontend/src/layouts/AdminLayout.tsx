@@ -5,7 +5,7 @@
 import { useState } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Shield, Building2, BarChart3, LogOut, Menu, X, Settings, Zap, Activity, FileText } from 'lucide-react';
+import { Shield, Building2, BarChart3, LogOut, Menu, X, Settings, Zap, Activity, FileText, CreditCard } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui';
@@ -17,6 +17,7 @@ const adminNav = [
   { to: '/admin/usage', icon: Zap, labelKey: 'layout.nav.usage' },
   { to: '/admin/activity', icon: Activity, labelKey: 'layout.nav.activity' },
   { to: '/admin/prompts', icon: FileText, labelKey: 'layout.nav.prompts' },
+  { to: '/admin/plans', icon: CreditCard, labelKey: 'layout.nav.plans' },
   { to: '/admin/settings', icon: Settings, labelKey: 'layout.nav.adminSettings' },
 ];
 
@@ -30,6 +31,7 @@ function resolvePageTitleKey(pathname: string): string {
     '/admin/usage': 'layout.nav.usage',
     '/admin/activity': 'layout.nav.activity',
     '/admin/prompts': 'layout.nav.prompts',
+    '/admin/plans': 'layout.nav.plans',
     '/admin/settings': 'layout.nav.adminSettings',
   };
   return map[pathname] || 'layout.adminPanel';

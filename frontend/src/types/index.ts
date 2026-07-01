@@ -225,6 +225,18 @@ export interface WhatsAppConfig {
   status: string;
 }
 
+export interface SubscriptionPlan {
+  id: string;
+  plan_type: string;
+  name: string;
+  description: string | null;
+  message_limit: number;
+  user_limit: number;
+  price_monthly: number;
+  is_active: boolean;
+  created_at?: string;
+}
+
 export interface SubscriptionUsage {
   messages_used: number;
   messages_limit: number;

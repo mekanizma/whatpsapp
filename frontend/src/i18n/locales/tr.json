@@ -143,6 +143,7 @@
       "usage": "AI Kullanımı",
       "activity": "Aktivite",
       "prompts": "AI Promptları",
+      "plans": "Abonelik Paketleri",
       "adminSettings": "Ayarlar",
       "companyDetail": "Şirket Detayı"
     },
@@ -505,8 +506,26 @@
         "knowledge_file_parsed": "Dosya okundu",
         "prompt_created": "Prompt oluşturuldu",
         "prompt_updated": "Prompt güncellendi",
-        "prompt_reset": "Prompt varsayılana döndürüldü"
+        "prompt_reset": "Prompt varsayılana döndürüldü",
+        "subscription_plan_updated": "Abonelik paketi güncellendi"
       }
+    },
+    "plans": {
+      "title": "Abonelik Paketleri",
+      "description": "Starter, Business ve Enterprise paketlerinin fiyat ve limitlerini buradan düzenleyin. Değişiklikler müşteri abonelik sayfasına yansır.",
+      "name": "Paket Adı",
+      "fieldDescription": "Açıklama",
+      "messageLimit": "Aylık Mesaj Limiti",
+      "userLimit": "Kullanıcı Limiti",
+      "priceMonthly": "Aylık Fiyat (₺)",
+      "active": "Aktif",
+      "inactive": "Pasif",
+      "activeHint": "Paket müşteri panelinde listelensin",
+      "syncHint": "Bu paketteki mevcut şirketlerin kota limitlerini de güncelle",
+      "saved": "Paket kaydedildi",
+      "noDescription": "Açıklama eklenmemiş",
+      "empty": "Henüz abonelik paketi bulunamadı",
+      "demoHint": "Demo modda paket düzenleme kapalıdır. Canlı ortamda değişiklik yapabilirsiniz."
     },
     "settings": {
       "title": "Platform Ayarları",

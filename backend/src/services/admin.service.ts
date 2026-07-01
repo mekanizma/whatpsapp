@@ -186,14 +186,14 @@ export async function updateSubscriptionAdmin(
     const limits = PLAN_LIMITS[updates.plan_type] || PLAN_LIMITS.starter;
     const { data: plan } = await adminClient
       .from('subscription_plans')
-      .select('id')
+      .select('id, message_limit, user_limit')
       .eq('plan_type', updates.plan_type)
       .single();
 
     if (plan) {
       subUpdates.plan_id = plan.id;
-      subUpdates.messages_limit = limits.messages;
-      subUpdates.users_limit = limits.users;
+      subUpdates.messages_limit = plan.message_limit ?? limits.messages;
+      subUpdates.users_limit = plan.user_limit ?? limits.users;
     }
 
     await adminClient

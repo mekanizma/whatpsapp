@@ -5,7 +5,7 @@
 import { Response } from 'express';
 import { config } from '../config';
 import { adminClient } from '../database/supabase';
-import { demoCompany } from '../demo/mockData';
+import { demoCompany, demoPlans } from '../demo/mockData';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { logActivity } from '../services/log.service';
 import {
@@ -32,6 +32,10 @@ import {
   CORE_PROMPT_ROLES,
   PROMPT_ROLE_META,
 } from '../services/prompt.service';
+import {
+  getAllSubscriptionPlans,
+  updateSubscriptionPlan,
+} from '../services/subscription-plan.service';
 
 export async function getCompanies(req: AuthRequest, res: Response): Promise<void> {
   if (config.demoMode) {
@@ -365,5 +369,63 @@ export async function seedPrompts(_req: AuthRequest, res: Response): Promise<voi
     res.json({ success: true, data: { inserted: count } });
   } catch (err) {
     res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'Hata' });
+  }
+}
+
+export async function getSubscriptionPlans(_req: AuthRequest, res: Response): Promise<void> {
+  if (config.demoMode) {
+    res.json({
+      success: true,
+      data: demoPlans.map((p) => ({ ...p, is_active: true, created_at: new Date().toISOString() })),
+    });
+    return;
+  }
+
+  try {
+    const data = await getAllSubscriptionPlans();
+    res.json({ success: true, data });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'Paketler alınamadı' });
+  }
+}
+
+export async function updateSubscriptionPlanAdmin(req: AuthRequest, res: Response): Promise<void> {
+  if (config.demoMode) {
+    res.status(400).json({ success: false, error: 'Demo modda paket düzenlenemez' });
+    return;
+  }
+
+  const {
+    name,
+    description,
+    message_limit,
+    user_limit,
+    price_monthly,
+    is_active,
+    sync_subscriptions,
+  } = req.body;
+
+  try {
+    const data = await updateSubscriptionPlan(String(req.params.id), {
+      name,
+      description,
+      message_limit: message_limit !== undefined ? Number(message_limit) : undefined,
+      user_limit: user_limit !== undefined ? Number(user_limit) : undefined,
+      price_monthly: price_monthly !== undefined ? Number(price_monthly) : undefined,
+      is_active,
+      sync_subscriptions: !!sync_subscriptions,
+    });
+
+    await logActivity({
+      userId: req.userId,
+      action: 'subscription_plan_updated',
+      entityType: 'subscription_plan',
+      entityId: data.id,
+      metadata: { plan_type: data.plan_type, sync_subscriptions: !!sync_subscriptions },
+    });
+
+    res.json({ success: true, data });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'Paket güncellenemedi' });
   }
 }

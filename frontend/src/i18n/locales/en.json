@@ -143,6 +143,7 @@
       "usage": "AI Usage",
       "activity": "Activity",
       "prompts": "AI Prompts",
+      "plans": "Subscription Plans",
       "adminSettings": "Settings",
       "companyDetail": "Company Detail"
     },
@@ -505,8 +506,26 @@
         "knowledge_file_parsed": "File parsed",
         "prompt_created": "Prompt created",
         "prompt_updated": "Prompt updated",
-        "prompt_reset": "Prompt reset to default"
+        "prompt_reset": "Prompt reset to default",
+        "subscription_plan_updated": "Subscription plan updated"
       }
+    },
+    "plans": {
+      "title": "Subscription Plans",
+      "description": "Edit pricing and limits for Starter, Business, and Enterprise. Changes appear on the customer subscription page.",
+      "name": "Plan Name",
+      "fieldDescription": "Description",
+      "messageLimit": "Monthly Message Limit",
+      "userLimit": "User Limit",
+      "priceMonthly": "Monthly Price (₺)",
+      "active": "Active",
+      "inactive": "Inactive",
+      "activeHint": "Show this plan on the customer panel",
+      "syncHint": "Also update quota limits for companies already on this plan",
+      "saved": "Plan saved",
+      "noDescription": "No description added",
+      "empty": "No subscription plans found",
+      "demoHint": "Plan editing is disabled in demo mode. Use a live environment to make changes."
     },
     "settings": {
       "title": "Platform Settings",
