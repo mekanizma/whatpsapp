@@ -44,15 +44,15 @@ export function AdminLoginPage() {
         onSubmit={handleSubmit}
         accent="amber"
         footer={
-          <p className="text-center text-sm">
-            {t('auth.customerAccount')}{' '}
+          <p className="flex flex-wrap items-center justify-center gap-x-1 gap-y-1 text-center text-sm">
+            <span>{t('auth.customerAccount')}</span>
             <Link
               to="/login"
               className="inline-flex items-center gap-1 font-semibold text-amber-300 transition hover:text-amber-200 hover:underline"
             >
-              <MessageSquare className="h-3.5 w-3.5" />
+              <MessageSquare className="h-3.5 w-3.5 shrink-0" />
               {t('auth.customerLogin')}
-              <ArrowRight className="h-3.5 w-3.5" />
+              <ArrowRight className="h-3.5 w-3.5 shrink-0" />
             </Link>
           </p>
         }

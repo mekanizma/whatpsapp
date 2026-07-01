@@ -46,19 +46,19 @@ export function LoginPage() {
         accent="teal"
         footer={
           <div className="space-y-3 text-center text-sm">
-            <p>
-              {t('auth.platformAdmin')}{' '}
+            <p className="flex flex-wrap items-center justify-center gap-x-1 gap-y-1">
+              <span>{t('auth.platformAdmin')}</span>
               <Link
                 to="/admin/login"
                 className="inline-flex items-center gap-1 font-semibold text-teal-300 transition hover:text-teal-200"
               >
-                <Shield className="h-3.5 w-3.5" />
+                <Shield className="h-3.5 w-3.5 shrink-0" />
                 {t('auth.adminLogin')}
-                <ArrowRight className="h-3.5 w-3.5" />
+                <ArrowRight className="h-3.5 w-3.5 shrink-0" />
               </Link>
             </p>
-            <p>
-              {t('auth.noAccount')}{' '}
+            <p className="flex flex-wrap items-center justify-center gap-x-1 gap-y-1">
+              <span>{t('auth.noAccount')}</span>
               <Link to="/register" className="font-semibold text-teal-300 hover:text-teal-200 hover:underline">
                 {t('auth.register')}
               </Link>

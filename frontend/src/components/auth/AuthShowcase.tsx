@@ -251,31 +251,36 @@ export function AuthMobileBanner({ variant }: AuthShowcaseProps) {
   return (
     <div
       className={cn(
-        'auth-page relative overflow-hidden text-white lg:hidden',
+        'auth-page relative shrink-0 overflow-hidden text-white lg:hidden',
         isAdmin
           ? 'bg-gradient-to-br from-slate-950 via-stone-950 to-slate-900'
           : 'bg-gradient-to-br from-slate-950 via-teal-950 to-emerald-900'
       )}
     >
-      <ShowcaseBackground isAdmin={isAdmin} />
-      <div className="relative z-10 space-y-5 px-6 py-8">
-        <div className="text-center">
-          <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-white/10">
-            {isAdmin ? (
-              <Shield className="h-6 w-6 text-amber-400" />
-            ) : (
-              <MessageSquare className="h-6 w-6 text-[#25d366]" />
-            )}
-          </div>
-          <h2 className="text-xl font-bold text-white">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
+        <ShowcaseBackground isAdmin={isAdmin} />
+      </div>
+      <div className="relative z-10 flex items-center gap-3 px-4 py-4 sm:px-6 sm:py-5">
+        <div
+          className={cn(
+            'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 sm:h-11 sm:w-11',
+            isAdmin ? 'bg-amber-500/15 ring-amber-500/30' : 'bg-white/10 ring-white/20'
+          )}
+        >
+          {isAdmin ? (
+            <Shield className="h-5 w-5 text-amber-400 sm:h-6 sm:w-6" />
+          ) : (
+            <MessageSquare className="h-5 w-5 text-[#25d366] sm:h-6 sm:w-6" />
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate text-base font-bold text-white sm:text-lg">
             {isAdmin ? t('showcase.platformAdmin') : t('showcase.whatsappAi')}
           </h2>
-          <p className="mt-1 text-sm text-slate-400">
+          <p className="truncate text-xs text-slate-400 sm:text-sm">
             {isAdmin ? t('showcase.mobileAdmin') : t('showcase.mobileCustomer')}
           </p>
         </div>
-
-        {!isAdmin && <ChatMockup compact />}
       </div>
     </div>
   );
