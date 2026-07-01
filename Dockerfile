@@ -5,6 +5,9 @@ FROM node:20-bookworm-slim AS builder
 
 WORKDIR /app
 
+# Küçük VPS / Coolify build sunucularında OOM önleme
+ENV NODE_OPTIONS=--max-old-space-size=2048
+
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ \
   && rm -rf /var/lib/apt/lists/*
@@ -25,7 +28,12 @@ ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
 ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
 ENV VITE_DEMO_MODE=$VITE_DEMO_MODE
 
-RUN npm run build
+# Sıralı build — bellek zirvesini düşürür (tsc + vite aynı anda değil)
+RUN npm run build --prefix backend
+RUN npm run build --prefix frontend
+
+# Runner aşamasında paralel npm ci yapma (build ile RAM yarışmasını önler)
+RUN cd backend && npm ci --omit=dev && npm cache clean --force
 
 FROM node:20-bookworm-slim AS runner
 
@@ -38,9 +46,8 @@ ENV SESSIONS_DIR=/data/sessions
 RUN mkdir -p /data/sessions \
   && chown -R node:node /data/sessions /app
 
-COPY backend/package.json backend/package-lock.json ./backend/
-RUN cd backend && npm ci --omit=dev && npm cache clean --force
-
+COPY --from=builder /app/backend/package.json /app/backend/package-lock.json ./backend/
+COPY --from=builder /app/backend/node_modules ./backend/node_modules
 COPY --from=builder /app/backend/dist ./backend/dist
 COPY --from=builder /app/frontend/dist ./frontend/dist
 

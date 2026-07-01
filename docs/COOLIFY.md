@@ -160,6 +160,8 @@ ADMIN_EMAIL=admin@example.com ADMIN_PASSWORD=xxx npx tsx src/scripts/setup-supab
 | WhatsApp kopuyor | Volume + `SESSIONS_DIR` eşleşmeli |
 | Her restart'ta QR | Persistent Storage bağlı değil |
 | Build'de VITE hatası | `VITE_*` Build Variable olarak işaretli mi |
+| Build OOM / exit 255 | Sunucuda en az 2 GB RAM; Dockerfile `NODE_OPTIONS` kullanır |
+| Frontend build düşüyor | Logda `heap out of memory` — Coolify build kaynaklarını artırın |
 
 ---
 
