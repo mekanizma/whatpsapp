@@ -96,3 +96,9 @@ export const config = {
 
   demoMode: process.env.DEMO_MODE === 'true',
 } as const;
+
+if (config.nodeEnv === 'production' && config.demoMode) {
+  console.warn(
+    '[UYARI] DEMO_MODE=true — canlı ortamda müşteri özellikleri kısıtlanır. Render/Vercel env: DEMO_MODE=false ve VITE_DEMO_MODE=false yapın.'
+  );
+}

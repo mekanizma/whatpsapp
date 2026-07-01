@@ -3,10 +3,9 @@
  */
 
 import { Response } from 'express';
-import { config } from '../config';
 import { adminClient } from '../database/supabase';
 import { demoPlans, demoSubscriptionUsage } from '../demo/mockData';
-import { AuthRequest } from '../middleware/auth.middleware';
+import { AuthRequest, isDemoSession } from '../middleware/auth.middleware';
 
 export async function getCurrentSubscription(req: AuthRequest, res: Response): Promise<void> {
   const { data, error } = await adminClient
@@ -24,7 +23,7 @@ export async function getCurrentSubscription(req: AuthRequest, res: Response): P
 }
 
 export async function getUsage(req: AuthRequest, res: Response): Promise<void> {
-  if (config.demoMode) {
+  if (isDemoSession(req)) {
     res.json({ success: true, data: demoSubscriptionUsage });
     return;
   }
@@ -56,8 +55,8 @@ export async function getUsage(req: AuthRequest, res: Response): Promise<void> {
   });
 }
 
-export async function getPlans(_req: AuthRequest, res: Response): Promise<void> {
-  if (config.demoMode) {
+export async function getPlans(req: AuthRequest, res: Response): Promise<void> {
+  if (isDemoSession(req)) {
     res.json({ success: true, data: demoPlans });
     return;
   }

@@ -3,10 +3,9 @@
  */
 
 import { Response } from 'express';
-import { config } from '../config';
 import { adminClient } from '../database/supabase';
 import { demoCompany, demoProfilesByToken, DEMO_TOKENS } from '../demo/mockData';
-import { AuthRequest } from '../middleware/auth.middleware';
+import { AuthRequest, isDemoSession } from '../middleware/auth.middleware';
 import { logActivity } from '../services/log.service';
 
 const DEMO_EMAILS: Record<string, string> = {
@@ -16,14 +15,15 @@ const DEMO_EMAILS: Record<string, string> = {
 };
 
 export async function getMe(req: AuthRequest, res: Response): Promise<void> {
-  if (config.demoMode && req.accessToken && demoProfilesByToken[req.accessToken]) {
-    const profile = demoProfilesByToken[req.accessToken];
+  if (isDemoSession(req)) {
+    const token = req.accessToken!;
+    const profile = demoProfilesByToken[token];
     res.json({
       success: true,
       data: {
         profile,
         company: profile.company_id ? demoCompany : null,
-        email: DEMO_EMAILS[req.accessToken] || '',
+        email: DEMO_EMAILS[token] || '',
       },
     });
     return;
@@ -56,8 +56,9 @@ export async function getMe(req: AuthRequest, res: Response): Promise<void> {
 export async function updateProfile(req: AuthRequest, res: Response): Promise<void> {
   const { full_name, avatar_url } = req.body;
 
-  if (config.demoMode && req.accessToken && demoProfilesByToken[req.accessToken]) {
-    const profile = demoProfilesByToken[req.accessToken];
+  if (isDemoSession(req)) {
+    const token = req.accessToken!;
+    const profile = demoProfilesByToken[token];
     if (full_name !== undefined) profile.full_name = full_name;
     if (avatar_url !== undefined) profile.avatar_url = avatar_url;
     res.json({ success: true, data: profile });

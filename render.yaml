@@ -25,6 +25,7 @@ services:
         value: "false"
       - key: VITE_DEMO_MODE
         value: "false"
+      # Canlı mod: DEMO_MODE ve VITE_DEMO_MODE mutlaka false olmalı
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_ANON_KEY

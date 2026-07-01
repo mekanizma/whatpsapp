@@ -3,9 +3,8 @@
  */
 
 import { Response } from 'express';
-import { config } from '../config';
 import { adminClient } from '../database/supabase';
-import { AuthRequest } from '../middleware/auth.middleware';
+import { AuthRequest, isDemoSession } from '../middleware/auth.middleware';
 import { logActivity } from '../services/log.service';
 import { clearTransferState } from '../whatsapp/message.handler';
 import { normalizePhoneNumber } from '../whatsapp/message.handler';
@@ -25,7 +24,7 @@ async function getStaffIdForProfile(
 }
 
 export async function getTickets(req: AuthRequest, res: Response): Promise<void> {
-  if (config.demoMode) {
+  if (isDemoSession(req)) {
     res.json({ success: true, data: [] });
     return;
   }

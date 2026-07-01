@@ -38,7 +38,7 @@ import {
 } from '../services/subscription-plan.service';
 
 export async function getCompanies(req: AuthRequest, res: Response): Promise<void> {
-  if (config.demoMode) {
+  if (isDemoSession(req)) {
     res.json({
       success: true,
       data: [{ ...demoCompany, message_count: 0, ai_tokens_month: 0 }],
@@ -227,11 +227,12 @@ export async function getPlatformSettings(_req: AuthRequest, res: Response): Pro
     success: true,
     data: {
       demo_mode: config.demoMode,
+      live_mode: !config.demoMode,
       ai_model: config.openai.model,
       ai_max_tokens: config.ai.maxTokens,
       ai_cache_enabled: config.ai.cacheEnabled,
       node_env: config.nodeEnv,
-      supabase_connected: !config.demoMode,
+      supabase_connected: true,
       whatsapp_mode: config.isVercel ? 'cloud_api' : 'baileys',
     },
   });
@@ -372,8 +373,8 @@ export async function seedPrompts(_req: AuthRequest, res: Response): Promise<voi
   }
 }
 
-export async function getSubscriptionPlans(_req: AuthRequest, res: Response): Promise<void> {
-  if (config.demoMode) {
+export async function getSubscriptionPlans(req: AuthRequest, res: Response): Promise<void> {
+  if (isDemoSession(req)) {
     res.json({
       success: true,
       data: demoPlans.map((p) => ({ ...p, is_active: true, created_at: new Date().toISOString() })),

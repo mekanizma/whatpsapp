@@ -3,10 +3,9 @@
  */
 
 import { Response } from 'express';
-import { config } from '../config';
 import { adminClient } from '../database/supabase';
-import { demoCompany, DEMO_COMPANY_ID } from '../demo/mockData';
-import { AuthRequest } from '../middleware/auth.middleware';
+import { demoCompany } from '../demo/mockData';
+import { AuthRequest, isDemoSession } from '../middleware/auth.middleware';
 import { getDashboardStats } from '../services/dashboard.service';
 import { logActivity } from '../services/log.service';
 
@@ -31,7 +30,7 @@ export async function updateCompany(req: AuthRequest, res: Response): Promise<vo
   const companyId = req.params.id || req.companyId;
   const { company_name, category, phone, email, address, working_hours, logo } = req.body;
 
-  if (config.demoMode && companyId === DEMO_COMPANY_ID) {
+  if (isDemoSession(req)) {
     if (company_name !== undefined) demoCompany.company_name = company_name;
     if (category !== undefined) demoCompany.category = category;
     if (phone !== undefined) demoCompany.phone = phone;
@@ -73,6 +72,6 @@ export async function getDashboard(req: AuthRequest, res: Response): Promise<voi
     return;
   }
 
-  const stats = await getDashboardStats(companyId as string);
+  const stats = await getDashboardStats(companyId as string, isDemoSession(req));
   res.json({ success: true, data: stats });
 }

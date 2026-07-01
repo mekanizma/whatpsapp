@@ -5,7 +5,7 @@
 import { Response } from 'express';
 import { config } from '../config';
 import { adminClient } from '../database/supabase';
-import { AuthRequest } from '../middleware/auth.middleware';
+import { AuthRequest, isDemoSession } from '../middleware/auth.middleware';
 import { sendTestMessage, sendMessageToCustomer } from '../whatsapp/whatsapp.service';
 import {
   startQrSession,
@@ -17,7 +17,7 @@ import {
 import { logActivity } from '../services/log.service';
 
 export async function getWhatsAppConfig(req: AuthRequest, res: Response): Promise<void> {
-  if (config.demoMode) {
+  if (isDemoSession(req)) {
     res.json({
       success: true,
       data: {
@@ -115,7 +115,7 @@ export async function getWhatsAppStatus(req: AuthRequest, res: Response): Promis
     return;
   }
 
-  if (config.demoMode) {
+  if (isDemoSession(req)) {
     res.json({
       success: true,
       data: {
@@ -188,7 +188,7 @@ export async function disconnectWhatsApp(req: AuthRequest, res: Response): Promi
     await disconnectBaileys(req.companyId!);
   }
 
-  if (!config.demoMode) {
+  if (!isDemoSession(req)) {
     await adminClient
       .from('whatsapp_configs')
       .update({ status: 'disconnected', access_token: null, phone_number: null, business_account_id: null })

@@ -3,9 +3,8 @@
  */
 
 import { Response } from 'express';
-import { config } from '../config';
 import { adminClient } from '../database/supabase';
-import { AuthRequest } from '../middleware/auth.middleware';
+import { AuthRequest, isDemoSession } from '../middleware/auth.middleware';
 import { logActivity } from '../services/log.service';
 import { parseKnowledgeDocument } from '../services/document-parser.service';
 import {
@@ -19,7 +18,7 @@ function paramId(value: string | string[]): string {
 }
 
 export async function getKnowledgeItems(req: AuthRequest, res: Response): Promise<void> {
-  if (config.demoMode) {
+  if (isDemoSession(req)) {
     res.json({ success: true, data: [] });
     return;
   }

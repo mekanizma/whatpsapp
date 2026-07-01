@@ -3,9 +3,8 @@
  */
 
 import { Response } from 'express';
-import { config } from '../config';
 import { adminClient } from '../database/supabase';
-import { AuthRequest } from '../middleware/auth.middleware';
+import { AuthRequest, isDemoSession } from '../middleware/auth.middleware';
 import { sendMessageToCustomer } from '../whatsapp/whatsapp.service';
 import { logActivity } from '../services/log.service';
 import { normalizePhoneNumber } from '../whatsapp/message.handler';
@@ -15,7 +14,7 @@ function resolvePhoneParam(phone: string): string {
 }
 
 export async function getConversations(req: AuthRequest, res: Response): Promise<void> {
-  if (config.demoMode) {
+  if (isDemoSession(req)) {
     res.json({ success: true, data: [] });
     return;
   }

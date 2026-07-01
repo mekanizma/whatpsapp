@@ -3,12 +3,11 @@
  */
 
 import { adminClient } from '../database/supabase';
-import { config } from '../config';
 import { demoDashboardStats, demoPlatformStats } from '../demo/mockData';
 import { DashboardStats } from '../types';
 
-export async function getDashboardStats(companyId: string): Promise<DashboardStats> {
-  if (config.demoMode) return demoDashboardStats;
+export async function getDashboardStats(companyId: string, useDemoData = false): Promise<DashboardStats> {
+  if (useDemoData) return demoDashboardStats;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -85,8 +84,8 @@ export async function getDashboardStats(companyId: string): Promise<DashboardSta
   };
 }
 
-export async function getPlatformStats() {
-  if (config.demoMode) return demoPlatformStats;
+export async function getPlatformStats(useDemoData = false) {
+  if (useDemoData) return demoPlatformStats;
   const [companies, messages, subscriptions] = await Promise.all([
     adminClient.from('companies').select('id', { count: 'exact', head: true }),
     adminClient.from('messages').select('id', { count: 'exact', head: true }),
