@@ -44,22 +44,25 @@ ENV PORT=3001
 ENV SESSIONS_DIR=/data/sessions
 
 # Baileys: HTTPS (versiyon kontrolü) ve WhatsApp WebSocket için gerekli
+# gosu: volume mount sonrası /data/sessions izinlerini node kullanıcısına vermek için
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends ca-certificates \
+  && apt-get install -y --no-install-recommends ca-certificates gosu \
   && rm -rf /var/lib/apt/lists/* \
   && mkdir -p /data/sessions \
   && chown -R node:node /data/sessions /app
+
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 COPY --from=builder /app/backend/package.json /app/backend/package-lock.json ./backend/
 COPY --from=builder /app/backend/node_modules ./backend/node_modules
 COPY --from=builder /app/backend/dist ./backend/dist
 COPY --from=builder /app/frontend/dist ./frontend/dist
 
-USER node
-
 EXPOSE 3001
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3001)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
+ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["node", "backend/dist/index.js"]
