@@ -6,13 +6,62 @@ import { AuthError } from '@supabase/supabase-js';
 import { adminClient } from '../database/supabase';
 
 function formatServiceError(err: unknown): string {
-  if (err instanceof AuthError) return err.message || 'Kimlik doğrulama hatası';
+  if (err instanceof AuthError) {
+    const code = 'code' in err ? String((err as AuthError & { code?: string }).code || '') : '';
+    const base = err.message || 'Kimlik doğrulama hatası';
+    return code ? `${base} (${code})` : base;
+  }
   if (err instanceof Error && err.message) return err.message;
-  if (err && typeof err === 'object' && 'message' in err) {
-    const message = (err as { message?: unknown }).message;
-    if (typeof message === 'string' && message.trim()) return message;
+  if (err && typeof err === 'object') {
+    const record = err as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown };
+    if (typeof record.message === 'string' && record.message.trim()) {
+      const extra = [record.details, record.hint, record.code]
+        .filter((v) => typeof v === 'string' && v.trim())
+        .join(' — ');
+      return extra ? `${record.message} (${extra})` : record.message;
+    }
   }
   return 'Personel oluşturulamadı';
+}
+
+function isDuplicateAuthEmailError(err: unknown): boolean {
+  if (!(err instanceof AuthError)) return false;
+  const message = err.message?.toLowerCase() || '';
+  return (
+    err.status === 422 ||
+    message.includes('already') ||
+    message.includes('registered') ||
+    message.includes('exists')
+  );
+}
+
+async function resolveAuthStaffUser(
+  email: string,
+  password: string,
+  fullName: string
+): Promise<{ userId: string; created: boolean }> {
+  const { data, error } = await adminClient.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: { full_name: fullName, role: 'staff' },
+  });
+
+  if (!error) {
+    return { userId: data.user.id, created: true };
+  }
+
+  if (!isDuplicateAuthEmailError(error)) {
+    throw error;
+  }
+
+  const found = await findAuthUserByEmail(email);
+  if (!found) {
+    throw new Error('Bu e-posta adresi kayıtlı ancak kullanıcı bilgisi alınamadı');
+  }
+
+  await updateAuthStaffUser(found.id, password, fullName);
+  return { userId: found.id, created: false };
 }
 
 async function findAuthUserByEmail(email: string) {
@@ -81,22 +130,6 @@ async function ensureStaffProfile(
   return inserted.id;
 }
 
-async function createAuthStaffUser(
-  email: string,
-  password: string,
-  fullName: string
-): Promise<string> {
-  const { data, error } = await adminClient.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-    user_metadata: { full_name: fullName, role: 'staff' },
-  });
-
-  if (error) throw error;
-  return data.user.id;
-}
-
 async function updateAuthStaffUser(
   userId: string,
   password: string,
@@ -162,8 +195,9 @@ export async function createStaffUser(
       await updateAuthStaffUser(found.id, password, trimmedName);
       userId = found.id;
     } else {
-      userId = await createAuthStaffUser(normalizedEmail, password, trimmedName);
-      createdNewAuthUser = true;
+      const resolved = await resolveAuthStaffUser(normalizedEmail, password, trimmedName);
+      userId = resolved.userId;
+      createdNewAuthUser = resolved.created;
     }
 
     const profileId = await ensureStaffProfile(userId, companyId, trimmedName);

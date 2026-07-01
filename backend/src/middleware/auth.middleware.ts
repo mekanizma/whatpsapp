@@ -17,6 +17,11 @@ export interface AuthRequest extends Request {
   accessToken?: string;
 }
 
+/** Yalnızca demo token ile giriş yapılmış oturumlar (gerçek Supabase JWT değil) */
+export function isDemoSession(req: AuthRequest): boolean {
+  return !!(config.demoMode && req.accessToken && demoProfilesByToken[req.accessToken]);
+}
+
 export async function authenticate(
   req: AuthRequest,
   res: Response,

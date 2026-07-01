@@ -6,7 +6,7 @@ import { Response } from 'express';
 import { config } from '../config';
 import { adminClient } from '../database/supabase';
 import { demoCompany, demoPlans } from '../demo/mockData';
-import { AuthRequest } from '../middleware/auth.middleware';
+import { AuthRequest, isDemoSession } from '../middleware/auth.middleware';
 import { logActivity } from '../services/log.service';
 import {
   getExtendedPlatformStats,
@@ -390,7 +390,7 @@ export async function getSubscriptionPlans(_req: AuthRequest, res: Response): Pr
 }
 
 export async function updateSubscriptionPlanAdmin(req: AuthRequest, res: Response): Promise<void> {
-  if (config.demoMode) {
+  if (isDemoSession(req)) {
     res.status(400).json({ success: false, error: 'Demo modda paket düzenlenemez' });
     return;
   }

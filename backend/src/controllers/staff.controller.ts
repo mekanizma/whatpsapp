@@ -3,14 +3,15 @@
  */
 
 import { Response } from 'express';
-import { config } from '../config';
 import { adminClient } from '../database/supabase';
-import { AuthRequest } from '../middleware/auth.middleware';
+import { AuthRequest, isDemoSession } from '../middleware/auth.middleware';
 import { logActivity } from '../services/log.service';
 import { createStaffUser, deleteStaffUser, formatServiceError } from '../services/staff.service';
 
 export async function getStaff(req: AuthRequest, res: Response): Promise<void> {
-  if (config.demoMode) {
+  res.set('Cache-Control', 'no-store');
+
+  if (isDemoSession(req)) {
     res.json({ success: true, data: [] });
     return;
   }
@@ -37,7 +38,7 @@ export async function createStaff(req: AuthRequest, res: Response): Promise<void
     return;
   }
 
-  if (config.demoMode) {
+  if (isDemoSession(req)) {
     res.status(400).json({ success: false, error: 'Demo modda personel eklenemez' });
     return;
   }
@@ -86,7 +87,7 @@ export async function updateStaff(req: AuthRequest, res: Response): Promise<void
 }
 
 export async function deleteStaff(req: AuthRequest, res: Response): Promise<void> {
-  if (config.demoMode) {
+  if (isDemoSession(req)) {
     res.status(400).json({ success: false, error: 'Demo modda personel silinemez' });
     return;
   }
