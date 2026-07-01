@@ -28,9 +28,23 @@ export interface Company {
   created_at?: string;
 }
 
+export interface CompanyPlan {
+  plan_type: string;
+  name: string;
+  description: string | null;
+  features: string[];
+  message_limit: number;
+  user_limit: number;
+  messages_limit: number;
+  messages_used: number;
+  users_limit: number;
+  status: string;
+}
+
 export interface AdminCompany extends Company {
   message_count?: number;
   ai_tokens_month?: number;
+  plan?: CompanyPlan | null;
   subscription?: {
     messages_used: number;
     messages_limit: number;
@@ -58,12 +72,20 @@ export interface PlatformStats {
 
 export interface CompanyDetail {
   company: Company;
+  plan?: CompanyPlan | null;
   subscription: {
     messages_used: number;
     messages_limit: number;
     status: string;
     users_limit: number;
-    plan?: { plan_type: string; name: string };
+    plan?: {
+      plan_type: string;
+      name: string;
+      description?: string | null;
+      features?: string[];
+      message_limit?: number;
+      user_limit?: number;
+    };
   } | null;
   whatsapp: { status: string; phone_number: string | null } | null;
   users: { id: string; full_name: string; role: string; is_active: boolean; created_at: string }[];
@@ -180,6 +202,20 @@ export interface KnowledgeChunkPreview {
   previews: { index: number; heading: string | null; preview: string }[];
 }
 
+export interface UnknownQuestion {
+  id: string;
+  company_id: string;
+  customer_phone: string;
+  customer_name: string | null;
+  question: string;
+  ai_response: string | null;
+  status: 'open' | 'resolved' | 'dismissed' | 'added_to_kb';
+  occurrence_count: number;
+  last_asked_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Ticket {
   id: string;
   customer_phone: string;
@@ -245,6 +281,7 @@ export interface SubscriptionPlan {
   message_limit: number;
   user_limit: number;
   price_monthly: number;
+  price_yearly?: number | null;
   currency?: string;
   is_active: boolean;
   created_at?: string;
@@ -257,6 +294,28 @@ export interface SubscriptionUsage {
   users_limit: number;
   status: string;
   messages_percentage: number;
+  quota_exhausted?: boolean;
+  plan_type?: string | null;
+}
+
+export interface AiConversationAddon {
+  id: string;
+  name: string;
+  conversation_count: number;
+  price: number;
+  currency: string;
+  is_active: boolean;
+  sort_order: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CurrentSubscription {
+  messages_used: number;
+  messages_limit: number;
+  users_limit: number;
+  status: string;
+  plan: SubscriptionPlan | null;
 }
 
 export interface ApiResponse<T = unknown> {

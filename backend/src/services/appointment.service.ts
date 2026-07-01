@@ -5,7 +5,7 @@
 import { adminClient } from '../database/supabase';
 import { Appointment, AppointmentSource, AppointmentStatus } from '../types';
 
-import { preferHistorySlot, formatSlotLocalized } from '../ai/appointment-slot.service';
+import { preferHistorySlot, formatSlotLocalized, turkeyLocalToUtc, turkeyDateParts, turkeyTimeParts, CLINIC_TZ } from '../ai/appointment-slot.service';
 import type { HistoryMsg } from '../ai/appointment-collect.service';
 import { ConversationLang, t } from '../ai/language.service';
 
@@ -39,9 +39,22 @@ export interface ParsedAppointmentAction {
 }
 
 function formatSlot(start: Date, end: Date, locale = 'tr-TR'): string {
-  const day = start.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: 'numeric' });
-  const t1 = start.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
-  const t2 = end.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+  const day = start.toLocaleDateString(locale, {
+    timeZone: CLINIC_TZ,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+  const t1 = start.toLocaleTimeString(locale, {
+    timeZone: CLINIC_TZ,
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+  const t2 = end.toLocaleTimeString(locale, {
+    timeZone: CLINIC_TZ,
+    hour: '2-digit',
+    minute: '2-digit',
+  });
   return `${day} ${t1}-${t2}`;
 }
 
@@ -137,6 +150,120 @@ export async function hasConflict(
   const { count, error } = await query;
   if (error) throw new Error(error.message);
   return (count || 0) > 0;
+}
+
+const WORK_START_HOUR = 9;
+const WORK_END_HOUR = 18;
+const SLOT_STEP_MS = 30 * 60 * 1000;
+
+function turkeyWeekday(ref: Date): number {
+  return turkeyLocalToUtc(
+    turkeyDateParts(ref).year,
+    turkeyDateParts(ref).month,
+    turkeyDateParts(ref).day,
+    12,
+    0
+  ).getUTCDay();
+}
+
+function advanceToNextWorkSlot(cursor: Date): Date {
+  let next = new Date(cursor.getTime());
+  for (let i = 0; i < 366; i++) {
+    const parts = turkeyDateParts(next);
+    const { hour } = turkeyTimeParts(next);
+    const wd = turkeyWeekday(next);
+
+    if (wd === 0) {
+      const d = addDaysParts(parts, 1);
+      next = turkeyLocalToUtc(d.year, d.month, d.day, WORK_START_HOUR, 0);
+      continue;
+    }
+
+    if (hour < WORK_START_HOUR) {
+      next = turkeyLocalToUtc(parts.year, parts.month, parts.day, WORK_START_HOUR, 0);
+      return next;
+    }
+
+    if (hour >= WORK_END_HOUR) {
+      const d = addDaysParts(parts, 1);
+      next = turkeyLocalToUtc(d.year, d.month, d.day, WORK_START_HOUR, 0);
+      continue;
+    }
+
+    return next;
+  }
+  return next;
+}
+
+function addDaysParts(parts: { year: number; month: number; day: number }, days: number) {
+  const d = turkeyLocalToUtc(parts.year, parts.month, parts.day, 12, 0);
+  d.setUTCDate(d.getUTCDate() + days);
+  return turkeyDateParts(d);
+}
+
+/** Dolu saate yakın müsait alternatifler bul */
+export async function findAlternativeSlots(
+  companyId: string,
+  preferredStartIso: string,
+  preferredEndIso?: string,
+  count = 3
+): Promise<{ starts_at: string; ends_at: string }[]> {
+  const durationMs = preferredEndIso
+    ? Math.max(new Date(preferredEndIso).getTime() - new Date(preferredStartIso).getTime(), SLOT_STEP_MS)
+    : SLOT_STEP_MS;
+
+  let cursor = advanceToNextWorkSlot(new Date(preferredStartIso));
+  const now = new Date();
+  if (cursor.getTime() < now.getTime()) {
+    cursor = advanceToNextWorkSlot(now);
+  }
+
+  const results: { starts_at: string; ends_at: string }[] = [];
+  const searchUntil = Date.now() + 14 * 24 * 60 * 60 * 1000;
+
+  while (results.length < count && cursor.getTime() < searchUntil) {
+    cursor = advanceToNextWorkSlot(cursor);
+    const { hour } = turkeyTimeParts(cursor);
+    if (hour >= WORK_END_HOUR) {
+      const parts = turkeyDateParts(cursor);
+      const nextDay = addDaysParts(parts, 1);
+      cursor = turkeyLocalToUtc(nextDay.year, nextDay.month, nextDay.day, WORK_START_HOUR, 0);
+      continue;
+    }
+
+    const end = new Date(cursor.getTime() + durationMs);
+    const conflict = await hasConflict(companyId, cursor.toISOString(), end.toISOString());
+    if (!conflict) {
+      results.push({ starts_at: cursor.toISOString(), ends_at: end.toISOString() });
+    }
+    cursor = new Date(cursor.getTime() + SLOT_STEP_MS);
+  }
+
+  return results;
+}
+
+export async function buildConflictMessageWithAlternatives(
+  companyId: string,
+  startsAt: string,
+  endsAt: string,
+  lang: ConversationLang = 'tr'
+): Promise<string> {
+  const requested = formatSlotLocalized(startsAt, endsAt, lang);
+  const alternatives = await findAlternativeSlots(companyId, startsAt, endsAt, 3);
+
+  if (alternatives.length === 0) {
+    return lang === 'tr'
+      ? `${requested} saatinde başka bir randevu var ve yakın zamanda müsait saat bulunamadı. Lütfen farklı bir gün veya saat yazın.`
+      : `There is already an appointment at ${requested} and no nearby slots are available. Please suggest another day or time.`;
+  }
+
+  const formatted = alternatives
+    .map((s, i) => `${i + 1}) ${formatSlotLocalized(s.starts_at, s.ends_at, lang)}`)
+    .join('\n');
+
+  return lang === 'tr'
+    ? `${requested} saatinde başka bir randevu var. Şu saatler müsait:\n${formatted}\nHangisini tercih edersiniz? Lütfen numarayı veya saati yazarak onaylayın.`
+    : `There is already an appointment at ${requested}. These times are available:\n${formatted}\nWhich would you prefer? Reply with the number or time to confirm.`;
 }
 
 export async function createAppointment(
@@ -333,7 +460,9 @@ export async function processAIAppointmentBooking(
   rawResponse: string,
   collected?: { customer_name: string | null; customer_phone: string | null; title: string | null; doctor_name?: string | null },
   history: HistoryMsg[] = [],
-  lang: ConversationLang = 'tr'
+  lang: ConversationLang = 'tr',
+  latestMessage = '',
+  userConfirmed = false
 ): Promise<{ message: string; appointment: Appointment | null }> {
   const hadMarker = rawResponse.includes(APPOINTMENT_MARKER);
   const action = parseAppointmentAction(rawResponse);
@@ -347,7 +476,7 @@ export async function processAIAppointmentBooking(
     return { message, appointment: null };
   }
 
-  const slot = preferHistorySlot(history, action);
+  const slot = preferHistorySlot(history, action, latestMessage);
   const actionWithSlot = slot ? { ...action, ...slot } : action;
 
   const mergedAction: ParsedAppointmentAction = {
@@ -362,6 +491,30 @@ export async function processAIAppointmentBooking(
   if (validationError) {
     console.warn('[Randevu] Doğrulama hatası:', validationError);
     return { message: validationError, appointment: null };
+  }
+
+  if (!userConfirmed) {
+    const slotLabel = formatSlotLocalized(mergedAction.starts_at, mergedAction.ends_at, lang);
+    const confirmMsg =
+      lang === 'tr'
+        ? `Randevunuzu ${slotLabel} için kaydetmemi onaylıyor musunuz? Lütfen "evet" veya "onaylıyorum" yazın.`
+        : `Shall I book your appointment for ${slotLabel}? Please reply "yes" or "confirm".`;
+    return { message: confirmMsg, appointment: null };
+  }
+
+  const conflict = await hasConflict(
+    companyId,
+    mergedAction.starts_at,
+    mergedAction.ends_at
+  );
+  if (conflict) {
+    const altMsg = await buildConflictMessageWithAlternatives(
+      companyId,
+      mergedAction.starts_at,
+      mergedAction.ends_at,
+      lang
+    );
+    return { message: altMsg, appointment: null };
   }
 
   try {
@@ -384,8 +537,17 @@ export async function processAIAppointmentBooking(
   } catch (err) {
     const errMsg = (err as Error).message;
     console.error('[Randevu] Kayıt hatası:', errMsg);
+    if (/başka bir randevu|çakışma/i.test(errMsg)) {
+      const altMsg = await buildConflictMessageWithAlternatives(
+        companyId,
+        mergedAction.starts_at,
+        mergedAction.ends_at,
+        lang
+      );
+      return { message: altMsg, appointment: null };
+    }
     return {
-      message: `Randevu kaydedilemedi: ${errMsg} Lütfen başka bir saat önerin.`,
+      message: `Randevu kaydedilemedi: ${errMsg}`,
       appointment: null,
     };
   }

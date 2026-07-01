@@ -33,7 +33,7 @@ npm run dev
 - [Sistem Mimarisi](docs/ARCHITECTURE.md)
 - [Database ER Diagram](docs/DATABASE_ER.md)
 - [Kurulum Rehberi](docs/SETUP.md)
-- [Render Yayın](docs/RENDER.md)
+- [Coolify Yayın](docs/COOLIFY.md)
 
 ## Proje Yapısı
 

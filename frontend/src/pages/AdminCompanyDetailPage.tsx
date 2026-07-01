@@ -16,6 +16,7 @@ import {
   Button, Input, Label, Card, CardContent, CardHeader, CardTitle,
   Spinner, Badge,
 } from '@/components/ui';
+import { CompanyPlanFeatures } from '@/components/CompanyPlanFeatures';
 import type { CompanyDetail } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -63,7 +64,7 @@ export function AdminCompanyDetailPage() {
     );
   }
 
-  const { company, subscription, whatsapp, users, staff_count, stats } = data;
+  const { company, subscription, whatsapp, users, staff_count, stats, plan } = data;
   const companyForm = {
     company_name: form.company_name ?? company.company_name,
     category: form.category ?? company.category,
@@ -177,66 +178,83 @@ export function AdminCompanyDetailPage() {
       )}
 
       {tab === 'abonelik' && subscription && (
-        <Card>
-          <CardHeader><CardTitle>{t('admin.companyDetail.subscription')}</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>{t('admin.companyDetail.package')}</Label>
-                <select
-                  className="flex h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                  defaultValue={subscription.plan?.plan_type || company.subscription_plan}
-                  onChange={(e) => subMutation.mutate({ plan_type: e.target.value })}
-                >
-                  {PLAN_VALUES.map((value) => (
-                    <option key={value} value={value}>{t(`common.plans.${value}`)}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-2">
-                <Label>{t('admin.companyDetail.subStatus')}</Label>
-                <select
-                  className="flex h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                  defaultValue={subscription.status}
-                  onChange={(e) => subMutation.mutate({ status: e.target.value })}
-                >
-                  {['trial', 'active', 'cancelled'].map((value) => (
-                    <option key={value} value={value}>{t(`common.status.${value}`)}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-2">
-                <Label>{t('admin.companyDetail.messageLimit')}</Label>
-                <Input
-                  type="number"
-                  defaultValue={subscription.messages_limit}
-                  onBlur={(e) => subMutation.mutate({ messages_limit: parseInt(e.target.value) || 0 })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>{t('admin.companyDetail.messagesUsed')}</Label>
-                <div className="flex gap-2">
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Card>
+            <CardHeader><CardTitle>{t('admin.companyDetail.subscription')}</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>{t('admin.companyDetail.package')}</Label>
+                  <select
+                    className="flex h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
+                    defaultValue={subscription.plan?.plan_type || company.subscription_plan}
+                    onChange={(e) => subMutation.mutate({ plan_type: e.target.value })}
+                  >
+                    {PLAN_VALUES.map((value) => (
+                      <option key={value} value={value}>{t(`common.plans.${value}`)}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label>{t('admin.companyDetail.subStatus')}</Label>
+                  <select
+                    className="flex h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
+                    defaultValue={subscription.status}
+                    onChange={(e) => subMutation.mutate({ status: e.target.value })}
+                  >
+                    {['trial', 'active', 'cancelled'].map((value) => (
+                      <option key={value} value={value}>{t(`common.status.${value}`)}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label>{t('admin.companyDetail.messageLimit')}</Label>
                   <Input
                     type="number"
-                    defaultValue={subscription.messages_used}
-                    onBlur={(e) => subMutation.mutate({ messages_used: parseInt(e.target.value) || 0 })}
+                    defaultValue={subscription.messages_limit}
+                    onBlur={(e) => subMutation.mutate({ messages_limit: parseInt(e.target.value) || 0 })}
                   />
-                  <Button variant="outline" onClick={() => subMutation.mutate({ messages_used: 0 })} disabled={subMutation.isPending}>
-                    <RotateCcw className="h-4 w-4" /> {t('admin.companyDetail.reset')}
-                  </Button>
+                </div>
+                <div className="space-y-2">
+                  <Label>{t('admin.companyDetail.messagesUsed')}</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      defaultValue={subscription.messages_used}
+                      onBlur={(e) => subMutation.mutate({ messages_used: parseInt(e.target.value) || 0 })}
+                    />
+                    <Button variant="outline" onClick={() => subMutation.mutate({ messages_used: 0 })} disabled={subMutation.isPending}>
+                      <RotateCcw className="h-4 w-4" /> {t('admin.companyDetail.reset')}
+                    </Button>
+                  </div>
                 </div>
               </div>
-            </div>
-            <p className="text-sm text-slate-500">
-              {t('admin.companyDetail.usageHint', {
-                usersLimit: subscription.users_limit,
-                apiCalls: stats.ai_api_calls,
-                cached: stats.ai_cached_hits,
-                skipped: stats.ai_skipped,
-              })}
-            </p>
-          </CardContent>
-        </Card>
+              <p className="text-sm text-slate-500">
+                {t('admin.companyDetail.usageHint', {
+                  usersLimit: subscription.users_limit,
+                  apiCalls: stats.ai_api_calls,
+                  cached: stats.ai_cached_hits,
+                  skipped: stats.ai_skipped,
+                })}
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle>{t('admin.companyDetail.planFeaturesCard')}</CardTitle></CardHeader>
+            <CardContent>
+              <CompanyPlanFeatures
+                planType={plan?.plan_type || subscription.plan?.plan_type || company.subscription_plan}
+                planName={plan?.name || subscription.plan?.name}
+                description={plan?.description || subscription.plan?.description}
+                features={plan?.features || subscription.plan?.features}
+                messageLimit={subscription.messages_limit}
+                userLimit={subscription.users_limit}
+              />
+              <p className="mt-4 text-xs text-slate-500">{t('admin.companyDetail.planFeaturesHint')}</p>
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       {tab === 'kullanicilar' && (

@@ -16,13 +16,14 @@ import {
 
   LayoutDashboard, MessageSquare, BookOpen, Users, Ticket,
 
-  LogOut, Menu, X, CreditCard, Smartphone, Bell, Settings, CalendarDays, UserRound,
+  LogOut, Menu, X, CreditCard, Smartphone, Bell, Settings, CalendarDays, UserRound, HelpCircle,
 
 } from 'lucide-react';
 
 import { useAuthStore } from '@/store/authStore';
 
 import { cn } from '@/lib/utils';
+import { planHasModule, type PlanModuleKey } from '@/lib/plan-capabilities';
 
 import { Button } from '@/components/ui';
 
@@ -32,27 +33,29 @@ import type { UserRole } from '@/types';
 
 
 
-const allNav = [
+const allNav: { to: string; icon: typeof LayoutDashboard; labelKey: string; roles: UserRole[]; module: PlanModuleKey }[] = [
 
-  { to: '/panel/dashboard', icon: LayoutDashboard, labelKey: 'layout.nav.dashboard', roles: ['company_admin'] as UserRole[] },
+  { to: '/panel/dashboard', icon: LayoutDashboard, labelKey: 'layout.nav.dashboard', roles: ['company_admin'], module: 'dashboard' },
 
-  { to: '/panel/messages', icon: MessageSquare, labelKey: 'layout.nav.messages', roles: ['company_admin', 'staff'] as UserRole[] },
+  { to: '/panel/messages', icon: MessageSquare, labelKey: 'layout.nav.messages', roles: ['company_admin', 'staff'], module: 'messages' },
 
-  { to: '/panel/customers', icon: UserRound, labelKey: 'layout.nav.customers', roles: ['company_admin'] as UserRole[] },
+  { to: '/panel/customers', icon: UserRound, labelKey: 'layout.nav.customers', roles: ['company_admin'], module: 'customers' },
 
-  { to: '/panel/knowledge', icon: BookOpen, labelKey: 'layout.nav.knowledge', roles: ['company_admin'] as UserRole[] },
+  { to: '/panel/knowledge', icon: BookOpen, labelKey: 'layout.nav.knowledge', roles: ['company_admin'], module: 'knowledge' },
 
-  { to: '/panel/tickets', icon: Ticket, labelKey: 'layout.nav.tickets', roles: ['company_admin', 'staff'] as UserRole[] },
+  { to: '/panel/unknown-questions', icon: HelpCircle, labelKey: 'layout.nav.unknownQuestions', roles: ['company_admin'], module: 'unknown_questions' },
 
-  { to: '/panel/calendar', icon: CalendarDays, labelKey: 'layout.nav.calendar', roles: ['company_admin'] as UserRole[] },
+  { to: '/panel/tickets', icon: Ticket, labelKey: 'layout.nav.tickets', roles: ['company_admin', 'staff'], module: 'tickets' },
 
-  { to: '/panel/staff', icon: Users, labelKey: 'layout.nav.staff', roles: ['company_admin'] as UserRole[] },
+  { to: '/panel/calendar', icon: CalendarDays, labelKey: 'layout.nav.calendar', roles: ['company_admin'], module: 'calendar' },
 
-  { to: '/panel/whatsapp', icon: Smartphone, labelKey: 'layout.nav.whatsapp', roles: ['company_admin'] as UserRole[] },
+  { to: '/panel/staff', icon: Users, labelKey: 'layout.nav.staff', roles: ['company_admin'], module: 'staff' },
 
-  { to: '/panel/subscription', icon: CreditCard, labelKey: 'layout.nav.subscription', roles: ['company_admin'] as UserRole[] },
+  { to: '/panel/whatsapp', icon: Smartphone, labelKey: 'layout.nav.whatsapp', roles: ['company_admin'], module: 'whatsapp' },
 
-  { to: '/panel/settings', icon: Settings, labelKey: 'layout.nav.settings', roles: ['company_admin', 'staff'] as UserRole[] },
+  { to: '/panel/subscription', icon: CreditCard, labelKey: 'layout.nav.subscription', roles: ['company_admin'], module: 'subscription' },
+
+  { to: '/panel/settings', icon: Settings, labelKey: 'layout.nav.settings', roles: ['company_admin', 'staff'], module: 'settings' },
 
 ];
 
@@ -71,6 +74,8 @@ const pageTitleKeys: Record<string, string> = {
   '/panel/customers': 'layout.titles.customers',
 
   '/panel/knowledge': 'layout.titles.knowledge',
+
+  '/panel/unknown-questions': 'layout.titles.unknownQuestions',
 
   '/panel/tickets': 'layout.titles.tickets',
 
@@ -94,7 +99,7 @@ export function CompanyLayout() {
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const { user, company, logout } = useAuthStore();
+  const { user, company, companyPlan, logout } = useAuthStore();
 
   const navigate = useNavigate();
 
@@ -102,7 +107,13 @@ export function CompanyLayout() {
 
 
 
-  const navItems = allNav.filter((item) => user?.role && item.roles.includes(user.role));
+  const planType = companyPlan?.plan_type || company?.subscription_plan;
+  const navItems = allNav.filter(
+    (item) =>
+      user?.role &&
+      item.roles.includes(user.role) &&
+      planHasModule(planType, item.module)
+  );
 
   const pageTitleKey = pageTitleKeys[location.pathname] || 'layout.panel';
 
@@ -301,6 +312,11 @@ export function CompanyLayout() {
               {company?.company_name}
 
             </span>
+            {planType && (
+              <span className="hidden rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 lg:inline">
+                {t(`common.plans.${planType}`, { defaultValue: planType })}
+              </span>
+            )}
 
             <button className="rounded-lg p-2 text-slate-500 hover:bg-slate-100" aria-label={t('layout.notifications')}>
 

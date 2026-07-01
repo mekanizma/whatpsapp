@@ -4,9 +4,10 @@
 
 import { Response } from 'express';
 import { adminClient } from '../database/supabase';
-import { demoCompany, demoProfilesByToken, DEMO_TOKENS } from '../demo/mockData';
+import { demoCompany, demoPlans, demoProfilesByToken, DEMO_TOKENS } from '../demo/mockData';
 import { AuthRequest, isDemoSession } from '../middleware/auth.middleware';
 import { logActivity } from '../services/log.service';
+import { mapSubscriptionToCompanyPlan } from '../services/plan-capabilities.service';
 
 const DEMO_EMAILS: Record<string, string> = {
   [DEMO_TOKENS.admin]: 'admin@demo.com',
@@ -18,11 +19,28 @@ export async function getMe(req: AuthRequest, res: Response): Promise<void> {
   if (isDemoSession(req)) {
     const token = req.accessToken!;
     const profile = demoProfilesByToken[token];
+    const demoPlanRow = demoPlans.find((p) => p.plan_type === demoCompany.subscription_plan);
+    const companyPlan = demoPlanRow
+      ? {
+          plan_type: demoPlanRow.plan_type,
+          name: demoPlanRow.name,
+          description: demoPlanRow.description,
+          features: demoPlanRow.features,
+          message_limit: demoPlanRow.message_limit,
+          user_limit: demoPlanRow.user_limit,
+          messages_limit: demoPlanRow.message_limit,
+          messages_used: 0,
+          users_limit: demoPlanRow.user_limit,
+          status: 'active',
+        }
+      : null;
+
     res.json({
       success: true,
       data: {
         profile,
         company: profile.company_id ? demoCompany : null,
+        companyPlan: profile.company_id ? companyPlan : null,
         email: DEMO_EMAILS[token] || '',
       },
     });
@@ -31,6 +49,7 @@ export async function getMe(req: AuthRequest, res: Response): Promise<void> {
 
   const profile = req.profile;
   let company = null;
+  let companyPlan = null;
   let email: string | null = null;
 
   if (req.accessToken) {
@@ -39,17 +58,23 @@ export async function getMe(req: AuthRequest, res: Response): Promise<void> {
   }
 
   if (profile?.company_id) {
-    const { data } = await adminClient
-      .from('companies')
-      .select('*')
-      .eq('id', profile.company_id)
-      .single();
+    const [{ data }, { data: sub }] = await Promise.all([
+      adminClient.from('companies').select('*').eq('id', profile.company_id).single(),
+      adminClient
+        .from('subscriptions')
+        .select(
+          '*, subscription_plans(plan_type, name, description, features, message_limit, user_limit)'
+        )
+        .eq('company_id', profile.company_id)
+        .single(),
+    ]);
     company = data;
+    companyPlan = mapSubscriptionToCompanyPlan(sub as Record<string, unknown> | undefined);
   }
 
   res.json({
     success: true,
-    data: { profile, company, email },
+    data: { profile, company, companyPlan, email },
   });
 }
 

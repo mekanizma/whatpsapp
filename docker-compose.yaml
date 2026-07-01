@@ -1,0 +1,47 @@
+# Coolify Docker Compose (opsiyonel — Build Pack: Docker Compose)
+# Tek servis: React panel + Express API + Baileys QR
+
+services:
+  whatsapp-ai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
+        VITE_DEMO_MODE: ${VITE_DEMO_MODE:-false}
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      SESSIONS_DIR: /data/sessions
+      DEMO_MODE: ${DEMO_MODE:-false}
+      SUPABASE_URL: ${SUPABASE_URL}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY}
+      SUPABASE_SERVICE_ROLE_KEY: ${SUPABASE_SERVICE_ROLE_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      AI_MAX_HISTORY: ${AI_MAX_HISTORY:-60}
+      RAG_TOP_K: ${RAG_TOP_K:-10}
+      RAG_MATCH_THRESHOLD: ${RAG_MATCH_THRESHOLD:-0.5}
+      RAG_MAX_CONTEXT_CHARS: ${RAG_MAX_CONTEXT_CHARS:-6000}
+      WHATSAPP_VERIFY_TOKEN: ${WHATSAPP_VERIFY_TOKEN}
+      WHATSAPP_API_VERSION: ${WHATSAPP_API_VERSION:-v21.0}
+    volumes:
+      - whatsapp-sessions:/data/sessions
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:'+(process.env.PORT||3001)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  whatsapp-sessions:

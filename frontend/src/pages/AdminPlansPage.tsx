@@ -2,7 +2,7 @@
  * Super admin — abonelik paketleri yönetimi
  */
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { CreditCard, Save, Pencil, X } from 'lucide-react';
@@ -28,9 +28,15 @@ import {
   PLAN_CURRENCIES,
   featuresToTextarea,
   parseLegacyDescriptionFeatures,
+  parsePlanPriceInput,
+  normalizePlanPrice,
   textareaToFeatures,
 } from '@/lib/plan-format';
 import { PlanCard } from '@/components/PlanCard';
+import { BillingPeriodToggle } from '@/components/BillingPeriodToggle';
+import { AdminAddonsSection } from '@/components/AdminAddonsSection';
+import { planHasYearlyPrice } from '@/lib/plan-format';
+import type { BillingPeriod } from '@/lib/plan-format';
 
 interface PlanForm {
   name: string;
@@ -39,6 +45,7 @@ interface PlanForm {
   message_limit: string;
   user_limit: string;
   price_monthly: string;
+  price_yearly: string;
   currency: string;
   is_active: boolean;
   sync_subscriptions: boolean;
@@ -56,7 +63,11 @@ function toForm(plan: SubscriptionPlan): PlanForm {
     features,
     message_limit: String(plan.message_limit),
     user_limit: String(plan.user_limit),
-    price_monthly: String(plan.price_monthly),
+    price_monthly: String(normalizePlanPrice(plan.price_monthly)),
+    price_yearly:
+      plan.price_yearly != null && normalizePlanPrice(plan.price_yearly) > 0
+        ? String(normalizePlanPrice(plan.price_yearly))
+        : '',
     currency: (plan.currency || 'TRY').toUpperCase(),
     is_active: plan.is_active,
     sync_subscriptions: false,
@@ -69,6 +80,7 @@ export function AdminPlansPage() {
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<PlanForm | null>(null);
+  const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>('monthly');
   const [saveMsg, setSaveMsg] = useState<{ id: string; type: 'ok' | 'err'; text: string } | null>(null);
 
   const { data: plans, isLoading } = useQuery({
@@ -106,6 +118,19 @@ export function AdminPlansPage() {
   const handleSave = (planId: string) => {
     if (!form) return;
     setSaveMsg(null);
+
+    const priceMonthly = parsePlanPriceInput(form.price_monthly);
+    const priceYearly = form.price_yearly.trim() ? parsePlanPriceInput(form.price_yearly) : null;
+
+    if (!Number.isFinite(priceMonthly) || priceMonthly < 0) {
+      setSaveMsg({ id: planId, type: 'err', text: t('admin.plans.invalidPrice') });
+      return;
+    }
+    if (priceYearly != null && (!Number.isFinite(priceYearly) || priceYearly < 0)) {
+      setSaveMsg({ id: planId, type: 'err', text: t('admin.plans.invalidYearlyPrice') });
+      return;
+    }
+
     updateMutation.mutate({
       id: planId,
       body: {
@@ -114,7 +139,8 @@ export function AdminPlansPage() {
         features: textareaToFeatures(form.features),
         message_limit: Number(form.message_limit),
         user_limit: Number(form.user_limit),
-        price_monthly: Number(form.price_monthly),
+        price_monthly: priceMonthly,
+        price_yearly: priceYearly,
         currency: form.currency,
         is_active: form.is_active,
         sync_subscriptions: form.sync_subscriptions,
@@ -124,6 +150,11 @@ export function AdminPlansPage() {
 
   const currencyLabel = (code: string) =>
     t(`admin.plans.currencies.${code}`, { defaultValue: code });
+
+  const showBillingToggle = useMemo(
+    () => (plans ?? []).some(planHasYearlyPrice),
+    [plans]
+  );
 
   if (isLoading) {
     return (
@@ -143,6 +174,13 @@ export function AdminPlansPage() {
       {isDemoMode && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           {t('admin.plans.demoHint')}
+        </div>
+      )}
+
+      {showBillingToggle && (
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm text-slate-600">{t('subscription.billingPeriodHint')}</p>
+          <BillingPeriodToggle value={billingPeriod} onChange={setBillingPeriod} />
         </div>
       )}
 
@@ -226,6 +264,7 @@ export function AdminPlansPage() {
                           value={form.message_limit}
                           onChange={(e) => setForm({ ...form, message_limit: e.target.value })}
                         />
+                        <p className="text-xs text-slate-500">{t('admin.plans.messageLimitHint')}</p>
                       </div>
                       <div className="space-y-2">
                         <Label>{t('admin.plans.userLimit')}</Label>
@@ -237,30 +276,53 @@ export function AdminPlansPage() {
                         />
                       </div>
                     </div>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label>{t('admin.plans.currency')}</Label>
-                        <select
-                          value={form.currency}
-                          onChange={(e) => setForm({ ...form, currency: e.target.value })}
-                          className="flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-                        >
-                          {PLAN_CURRENCIES.map((code) => (
-                            <option key={code} value={code}>
-                              {currencyLabel(code)}
-                            </option>
-                          ))}
-                        </select>
+
+                    <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/60 p-4">
+                      <p className="text-sm font-semibold text-slate-800">
+                        {t('admin.plans.monthlyBillingSection')}
+                      </p>
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label>{t('admin.plans.currency')}</Label>
+                          <select
+                            value={form.currency}
+                            onChange={(e) => setForm({ ...form, currency: e.target.value })}
+                            className="flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                          >
+                            {PLAN_CURRENCIES.map((code) => (
+                              <option key={code} value={code}>
+                                {currencyLabel(code)}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>{t('admin.plans.priceMonthly')}</Label>
+                          <Input
+                            type="text"
+                            inputMode="decimal"
+                            value={form.price_monthly}
+                            onChange={(e) => setForm({ ...form, price_monthly: e.target.value })}
+                            placeholder={t('admin.plans.priceInputPlaceholder')}
+                          />
+                        </div>
                       </div>
+                    </div>
+
+                    <div className="space-y-3 rounded-xl border border-emerald-200 bg-emerald-50/40 p-4">
+                      <p className="text-sm font-semibold text-slate-800">
+                        {t('admin.plans.yearlyBillingSection')}
+                      </p>
                       <div className="space-y-2">
-                        <Label>{t('admin.plans.priceMonthly')}</Label>
+                        <Label>{t('admin.plans.priceYearly')}</Label>
                         <Input
-                          type="number"
-                          min={0}
-                          step="0.01"
-                          value={form.price_monthly}
-                          onChange={(e) => setForm({ ...form, price_monthly: e.target.value })}
+                          type="text"
+                          inputMode="decimal"
+                          value={form.price_yearly}
+                          onChange={(e) => setForm({ ...form, price_yearly: e.target.value })}
+                          placeholder={t('admin.plans.priceYearlyPlaceholder')}
                         />
+                        <p className="text-xs text-slate-500">{t('admin.plans.priceYearlyHint')}</p>
                       </div>
                     </div>
                     <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-slate-50/80 p-3">
@@ -303,7 +365,7 @@ export function AdminPlansPage() {
                   </>
                 ) : (
                   <>
-                    <PlanCard plan={plan} locale={locale} embedded />
+                    <PlanCard plan={plan} locale={locale} billingPeriod={billingPeriod} embedded />
                     {saveMsg?.id === plan.id && saveMsg.type === 'ok' && (
                       <p className="text-sm text-emerald-600">{saveMsg.text}</p>
                     )}
@@ -322,6 +384,8 @@ export function AdminPlansPage() {
           </CardContent>
         </Card>
       )}
+
+      <AdminAddonsSection />
     </div>
   );
 }

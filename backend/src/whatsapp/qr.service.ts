@@ -1,6 +1,6 @@
 /**
  * WhatsApp QR connection service (Baileys)
- * Render ve yerel geliştirmede çalışır; serverless (Vercel) ortamında devre dışı
+ * Coolify ve yerel geliştirmede çalışır; serverless (Vercel) ortamında devre dışı
  */
 
 import {

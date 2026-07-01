@@ -9,6 +9,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/authStore';
 import { RoleRoute } from '@/components/RoleRoute';
 import { AdminOnlyRoute, PanelIndexRedirect } from '@/components/AdminOnlyRoute';
+import { PlanModuleRoute } from '@/components/PlanModuleRoute';
 import { AdminLayout } from '@/layouts/AdminLayout';
 import { CompanyLayout } from '@/layouts/CompanyLayout';
 import { LoginPage } from '@/pages/LoginPage';
@@ -25,6 +26,7 @@ import { SettingsPage } from '@/pages/SettingsPage';
 import { CalendarPage } from '@/pages/CalendarPage';
 import { AiInsightsPage } from '@/pages/AiInsightsPage';
 import { CustomersPage } from '@/pages/CustomersPage';
+import { UnknownQuestionsPage } from '@/pages/UnknownQuestionsPage';
 import { TodayActivityPage } from '@/pages/TodayActivityPage';
 import { AdminPage } from '@/pages/AdminPage';
 import { AdminCompaniesPage } from '@/pages/AdminCompaniesPage';
@@ -82,18 +84,19 @@ function AppRoutes() {
         }
       >
         <Route index element={<PanelIndexRedirect />} />
-        <Route path="dashboard" element={<AdminOnlyRoute><DashboardPage /></AdminOnlyRoute>} />
-        <Route path="messages" element={<MessagesPage />} />
-        <Route path="activity/today" element={<AdminOnlyRoute><TodayActivityPage /></AdminOnlyRoute>} />
-        <Route path="ai-insights" element={<AdminOnlyRoute><AiInsightsPage /></AdminOnlyRoute>} />
-        <Route path="customers" element={<AdminOnlyRoute><CustomersPage /></AdminOnlyRoute>} />
-        <Route path="knowledge" element={<AdminOnlyRoute><KnowledgePage /></AdminOnlyRoute>} />
-        <Route path="tickets" element={<TicketsPage />} />
-        <Route path="calendar" element={<AdminOnlyRoute><CalendarPage /></AdminOnlyRoute>} />
-        <Route path="staff" element={<AdminOnlyRoute><StaffPage /></AdminOnlyRoute>} />
-        <Route path="whatsapp" element={<AdminOnlyRoute><WhatsAppPage /></AdminOnlyRoute>} />
-        <Route path="subscription" element={<AdminOnlyRoute><SubscriptionPage /></AdminOnlyRoute>} />
-        <Route path="settings" element={<SettingsPage />} />
+        <Route path="dashboard" element={<PlanModuleRoute module="dashboard"><AdminOnlyRoute><DashboardPage /></AdminOnlyRoute></PlanModuleRoute>} />
+        <Route path="messages" element={<PlanModuleRoute module="messages"><MessagesPage /></PlanModuleRoute>} />
+        <Route path="activity/today" element={<PlanModuleRoute module="dashboard"><AdminOnlyRoute><TodayActivityPage /></AdminOnlyRoute></PlanModuleRoute>} />
+        <Route path="ai-insights" element={<PlanModuleRoute module="dashboard"><AdminOnlyRoute><AiInsightsPage /></AdminOnlyRoute></PlanModuleRoute>} />
+        <Route path="customers" element={<PlanModuleRoute module="customers"><AdminOnlyRoute><CustomersPage /></AdminOnlyRoute></PlanModuleRoute>} />
+        <Route path="knowledge" element={<PlanModuleRoute module="knowledge"><AdminOnlyRoute><KnowledgePage /></AdminOnlyRoute></PlanModuleRoute>} />
+        <Route path="unknown-questions" element={<PlanModuleRoute module="unknown_questions"><AdminOnlyRoute><UnknownQuestionsPage /></AdminOnlyRoute></PlanModuleRoute>} />
+        <Route path="tickets" element={<PlanModuleRoute module="tickets"><TicketsPage /></PlanModuleRoute>} />
+        <Route path="calendar" element={<PlanModuleRoute module="calendar"><AdminOnlyRoute><CalendarPage /></AdminOnlyRoute></PlanModuleRoute>} />
+        <Route path="staff" element={<PlanModuleRoute module="staff"><AdminOnlyRoute><StaffPage /></AdminOnlyRoute></PlanModuleRoute>} />
+        <Route path="whatsapp" element={<PlanModuleRoute module="whatsapp"><AdminOnlyRoute><WhatsAppPage /></AdminOnlyRoute></PlanModuleRoute>} />
+        <Route path="subscription" element={<PlanModuleRoute module="subscription"><AdminOnlyRoute><SubscriptionPage /></AdminOnlyRoute></PlanModuleRoute>} />
+        <Route path="settings" element={<PlanModuleRoute module="settings"><SettingsPage /></PlanModuleRoute>} />
       </Route>
 
       {/* Eski URL yönlendirmeleri */}

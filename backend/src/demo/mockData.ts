@@ -3,6 +3,7 @@
  */
 
 import { Company, DashboardStats, Profile } from '../types';
+import type { UnknownQuestionRow } from '../services/unknown-questions.service';
 
 export const DEMO_COMPANY_ID = '00000000-0000-0000-0000-000000000003';
 
@@ -104,7 +105,45 @@ export const demoSubscriptionUsage = {
   users_limit: 5,
   status: 'active',
   messages_percentage: 25,
+  quota_exhausted: false,
+  plan_type: 'business',
 };
+
+export const demoAiConversationAddons = [
+  {
+    id: 'addon-1',
+    name: '500 AI Görüşme Paketi',
+    conversation_count: 500,
+    price: 99,
+    currency: 'TRY',
+    is_active: true,
+    sort_order: 1,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: 'addon-2',
+    name: '1.000 AI Görüşme Paketi',
+    conversation_count: 1000,
+    price: 179,
+    currency: 'TRY',
+    is_active: true,
+    sort_order: 2,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+  {
+    id: 'addon-3',
+    name: '2.500 AI Görüşme Paketi',
+    conversation_count: 2500,
+    price: 399,
+    currency: 'TRY',
+    is_active: true,
+    sort_order: 3,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  },
+];
 
 export const demoPlans = [
   {
@@ -116,6 +155,7 @@ export const demoPlans = [
     message_limit: 1000,
     user_limit: 1,
     price_monthly: 499,
+    price_yearly: 4990,
     currency: 'TRY',
   },
   {
@@ -127,6 +167,7 @@ export const demoPlans = [
     message_limit: 5000,
     user_limit: 5,
     price_monthly: 1499,
+    price_yearly: 14990,
     currency: 'TRY',
   },
   {
@@ -138,6 +179,7 @@ export const demoPlans = [
     message_limit: 999999,
     user_limit: 999,
     price_monthly: 4999,
+    price_yearly: 49990,
     currency: 'TRY',
   },
 ];
@@ -161,3 +203,34 @@ export const demoWhatsAppState = {
   connected: false,
   phone: '+905551234567',
 };
+
+export const demoUnknownQuestions: UnknownQuestionRow[] = [
+  {
+    id: 'uq-1',
+    company_id: DEMO_COMPANY_ID,
+    customer_phone: '905551112233',
+    customer_name: 'Mehmet Kaya',
+    question: 'Diş beyazlatma işlemi hamileler için güvenli mi?',
+    ai_response:
+      'Bu konuda bilgi bankamızda kayıt bulunmuyor. Başka bir konuda yardımcı olabilir miyim, yoksa sizi canlı temsilcimize bağlamamı ister misiniz?',
+    status: 'open',
+    occurrence_count: 2,
+    last_asked_at: new Date(Date.now() - 3600_000).toISOString(),
+    created_at: new Date(Date.now() - 86400_000).toISOString(),
+    updated_at: new Date(Date.now() - 3600_000).toISOString(),
+  },
+  {
+    id: 'uq-2',
+    company_id: DEMO_COMPANY_ID,
+    customer_phone: '905559998877',
+    customer_name: 'Zeynep Arslan',
+    question: 'Pazar günü acil muayene var mı?',
+    ai_response:
+      'Bu konuda net bilgiye ulaşamadım. Yanlış yönlendirmemek için sizi canlı temsilcimize aktarabilirim.',
+    status: 'open',
+    occurrence_count: 1,
+    last_asked_at: new Date(Date.now() - 7200_000).toISOString(),
+    created_at: new Date(Date.now() - 7200_000).toISOString(),
+    updated_at: new Date(Date.now() - 7200_000).toISOString(),
+  },
+];

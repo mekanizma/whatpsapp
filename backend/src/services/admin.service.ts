@@ -6,6 +6,7 @@ import { adminClient } from '../database/supabase';
 import { config } from '../config';
 import { getDashboardStats } from './dashboard.service';
 import { getMonthStartISO } from '../utils/date';
+import { mapSubscriptionToCompanyPlan } from './plan-capabilities.service';
 
 const PLAN_LIMITS: Record<string, { messages: number; users: number }> = {
   starter: { messages: 1000, users: 1 },
@@ -64,7 +65,7 @@ export async function getCompaniesWithUsage(page = 1, limit = 50, search = '') {
   let query = adminClient
     .from('companies')
     .select(
-      `*, subscriptions(messages_used, messages_limit, status, users_limit),
+      `*, subscriptions(messages_used, messages_limit, status, users_limit, plan:plan_id(plan_type, name, description, features, message_limit, user_limit)),
        whatsapp_configs(status, phone_number)`,
       { count: 'exact' }
     )
@@ -86,7 +87,11 @@ export async function getCompaniesWithUsage(page = 1, limit = 50, search = '') {
   if (ids.length) {
     const monthStart = getMonthStartISO();
     const [msgs, ai] = await Promise.all([
-      adminClient.from('messages').select('company_id').in('company_id', ids),
+      adminClient
+        .from('messages')
+        .select('company_id')
+        .in('company_id', ids)
+        .eq('sender_type', 'ai'),
       adminClient
         .from('ai_usage_logs')
         .select('company_id, total_tokens')
@@ -103,13 +108,28 @@ export async function getCompaniesWithUsage(page = 1, limit = 50, search = '') {
   }
 
   return {
-    companies: companies.map((c) => ({
-      ...c,
-      message_count: msgCounts[c.id] || 0,
-      ai_tokens_month: aiTokens[c.id] || 0,
-      subscription: Array.isArray(c.subscriptions) ? c.subscriptions[0] : c.subscriptions,
-      whatsapp: Array.isArray(c.whatsapp_configs) ? c.whatsapp_configs[0] : c.whatsapp_configs,
-    })),
+    companies: companies.map((c) => {
+      const subscription = Array.isArray(c.subscriptions) ? c.subscriptions[0] : c.subscriptions;
+      const plan = mapSubscriptionToCompanyPlan(
+        subscription as Record<string, unknown> | undefined
+      );
+
+      return {
+        ...c,
+        message_count: msgCounts[c.id] || 0,
+        ai_tokens_month: aiTokens[c.id] || 0,
+        subscription: subscription
+          ? {
+              messages_used: subscription.messages_used,
+              messages_limit: subscription.messages_limit,
+              status: subscription.status,
+              users_limit: subscription.users_limit,
+            }
+          : undefined,
+        plan,
+        whatsapp: Array.isArray(c.whatsapp_configs) ? c.whatsapp_configs[0] : c.whatsapp_configs,
+      };
+    }),
     pagination: {
       page,
       limit,
@@ -129,23 +149,32 @@ export async function getCompanyDetail(companyId: string) {
   if (error || !company) throw new Error('Şirket bulunamadı');
 
   const [subscription, whatsapp, profiles, staffCount, stats] = await Promise.all([
-    adminClient.from('subscriptions').select('*, subscription_plans(plan_type, name)').eq('company_id', companyId).single(),
+    adminClient
+      .from('subscriptions')
+      .select(
+        '*, subscription_plans(plan_type, name, description, features, message_limit, user_limit, price_monthly, price_yearly, currency)'
+      )
+      .eq('company_id', companyId)
+      .single(),
     adminClient.from('whatsapp_configs').select('status, phone_number, business_account_id').eq('company_id', companyId).single(),
     adminClient.from('profiles').select('id, full_name, role, is_active, created_at').eq('company_id', companyId),
     adminClient.from('staff').select('id', { count: 'exact', head: true }).eq('company_id', companyId),
     getDashboardStats(companyId),
   ]);
 
+  const subscriptionRow = subscription.data
+    ? {
+        ...subscription.data,
+        plan: Array.isArray(subscription.data.subscription_plans)
+          ? subscription.data.subscription_plans[0]
+          : subscription.data.subscription_plans,
+      }
+    : null;
+
   return {
     company,
-    subscription: subscription.data
-      ? {
-          ...subscription.data,
-          plan: Array.isArray(subscription.data.subscription_plans)
-            ? subscription.data.subscription_plans[0]
-            : subscription.data.subscription_plans,
-        }
-      : null,
+    subscription: subscriptionRow,
+    plan: mapSubscriptionToCompanyPlan(subscription.data as Record<string, unknown> | undefined),
     whatsapp: whatsapp.data,
     users: profiles.data || [],
     staff_count: staffCount.count || 0,
@@ -202,6 +231,9 @@ export async function updateSubscriptionAdmin(
       subUpdates.plan_id = plan.id;
       subUpdates.messages_limit = plan.message_limit ?? limits.messages;
       subUpdates.users_limit = plan.user_limit ?? limits.users;
+    } else {
+      subUpdates.messages_limit = limits.messages;
+      subUpdates.users_limit = limits.users;
     }
 
     await adminClient

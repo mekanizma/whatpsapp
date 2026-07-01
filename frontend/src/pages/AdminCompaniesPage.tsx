@@ -8,12 +8,13 @@ import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, ChevronRight, Pause, Play, Smartphone } from 'lucide-react';
 import { api } from '@/services/api';
+import { CompanyPlanFeatures } from '@/components/CompanyPlanFeatures';
 import { PageHeader } from '@/components/PageHeader';
 import {
   Button, Input, Label, Card, CardContent, CardHeader, CardTitle,
   Spinner, Badge,
 } from '@/components/ui';
-import type { AdminCompany } from '@/types';
+import type { AdminCompany, SubscriptionPlan } from '@/types';
 import { cn } from '@/lib/utils';
 
 const CATEGORY_VALUES = [
@@ -60,6 +61,13 @@ export function AdminCompaniesPage() {
     queryKey: ['admin-companies', search],
     queryFn: () => api.getWithMeta<AdminCompany[]>(`/admin/companies?search=${encodeURIComponent(search)}`),
   });
+
+  const { data: plans } = useQuery({
+    queryKey: ['admin-plans'],
+    queryFn: () => api.get<SubscriptionPlan[]>('/admin/plans'),
+  });
+
+  const selectedPlan = plans?.find((p) => p.plan_type === form.subscription_plan);
 
   const createMutation = useMutation({
     mutationFn: (body: Record<string, string>) => api.post('/admin/companies', body),
@@ -143,6 +151,22 @@ export function AdminCompaniesPage() {
                   ))}
                 </select>
               </div>
+              {selectedPlan && (
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>{t('admin.companies.planFeatures')}</Label>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+                    <CompanyPlanFeatures
+                      planType={selectedPlan.plan_type}
+                      planName={selectedPlan.name}
+                      description={selectedPlan.description}
+                      features={selectedPlan.features}
+                      messageLimit={selectedPlan.message_limit}
+                      userLimit={selectedPlan.user_limit}
+                      compact
+                    />
+                  </div>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label>{t('admin.companies.companyEmail')}</Label>
                 <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
@@ -212,9 +236,21 @@ export function AdminCompaniesPage() {
                         <Badge variant={company.status === 'active' || company.status === 'trial' ? 'success' : 'warning'}>
                           {t(`common.status.${company.status}`, { defaultValue: company.status })}
                         </Badge>
-                        <Badge>{company.subscription_plan}</Badge>
+                        <Badge>{t(`common.plans.${company.subscription_plan}`, { defaultValue: company.subscription_plan })}</Badge>
                       </div>
                       <p className="text-sm text-slate-500">{company.email || '—'} · {company.phone || '—'}</p>
+                      {company.plan && (
+                        <CompanyPlanFeatures
+                          planType={company.plan.plan_type}
+                          planName={company.plan.name}
+                          description={company.plan.description}
+                          features={company.plan.features}
+                          messageLimit={company.plan.messages_limit}
+                          userLimit={company.plan.users_limit}
+                          compact
+                          className="max-w-2xl"
+                        />
+                      )}
                       {sub && <div className="max-w-xs"><UsageBar used={sub.messages_used} limit={sub.messages_limit} /></div>}
                       <div className="flex flex-wrap gap-3 text-xs text-slate-500">
                         <span>{t('admin.companies.messageCount', { count: company.message_count ?? 0 })}</span>

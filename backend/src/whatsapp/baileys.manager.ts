@@ -556,10 +556,10 @@ async function restoreCompanySession(
   await connectBaileysSocket(companyId, session);
 }
 
-// Sunucu başladığında mevcut oturumları yükle (Render restart / spin-up sonrası)
+// Sunucu başladığında mevcut oturumları yükle (Coolify restart / redeploy sonrası)
 export async function restoreBaileysSessions(): Promise<void> {
   const sessionsDir = config.sessionsDir;
-  console.log(`[Baileys] Oturum dizini: ${sessionsDir} (Render disk: ${config.isRender})`);
+  console.log(`[Baileys] Oturum dizini: ${sessionsDir} (kalıcı volume: ${config.isCoolify})`);
 
   if (!fs.existsSync(sessionsDir)) {
     fs.mkdirSync(sessionsDir, { recursive: true });

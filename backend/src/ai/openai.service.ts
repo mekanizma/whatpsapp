@@ -16,7 +16,9 @@ import { preAIGate } from './ai-gate.service';
 import { stripTransferMarker } from './transfer.service';
 import { retrieveKnowledgeContext } from '../services/knowledge-retrieval.service';
 import { isAppointmentIntent } from './knowledge-filter.service';
-import { buildCollectedFieldsContext } from './appointment-collect.service';
+import { shouldRecordUnknownQuestion } from './knowledge-miss.service';
+import { buildCollectedFieldsContext, parseCollectedFields } from './appointment-collect.service';
+import { buildParsedSlotHint, reconcileAppointmentAiResponse } from './appointment-response.service';
 import { handleAppointmentBooking } from './appointment-extract.service';
 
 export interface AIResponse {
@@ -26,6 +28,7 @@ export interface AIResponse {
   skipReason?: string;
   tokensUsed: number;
   appointmentBooked?: boolean;
+  knowledgeMiss?: boolean;
 }
 
 const companyCache = new Map<string, { data: Company; expires: number }>();
@@ -120,7 +123,11 @@ export async function generateAIResponse(
   }
 
   const collectedContext = appointmentMode
-    ? buildCollectedFieldsContext(history, trimmed, conversationLang)
+    ? (() => {
+        const collected = parseCollectedFields(history, trimmed);
+        const slotHint = buildParsedSlotHint(history, trimmed, collected);
+        return buildCollectedFieldsContext(history, trimmed, conversationLang) + slotHint;
+      })()
     : '';
 
   const systemPrompt = await buildAdminPanelPrompt(company, {
@@ -174,7 +181,11 @@ export async function generateAIResponse(
   const usage = completion.usage;
   const totalTokens = usage?.total_tokens || 0;
 
-  const raw = completion.choices[0]?.message?.content?.trim() || '';
+  let raw = completion.choices[0]?.message?.content?.trim() || '';
+
+  if (appointmentMode) {
+    raw = reconcileAppointmentAiResponse(raw, history, trimmed, conversationLang);
+  }
 
   const booking = await handleAppointmentBooking(
     companyId,
@@ -199,6 +210,14 @@ export async function generateAIResponse(
     );
   }
 
+  const knowledgeMiss = shouldRecordUnknownQuestion({
+    customerMessage: trimmed,
+    aiResponse: message,
+    shouldTransfer,
+    skippedAI: false,
+    appointmentMode,
+  });
+
   return {
     message,
     shouldTransfer,
@@ -206,5 +225,6 @@ export async function generateAIResponse(
     skipReason: shouldTransfer ? 'ai_transfer' : undefined,
     tokensUsed: totalTokens,
     appointmentBooked: !!booking.appointment,
+    knowledgeMiss,
   };
 }

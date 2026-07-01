@@ -4,6 +4,7 @@
 
 import { Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
+import { planHasModule } from '@/lib/plan-capabilities';
 
 interface AdminOnlyRouteProps {
   children: React.ReactNode;
@@ -22,10 +23,17 @@ export function AdminOnlyRoute({ children, redirectTo = '/panel/messages' }: Adm
 
 export function PanelIndexRedirect() {
   const user = useAuthStore((s) => s.user);
+  const company = useAuthStore((s) => s.company);
+  const companyPlan = useAuthStore((s) => s.companyPlan);
+  const planType = companyPlan?.plan_type || company?.subscription_plan;
 
   if (user?.role === 'staff') {
     return <Navigate to="/panel/messages" replace />;
   }
 
-  return <Navigate to="/panel/dashboard" replace />;
+  if (planHasModule(planType, 'dashboard')) {
+    return <Navigate to="/panel/dashboard" replace />;
+  }
+
+  return <Navigate to="/panel/messages" replace />;
 }

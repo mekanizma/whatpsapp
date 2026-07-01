@@ -6,7 +6,7 @@ import { create } from 'zustand';
 import { supabase, supabaseConfigured } from '@/services/supabase';
 import { isDemoMode } from '@/lib/env';
 import { api, setDemoToken, clearDemoToken } from '@/services/api';
-import type { Profile, Company, UserRole } from '@/types';
+import type { Profile, Company, UserRole, CompanyPlan } from '@/types';
 
 export type LoginPanel = 'admin' | 'customer';
 
@@ -19,6 +19,7 @@ const DEMO_USERS: Record<string, { password: string; token: string; role: UserRo
 interface AuthState {
   user: Profile | null;
   company: Company | null;
+  companyPlan: CompanyPlan | null;
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (email: string, password: string, panel: LoginPanel) => Promise<void>;
@@ -40,6 +41,7 @@ export function getRedirectPath(role?: UserRole): string {
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   company: null,
+  companyPlan: null,
   isLoading: true,
   isAuthenticated: false,
 
@@ -56,8 +58,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         throw new Error('Admin hesabı müşteri paneline giremez. Admin girişini kullanın.');
       }
       setDemoToken(demoUser.token);
-      const data = await api.get<{ profile: Profile; company: Company | null }>('/auth/me');
-      set({ user: data.profile, company: data.company, isAuthenticated: true });
+      const data = await api.get<{ profile: Profile; company: Company | null; companyPlan: CompanyPlan | null }>('/auth/me');
+      set({ user: data.profile, company: data.company, companyPlan: data.companyPlan, isAuthenticated: true });
       return;
     }
 
@@ -68,7 +70,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw new Error(error.message);
 
-    const data = await api.get<{ profile: Profile; company: Company | null }>('/auth/me');
+    const data = await api.get<{ profile: Profile; company: Company | null; companyPlan: CompanyPlan | null }>('/auth/me');
 
     if (panel === 'admin' && data.profile.role !== 'super_admin') {
       await supabase.auth.signOut();
@@ -79,7 +81,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       throw new Error('Admin hesabı müşteri paneline giremez.');
     }
 
-    set({ user: data.profile, company: data.company, isAuthenticated: true });
+    set({
+      user: data.profile,
+      company: data.company,
+      companyPlan: data.companyPlan,
+      isAuthenticated: true,
+    });
   },
 
   register: async (email, password, fullName) => {
@@ -100,15 +107,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     } else if (supabaseConfigured) {
       await supabase.auth.signOut();
     }
-    set({ user: null, company: null, isAuthenticated: false });
+    set({ user: null, company: null, companyPlan: null, isAuthenticated: false });
   },
 
   fetchProfile: async () => {
     try {
-      const data = await api.get<{ profile: Profile; company: Company | null }>('/auth/me');
-      set({ user: data.profile, company: data.company, isAuthenticated: true, isLoading: false });
+      const data = await api.get<{ profile: Profile; company: Company | null; companyPlan: CompanyPlan | null }>('/auth/me');
+      set({
+        user: data.profile,
+        company: data.company,
+        companyPlan: data.companyPlan,
+        isAuthenticated: true,
+        isLoading: false,
+      });
     } catch {
-      set({ user: null, company: null, isAuthenticated: false, isLoading: false });
+      set({ user: null, company: null, companyPlan: null, isAuthenticated: false, isLoading: false });
     }
   },
 
@@ -176,7 +189,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       supabase.auth.onAuthStateChange((_event, session) => {
         if (!session) {
-          set({ user: null, company: null, isAuthenticated: false, isLoading: false });
+          set({ user: null, company: null, companyPlan: null, isAuthenticated: false, isLoading: false });
         }
       });
     } catch {

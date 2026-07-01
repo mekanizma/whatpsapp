@@ -8,24 +8,44 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+function normalizePublicUrl(value: string): string {
+  const trimmed = value.trim().replace(/\/$/, '');
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) return trimmed;
+  return `https://${trimmed}`;
+}
+
+function collectPlatformUrls(): string[] {
+  const urls: string[] = [];
+  const add = (raw?: string) => {
+    if (!raw) return;
+    raw
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .forEach((part) => urls.push(normalizePublicUrl(part)));
+  };
+
+  add(process.env.APP_URL);
+  add(process.env.COOLIFY_URL);
+  add(process.env.COOLIFY_FQDN);
+  if (process.env.VERCEL_URL) add(`https://${process.env.VERCEL_URL}`);
+  if (process.env.VERCEL_BRANCH_URL) add(`https://${process.env.VERCEL_BRANCH_URL}`);
+
+  return [...new Set(urls)];
+}
+
 function getCorsOrigins(): string[] {
   const fromEnv = (process.env.CORS_ORIGIN || 'http://localhost:5173')
     .split(',')
     .map((o) => o.trim())
     .filter(Boolean);
 
-  const platform: string[] = [];
-  if (process.env.RENDER_EXTERNAL_URL) platform.push(process.env.RENDER_EXTERNAL_URL);
-  if (process.env.VERCEL_URL) platform.push(`https://${process.env.VERCEL_URL}`);
-  if (process.env.VERCEL_BRANCH_URL) platform.push(`https://${process.env.VERCEL_BRANCH_URL}`);
-
-  return [...new Set([...fromEnv, ...platform])];
+  return [...new Set([...fromEnv, ...collectPlatformUrls()])];
 }
 
 function getPublicUrl(): string | null {
-  if (process.env.RENDER_EXTERNAL_URL) return process.env.RENDER_EXTERNAL_URL;
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return null;
+  const urls = collectPlatformUrls();
+  return urls[0] ?? null;
 }
 
 function requireEnv(key: string): string {
@@ -41,7 +61,10 @@ export const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   isDev: process.env.NODE_ENV !== 'production',
   isVercel: !!process.env.VERCEL,
-  isRender: !!process.env.RENDER,
+  isCoolify:
+    !!process.env.COOLIFY_URL ||
+    !!process.env.COOLIFY_FQDN ||
+    !!process.env.COOLIFY_RESOURCE_UUID,
   publicUrl: getPublicUrl(),
   serveFrontend: process.env.NODE_ENV === 'production',
 
@@ -99,6 +122,6 @@ export const config = {
 
 if (config.nodeEnv === 'production' && config.demoMode) {
   console.warn(
-    '[UYARI] DEMO_MODE=true — canlı ortamda müşteri özellikleri kısıtlanır. Render/Vercel env: DEMO_MODE=false ve VITE_DEMO_MODE=false yapın.'
+    '[UYARI] DEMO_MODE=true — canlı ortamda müşteri özellikleri kısıtlanır. Coolify env: DEMO_MODE=false ve VITE_DEMO_MODE=false yapın.'
   );
 }

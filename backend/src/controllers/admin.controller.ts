@@ -5,7 +5,7 @@
 import { Response } from 'express';
 import { config } from '../config';
 import { adminClient } from '../database/supabase';
-import { demoCompany, demoPlans } from '../demo/mockData';
+import { demoCompany, demoPlans, demoAiConversationAddons } from '../demo/mockData';
 import { AuthRequest, isDemoSession } from '../middleware/auth.middleware';
 import { logActivity } from '../services/log.service';
 import {
@@ -36,6 +36,10 @@ import {
   getAllSubscriptionPlans,
   updateSubscriptionPlan,
 } from '../services/subscription-plan.service';
+import {
+  getAllAiConversationAddons,
+  updateAiConversationAddon,
+} from '../services/ai-addon.service';
 
 export async function getCompanies(req: AuthRequest, res: Response): Promise<void> {
   if (isDemoSession(req)) {
@@ -110,7 +114,7 @@ export async function createCompany(req: AuthRequest, res: Response): Promise<vo
 
   const { data: planRow } = await adminClient
     .from('subscription_plans')
-    .select('id')
+    .select('id, message_limit, user_limit')
     .eq('plan_type', plan)
     .single();
 
@@ -118,8 +122,8 @@ export async function createCompany(req: AuthRequest, res: Response): Promise<vo
     await adminClient.from('subscriptions').insert({
       company_id: company.id,
       plan_id: planRow.id,
-      messages_limit: limits.messages,
-      users_limit: limits.users,
+      messages_limit: planRow.message_limit ?? limits.messages,
+      users_limit: planRow.user_limit ?? limits.users,
       status: 'trial',
     });
   }
@@ -403,6 +407,7 @@ export async function updateSubscriptionPlanAdmin(req: AuthRequest, res: Respons
     message_limit,
     user_limit,
     price_monthly,
+    price_yearly,
     currency,
     is_active,
     sync_subscriptions,
@@ -416,6 +421,12 @@ export async function updateSubscriptionPlanAdmin(req: AuthRequest, res: Respons
       message_limit: message_limit !== undefined ? Number(message_limit) : undefined,
       user_limit: user_limit !== undefined ? Number(user_limit) : undefined,
       price_monthly: price_monthly !== undefined ? Number(price_monthly) : undefined,
+      price_yearly:
+        price_yearly === null || price_yearly === ''
+          ? null
+          : price_yearly !== undefined
+            ? Number(price_yearly)
+            : undefined,
       currency: typeof currency === 'string' ? currency : undefined,
       is_active,
       sync_subscriptions: !!sync_subscriptions,
@@ -432,5 +443,51 @@ export async function updateSubscriptionPlanAdmin(req: AuthRequest, res: Respons
     res.json({ success: true, data });
   } catch (err) {
     res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'Paket güncellenemedi' });
+  }
+}
+
+export async function getAiConversationAddonsAdmin(req: AuthRequest, res: Response): Promise<void> {
+  if (isDemoSession(req)) {
+    res.json({ success: true, data: demoAiConversationAddons });
+    return;
+  }
+
+  try {
+    const data = await getAllAiConversationAddons();
+    res.json({ success: true, data });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'Ek paketler alınamadı' });
+  }
+}
+
+export async function updateAiConversationAddonAdmin(req: AuthRequest, res: Response): Promise<void> {
+  if (isDemoSession(req)) {
+    res.status(400).json({ success: false, error: 'Demo modda ek paket düzenlenemez' });
+    return;
+  }
+
+  const { name, conversation_count, price, currency, is_active, sort_order } = req.body;
+
+  try {
+    const data = await updateAiConversationAddon(String(req.params.id), {
+      name,
+      conversation_count: conversation_count !== undefined ? Number(conversation_count) : undefined,
+      price: price !== undefined ? Number(price) : undefined,
+      currency: typeof currency === 'string' ? currency : undefined,
+      is_active,
+      sort_order: sort_order !== undefined ? Number(sort_order) : undefined,
+    });
+
+    await logActivity({
+      userId: req.userId,
+      action: 'ai_addon_updated',
+      entityType: 'ai_conversation_addon',
+      entityId: data.id,
+      metadata: { name: data.name },
+    });
+
+    res.json({ success: true, data });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'Ek paket güncellenemedi' });
   }
 }

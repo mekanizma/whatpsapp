@@ -7,9 +7,11 @@ import { useTranslation } from 'react-i18next';
 import { Card, CardContent, Badge } from '@/components/ui';
 import {
   formatPlanPrice,
+  resolvePlanDisplayPrice,
   resolvePlanFeatures,
   resolvePlanTagline,
 } from '@/lib/plan-format';
+import type { BillingPeriod } from '@/lib/plan-format';
 import { cn } from '@/lib/utils';
 
 export interface PlanCardData {
@@ -21,6 +23,7 @@ export interface PlanCardData {
   message_limit: number;
   user_limit: number;
   price_monthly: number;
+  price_yearly?: number | null;
   currency?: string | null;
   is_active?: boolean;
 }
@@ -28,16 +31,25 @@ export interface PlanCardData {
 interface PlanCardProps {
   plan: PlanCardData;
   locale: string;
+  billingPeriod?: BillingPeriod;
   highlighted?: boolean;
   embedded?: boolean;
   className?: string;
 }
 
-export function PlanCard({ plan, locale, highlighted, embedded, className }: PlanCardProps) {
+export function PlanCard({
+  plan,
+  locale,
+  billingPeriod = 'monthly',
+  highlighted,
+  embedded,
+  className,
+}: PlanCardProps) {
   const { t } = useTranslation();
   const features = resolvePlanFeatures(plan.features, plan.description);
   const tagline = resolvePlanTagline(plan.description, plan.features);
   const planLabel = t(`common.plans.${plan.plan_type}`, { defaultValue: plan.plan_type });
+  const { price, period, fallbackFromYearly } = resolvePlanDisplayPrice(plan, billingPeriod);
 
   const messageLabel =
     plan.message_limit >= 999999
@@ -63,9 +75,21 @@ export function PlanCard({ plan, locale, highlighted, embedded, className }: Pla
 
         <div className="mb-5 border-b border-slate-100 pb-5">
           <p className="text-3xl font-bold tracking-tight text-slate-900 sm:text-[2rem]">
-            {formatPlanPrice(plan.price_monthly, plan.currency || 'TRY', locale)}
+            {formatPlanPrice(price, plan.currency || 'TRY', locale)}
           </p>
-          <p className="mt-0.5 text-sm text-slate-500">{t('subscription.perMonth')}</p>
+          <p className="mt-0.5 text-sm text-slate-500">
+            {period === 'yearly' ? t('subscription.perYear') : t('subscription.perMonth')}
+          </p>
+          {period === 'yearly' && price > 0 && (
+            <p className="mt-1 text-xs text-slate-400">
+              {t('subscription.yearlyMonthlyEquivalent', {
+                amount: formatPlanPrice(price / 12, plan.currency || 'TRY', locale),
+              })}
+            </p>
+          )}
+          {fallbackFromYearly && (
+            <p className="mt-2 text-xs text-amber-700">{t('subscription.yearlyNotAvailable')}</p>
+          )}
         </div>
 
         {features.length > 0 && (
@@ -86,7 +110,7 @@ export function PlanCard({ plan, locale, highlighted, embedded, className }: Pla
           )}
         >
           <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-            {t('subscription.planLimits')}
+            {t('subscription.aiConversationsPerMonth')}
           </p>
           <ul className="space-y-2 text-sm text-slate-700">
             <li className="flex items-center gap-2">

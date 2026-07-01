@@ -9,6 +9,7 @@ import { buildTransferTicketSubject } from '../ai/transfer.service';
 import { hasActiveTransferTicket } from '../ai/ai-quota.service';
 import { logActivity } from '../services/log.service';
 import { createTicketAndNotify } from '../services/ticket-notification.service';
+import { recordUnknownQuestion } from '../services/unknown-questions.service';
 
 const DEBOUNCE_MS = 3000;
 const TRANSFER_REPLY_COOLDOWN_MS = 60_000;
@@ -244,6 +245,21 @@ export async function processInboundMessage(
       sender_type: 'ai',
       status: messageStatus,
     });
+
+    if (aiResponse.knowledgeMiss) {
+      recordUnknownQuestion({
+        companyId,
+        customerPhone: phone,
+        customerName,
+        question: trimmed,
+        aiResponse: replyMessage,
+      }).catch((err) => {
+        console.error(
+          '[WhatsApp] Bilinmeyen soru kaydı hatası:',
+          err instanceof Error ? err.message : err
+        );
+      });
+    }
 
     await logActivity({
       companyId,

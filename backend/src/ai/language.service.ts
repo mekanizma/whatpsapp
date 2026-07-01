@@ -160,7 +160,7 @@ const MESSAGES: Record<MessageKey, Record<ConversationLang, string>> = {
     es: 'Le conecto con nuestro representante de soporte.',
   },
   quota_exceeded: {
-    tr: 'Mesaj limitinize ulaşıldı. Lütfen yöneticinizle iletişime geçin.',
+    tr: 'AI görüşme limitinize ulaşıldı. Lütfen yöneticinizle iletişime geçin.',
     en: 'Message limit reached. Please contact your administrator.',
     de: 'Nachrichtenlimit erreicht. Bitte kontaktieren Sie Ihren Administrator.',
     ar: 'تم الوصول إلى حد الرسائل. يرجى التواصل مع المسؤول.',

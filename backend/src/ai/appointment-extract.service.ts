@@ -11,6 +11,8 @@ import {
   APPOINTMENT_MARKER,
   buildAppointmentConfirmationMessage,
   finalizeCustomerFacingMessage,
+  buildConflictMessageWithAlternatives,
+  hasConflict,
 } from '../services/appointment.service';
 import { Appointment } from '../types';
 import {
@@ -19,13 +21,17 @@ import {
   parseCollectedFields,
   HistoryMsg,
 } from './appointment-collect.service';
-import { extractOfferedSlotFromHistory, preferHistorySlot } from './appointment-slot.service';
+import { extractSlotForConfirmation, preferHistorySlot, extractNumberedAlternative } from './appointment-slot.service';
 import { ConversationLang, detectConversationLanguage } from './language.service';
 
 const CONFIRM_RE = /^(evet|onayl?[iıİI]yorum|onaylıyorum|onayliyorum|onay|tamam|uygun|olur|kabul|ok|yes)\b/iu;
 
 export function isAppointmentConfirmation(message: string): boolean {
   return CONFIRM_RE.test(message.trim());
+}
+
+function isAlternativeSlotSelection(history: HistoryMsg[], latestMessage: string): boolean {
+  return /^\s*[123]\s*$/.test(latestMessage.trim()) && !!extractNumberedAlternative(history, latestMessage);
 }
 
 export async function extractAppointmentFromConversation(
@@ -105,23 +111,48 @@ async function persistAppointment(
     ends_at: string;
   },
   lang: ConversationLang = 'tr'
-): Promise<{ message: string; appointment: Appointment }> {
-  const appointment = await createAppointment(companyId, {
-    customer_phone: merged.customer_phone,
-    customer_name: merged.customer_name,
-    title: merged.title,
-    notes: merged.notes || null,
-    preferred_doctor: merged.doctor_name || merged.preferred_doctor || null,
-    starts_at: new Date(merged.starts_at).toISOString(),
-    ends_at: new Date(merged.ends_at).toISOString(),
-    status: 'confirmed',
-    source: 'ai',
-  });
+): Promise<{ message: string; appointment: Appointment | null }> {
+  const conflict = await hasConflict(companyId, merged.starts_at, merged.ends_at);
+  if (conflict) {
+    const altMsg = await buildConflictMessageWithAlternatives(
+      companyId,
+      merged.starts_at,
+      merged.ends_at,
+      lang
+    );
+    return { message: altMsg, appointment: null };
+  }
 
-  return {
-    message: buildAppointmentConfirmationMessage(appointment, lang),
-    appointment,
-  };
+  try {
+    const appointment = await createAppointment(companyId, {
+      customer_phone: merged.customer_phone,
+      customer_name: merged.customer_name,
+      title: merged.title,
+      notes: merged.notes || null,
+      preferred_doctor: merged.doctor_name || merged.preferred_doctor || null,
+      starts_at: new Date(merged.starts_at).toISOString(),
+      ends_at: new Date(merged.ends_at).toISOString(),
+      status: 'confirmed',
+      source: 'ai',
+    });
+
+    return {
+      message: buildAppointmentConfirmationMessage(appointment, lang),
+      appointment,
+    };
+  } catch (e) {
+    const errMsg = (e as Error).message;
+    if (/başka bir randevu|çakışma/i.test(errMsg)) {
+      const altMsg = await buildConflictMessageWithAlternatives(
+        companyId,
+        merged.starts_at,
+        merged.ends_at,
+        lang
+      );
+      return { message: altMsg, appointment: null };
+    }
+    return { message: `Randevu kaydedilemedi: ${errMsg}`, appointment: null };
+  }
 }
 
 /** Onay mesajında konuşmadaki teklif saatini kullanarak kaydet */
@@ -131,7 +162,9 @@ export async function bookFromConfirmation(
   history: HistoryMsg[],
   latestMessage: string
 ): Promise<{ message: string; appointment: Appointment | null } | null> {
-  if (!isAppointmentConfirmation(latestMessage)) return null;
+  if (!isAppointmentConfirmation(latestMessage) && !isAlternativeSlotSelection(history, latestMessage)) {
+    return null;
+  }
 
   const lang = detectConversationLanguage(latestMessage, history);
   const collected = parseCollectedFields(history, latestMessage);
@@ -140,8 +173,16 @@ export async function bookFromConfirmation(
     return { message: gate.message!, appointment: null };
   }
 
-  const offered = extractOfferedSlotFromHistory(history);
-  if (!offered) return null;
+  const offered = extractSlotForConfirmation(history, latestMessage);
+  if (!offered) {
+    return {
+      message:
+        lang === 'tr'
+          ? 'Randevu saatini anlayamadım. Lütfen tarih ve saati tekrar yazın (ör. "15 temmuz saat 14:00" veya "yarın saat 10").'
+          : 'I could not understand the appointment time. Please write the date and time again.',
+      appointment: null,
+    };
+  }
 
   const merged = mergeCollectedWithAction(collected, {
     starts_at: offered.starts_at,
@@ -178,7 +219,7 @@ export async function tryStructuredAppointmentBooking(
     return { message: gate.message!, appointment: null };
   }
 
-  const slot = preferHistorySlot(history, extracted);
+  const slot = preferHistorySlot(history, extracted, latestMessage);
   if (!slot) return fromHistory;
 
   const merged = mergeCollectedWithAction(gate.collected, { ...extracted, ...slot });
@@ -224,10 +265,12 @@ export async function handleAppointmentBooking(
   lang?: ConversationLang
 ): Promise<{ message: string; appointment: Appointment | null }> {
   const conversationLang = lang ?? detectConversationLanguage(latestMessage, history);
+  const confirmed =
+    isAppointmentConfirmation(latestMessage) || isAlternativeSlotSelection(history, latestMessage);
 
-  if (isAppointmentConfirmation(latestMessage)) {
-    const confirmed = await bookFromConfirmation(companyId, customerPhone, history, latestMessage);
-    if (confirmed?.appointment) return wrapBookingReply(confirmed, rawResponse, conversationLang);
+  if (confirmed) {
+    const booking = await bookFromConfirmation(companyId, customerPhone, history, latestMessage);
+    if (booking) return wrapBookingReply(booking, rawResponse, conversationLang);
   }
 
   const action = rawResponse.includes(APPOINTMENT_MARKER)
@@ -244,7 +287,7 @@ export async function handleAppointmentBooking(
   const gate = blockBookingIfIncomplete(history, latestMessage, action, conversationLang);
 
   const isBookingAttempt =
-    isAppointmentConfirmation(latestMessage) ||
+    confirmed ||
     rawResponse.includes(APPOINTMENT_MARKER) ||
     /randevu(nuz)?\s+.*(kayded|oluştur|olustur)/i.test(rawResponse);
 
@@ -259,11 +302,13 @@ export async function handleAppointmentBooking(
     rawResponse,
     gate.collected,
     history,
-    conversationLang
+    conversationLang,
+    latestMessage,
+    confirmed
   );
   if (fromMarker.appointment) return wrapBookingReply(fromMarker, rawResponse, conversationLang);
 
-  if (rawResponse.includes(APPOINTMENT_MARKER) || isAppointmentConfirmation(latestMessage)) {
+  if (rawResponse.includes(APPOINTMENT_MARKER) || confirmed) {
     const structured = await tryStructuredAppointmentBooking(
       companyId,
       customerPhone,
@@ -271,6 +316,11 @@ export async function handleAppointmentBooking(
       latestMessage
     );
     if (structured) return wrapBookingReply(structured, rawResponse, conversationLang);
+  }
+
+  // Marker var ama onay yoksa teyit mesajı öncelikli
+  if (fromMarker.message && rawResponse.includes(APPOINTMENT_MARKER) && !confirmed) {
+    return wrapBookingReply(fromMarker, rawResponse, conversationLang);
   }
 
   return wrapBookingReply(fromMarker, rawResponse, conversationLang);

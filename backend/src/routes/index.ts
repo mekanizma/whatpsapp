@@ -18,6 +18,7 @@ import * as staffCtrl from '../controllers/staff.controller';
 import * as subscriptionCtrl from '../controllers/subscription.controller';
 import * as appointmentsCtrl from '../controllers/appointments.controller';
 import * as notificationsCtrl from '../controllers/notifications.controller';
+import * as unknownQuestionsCtrl from '../controllers/unknown-questions.controller';
 import { knowledgeFileUpload } from '../middleware/upload.middleware';
 
 const router = Router();
@@ -49,6 +50,8 @@ router.post('/admin/prompts-cleanup', authenticate, requireRole('super_admin'), 
 router.post('/admin/prompts-seed', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.seedPrompts));
 router.get('/admin/plans', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.getSubscriptionPlans));
 router.put('/admin/plans/:id', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.updateSubscriptionPlanAdmin));
+router.get('/admin/addons', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.getAiConversationAddonsAdmin));
+router.put('/admin/addons/:id', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.updateAiConversationAddonAdmin));
 
 // Company
 router.get('/companies/:id', authenticate, companyCtrl.getCompany);
@@ -95,6 +98,16 @@ router.get('/messages/:phone', authenticate, requireCompany, messagesCtrl.getCon
 router.patch('/messages/:phone/customer-name', authenticate, requireRole('company_admin'), requireCompany, messagesCtrl.updateCustomerName);
 router.post('/messages/:phone/reply', authenticate, requireCompany, messagesCtrl.replyToConversation);
 
+// Unknown questions (Business / Enterprise)
+router.get('/unknown-questions', authenticate, requireCompany, asyncHandler(unknownQuestionsCtrl.getUnknownQuestions));
+router.patch(
+  '/unknown-questions/:id',
+  authenticate,
+  requireRole('company_admin'),
+  requireCompany,
+  asyncHandler(unknownQuestionsCtrl.patchUnknownQuestion)
+);
+
 // Tickets
 router.get('/tickets', authenticate, requireCompany, ticketsCtrl.getTickets);
 router.get('/tickets/active/:phone', authenticate, requireCompany, ticketsCtrl.getActiveTicketByPhone);
@@ -123,5 +136,7 @@ router.delete('/appointments/:id', authenticate, requireRole('company_admin'), r
 router.get('/subscriptions/current', authenticate, requireCompany, subscriptionCtrl.getCurrentSubscription);
 router.get('/subscriptions/usage', authenticate, requireCompany, subscriptionCtrl.getUsage);
 router.get('/subscriptions/plans', authenticate, subscriptionCtrl.getPlans);
+router.get('/subscriptions/addons', authenticate, requireCompany, subscriptionCtrl.getConversationAddons);
+router.post('/subscriptions/addons/:id/purchase', authenticate, requireRole('company_admin'), requireCompany, asyncHandler(subscriptionCtrl.purchaseConversationAddon));
 
 export default router;

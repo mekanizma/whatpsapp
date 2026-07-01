@@ -13,6 +13,7 @@ export interface SubscriptionPlanRow {
   message_limit: number;
   user_limit: number;
   price_monthly: number;
+  price_yearly: number | null;
   currency: string;
   is_active: boolean;
   created_at: string;
@@ -27,6 +28,7 @@ export interface UpdateSubscriptionPlanInput {
   message_limit?: number;
   user_limit?: number;
   price_monthly?: number;
+  price_yearly?: number | null;
   currency?: string;
   is_active?: boolean;
   sync_subscriptions?: boolean;
@@ -49,6 +51,10 @@ function mapPlanRow(row: Record<string, unknown>): SubscriptionPlanRow {
     message_limit: Number(row.message_limit),
     user_limit: Number(row.user_limit),
     price_monthly: Number(row.price_monthly),
+    price_yearly:
+      row.price_yearly != null && row.price_yearly !== ''
+        ? Number(row.price_yearly)
+        : null,
     currency: typeof row.currency === 'string' ? row.currency.toUpperCase() : 'TRY',
     is_active: Boolean(row.is_active),
     created_at: String(row.created_at),
@@ -84,7 +90,7 @@ export async function updateSubscriptionPlan(
   }
   if (updates.message_limit !== undefined) {
     if (!Number.isFinite(updates.message_limit) || updates.message_limit < 1) {
-      throw new Error('Mesaj limiti en az 1 olmalıdır');
+      throw new Error('AI görüşme limiti en az 1 olmalıdır');
     }
     payload.message_limit = Math.floor(updates.message_limit);
   }
@@ -96,9 +102,18 @@ export async function updateSubscriptionPlan(
   }
   if (updates.price_monthly !== undefined) {
     if (!Number.isFinite(updates.price_monthly) || updates.price_monthly < 0) {
-      throw new Error('Fiyat 0 veya daha büyük olmalıdır');
+      throw new Error('Aylık fiyat 0 veya daha büyük olmalıdır');
     }
     payload.price_monthly = updates.price_monthly;
+  }
+  if (updates.price_yearly !== undefined) {
+    if (updates.price_yearly === null) {
+      payload.price_yearly = null;
+    } else if (!Number.isFinite(updates.price_yearly) || updates.price_yearly < 0) {
+      throw new Error('Yıllık fiyat 0 veya daha büyük olmalıdır');
+    } else {
+      payload.price_yearly = updates.price_yearly;
+    }
   }
   if (updates.currency !== undefined) {
     const currency = updates.currency.trim().toUpperCase();

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   parseSlotFromTurkishText,
   extractOfferedSlotFromHistory,
+  extractSlotFromConversation,
   formatSlotTurkish,
   preferHistorySlot,
   slotsRoughlyMatch,
@@ -60,7 +61,7 @@ describe('appointment-slot.service', () => {
       starts_at: '2026-07-01T10:00:00.000Z', // 13:00 TR
       ends_at: '2026-07-01T10:30:00.000Z',
     };
-    const slot = preferHistorySlot(history, wrongLlm);
+    const slot = preferHistorySlot(history, wrongLlm, '', REF);
     assert.ok(slot);
     assert.equal(formatSlotTurkish(slot!.starts_at, slot!.ends_at), '01.07.2026 12:30-13:00');
     assert.equal(slotsRoughlyMatch(slot!.starts_at, wrongLlm.starts_at), false);
@@ -70,5 +71,30 @@ describe('appointment-slot.service', () => {
     const slot = parseSlotFromTurkishText('01.07.2026 saat 09:00 müsait', REF);
     assert.ok(slot);
     assert.match(formatSlotTurkish(slot!.starts_at, slot!.ends_at), /01\.07\.2026 09:00/);
+  });
+
+  it('15 temmuz saat 3 formatını parse eder', () => {
+    const slot = parseSlotFromTurkishText('15 temmuz saat 3 için randevu', REF);
+    assert.ok(slot);
+    assert.match(formatSlotTurkish(slot!.starts_at, slot!.ends_at), /15\.07\.2026 15:00/);
+  });
+
+  it('temmuz 15 14:30 formatını parse eder', () => {
+    const slot = parseSlotFromTurkishText('temmuz 15 14:30 uygun mu', REF);
+    assert.ok(slot);
+    assert.match(formatSlotTurkish(slot!.starts_at, slot!.ends_at), /15\.07\.2026 14:30/);
+  });
+
+  it('pazartesi saat 10 ifadesini parse eder', () => {
+    const slot = parseSlotFromTurkishText('pazartesi saat 10', REF);
+    assert.ok(slot);
+    assert.match(formatSlotTurkish(slot!.starts_at, slot!.ends_at), /06\.07\.2026 10:00/);
+  });
+
+  it('müşteri mesajından doğrudan slot çıkarır', () => {
+    const history = [{ sender_type: 'ai', message: 'Hangi gün uygun?' }];
+    const slot = extractSlotFromConversation(history, 'yarın saat 15:00', REF);
+    assert.ok(slot);
+    assert.match(formatSlotTurkish(slot!.starts_at, slot!.ends_at), /01\.07\.2026 15:00/);
   });
 });
