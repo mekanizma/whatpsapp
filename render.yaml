@@ -54,3 +54,18 @@ services:
         sync: false
       - key: VITE_SUPABASE_ANON_KEY
         sync: false
+
+  # Render 15 dk inaktivite sonrası uyutur; cron ile servisi uyanık tutar
+  - type: cron
+    name: whatsapp-ai-keepalive
+    runtime: node
+    region: frankfurt
+    plan: starter
+    schedule: "*/10 * * * *"
+    buildCommand: "true"
+    startCommand: 'curl -fsS "${KEEPALIVE_URL}/health" || exit 0'
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: KEEPALIVE_URL
+        sync: false

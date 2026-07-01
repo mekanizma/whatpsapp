@@ -30,6 +30,7 @@ interface WaStatus {
   connection_type?: string | null;
   supports_qr?: boolean;
   webhook_url?: string | null;
+  reconnecting?: boolean;
 }
 
 interface WaConfig {
@@ -78,7 +79,8 @@ export function WhatsAppPage() {
     }
   }, [config]);
 
-  const isConnected = status?.is_configured || status?.status === 'connected';
+  const isReconnecting = status?.status === 'reconnecting' || status?.reconnecting === true;
+  const isConnected = status?.status === 'connected';
   const useCloudApi = status?.supports_qr === false;
   const webhookUrl = status?.webhook_url || `${window.location.origin}/webhook/whatsapp`;
   const webhookSteps = t('whatsapp.webhookSteps', { returnObjects: true }) as string[];
@@ -160,6 +162,10 @@ export function WhatsAppPage() {
           <Badge variant="success" className="self-start px-3 py-1.5 text-sm">
             <Wifi className="mr-1 h-4 w-4" /> {t('whatsapp.connected')}
           </Badge>
+        ) : isReconnecting ? (
+          <Badge variant="warning" className="self-start px-3 py-1.5 text-sm">
+            <Wifi className="mr-1 h-4 w-4 animate-pulse" /> {t('whatsapp.reconnecting')}
+          </Badge>
         ) : (
           <Badge variant="danger" className="self-start px-3 py-1.5 text-sm">
             <WifiOff className="mr-1 h-4 w-4" /> {t('whatsapp.disconnected')}
@@ -167,7 +173,14 @@ export function WhatsAppPage() {
         )}
       </div>
 
-      {isConnected ? (
+      {isReconnecting ? (
+        <Card>
+          <CardContent className="p-6 text-center sm:text-left">
+            <p className="font-medium text-amber-800">{t('whatsapp.reconnectingTitle')}</p>
+            <p className="mt-2 text-sm text-gray-600">{t('whatsapp.reconnectingDesc')}</p>
+          </CardContent>
+        </Card>
+      ) : isConnected ? (
         <Card>
           <CardContent className="p-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">

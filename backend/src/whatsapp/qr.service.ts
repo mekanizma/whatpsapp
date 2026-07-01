@@ -9,6 +9,7 @@ import {
   cancelBaileysSession,
   disconnectBaileys,
   getBaileysConnectionStatus as getLocalBaileysStatus,
+  isBaileysReconnecting,
   sendBaileysMessage,
   restoreBaileysSessions,
   type BaileysSession,
@@ -80,4 +81,5 @@ export {
   disconnectBaileys,
   sendBaileysMessage,
   restoreBaileysSessions,
+  isBaileysReconnecting,
 };

@@ -12,6 +12,7 @@ import {
   getQrSessionStatus,
   cancelQrSession,
   getBaileysConnectionStatus,
+  isBaileysReconnecting,
   disconnectBaileys,
 } from '../whatsapp/qr.service';
 import { logActivity } from '../services/log.service';
@@ -100,6 +101,7 @@ export async function sendTest(req: AuthRequest, res: Response): Promise<void> {
 export async function getWhatsAppStatus(req: AuthRequest, res: Response): Promise<void> {
   const companyId = req.companyId!;
   const baileys = await getBaileysConnectionStatus(companyId);
+  const reconnecting = isBaileysReconnecting(companyId);
 
   if (baileys.connected) {
     res.json({
@@ -110,6 +112,21 @@ export async function getWhatsAppStatus(req: AuthRequest, res: Response): Promis
         is_configured: true,
         connection_type: 'qr',
         display_name: baileys.displayName,
+        reconnecting: false,
+      },
+    });
+    return;
+  }
+
+  if (reconnecting) {
+    res.json({
+      success: true,
+      data: {
+        status: 'reconnecting',
+        phone_number: null,
+        is_configured: true,
+        connection_type: 'qr',
+        reconnecting: true,
       },
     });
     return;

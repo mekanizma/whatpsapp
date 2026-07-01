@@ -49,9 +49,12 @@ interface CompanyConnection {
 }
 
 const SESSION_TTL_MS = 3 * 60 * 1000;
+const RECONNECT_BASE_MS = 3_000;
+const RECONNECT_MAX_MS = 60_000;
 const sessions = new Map<string, BaileysSession>();
 const connections = new Map<string, CompanyConnection>();
 const tokenToCompany = new Map<string, string>();
+const reconnectAttempts = new Map<string, number>();
 
 const logger = pino({ level: 'silent' });
 
@@ -74,6 +77,10 @@ async function qrToDataUrl(qr: string): Promise<string> {
     errorCorrectionLevel: 'M',
     color: { dark: '#111B21', light: '#FFFFFF' },
   });
+}
+
+export function isBaileysReconnecting(companyId: string): boolean {
+  return reconnectAttempts.has(companyId);
 }
 
 export function getBaileysConnectionStatus(companyId: string) {
@@ -186,7 +193,45 @@ function waitForQr(sessionToken: string, timeoutMs: number): Promise<string> {
   });
 }
 
+function getReconnectDelay(companyId: string): number {
+  const attempt = reconnectAttempts.get(companyId) ?? 0;
+  return Math.min(RECONNECT_BASE_MS * 2 ** attempt, RECONNECT_MAX_MS);
+}
+
+async function markWhatsAppDisconnected(companyId: string): Promise<void> {
+  if (config.demoMode) return;
+
+  await adminClient
+    .from('whatsapp_configs')
+    .update({ status: 'disconnected' })
+    .eq('company_id', companyId)
+    .like('business_account_id', 'baileys:%');
+}
+
+async function scheduleReconnect(companyId: string, session: BaileysSession): Promise<void> {
+  const attempt = (reconnectAttempts.get(companyId) ?? 0) + 1;
+  reconnectAttempts.set(companyId, attempt);
+  const delay = getReconnectDelay(companyId);
+
+  console.log(`[Baileys] Yeniden bağlanma planlandı: ${companyId} (${attempt}. deneme, ${delay}ms)`);
+
+  setTimeout(() => {
+    connectBaileysSocket(companyId, session).catch((err) => {
+      console.error(`[Baileys] Yeniden bağlanma hatası (${companyId}):`, err);
+    });
+  }, delay);
+}
+
 async function connectBaileysSocket(companyId: string, session: BaileysSession): Promise<void> {
+  const existing = connections.get(companyId);
+  if (existing?.socket) {
+    try {
+      existing.socket.end(undefined);
+    } catch {
+      /* önceki socket zaten kapanmış olabilir */
+    }
+  }
+
   const sessionDir = getSessionDir(companyId);
   const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
   const { version } = await fetchLatestBaileysVersion();
@@ -227,6 +272,8 @@ async function connectBaileysSocket(companyId: string, session: BaileysSession):
     if (connection === 'open') {
       session.status = 'connected';
       session.connected_at = new Date().toISOString();
+      reconnectAttempts.delete(companyId);
+      connections.set(companyId, { socket, session, isConnecting: false });
 
       const user = socket.user;
       if (user) {
@@ -261,21 +308,48 @@ async function connectBaileysSocket(companyId: string, session: BaileysSession):
 
     if (connection === 'close') {
       const statusCode = (lastDisconnect?.error as { output?: { statusCode?: number } })?.output?.statusCode;
+      const wasConnected = session.status === 'connected';
       const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
 
-      console.log(`[Baileys] Bağlantı kapandı: ${companyId}, kod: ${statusCode}`);
+      console.log(`[Baileys] Bağlantı kapandı: ${companyId}, kod: ${statusCode}, bağlıydı: ${wasConnected}`);
+
+      connections.delete(companyId);
 
       if (statusCode === DisconnectReason.loggedOut) {
         session.status = 'expired';
-        connections.delete(companyId);
-      } else if (shouldReconnect && session.status !== 'connected') {
-        // QR süresi dolmadan yeniden dene
-        if (new Date(session.expires_at) > new Date()) {
-          setTimeout(() => connectBaileysSocket(companyId, session), 3000);
-        } else {
-          session.status = 'expired';
+        reconnectAttempts.delete(companyId);
+
+        const sessionDir = path.join(config.sessionsDir, companyId);
+        if (fs.existsSync(sessionDir)) {
+          fs.rmSync(sessionDir, { recursive: true, force: true });
         }
+
+        if (!config.demoMode) {
+          await adminClient
+            .from('whatsapp_configs')
+            .update({
+              status: 'disconnected',
+              phone_number: null,
+              business_account_id: null,
+            })
+            .eq('company_id', companyId);
+        }
+        return;
       }
+
+      if (!shouldReconnect) return;
+
+      // QR aşamasında süre dolmuşsa yeniden bağlanma
+      if (!wasConnected && new Date(session.expires_at) <= new Date()) {
+        session.status = 'expired';
+        return;
+      }
+
+      if (wasConnected) {
+        await markWhatsAppDisconnected(companyId);
+      }
+
+      await scheduleReconnect(companyId, session);
     }
 
     if (receivedPendingNotifications) {
@@ -355,6 +429,8 @@ export async function cancelBaileysSession(companyId: string, sessionToken: stri
 }
 
 export async function disconnectBaileys(companyId: string): Promise<void> {
+  reconnectAttempts.delete(companyId);
+
   const conn = connections.get(companyId);
   if (conn?.socket) {
     try {
@@ -444,30 +520,77 @@ export async function sendBaileysMessage(
   }
 }
 
-// Sunucu başladığında mevcut oturumları yükle
+function hasStoredCredentials(companyId: string): boolean {
+  return fs.existsSync(path.join(config.sessionsDir, companyId, 'creds.json'));
+}
+
+function createRestoredSession(companyId: string, phoneNumber?: string | null): BaileysSession {
+  const session: BaileysSession = {
+    id: crypto.randomUUID(),
+    company_id: companyId,
+    session_token: generateToken(),
+    qr_data_url: null,
+    status: 'connected',
+    phone_number: phoneNumber ?? null,
+    display_name: null,
+    expires_at: new Date(Date.now() + SESSION_TTL_MS).toISOString(),
+    connected_at: new Date().toISOString(),
+    created_at: new Date().toISOString(),
+  };
+  sessions.set(session.session_token, session);
+  tokenToCompany.set(session.session_token, companyId);
+  return session;
+}
+
+async function restoreCompanySession(
+  companyId: string,
+  phoneNumber?: string | null
+): Promise<void> {
+  if (!hasStoredCredentials(companyId)) {
+    console.warn(`[Baileys] Oturum dosyası yok, atlanıyor: ${companyId}`);
+    return;
+  }
+
+  console.log(`[Baileys] Oturum geri yükleniyor: ${companyId}`);
+  const session = createRestoredSession(companyId, phoneNumber);
+  await connectBaileysSocket(companyId, session);
+}
+
+// Sunucu başladığında mevcut oturumları yükle (Render restart / spin-up sonrası)
 export async function restoreBaileysSessions(): Promise<void> {
   const sessionsDir = config.sessionsDir;
-  if (!fs.existsSync(sessionsDir)) return;
+  console.log(`[Baileys] Oturum dizini: ${sessionsDir} (Render disk: ${config.isRender})`);
 
-  const companyDirs = fs.readdirSync(sessionsDir);
-  for (const companyId of companyDirs) {
-    const credsPath = path.join(sessionsDir, companyId, 'creds.json');
-    if (fs.existsSync(credsPath)) {
-      console.log(`[Baileys] Oturum geri yükleniyor: ${companyId}`);
-      const fakeSession: BaileysSession = {
-        id: crypto.randomUUID(),
-        company_id: companyId,
-        session_token: generateToken(),
-        qr_data_url: null,
-        status: 'connected',
-        phone_number: null,
-        display_name: null,
-        expires_at: new Date(Date.now() + SESSION_TTL_MS).toISOString(),
-        connected_at: new Date().toISOString(),
-        created_at: new Date().toISOString(),
-      };
-      sessions.set(fakeSession.session_token, fakeSession);
-      connectBaileysSocket(companyId, fakeSession).catch(console.error);
+  if (!fs.existsSync(sessionsDir)) {
+    fs.mkdirSync(sessionsDir, { recursive: true });
+  }
+
+  const restored = new Set<string>();
+
+  if (!config.demoMode) {
+    const { data: configs } = await adminClient
+      .from('whatsapp_configs')
+      .select('company_id, phone_number, business_account_id, status')
+      .like('business_account_id', 'baileys:%');
+
+    for (const row of configs || []) {
+      if (!row.company_id) continue;
+      restored.add(row.company_id);
+      try {
+        await restoreCompanySession(row.company_id, row.phone_number);
+      } catch (err) {
+        console.error(`[Baileys] DB oturum kurtarma hatası (${row.company_id}):`, err);
+      }
+    }
+  }
+
+  const companyDirs = fs.readdirSync(sessionsDir, { withFileTypes: true });
+  for (const entry of companyDirs) {
+    if (!entry.isDirectory() || restored.has(entry.name)) continue;
+    try {
+      await restoreCompanySession(entry.name);
+    } catch (err) {
+      console.error(`[Baileys] Disk oturum kurtarma hatası (${entry.name}):`, err);
     }
   }
 }
