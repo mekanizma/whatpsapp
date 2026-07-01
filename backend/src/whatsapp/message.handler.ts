@@ -177,6 +177,11 @@ export async function processInboundMessage(
 
     if (whatsappMessageId) markProcessedWaId(companyId, whatsappMessageId);
 
+    if (await hasActiveTransferTicket(companyId, phone)) {
+      console.log(`[WhatsApp] Aktif ticket — AI yanıt atlandı → ${phone}`);
+      return '';
+    }
+
     let aiResponse;
     try {
       aiResponse = await generateAIResponse(companyId, trimmed, phone, customerName);
