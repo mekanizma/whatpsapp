@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, UserX, Eye, EyeOff } from 'lucide-react';
 import { api } from '@/services/api';
+import { getErrorMessage } from '@/lib/errors';
 import { Button, Input, Label, Card, CardContent, CardHeader, CardTitle, Spinner, Badge } from '@/components/ui';
 import type { StaffMember } from '@/types';
 
@@ -114,7 +115,7 @@ export function StaffPage() {
               </Button>
               <Button variant="outline" onClick={() => setShowForm(false)}>{t('common.cancel')}</Button>
               {createMutation.isError && (
-                <p className="w-full text-sm text-rose-600">{(createMutation.error as Error).message}</p>
+                <p className="w-full text-sm text-rose-600">{getErrorMessage(createMutation.error)}</p>
               )}
             </div>
           </CardContent>

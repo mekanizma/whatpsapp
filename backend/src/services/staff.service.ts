@@ -2,7 +2,114 @@
  * Staff user provisioning — auth account + profile + staff record
  */
 
+import { AuthError } from '@supabase/supabase-js';
 import { adminClient } from '../database/supabase';
+
+function formatServiceError(err: unknown): string {
+  if (err instanceof AuthError) return err.message || 'Kimlik doğrulama hatası';
+  if (err instanceof Error && err.message) return err.message;
+  if (err && typeof err === 'object' && 'message' in err) {
+    const message = (err as { message?: unknown }).message;
+    if (typeof message === 'string' && message.trim()) return message;
+  }
+  return 'Personel oluşturulamadı';
+}
+
+async function findAuthUserByEmail(email: string) {
+  let page = 1;
+  const perPage = 200;
+
+  while (true) {
+    const { data, error } = await adminClient.auth.admin.listUsers({ page, perPage });
+    if (error) throw new Error(error.message || 'Kullanıcı listesi alınamadı');
+
+    const found = data.users.find((u) => u.email?.toLowerCase() === email);
+    if (found) return found;
+
+    if (data.users.length < perPage) break;
+    page += 1;
+  }
+
+  return null;
+}
+
+async function ensureStaffProfile(
+  userId: string,
+  companyId: string,
+  fullName: string
+): Promise<string> {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const { data: existing, error: fetchError } = await adminClient
+      .from('profiles')
+      .select('id')
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (fetchError) throw new Error(fetchError.message);
+
+    if (existing?.id) {
+      const { error: updateError } = await adminClient
+        .from('profiles')
+        .update({
+          company_id: companyId,
+          full_name: fullName,
+          role: 'staff',
+          is_active: true,
+        })
+        .eq('user_id', userId);
+
+      if (updateError) throw new Error(updateError.message);
+      return existing.id;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+
+  const { data: inserted, error: insertError } = await adminClient
+    .from('profiles')
+    .insert({
+      user_id: userId,
+      company_id: companyId,
+      full_name: fullName,
+      role: 'staff',
+      is_active: true,
+    })
+    .select('id')
+    .single();
+
+  if (insertError) throw new Error(insertError.message);
+  return inserted.id;
+}
+
+async function createAuthStaffUser(
+  email: string,
+  password: string,
+  fullName: string
+): Promise<string> {
+  const { data, error } = await adminClient.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: { full_name: fullName, role: 'staff' },
+  });
+
+  if (error) throw error;
+  return data.user.id;
+}
+
+async function updateAuthStaffUser(
+  userId: string,
+  password: string,
+  fullName: string
+): Promise<void> {
+  const { error } = await adminClient.auth.admin.updateUserById(userId, {
+    password,
+    email_confirm: true,
+    user_metadata: { full_name: fullName, role: 'staff' },
+  });
+
+  if (error) throw error;
+}
 
 export async function createStaffUser(
   companyId: string,
@@ -16,86 +123,89 @@ export async function createStaffUser(
   }
 
   const normalizedEmail = email.trim().toLowerCase();
+  const trimmedName = fullName.trim();
 
-  const { data: existingStaff } = await adminClient
+  const { data: existingStaff, error: staffLookupError } = await adminClient
     .from('staff')
-    .select('id')
+    .select('id, profile_id, email')
     .eq('company_id', companyId)
-    .eq('email', normalizedEmail)
+    .ilike('email', normalizedEmail)
     .maybeSingle();
 
-  if (existingStaff) {
+  if (staffLookupError) throw new Error(staffLookupError.message);
+
+  if (existingStaff?.profile_id) {
     throw new Error('Bu e-posta adresi zaten personel olarak kayıtlı');
   }
 
-  const { data: existingUsers } = await adminClient.auth.admin.listUsers();
-  const found = existingUsers?.users?.find((u) => u.email?.toLowerCase() === normalizedEmail);
+  const found = await findAuthUserByEmail(normalizedEmail);
+  let userId: string | null = null;
+  let createdNewAuthUser = false;
 
-  let userId: string;
-  if (found) {
-    const { data: existingProfile } = await adminClient
-      .from('profiles')
-      .select('role, company_id')
-      .eq('user_id', found.id)
-      .maybeSingle();
+  try {
+    if (found) {
+      const { data: existingProfile, error: profileLookupError } = await adminClient
+        .from('profiles')
+        .select('role, company_id')
+        .eq('user_id', found.id)
+        .maybeSingle();
 
-    if (existingProfile?.role && existingProfile.role !== 'staff') {
-      throw new Error('Bu e-posta adresi başka bir hesap türüne ait');
+      if (profileLookupError) throw new Error(profileLookupError.message);
+
+      if (existingProfile?.role && existingProfile.role !== 'staff') {
+        throw new Error('Bu e-posta adresi başka bir hesap türüne ait');
+      }
+      if (existingProfile?.company_id && existingProfile.company_id !== companyId) {
+        throw new Error('Bu e-posta adresi başka bir şirkete bağlı');
+      }
+
+      await updateAuthStaffUser(found.id, password, trimmedName);
+      userId = found.id;
+    } else {
+      userId = await createAuthStaffUser(normalizedEmail, password, trimmedName);
+      createdNewAuthUser = true;
     }
-    if (existingProfile?.company_id && existingProfile.company_id !== companyId) {
-      throw new Error('Bu e-posta adresi başka bir şirkete bağlı');
+
+    const profileId = await ensureStaffProfile(userId, companyId, trimmedName);
+
+    if (existingStaff) {
+      const { data: staff, error: staffUpdateError } = await adminClient
+        .from('staff')
+        .update({
+          profile_id: profileId,
+          name: trimmedName,
+          role: staffRole,
+          is_active: true,
+        })
+        .eq('id', existingStaff.id)
+        .eq('company_id', companyId)
+        .select()
+        .single();
+
+      if (staffUpdateError) throw new Error(staffUpdateError.message);
+      return staff;
     }
 
-    const { error: updateError } = await adminClient.auth.admin.updateUserById(found.id, {
-      password,
-      email_confirm: true,
-      user_metadata: { full_name: fullName, role: 'staff' },
-    });
-    if (updateError) throw new Error(updateError.message);
-    userId = found.id;
-  } else {
-    const { data, error } = await adminClient.auth.admin.createUser({
-      email: normalizedEmail,
-      password,
-      email_confirm: true,
-      user_metadata: { full_name: fullName, role: 'staff' },
-    });
-    if (error) throw new Error(error.message);
-    userId = data.user.id;
-  }
-
-  const { data: profile, error: profileError } = await adminClient
-    .from('profiles')
-    .upsert(
-      {
-        user_id: userId,
+    const { data: staff, error: staffError } = await adminClient
+      .from('staff')
+      .insert({
         company_id: companyId,
-        full_name: fullName,
-        role: 'staff',
-        is_active: true,
-      },
-      { onConflict: 'user_id' }
-    )
-    .select('id')
-    .single();
+        profile_id: profileId,
+        name: trimmedName,
+        email: normalizedEmail,
+        role: staffRole,
+      })
+      .select()
+      .single();
 
-  if (profileError) throw new Error(profileError.message);
-
-  const { data: staff, error: staffError } = await adminClient
-    .from('staff')
-    .insert({
-      company_id: companyId,
-      profile_id: profile.id,
-      name: fullName,
-      email: normalizedEmail,
-      role: staffRole,
-    })
-    .select()
-    .single();
-
-  if (staffError) throw new Error(staffError.message);
-
-  return staff;
+    if (staffError) throw new Error(staffError.message);
+    return staff;
+  } catch (err) {
+    if (createdNewAuthUser && userId) {
+      await adminClient.auth.admin.deleteUser(userId).catch(() => undefined);
+    }
+    throw new Error(formatServiceError(err));
+  }
 }
 
 export async function deleteStaffUser(staffId: string, companyId: string): Promise<void> {
@@ -128,3 +238,5 @@ export async function deleteStaffUser(staffId: string, companyId: string): Promi
     }
   }
 }
+
+export { formatServiceError };

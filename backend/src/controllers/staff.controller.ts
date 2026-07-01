@@ -7,7 +7,7 @@ import { config } from '../config';
 import { adminClient } from '../database/supabase';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { logActivity } from '../services/log.service';
-import { createStaffUser, deleteStaffUser } from '../services/staff.service';
+import { createStaffUser, deleteStaffUser, formatServiceError } from '../services/staff.service';
 
 export async function getStaff(req: AuthRequest, res: Response): Promise<void> {
   if (config.demoMode) {
@@ -61,8 +61,8 @@ export async function createStaff(req: AuthRequest, res: Response): Promise<void
 
     res.status(201).json({ success: true, data });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Personel oluşturulamadı';
-    res.status(400).json({ success: false, error: message });
+    console.error('createStaff failed:', err);
+    res.status(400).json({ success: false, error: formatServiceError(err) });
   }
 }
 
@@ -95,7 +95,7 @@ export async function deleteStaff(req: AuthRequest, res: Response): Promise<void
     await deleteStaffUser(String(req.params.id), req.companyId!);
     res.json({ success: true, message: 'Personel silindi' });
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Personel silinemedi';
-    res.status(400).json({ success: false, error: message });
+    console.error('deleteStaff failed:', err);
+    res.status(400).json({ success: false, error: formatServiceError(err) });
   }
 }

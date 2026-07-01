@@ -6,6 +6,16 @@ import { supabase } from './supabase';
 import { isDemoMode } from '@/lib/env';
 import type { ApiResponse } from '@/types';
 
+function extractApiError(data: Record<string, unknown>, status: number): string {
+  const err = data.error ?? data.message;
+  if (typeof err === 'string' && err.trim()) return err;
+  if (err && typeof err === 'object' && 'message' in err) {
+    const nested = (err as { message?: unknown }).message;
+    if (typeof nested === 'string' && nested.trim()) return nested;
+  }
+  return `İstek başarısız (${status})`;
+}
+
 const API_BASE = (() => {
   const raw = import.meta.env.VITE_API_URL || '/api/v1';
   if (raw.endsWith('/api/v1')) return raw;
@@ -62,7 +72,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   }
 
   if (!response.ok || !data.success) {
-    throw new Error(data.error || `İstek başarısız (${response.status})`);
+    throw new Error(extractApiError(data as unknown as Record<string, unknown>, response.status));
   }
 
   return data.data as T;
@@ -92,7 +102,7 @@ async function requestWithMeta<T>(
 
   const body = await response.json();
   if (!response.ok || !body.success) {
-    throw new Error(body.error || `İstek başarısız (${response.status})`);
+    throw new Error(extractApiError(body as Record<string, unknown>, response.status));
   }
 
   return { data: body.data as T, pagination: body.pagination };
@@ -136,7 +146,7 @@ export const api = {
     }
 
     if (!response.ok || !data.success) {
-      throw new Error(data.error || `Yükleme başarısız (${response.status})`);
+      throw new Error(extractApiError(data as unknown as Record<string, unknown>, response.status));
     }
 
     return data.data as T;

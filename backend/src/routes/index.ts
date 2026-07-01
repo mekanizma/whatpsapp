@@ -101,9 +101,9 @@ router.patch('/tickets/:id/assign', authenticate, requireRole('company_admin'), 
 
 // Staff
 router.get('/staff', authenticate, requireCompany, staffCtrl.getStaff);
-router.post('/staff', authenticate, requireRole('company_admin'), requireCompany, staffCtrl.createStaff);
-router.put('/staff/:id', authenticate, requireRole('company_admin'), requireCompany, staffCtrl.updateStaff);
-router.delete('/staff/:id', authenticate, requireRole('company_admin'), requireCompany, staffCtrl.deleteStaff);
+router.post('/staff', authenticate, requireRole('company_admin'), requireCompany, asyncHandler(staffCtrl.createStaff));
+router.put('/staff/:id', authenticate, requireRole('company_admin'), requireCompany, asyncHandler(staffCtrl.updateStaff));
+router.delete('/staff/:id', authenticate, requireRole('company_admin'), requireCompany, asyncHandler(staffCtrl.deleteStaff));
 
 // Appointments
 router.get('/appointments', authenticate, requireCompany, appointmentsCtrl.getAppointments);
