@@ -11,10 +11,13 @@ import { buildAdminPanelPrompt } from './admin-prompt-builder';
 import { detectConversationLanguage } from './language.service';
 import { logAIUsage } from './ai-quota.service';
 import { getAllActivePromptContentsForAI } from '../services/prompt.service';
-import { getAppointmentContextForAI } from '../services/appointment.service';
+import { getAppointmentContextForAI, finalizeCustomerFacingMessage, APPOINTMENT_MARKER } from '../services/appointment.service';
 import { preAIGate } from './ai-gate.service';
 import { stripTransferMarker } from './transfer.service';
 import { retrieveKnowledgeContext } from '../services/knowledge-retrieval.service';
+import { isAppointmentIntent } from './knowledge-filter.service';
+import { buildCollectedFieldsContext } from './appointment-collect.service';
+import { handleAppointmentBooking } from './appointment-extract.service';
 
 export interface AIResponse {
   message: string;
@@ -22,6 +25,7 @@ export interface AIResponse {
   skippedAI: boolean;
   skipReason?: string;
   tokensUsed: number;
+  appointmentBooked?: boolean;
 }
 
 const companyCache = new Map<string, { data: Company; expires: number }>();
@@ -90,6 +94,8 @@ export async function generateAIResponse(
     );
   }
 
+  const appointmentMode = isAppointmentIntent(trimmed, history);
+
   const gate = preAIGate(trimmed, history, conversationLang);
   if (gate.skipAI && gate.response) {
     await logAIUsage({
@@ -113,16 +119,29 @@ export async function generateAIResponse(
     };
   }
 
+  const collectedContext = appointmentMode
+    ? buildCollectedFieldsContext(history, trimmed, conversationLang)
+    : '';
+
   const systemPrompt = await buildAdminPanelPrompt(company, {
     knowledge,
     appointmentContext,
+    collectedContext,
     lang: conversationLang,
+    appointmentMode,
   });
 
   const activePrompts = await getAllActivePromptContentsForAI();
   if (systemPrompt) {
+    const usedKeys = activePrompts
+      .filter((p) => {
+        if (p.prompt_role === 'greeting' || p.prompt_role === 'translation') return false;
+        if (p.prompt_role === 'appointment') return appointmentMode;
+        return true;
+      })
+      .map((p) => p.prompt_key);
     console.log(
-      `[AI] Admin prompt: [${activePrompts.map((p) => p.prompt_key).join(', ')}] (${systemPrompt.length} karakter)`
+      `[AI] Admin prompt${appointmentMode ? ' [randevu]' : ''}: [${usedKeys.join(', ')}] (${systemPrompt.length} karakter)`
     );
   } else {
     console.warn('[AI] Aktif admin prompt yok — panelden prompt kaydedin');
@@ -156,7 +175,29 @@ export async function generateAIResponse(
   const totalTokens = usage?.total_tokens || 0;
 
   const raw = completion.choices[0]?.message?.content?.trim() || '';
-  const { message, shouldTransfer } = stripTransferMarker(raw);
+
+  const booking = await handleAppointmentBooking(
+    companyId,
+    customerPhone,
+    _customerName,
+    raw,
+    history,
+    trimmed,
+    conversationLang
+  );
+
+  const { message, shouldTransfer } = stripTransferMarker(
+    finalizeCustomerFacingMessage(booking.message, {
+      hadAppointmentMarker: raw.includes(APPOINTMENT_MARKER),
+      lang: conversationLang,
+    })
+  );
+
+  if (booking.appointment) {
+    console.log(
+      `[Randevu] WhatsApp kaydı: ${booking.appointment.id} | ${booking.appointment.customer_name}`
+    );
+  }
 
   return {
     message,
@@ -164,5 +205,6 @@ export async function generateAIResponse(
     skippedAI: false,
     skipReason: shouldTransfer ? 'ai_transfer' : undefined,
     tokensUsed: totalTokens,
+    appointmentBooked: !!booking.appointment,
   };
 }

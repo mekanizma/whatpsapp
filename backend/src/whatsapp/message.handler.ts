@@ -255,6 +255,7 @@ export async function processInboundMessage(
         skip_reason: aiResponse.skipReason,
         tokens_used: aiResponse.tokensUsed,
         transferred: aiResponse.shouldTransfer,
+        appointment_booked: aiResponse.appointmentBooked ?? false,
       },
     });
 

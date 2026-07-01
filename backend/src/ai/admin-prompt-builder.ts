@@ -15,7 +15,12 @@ export interface AdminPromptContext {
   appointmentContext?: string;
   collectedContext?: string;
   lang?: ConversationLang;
+  /** Randevu sürecindeyken appointment rolü promptu devreye girer */
+  appointmentMode?: boolean;
 }
+
+/** Ana sistem promptuna dahil edilmeyen roller */
+const NON_CHAT_ROLES = new Set(['greeting', 'translation']);
 
 export async function buildAdminPanelPrompt(
   company: Company,
@@ -42,6 +47,11 @@ export async function buildAdminPanelPrompt(
   }
 
   const parts = activePrompts
+    .filter((p) => {
+      if (NON_CHAT_ROLES.has(p.prompt_role)) return false;
+      if (p.prompt_role === 'appointment') return ctx.appointmentMode === true;
+      return true;
+    })
     .map((p) => renderPromptTemplate(p.content, vars))
     .filter((text) => text.trim());
 

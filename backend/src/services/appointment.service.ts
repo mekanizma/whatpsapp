@@ -5,8 +5,9 @@
 import { adminClient } from '../database/supabase';
 import { Appointment, AppointmentSource, AppointmentStatus } from '../types';
 
-import { preferHistorySlot, formatSlotTurkish } from '../ai/appointment-slot.service';
+import { preferHistorySlot, formatSlotLocalized } from '../ai/appointment-slot.service';
 import type { HistoryMsg } from '../ai/appointment-collect.service';
+import { ConversationLang, t } from '../ai/language.service';
 
 const APPOINTMENT_BLOCK_RE = /\[APPOINTMENT\]([\s\S]*?)\[\/APPOINTMENT\]/gi;
 const FALSE_SUCCESS_RE =
@@ -230,7 +231,58 @@ export async function getAppointmentContextForAI(companyId: string): Promise<str
 }
 
 export function stripAppointmentMarkers(text: string): string {
-  return text.replace(APPOINTMENT_BLOCK_RE, '').replace(/\s+/g, ' ').trim();
+  return text
+    .replace(/\[APPOINTMENT\][\s\S]*?\[\/APPOINTMENT\]/gi, '')
+    .replace(/\[APPOINTMENT\][\s\S]*/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function formatPhoneDisplay(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  let local = digits;
+  if (digits.length >= 12 && digits.startsWith('90')) {
+    local = `0${digits.slice(2)}`;
+  } else if (digits.length === 10 && digits.startsWith('5')) {
+    local = `0${digits}`;
+  }
+  if (local.length === 11 && local.startsWith('0')) {
+    return `${local.slice(0, 4)} ${local.slice(4, 7)} ${local.slice(7, 9)} ${local.slice(9)}`;
+  }
+  return phone;
+}
+
+/** Müşteriye gösterilecek randevu onay mesajı */
+export function buildAppointmentConfirmationMessage(
+  appointment: Appointment,
+  lang: ConversationLang = 'tr'
+): string {
+  const slot = formatSlotLocalized(appointment.starts_at, appointment.ends_at, lang);
+  const doctorLine = appointment.preferred_doctor
+    ? t(lang, 'appointment_confirmed_doctor', { doctor: appointment.preferred_doctor })
+    : '';
+
+  return t(lang, 'appointment_confirmed', {
+    slot,
+    name: appointment.customer_name || '—',
+    title: appointment.title,
+    phone: formatPhoneDisplay(appointment.customer_phone),
+    doctor_line: doctorLine,
+  });
+}
+
+/** [APPOINTMENT] teknik bloğunu müşteri mesajından temizle */
+export function finalizeCustomerFacingMessage(
+  message: string,
+  opts: { hadAppointmentMarker?: boolean; lang?: ConversationLang } = {}
+): string {
+  const lang = opts.lang || 'tr';
+  const cleaned = stripAppointmentMarkers(message);
+  if (cleaned && !/\[APPOINTMENT\]/i.test(cleaned)) return cleaned;
+  if (opts.hadAppointmentMarker || message.includes(APPOINTMENT_MARKER)) {
+    return t(lang, 'appointment_processing');
+  }
+  return cleaned;
 }
 
 export function parseAppointmentAction(text: string): ParsedAppointmentAction | null {
@@ -280,7 +332,8 @@ export async function processAIAppointmentBooking(
   _customerName: string | null,
   rawResponse: string,
   collected?: { customer_name: string | null; customer_phone: string | null; title: string | null; doctor_name?: string | null },
-  history: HistoryMsg[] = []
+  history: HistoryMsg[] = [],
+  lang: ConversationLang = 'tr'
 ): Promise<{ message: string; appointment: Appointment | null }> {
   const hadMarker = rawResponse.includes(APPOINTMENT_MARKER);
   const action = parseAppointmentAction(rawResponse);
@@ -324,11 +377,7 @@ export async function processAIAppointmentBooking(
       source: 'ai',
     });
 
-    const start = new Date(appointment.starts_at);
-    const doctorPart = appointment.preferred_doctor ? ` Doktor: ${appointment.preferred_doctor}.` : '';
-    const confirmMsg = `Randevunuz kaydedildi: ${formatSlotTurkish(appointment.starts_at, appointment.ends_at)}.${doctorPart} ${appointment.title}`;
-
-    message = confirmMsg;
+    message = buildAppointmentConfirmationMessage(appointment, lang);
 
     console.log(`[Randevu] Oluşturuldu: ${appointment.id} | ${appointment.customer_name} | ${appointment.title}`);
     return { message, appointment };

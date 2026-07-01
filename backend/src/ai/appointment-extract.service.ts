@@ -9,7 +9,8 @@ import {
   validateAppointmentAction,
   createAppointment,
   APPOINTMENT_MARKER,
-  stripAppointmentMarkers,
+  buildAppointmentConfirmationMessage,
+  finalizeCustomerFacingMessage,
 } from '../services/appointment.service';
 import { Appointment } from '../types';
 import {
@@ -18,12 +19,8 @@ import {
   parseCollectedFields,
   HistoryMsg,
 } from './appointment-collect.service';
-import {
-  extractOfferedSlotFromHistory,
-  formatSlotLocalized,
-  preferHistorySlot,
-} from './appointment-slot.service';
-import { ConversationLang, detectConversationLanguage, t } from './language.service';
+import { extractOfferedSlotFromHistory, preferHistorySlot } from './appointment-slot.service';
+import { ConversationLang, detectConversationLanguage } from './language.service';
 
 const CONFIRM_RE = /^(evet|onayl?[iıİI]yorum|onaylıyorum|onayliyorum|onay|tamam|uygun|olur|kabul|ok|yes)\b/iu;
 
@@ -121,9 +118,8 @@ async function persistAppointment(
     source: 'ai',
   });
 
-  const slot = formatSlotLocalized(appointment.starts_at, appointment.ends_at, lang);
   return {
-    message: t(lang, 'appointment_saved', { slot, title: appointment.title }),
+    message: buildAppointmentConfirmationMessage(appointment, lang),
     appointment,
   };
 }
@@ -198,6 +194,26 @@ export async function tryStructuredAppointmentBooking(
 }
 
 /** Marker tabanlı işleme + yapılandırılmış yedek */
+function wrapBookingReply(
+  result: { message: string; appointment: Appointment | null },
+  rawResponse: string,
+  lang: ConversationLang
+): { message: string; appointment: Appointment | null } {
+  if (result.appointment) {
+    return {
+      message: buildAppointmentConfirmationMessage(result.appointment, lang),
+      appointment: result.appointment,
+    };
+  }
+  return {
+    message: finalizeCustomerFacingMessage(result.message, {
+      hadAppointmentMarker: rawResponse.includes(APPOINTMENT_MARKER),
+      lang,
+    }),
+    appointment: null,
+  };
+}
+
 export async function handleAppointmentBooking(
   companyId: string,
   customerPhone: string,
@@ -211,7 +227,7 @@ export async function handleAppointmentBooking(
 
   if (isAppointmentConfirmation(latestMessage)) {
     const confirmed = await bookFromConfirmation(companyId, customerPhone, history, latestMessage);
-    if (confirmed?.appointment) return confirmed;
+    if (confirmed?.appointment) return wrapBookingReply(confirmed, rawResponse, conversationLang);
   }
 
   const action = rawResponse.includes(APPOINTMENT_MARKER)
@@ -233,7 +249,7 @@ export async function handleAppointmentBooking(
     /randevu(nuz)?\s+.*(kayded|oluştur|olustur)/i.test(rawResponse);
 
   if (gate.blocked && isBookingAttempt) {
-    return { message: gate.message!, appointment: null };
+    return wrapBookingReply({ message: gate.message!, appointment: null }, rawResponse, conversationLang);
   }
 
   const fromMarker = await processAIAppointmentBooking(
@@ -242,9 +258,10 @@ export async function handleAppointmentBooking(
     null,
     rawResponse,
     gate.collected,
-    history
+    history,
+    conversationLang
   );
-  if (fromMarker.appointment) return fromMarker;
+  if (fromMarker.appointment) return wrapBookingReply(fromMarker, rawResponse, conversationLang);
 
   if (rawResponse.includes(APPOINTMENT_MARKER) || isAppointmentConfirmation(latestMessage)) {
     const structured = await tryStructuredAppointmentBooking(
@@ -253,8 +270,8 @@ export async function handleAppointmentBooking(
       history,
       latestMessage
     );
-    if (structured) return structured;
+    if (structured) return wrapBookingReply(structured, rawResponse, conversationLang);
   }
 
-  return fromMarker;
+  return wrapBookingReply(fromMarker, rawResponse, conversationLang);
 }

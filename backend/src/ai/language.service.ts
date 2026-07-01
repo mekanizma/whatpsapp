@@ -36,6 +36,9 @@ type MessageKey =
   | 'appointment_title'
   | 'appointment_missing_default'
   | 'appointment_saved'
+  | 'appointment_confirmed'
+  | 'appointment_confirmed_doctor'
+  | 'appointment_processing'
   | 'kb_topic_intro';
 
 const MESSAGES: Record<MessageKey, Record<ConversationLang, string>> = {
@@ -209,6 +212,33 @@ const MESSAGES: Record<MessageKey, Record<ConversationLang, string>> = {
     ru: 'Запись создана: {slot}. {title}',
     fr: 'Votre rendez-vous est enregistré : {slot}. {title}',
     es: 'Su cita quedó registrada: {slot}. {title}',
+  },
+  appointment_confirmed: {
+    tr: 'Randevunuz oluşturuldu.\n\nTarih: {slot}\nAd Soyad: {name}\nİşlem: {title}\nTelefon: {phone}{doctor_line}\n\nRandevu saatinde sizi bekliyoruz. Değişiklik veya iptal için bize yazabilirsiniz.',
+    en: 'Your appointment is confirmed.\n\nDate: {slot}\nName: {name}\nService: {title}\nPhone: {phone}{doctor_line}\n\nWe look forward to seeing you. Message us for any changes or cancellation.',
+    de: 'Ihr Termin wurde bestätigt.\n\nDatum: {slot}\nName: {name}\nBehandlung: {title}\nTelefon: {phone}{doctor_line}\n\nWir freuen uns auf Ihren Besuch. Schreiben Sie uns bei Änderungen oder Absage.',
+    ar: 'تم تأكيد موعدك.\n\nالتاريخ: {slot}\nالاسم: {name}\nالإجراء: {title}\nالهاتف: {phone}{doctor_line}\n\nننتظر زيارتكم. راسلونا لأي تغيير أو إلغاء.',
+    ru: 'Ваша запись подтверждена.\n\nДата: {slot}\nИмя: {name}\nУслуга: {title}\nТелефон: {phone}{doctor_line}\n\nЖдём вас в назначенное время. Напишите нам для изменений или отмены.',
+    fr: 'Votre rendez-vous est confirmé.\n\nDate : {slot}\nNom : {name}\nPrestation : {title}\nTéléphone : {phone}{doctor_line}\n\nNous vous attendons. Écrivez-nous pour modifier ou annuler.',
+    es: 'Su cita está confirmada.\n\nFecha: {slot}\nNombre: {name}\nServicio: {title}\nTeléfono: {phone}{doctor_line}\n\nLe esperamos. Escríbanos para cambios o cancelación.',
+  },
+  appointment_confirmed_doctor: {
+    tr: '\nDoktor: {doctor}',
+    en: '\nDoctor: {doctor}',
+    de: '\nArzt: {doctor}',
+    ar: '\nالطبيب: {doctor}',
+    ru: '\nВрач: {doctor}',
+    fr: '\nMédecin : {doctor}',
+    es: '\nDoctor: {doctor}',
+  },
+  appointment_processing: {
+    tr: 'Randevu bilgilerinizi aldım. Kayıt için kısa süre içinde size dönüş yapacağız.',
+    en: 'I have your appointment details. We will confirm your booking shortly.',
+    de: 'Ich habe Ihre Termindaten erhalten. Wir bestätigen den Termin in Kürze.',
+    ar: 'استلمت بيانات موعدك. سنؤكد الحجز قريباً.',
+    ru: 'Данные для записи получены. Мы скоро подтвердим запись.',
+    fr: 'J\'ai bien reçu vos informations. Nous confirmerons le rendez-vous sous peu.',
+    es: 'Recibí los datos de su cita. Confirmaremos la reserva en breve.',
   },
   kb_topic_intro: {
     tr: 'Size hangi konuda bilgi vermemi istersiniz? Aşağıdakilerden birini yazabilirsiniz:',

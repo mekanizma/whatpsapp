@@ -5,6 +5,7 @@
 
 import { detectImmediateEscalation } from './conversation-escalation.service';
 import { ConversationLang, detectConversationLanguage, t } from './language.service';
+import { isAppointmentIntent } from './knowledge-filter.service';
 
 export interface GateResult {
   skipAI: boolean;
@@ -179,7 +180,10 @@ export function preAIGate(
     };
   }
 
-  if (confirmsTransferAfterOffer(normalized, history)) {
+  if (
+    !isAppointmentIntent(trimmed, history) &&
+    confirmsTransferAfterOffer(normalized, history)
+  ) {
     return {
       skipAI: true,
       shouldTransfer: true,
