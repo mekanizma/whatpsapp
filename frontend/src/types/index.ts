@@ -11,6 +11,7 @@ export interface Profile {
   full_name: string;
   role: UserRole;
   avatar_url: string | null;
+  phone: string | null;
   is_active: boolean;
 }
 
@@ -214,8 +215,18 @@ export interface StaffMember {
   id: string;
   name: string;
   email: string;
+  phone: string | null;
   role: string;
   is_active: boolean;
+}
+
+export interface NotificationUser {
+  id: string;
+  full_name: string;
+  role: string;
+  email: string | null;
+  phone: string | null;
+  notify_enabled: boolean;
 }
 
 export interface WhatsAppConfig {

@@ -6,7 +6,7 @@ import { Response } from 'express';
 import { adminClient } from '../database/supabase';
 import { AuthRequest, isDemoSession } from '../middleware/auth.middleware';
 import { logActivity } from '../services/log.service';
-import { createStaffUser, deleteStaffUser, formatServiceError } from '../services/staff.service';
+import { createStaffUser, deleteStaffUser, formatServiceError, updateStaffMember } from '../services/staff.service';
 
 export async function getStaff(req: AuthRequest, res: Response): Promise<void> {
   res.set('Cache-Control', 'no-store');
@@ -31,7 +31,7 @@ export async function getStaff(req: AuthRequest, res: Response): Promise<void> {
 }
 
 export async function createStaff(req: AuthRequest, res: Response): Promise<void> {
-  const { name, email, password, role } = req.body;
+  const { name, email, password, role, phone } = req.body;
 
   if (!name?.trim() || !email?.trim() || !password) {
     res.status(400).json({ success: false, error: 'Ad, e-posta ve şifre zorunludur' });
@@ -49,7 +49,8 @@ export async function createStaff(req: AuthRequest, res: Response): Promise<void
       email,
       password,
       name.trim(),
-      role || 'agent'
+      role || 'agent',
+      phone
     );
 
     await logActivity({
@@ -68,22 +69,35 @@ export async function createStaff(req: AuthRequest, res: Response): Promise<void
 }
 
 export async function updateStaff(req: AuthRequest, res: Response): Promise<void> {
-  const { name, email, role, is_active } = req.body;
+  const { name, email, phone, role, is_active } = req.body;
 
-  const { data, error } = await adminClient
-    .from('staff')
-    .update({ name, email, role, is_active })
-    .eq('id', req.params.id)
-    .eq('company_id', req.companyId)
-    .select()
-    .single();
-
-  if (error) {
-    res.status(400).json({ success: false, error: error.message });
+  if (isDemoSession(req)) {
+    res.status(400).json({ success: false, error: 'Demo modda personel düzenlenemez' });
     return;
   }
 
-  res.json({ success: true, data });
+  try {
+    const data = await updateStaffMember(String(req.params.id), req.companyId!, {
+      name,
+      email,
+      phone,
+      role,
+      is_active,
+    });
+
+    await logActivity({
+      userId: req.userId,
+      companyId: req.companyId,
+      action: 'staff_updated',
+      entityType: 'staff',
+      entityId: data.id,
+    });
+
+    res.json({ success: true, data });
+  } catch (err) {
+    console.error('updateStaff failed:', err);
+    res.status(400).json({ success: false, error: formatServiceError(err) });
+  }
 }
 
 export async function deleteStaff(req: AuthRequest, res: Response): Promise<void> {

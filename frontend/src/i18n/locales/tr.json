@@ -301,7 +301,14 @@
     "fullName": "Ad Soyad",
     "fullNamePlaceholder": "Örn. Ayşe Yılmaz",
     "passwordPlaceholder": "Giriş şifresi belirleyin",
-    "passwordHint": "Personel bu şifre ile panele giriş yapacak (en az 6 karakter)"
+    "passwordHint": "Personel bu şifre ile panele giriş yapacak (en az 6 karakter)",
+    "phone": "Telefon (WhatsApp)",
+    "phonePlaceholder": "905551234567",
+    "phoneHint": "Destek talebi bildirimleri için WhatsApp numarası",
+    "edit": "Düzenle",
+    "editStaff": "Personeli Düzenle",
+    "saved": "Personel bilgileri güncellendi.",
+    "save": "Kaydet"
   },
   "knowledge": {
     "title": "Bilgi Bankası",
@@ -432,7 +439,17 @@
     "companySaved": "Şirket bilgileri güncellendi.",
     "saveCompany": "Şirket Bilgilerini Kaydet",
     "staffCompanyHint": "Şirket bilgilerini yalnızca yönetici hesapları güncelleyebilir.",
-    "currentCompany": "Mevcut şirket:"
+    "currentCompany": "Mevcut şirket:",
+    "personalPhone": "Telefon (WhatsApp)",
+    "personalPhoneHint": "Bildirim almak için WhatsApp numaranızı girin.",
+    "notifications": "Bildirimler",
+    "notificationsDesc": "Yeni destek talebi geldiğinde WhatsApp bildirimi alacak kişileri seçin.",
+    "notificationsHint": "Seçili kullanıcıların telefon numarasına WhatsApp üzerinden bildirim gönderilir. Numara olmayan kullanıcılar seçilebilir ancak bildirim alamaz.",
+    "notifyUser": "Bildirim gönder",
+    "noPhoneWarning": "Telefon numarası gerekli",
+    "notificationsSaved": "Bildirim ayarları kaydedildi.",
+    "saveNotifications": "Bildirim Ayarlarını Kaydet",
+    "noUsersForNotifications": "Henüz şirkete bağlı kullanıcı bulunmuyor."
   },
   "admin": {
     "overview": {

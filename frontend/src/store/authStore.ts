@@ -25,7 +25,7 @@ interface AuthState {
   register: (email: string, password: string, fullName: string) => Promise<void>;
   logout: () => Promise<void>;
   fetchProfile: () => Promise<void>;
-  updateProfile: (data: { full_name?: string }) => Promise<Profile>;
+  updateProfile: (data: { full_name?: string; phone?: string | null }) => Promise<Profile>;
   updateCompany: (data: Partial<Company>) => Promise<Company>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   initialize: () => Promise<void>;

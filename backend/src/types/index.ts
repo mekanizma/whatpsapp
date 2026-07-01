@@ -24,6 +24,7 @@ export interface Profile {
   full_name: string;
   role: UserRole;
   avatar_url: string | null;
+  phone: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -136,6 +137,7 @@ export interface StaffMember {
   profile_id: string | null;
   name: string;
   email: string;
+  phone: string | null;
   role: string;
   is_active: boolean;
   created_at: string;

@@ -8,6 +8,7 @@ import { generateAIResponse } from '../ai/openai.service';
 import { buildTransferTicketSubject } from '../ai/transfer.service';
 import { hasActiveTransferTicket } from '../ai/ai-quota.service';
 import { logActivity } from '../services/log.service';
+import { createTicketAndNotify } from '../services/ticket-notification.service';
 
 const DEBOUNCE_MS = 3000;
 const TRANSFER_REPLY_COOLDOWN_MS = 60_000;
@@ -98,17 +99,18 @@ async function ensureOpenTransferTicket(
   customerName: string | null,
   subject: string
 ): Promise<void> {
-  const { error } = await adminClient.from('tickets').insert({
-    company_id: companyId,
-    customer_phone: customerPhone,
-    customer_name: customerName,
-    subject,
-    priority: 'medium',
-    status: 'open',
-  });
+  try {
+    const { created } = await createTicketAndNotify(companyId, {
+      customer_phone: customerPhone,
+      customer_name: customerName,
+      subject,
+      priority: 'medium',
+      status: 'open',
+    });
 
-  if (error && error.code !== '23505') {
-    console.error('Ticket oluşturma hatası:', error.message);
+    if (!created) return;
+  } catch (err) {
+    console.error('Ticket oluşturma hatası:', err instanceof Error ? err.message : err);
   }
 }
 

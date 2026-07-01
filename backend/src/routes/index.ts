@@ -17,6 +17,7 @@ import * as ticketsCtrl from '../controllers/tickets.controller';
 import * as staffCtrl from '../controllers/staff.controller';
 import * as subscriptionCtrl from '../controllers/subscription.controller';
 import * as appointmentsCtrl from '../controllers/appointments.controller';
+import * as notificationsCtrl from '../controllers/notifications.controller';
 import { knowledgeFileUpload } from '../middleware/upload.middleware';
 
 const router = Router();
@@ -101,6 +102,10 @@ router.post('/tickets', authenticate, requireCompany, ticketsCtrl.createTicket);
 router.put('/tickets/:id', authenticate, requireCompany, ticketsCtrl.updateTicket);
 router.patch('/tickets/:id/claim', authenticate, requireCompany, ticketsCtrl.claimTicket);
 router.patch('/tickets/:id/assign', authenticate, requireRole('company_admin'), requireCompany, ticketsCtrl.assignTicket);
+
+// Notifications
+router.get('/notifications/recipients', authenticate, requireRole('company_admin'), requireCompany, asyncHandler(notificationsCtrl.getNotificationRecipients));
+router.put('/notifications/recipients', authenticate, requireRole('company_admin'), requireCompany, asyncHandler(notificationsCtrl.updateNotificationRecipients));
 
 // Staff
 router.get('/staff', authenticate, requireCompany, staffCtrl.getStaff);

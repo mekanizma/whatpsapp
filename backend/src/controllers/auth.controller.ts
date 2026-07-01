@@ -54,20 +54,26 @@ export async function getMe(req: AuthRequest, res: Response): Promise<void> {
 }
 
 export async function updateProfile(req: AuthRequest, res: Response): Promise<void> {
-  const { full_name, avatar_url } = req.body;
+  const { full_name, avatar_url, phone } = req.body;
 
   if (isDemoSession(req)) {
     const token = req.accessToken!;
     const profile = demoProfilesByToken[token];
     if (full_name !== undefined) profile.full_name = full_name;
     if (avatar_url !== undefined) profile.avatar_url = avatar_url;
+    if (phone !== undefined) (profile as { phone?: string | null }).phone = phone;
     res.json({ success: true, data: profile });
     return;
   }
 
+  const updates: Record<string, unknown> = {};
+  if (full_name !== undefined) updates.full_name = full_name;
+  if (avatar_url !== undefined) updates.avatar_url = avatar_url;
+  if (phone !== undefined) updates.phone = phone?.trim() || null;
+
   const { data, error } = await adminClient
     .from('profiles')
-    .update({ full_name, avatar_url })
+    .update(updates)
     .eq('user_id', req.userId)
     .select()
     .single();

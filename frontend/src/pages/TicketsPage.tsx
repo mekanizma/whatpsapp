@@ -51,6 +51,10 @@ export function TicketsPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tickets'] }),
   });
 
+  const goToConversation = (ticket: TicketType) => {
+    navigate(`/panel/messages?phone=${encodeURIComponent(ticket.customer_phone)}&ticket=${ticket.id}`);
+  };
+
   const openCount = tickets?.filter((t) => t.status === 'open').length ?? 0;
 
   return (
@@ -72,7 +76,11 @@ export function TicketsPage() {
       ) : (
         <div className="space-y-3">
           {tickets?.map((ticket) => (
-            <Card key={ticket.id} className="overflow-hidden">
+            <Card
+              key={ticket.id}
+              className="cursor-pointer overflow-hidden transition-shadow hover:shadow-md"
+              onClick={() => goToConversation(ticket)}
+            >
               <CardContent className="p-0">
                 <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex gap-4">
@@ -99,7 +107,7 @@ export function TicketsPage() {
                       </div>
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-2 sm:shrink-0">
+                  <div className="flex flex-wrap gap-2 sm:shrink-0" onClick={(e) => e.stopPropagation()}>
                     {ticket.status === 'open' && (
                       <Button size="sm" onClick={() => claimMutation.mutate(ticket)} disabled={claimMutation.isPending}>
                         <UserCheck className="h-4 w-4" />
@@ -111,7 +119,7 @@ export function TicketsPage() {
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => navigate(`/panel/messages?phone=${encodeURIComponent(ticket.customer_phone)}&ticket=${ticket.id}`)}
+                          onClick={() => goToConversation(ticket)}
                         >
                           <MessageSquare className="h-4 w-4" />
                           {t('tickets.goToChat')}
@@ -127,6 +135,12 @@ export function TicketsPage() {
                           {t('tickets.markResolved')}
                         </Button>
                       </>
+                    )}
+                    {(ticket.status === 'resolved' || ticket.status === 'closed') && (
+                      <Button size="sm" variant="outline" onClick={() => goToConversation(ticket)}>
+                        <MessageSquare className="h-4 w-4" />
+                        {t('tickets.goToChat')}
+                      </Button>
                     )}
                   </div>
                 </div>

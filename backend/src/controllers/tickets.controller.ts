@@ -6,8 +6,8 @@ import { Response } from 'express';
 import { adminClient } from '../database/supabase';
 import { AuthRequest, isDemoSession } from '../middleware/auth.middleware';
 import { logActivity } from '../services/log.service';
-import { clearTransferState } from '../whatsapp/message.handler';
-import { normalizePhoneNumber } from '../whatsapp/message.handler';
+import { clearTransferState, normalizePhoneNumber } from '../whatsapp/message.handler';
+import { createTicketAndNotify } from '../services/ticket-notification.service';
 
 async function getStaffIdForProfile(
   companyId: string,
@@ -82,24 +82,34 @@ export async function getActiveTicketByPhone(req: AuthRequest, res: Response): P
 export async function createTicket(req: AuthRequest, res: Response): Promise<void> {
   const { customer_phone, customer_name, subject, priority } = req.body;
 
-  const { data, error } = await adminClient
-    .from('tickets')
-    .insert({
-      company_id: req.companyId,
+  try {
+    const { created, ticket } = await createTicketAndNotify(req.companyId!, {
       customer_phone,
       customer_name,
       subject,
       priority: priority || 'medium',
-    })
-    .select()
-    .single();
+    });
 
-  if (error) {
-    res.status(400).json({ success: false, error: error.message });
-    return;
+    if (!created) {
+      res.status(409).json({ success: false, error: 'Bu müşteri için zaten açık bir destek talebi var' });
+      return;
+    }
+
+    const { data, error } = await adminClient
+      .from('tickets')
+      .select('*')
+      .eq('id', ticket!.id)
+      .single();
+
+    if (error) {
+      res.status(400).json({ success: false, error: error.message });
+      return;
+    }
+
+    res.status(201).json({ success: true, data });
+  } catch (err) {
+    res.status(400).json({ success: false, error: (err as Error).message });
   }
-
-  res.status(201).json({ success: true, data });
 }
 
 export async function updateTicket(req: AuthRequest, res: Response): Promise<void> {

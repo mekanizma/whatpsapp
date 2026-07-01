@@ -4,8 +4,8 @@
 
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useMutation } from '@tanstack/react-query';
-import { User, Building2, Lock, Save, Eye, EyeOff } from 'lucide-react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { User, Building2, Lock, Save, Eye, EyeOff, Bell } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
 import {
   Button,
@@ -17,11 +17,13 @@ import {
   CardTitle,
   CardDescription,
   Badge,
+  Spinner,
 } from '@/components/ui';
 import { useAuthStore } from '@/store/authStore';
 import { supabase, supabaseConfigured } from '@/services/supabase';
+import { api } from '@/services/api';
 import { isDemoMode } from '@/lib/env';
-import type { Company } from '@/types';
+import type { Company, NotificationUser } from '@/types';
 
 const CATEGORY_VALUES = [
   'universite', 'klinik', 'dis_hekimi', 'guzellik_merkezi', 'emlak',
@@ -34,6 +36,7 @@ export function SettingsPage() {
 
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState(user?.full_name || '');
+  const [personalPhone, setPersonalPhone] = useState(user?.phone || '');
 
   const [companyName, setCompanyName] = useState(company?.company_name || '');
   const [companyPhone, setCompanyPhone] = useState(company?.phone || '');
@@ -49,12 +52,15 @@ export function SettingsPage() {
   const [profileMsg, setProfileMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const [companyMsg, setCompanyMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const [passwordMsg, setPasswordMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [notificationMsg, setNotificationMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [notificationUsers, setNotificationUsers] = useState<NotificationUser[]>([]);
 
   const isAdmin = user?.role === 'company_admin';
   const roleLabel = user?.role ? t(`common.roles.${user.role}`, { defaultValue: user.role }) : '';
 
   useEffect(() => {
     setFullName(user?.full_name || '');
+    setPersonalPhone(user?.phone || '');
   }, [user]);
 
   useEffect(() => {
@@ -83,7 +89,10 @@ export function SettingsPage() {
   }, [user?.role]);
 
   const profileMutation = useMutation({
-    mutationFn: () => updateProfile({ full_name: fullName.trim() }),
+    mutationFn: () => updateProfile({
+      full_name: fullName.trim(),
+      phone: personalPhone.trim() || null,
+    }),
     onSuccess: () => {
       setProfileMsg({ type: 'ok', text: t('settings.profileSaved') });
     },
@@ -106,6 +115,36 @@ export function SettingsPage() {
     },
     onError: (err: Error) => {
       setCompanyMsg({ type: 'err', text: err.message });
+    },
+  });
+
+  const { data: notificationData, isLoading: notificationsLoading } = useQuery({
+    queryKey: ['notification-recipients'],
+    queryFn: () => api.get<NotificationUser[]>('/notifications/recipients'),
+    enabled: isAdmin,
+  });
+
+  useEffect(() => {
+    if (notificationData) {
+      setNotificationUsers(notificationData);
+    }
+  }, [notificationData]);
+
+  const notificationsMutation = useMutation({
+    mutationFn: () =>
+      api.put<NotificationUser[]>('/notifications/recipients', {
+        users: notificationUsers.map((u) => ({
+          profile_id: u.id,
+          phone: u.phone,
+          notify_enabled: u.notify_enabled,
+        })),
+      }),
+    onSuccess: (data) => {
+      setNotificationUsers(data);
+      setNotificationMsg({ type: 'ok', text: t('settings.notificationsSaved') });
+    },
+    onError: (err: Error) => {
+      setNotificationMsg({ type: 'err', text: err.message });
     },
   });
 
@@ -169,6 +208,18 @@ export function SettingsPage() {
                 <Label htmlFor="email">{t('common.email')}</Label>
                 <Input id="email" value={email} disabled className="bg-slate-50" />
                 <p className="text-xs text-slate-500">{t('settings.emailChangeHint')}</p>
+              </div>
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="personalPhone">{t('settings.personalPhone')}</Label>
+                <Input
+                  id="personalPhone"
+                  value={personalPhone}
+                  onChange={(e) => setPersonalPhone(e.target.value)}
+                  type="tel"
+                  placeholder="905551234567"
+                  autoComplete="tel"
+                />
+                <p className="text-xs text-slate-500">{t('settings.personalPhoneHint')}</p>
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-3">
@@ -339,6 +390,110 @@ export function SettingsPage() {
               >
                 <Save className="h-4 w-4" />
                 {companyMutation.isPending ? t('common.saving') : t('settings.saveCompany')}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {isAdmin && company && (
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Bell className="h-5 w-5 text-primary" />
+                {t('settings.notifications')}
+              </CardTitle>
+              <CardDescription>{t('settings.notificationsDesc')}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600 ring-1 ring-slate-200/60">
+                {t('settings.notificationsHint')}
+              </p>
+
+              {notificationsLoading ? (
+                <div className="flex justify-center py-8">
+                  <Spinner className="h-8 w-8" />
+                </div>
+              ) : notificationUsers.length === 0 ? (
+                <p className="text-sm text-slate-500">{t('settings.noUsersForNotifications')}</p>
+              ) : (
+                <div className="space-y-3">
+                  {notificationUsers.map((member) => {
+                    const roleText = t(`common.roles.${member.role}`, { defaultValue: member.role });
+                    const missingPhone = member.notify_enabled && !member.phone?.trim();
+
+                    return (
+                      <div
+                        key={member.id}
+                        className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+                      >
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <label className="flex min-h-[44px] cursor-pointer items-start gap-3">
+                            <input
+                              type="checkbox"
+                              checked={member.notify_enabled}
+                              onChange={(e) => {
+                                const checked = e.target.checked;
+                                setNotificationUsers((prev) =>
+                                  prev.map((u) =>
+                                    u.id === member.id ? { ...u, notify_enabled: checked } : u
+                                  )
+                                );
+                              }}
+                              className="mt-1 h-5 w-5 shrink-0 rounded border-slate-300 text-primary focus:ring-primary/30"
+                            />
+                            <div className="min-w-0">
+                              <p className="font-medium text-slate-900">{member.full_name}</p>
+                              <p className="text-sm text-slate-500">{member.email || '—'}</p>
+                              <Badge variant="info" className="mt-1 capitalize">{roleText}</Badge>
+                            </div>
+                          </label>
+
+                          <div className="w-full space-y-1 sm:max-w-xs">
+                            <Label htmlFor={`notify-phone-${member.id}`} className="text-xs">
+                              {t('settings.phone')}
+                            </Label>
+                            <Input
+                              id={`notify-phone-${member.id}`}
+                              value={member.phone || ''}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                setNotificationUsers((prev) =>
+                                  prev.map((u) =>
+                                    u.id === member.id ? { ...u, phone: value } : u
+                                  )
+                                );
+                              }}
+                              type="tel"
+                              placeholder="905551234567"
+                              className="h-11"
+                            />
+                            {missingPhone && (
+                              <p className="text-xs text-amber-600">{t('settings.noPhoneWarning')}</p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {notificationMsg && (
+                <p className={notificationMsg.type === 'ok' ? 'text-sm text-emerald-600' : 'text-sm text-red-600'}>
+                  {notificationMsg.text}
+                </p>
+              )}
+
+              <Button
+                onClick={() => {
+                  setNotificationMsg(null);
+                  notificationsMutation.mutate();
+                }}
+                disabled={notificationsMutation.isPending || notificationsLoading || notificationUsers.length === 0}
+                className="w-full sm:w-auto"
+              >
+                <Save className="h-4 w-4" />
+                {notificationsMutation.isPending ? t('common.saving') : t('settings.saveNotifications')}
               </Button>
             </CardContent>
           </Card>

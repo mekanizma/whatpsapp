@@ -2,7 +2,7 @@
  * Messages page — professional chat interface
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -25,6 +25,7 @@ export function MessagesPage() {
   const [replyError, setReplyError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const queryClient = useQueryClient();
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (phoneParam) setSelectedPhone(phoneParam);
@@ -44,6 +45,11 @@ export function MessagesPage() {
     enabled: !!selectedPhone,
     refetchInterval: 5000,
   });
+
+  useEffect(() => {
+    if (!messages?.length || !selectedPhone) return;
+    messagesEndRef.current?.scrollIntoView({ behavior: ticketParam ? 'smooth' : 'auto' });
+  }, [messages, selectedPhone, ticketParam]);
 
   const { data: activeTicket } = useQuery({
     queryKey: ['active-ticket', selectedPhone],
@@ -201,6 +207,7 @@ export function MessagesPage() {
                   </div>
                 </div>
               ))}
+              <div ref={messagesEndRef} />
             </div>
 
             <div className="border-t border-slate-100 bg-white p-4">

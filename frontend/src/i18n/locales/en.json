@@ -301,7 +301,14 @@
     "fullName": "Full Name",
     "fullNamePlaceholder": "e.g. Jane Doe",
     "passwordPlaceholder": "Set login password",
-    "passwordHint": "Staff will use this password to sign in (min. 6 characters)"
+    "passwordHint": "Staff will use this password to sign in (min. 6 characters)",
+    "phone": "Phone (WhatsApp)",
+    "phonePlaceholder": "905551234567",
+    "phoneHint": "WhatsApp number for support ticket notifications",
+    "edit": "Edit",
+    "editStaff": "Edit Staff Member",
+    "saved": "Staff member updated.",
+    "save": "Save"
   },
   "knowledge": {
     "title": "Knowledge Base",
@@ -432,7 +439,17 @@
     "companySaved": "Company information updated.",
     "saveCompany": "Save Company Info",
     "staffCompanyHint": "Only admin accounts can update company information.",
-    "currentCompany": "Current company:"
+    "currentCompany": "Current company:",
+    "personalPhone": "Phone (WhatsApp)",
+    "personalPhoneHint": "Enter your WhatsApp number to receive notifications.",
+    "notifications": "Notifications",
+    "notificationsDesc": "Select who receives a WhatsApp alert when a new support ticket arrives.",
+    "notificationsHint": "Selected users receive WhatsApp notifications. Users without a phone number can be selected but will not receive alerts.",
+    "notifyUser": "Send notification",
+    "noPhoneWarning": "Phone number required",
+    "notificationsSaved": "Notification settings saved.",
+    "saveNotifications": "Save Notification Settings",
+    "noUsersForNotifications": "No company users found yet."
   },
   "admin": {
     "overview": {

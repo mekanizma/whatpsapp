@@ -4,6 +4,12 @@
 
 import { AuthError } from '@supabase/supabase-js';
 import { adminClient } from '../database/supabase';
+import { normalizePhoneNumber } from '../whatsapp/message.handler';
+
+function normalizeStaffPhone(phone?: string | null): string | null {
+  if (!phone?.trim()) return null;
+  return normalizePhoneNumber(phone.trim()) || phone.trim();
+}
 
 function formatServiceError(err: unknown): string {
   if (err instanceof AuthError) {
@@ -85,8 +91,11 @@ async function findAuthUserByEmail(email: string) {
 async function ensureStaffProfile(
   userId: string,
   companyId: string,
-  fullName: string
+  fullName: string,
+  phone?: string | null
 ): Promise<string> {
+  const normalizedPhone = normalizeStaffPhone(phone);
+
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const { data: existing, error: fetchError } = await adminClient
       .from('profiles')
@@ -104,6 +113,7 @@ async function ensureStaffProfile(
           full_name: fullName,
           role: 'staff',
           is_active: true,
+          phone: normalizedPhone,
         })
         .eq('user_id', userId);
 
@@ -122,12 +132,31 @@ async function ensureStaffProfile(
       full_name: fullName,
       role: 'staff',
       is_active: true,
+      phone: normalizedPhone,
     })
     .select('id')
     .single();
 
   if (insertError) throw new Error(insertError.message);
   return inserted.id;
+}
+
+async function syncStaffProfile(
+  profileId: string,
+  updates: { full_name?: string; phone?: string | null }
+): Promise<void> {
+  const payload: Record<string, unknown> = {};
+  if (updates.full_name !== undefined) payload.full_name = updates.full_name;
+  if (updates.phone !== undefined) payload.phone = normalizeStaffPhone(updates.phone);
+
+  if (Object.keys(payload).length === 0) return;
+
+  const { error } = await adminClient
+    .from('profiles')
+    .update(payload)
+    .eq('id', profileId);
+
+  if (error) throw new Error(error.message);
 }
 
 async function updateAuthStaffUser(
@@ -149,7 +178,8 @@ export async function createStaffUser(
   email: string,
   password: string,
   fullName: string,
-  staffRole = 'agent'
+  staffRole = 'agent',
+  phone?: string | null
 ) {
   if (!password || password.length < 6) {
     throw new Error('Şifre en az 6 karakter olmalıdır');
@@ -157,6 +187,7 @@ export async function createStaffUser(
 
   const normalizedEmail = email.trim().toLowerCase();
   const trimmedName = fullName.trim();
+  const normalizedPhone = normalizeStaffPhone(phone);
 
   const { data: existingStaff, error: staffLookupError } = await adminClient
     .from('staff')
@@ -200,7 +231,7 @@ export async function createStaffUser(
       createdNewAuthUser = resolved.created;
     }
 
-    const profileId = await ensureStaffProfile(userId, companyId, trimmedName);
+    const profileId = await ensureStaffProfile(userId, companyId, trimmedName, normalizedPhone);
 
     if (existingStaff) {
       const { data: staff, error: staffUpdateError } = await adminClient
@@ -208,6 +239,7 @@ export async function createStaffUser(
         .update({
           profile_id: profileId,
           name: trimmedName,
+          phone: normalizedPhone,
           role: staffRole,
           is_active: true,
         })
@@ -227,6 +259,7 @@ export async function createStaffUser(
         profile_id: profileId,
         name: trimmedName,
         email: normalizedEmail,
+        phone: normalizedPhone,
         role: staffRole,
       })
       .select()
@@ -240,6 +273,84 @@ export async function createStaffUser(
     }
     throw new Error(formatServiceError(err));
   }
+}
+
+export async function updateStaffMember(
+  staffId: string,
+  companyId: string,
+  input: {
+    name?: string;
+    email?: string;
+    phone?: string | null;
+    role?: string;
+    is_active?: boolean;
+  }
+) {
+  const { data: existing, error: fetchError } = await adminClient
+    .from('staff')
+    .select('id, profile_id, email')
+    .eq('id', staffId)
+    .eq('company_id', companyId)
+    .single();
+
+  if (fetchError) throw new Error(fetchError.message);
+
+  const updates: Record<string, unknown> = {};
+  if (input.name !== undefined) updates.name = input.name.trim();
+  if (input.email !== undefined) updates.email = input.email.trim().toLowerCase();
+  if (input.phone !== undefined) updates.phone = normalizeStaffPhone(input.phone);
+  if (input.role !== undefined) updates.role = input.role;
+  if (input.is_active !== undefined) updates.is_active = input.is_active;
+
+  if (Object.keys(updates).length === 0) {
+    const { data, error } = await adminClient
+      .from('staff')
+      .select('*')
+      .eq('id', staffId)
+      .eq('company_id', companyId)
+      .single();
+    if (error) throw new Error(error.message);
+    return data;
+  }
+
+  const { data: staff, error: updateError } = await adminClient
+    .from('staff')
+    .update(updates)
+    .eq('id', staffId)
+    .eq('company_id', companyId)
+    .select()
+    .single();
+
+  if (updateError) throw new Error(updateError.message);
+
+  if (existing.profile_id) {
+    await syncStaffProfile(existing.profile_id, {
+      full_name: typeof updates.name === 'string' ? updates.name : undefined,
+      phone: updates.phone !== undefined ? (updates.phone as string | null) : undefined,
+    });
+  }
+
+  if (
+    input.email !== undefined &&
+    input.email.trim().toLowerCase() !== existing.email &&
+    existing.profile_id
+  ) {
+    const { data: profile } = await adminClient
+      .from('profiles')
+      .select('user_id')
+      .eq('id', existing.profile_id)
+      .maybeSingle();
+
+    if (profile?.user_id) {
+      const { error: authError } = await adminClient.auth.admin.updateUserById(profile.user_id, {
+        email: input.email.trim().toLowerCase(),
+        email_confirm: true,
+      });
+      if (authError) throw new Error(authError.message);
+    }
+  }
+
+  return staff;
 }
 
 export async function deleteStaffUser(staffId: string, companyId: string): Promise<void> {
