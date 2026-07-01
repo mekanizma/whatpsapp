@@ -16,6 +16,9 @@ import { errorHandler, notFoundHandler } from './middleware/error.middleware';
 
 const app = express();
 
+// API yanıtlarında ETag/304 önbelleği frontend JSON parse hatalarına yol açar
+app.set('etag', false);
+
 if (!config.isDev) {
   app.set('trust proxy', 1);
 }
@@ -48,6 +51,10 @@ const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: config.isDev ? 1000 : 100,
   message: { success: false, error: 'Çok fazla istek gönderildi' },
+});
+app.use('/api', (_req, res, next) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+  next();
 });
 app.use('/api', limiter);
 

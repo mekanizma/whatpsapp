@@ -12,6 +12,7 @@ import {
   isBaileysReconnecting,
   sendBaileysMessage,
   restoreBaileysSessions,
+  verifySessionsDirWritable,
   type BaileysSession,
   type QrSessionStatus,
 } from './baileys.manager';
@@ -82,4 +83,5 @@ export {
   sendBaileysMessage,
   restoreBaileysSessions,
   isBaileysReconnecting,
+  verifySessionsDirWritable,
 };

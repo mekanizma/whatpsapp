@@ -40,6 +40,7 @@ export interface BaileysSession {
   expires_at: string;
   connected_at: string | null;
   created_at: string;
+  failure_reason?: string | null;
 }
 
 interface CompanyConnection {
@@ -51,6 +52,8 @@ interface CompanyConnection {
 const SESSION_TTL_MS = 3 * 60 * 1000;
 const RECONNECT_BASE_MS = 3_000;
 const RECONNECT_MAX_MS = 60_000;
+const QR_WAIT_MS = 30_000;
+const DEFAULT_BAILEYS_VERSION: [number, number, number] = [6, 7, 22];
 const sessions = new Map<string, BaileysSession>();
 const connections = new Map<string, CompanyConnection>();
 const tokenToCompany = new Map<string, string>();
@@ -64,6 +67,35 @@ function getSessionDir(companyId: string): string {
     fs.mkdirSync(dir, { recursive: true });
   }
   return dir;
+}
+
+export function verifySessionsDirWritable(): { ok: boolean; path: string; error?: string } {
+  const dir = config.sessionsDir;
+  try {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    const probe = path.join(dir, `.write-test-${process.pid}`);
+    fs.writeFileSync(probe, 'ok');
+    fs.unlinkSync(probe);
+    return { ok: true, path: dir };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return { ok: false, path: dir, error: message };
+  }
+}
+
+async function resolveBaileysVersion(): Promise<[number, number, number]> {
+  try {
+    const { version, error } = await fetchLatestBaileysVersion();
+    if (error) {
+      console.warn('[Baileys] Versiyon API hatası, paket sürümü kullanılıyor:', error);
+    }
+    return version;
+  } catch (err) {
+    console.warn('[Baileys] fetchLatestBaileysVersion başarısız, paket sürümü kullanılıyor:', err);
+    return DEFAULT_BAILEYS_VERSION;
+  }
 }
 
 function generateToken(): string {
@@ -115,8 +147,15 @@ export async function startBaileysQrSession(
   companyId: string,
   userId?: string
 ): Promise<BaileysSession> {
-  // Mevcut bağlantı varsa kapat
-  await disconnectBaileys(companyId);
+  const dirCheck = verifySessionsDirWritable();
+  if (!dirCheck.ok) {
+    throw new Error(
+      `Oturum dizinine yazılamıyor (${dirCheck.path}). Coolify'da Persistent Storage: /data/sessions ve SESSIONS_DIR=/data/sessions olmalı.`
+    );
+  }
+
+  // Mevcut bağlantıyı kapat (logout yapmadan — yeni QR için yeterli)
+  await disconnectBaileys(companyId, { logout: false });
 
   const sessionToken = generateToken();
   const sessionId = crypto.randomUUID();
@@ -157,12 +196,14 @@ export async function startBaileysQrSession(
 
   // Baileys socket başlat (arka planda QR üretir)
   connectBaileysSocket(companyId, session).catch((err) => {
-    console.error('Baileys bağlantı hatası:', err);
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[Baileys] Bağlantı hatası (${companyId}):`, err);
     session.status = 'failed';
+    session.failure_reason = message;
   });
 
-  // İlk QR'ın gelmesini bekle (max 20 sn)
-  const qrDataUrl = await waitForQr(sessionToken, 20000);
+  // İlk QR'ın gelmesini bekle
+  const qrDataUrl = await waitForQr(sessionToken, QR_WAIT_MS);
   session.qr_data_url = qrDataUrl;
 
   return session;
@@ -179,7 +220,7 @@ function waitForQr(sessionToken: string, timeoutMs: number): Promise<string> {
         return;
       }
       if (session?.status === 'failed') {
-        reject(new Error('WhatsApp bağlantısı başlatılamadı'));
+        reject(new Error(session.failure_reason || 'WhatsApp bağlantısı başlatılamadı'));
         return;
       }
       if (Date.now() - start > timeoutMs) {
@@ -223,35 +264,38 @@ async function scheduleReconnect(companyId: string, session: BaileysSession): Pr
 }
 
 async function connectBaileysSocket(companyId: string, session: BaileysSession): Promise<void> {
-  const existing = connections.get(companyId);
-  if (existing?.socket) {
-    try {
-      existing.socket.end(undefined);
-    } catch {
-      /* önceki socket zaten kapanmış olabilir */
+  try {
+    const existing = connections.get(companyId);
+    if (existing?.socket) {
+      try {
+        existing.socket.end(undefined);
+      } catch {
+        /* önceki socket zaten kapanmış olabilir */
+      }
     }
-  }
 
-  const sessionDir = getSessionDir(companyId);
-  const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
-  const { version } = await fetchLatestBaileysVersion();
+    const sessionDir = getSessionDir(companyId);
+    const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
+    const version = await resolveBaileysVersion();
 
-  const socket = makeWASocket({
-    version,
-    auth: state,
-    logger,
-    printQRInTerminal: false,
-    browser: ['WhatsApp AI SaaS', 'Chrome', '1.0.0'],
-    syncFullHistory: false,
-    markOnlineOnConnect: true,
-    generateHighQualityLinkPreview: false,
-  });
+    const socket = makeWASocket({
+      version,
+      auth: state,
+      logger,
+      printQRInTerminal: false,
+      browser: ['WhatsApp AI SaaS', 'Chrome', '1.0.0'],
+      syncFullHistory: false,
+      markOnlineOnConnect: true,
+      generateHighQualityLinkPreview: false,
+      connectTimeoutMs: 30_000,
+      defaultQueryTimeoutMs: 30_000,
+    });
 
-  connections.set(companyId, { socket, session, isConnecting: true });
+    connections.set(companyId, { socket, session, isConnecting: true });
 
-  socket.ev.on('creds.update', saveCreds);
+    socket.ev.on('creds.update', saveCreds);
 
-  socket.ev.on('connection.update', async (update) => {
+    socket.ev.on('connection.update', async (update) => {
     const { connection, lastDisconnect, qr, receivedPendingNotifications } = update;
 
     if (qr) {
@@ -403,6 +447,14 @@ async function connectBaileysSocket(companyId: string, session: BaileysSession):
       }
     }
   });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error(`[Baileys] Socket başlatma hatası (${companyId}):`, err);
+    session.status = 'failed';
+    session.failure_reason = message;
+    connections.delete(companyId);
+    throw err;
+  }
 }
 
 export function getBaileysSession(
@@ -428,13 +480,21 @@ export async function cancelBaileysSession(companyId: string, sessionToken: stri
   await disconnectBaileys(companyId);
 }
 
-export async function disconnectBaileys(companyId: string): Promise<void> {
+export async function disconnectBaileys(
+  companyId: string,
+  options: { logout?: boolean } = {}
+): Promise<void> {
+  const shouldLogout = options.logout ?? true;
   reconnectAttempts.delete(companyId);
 
   const conn = connections.get(companyId);
   if (conn?.socket) {
     try {
-      await conn.socket.logout();
+      if (shouldLogout) {
+        await conn.socket.logout();
+      } else {
+        conn.socket.end(undefined);
+      }
     } catch {
       conn.socket.end(undefined);
     }

@@ -120,6 +120,43 @@ export const api = {
   delete: <T>(endpoint: string) =>
     request<T>(endpoint, { method: 'DELETE' }),
 
+  downloadBlob: async (endpoint: string, filename?: string): Promise<void> => {
+    const authHeaders = await getAuthHeaders();
+    const { 'Content-Type': _ct, ...headers } = authHeaders as Record<string, string>;
+
+    let response: Response;
+    try {
+      response = await fetch(`${API_URL}${endpoint}`, { headers });
+    } catch {
+      throw new Error('Sunucuya bağlanılamadı. Backend çalışıyor mu?');
+    }
+
+    if (!response.ok) {
+      let message = `İstek başarısız (${response.status})`;
+      try {
+        const body = await response.json();
+        message = extractApiError(body as Record<string, unknown>, response.status);
+      } catch {
+        // binary response
+      }
+      throw new Error(message);
+    }
+
+    const blob = await response.blob();
+    const disposition = response.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename="?([^"]+)"?/i);
+    const resolvedName = filename || (match ? decodeURIComponent(match[1]) : 'download');
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = resolvedName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  },
+
   upload: async <T>(endpoint: string, file: File): Promise<T> => {
     const formData = new FormData();
     formData.append('file', file);

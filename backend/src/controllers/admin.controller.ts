@@ -40,6 +40,10 @@ import {
   getAllAiConversationAddons,
   updateAiConversationAddon,
 } from '../services/ai-addon.service';
+import {
+  createCompanyInvoicePdf,
+  type BillingPeriod,
+} from '../services/invoice.service';
 
 export async function getCompanies(req: AuthRequest, res: Response): Promise<void> {
   if (isDemoSession(req)) {
@@ -69,6 +73,29 @@ export async function getCompany(req: AuthRequest, res: Response): Promise<void>
     res.json({ success: true, data: detail });
   } catch (err) {
     res.status(404).json({ success: false, error: err instanceof Error ? err.message : 'Bulunamadı' });
+  }
+}
+
+export async function downloadCompanyInvoice(req: AuthRequest, res: Response): Promise<void> {
+  const companyId = req.params.id as string;
+  const period = (req.query.period as string) === 'yearly' ? 'yearly' : 'monthly';
+
+  if (isDemoSession(req)) {
+    res.status(400).json({ success: false, error: 'Demo modda fatura oluşturulamaz' });
+    return;
+  }
+
+  try {
+    const { buffer, filename } = await createCompanyInvoicePdf(companyId, period as BillingPeriod);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Length', buffer.length);
+    res.send(buffer);
+  } catch (err) {
+    res.status(400).json({
+      success: false,
+      error: err instanceof Error ? err.message : 'Fatura oluşturulamadı',
+    });
   }
 }
 

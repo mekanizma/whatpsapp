@@ -31,6 +31,7 @@ router.put('/auth/profile', authenticate, authCtrl.updateProfile);
 router.get('/admin/stats', authenticate, requireRole('super_admin'), adminCtrl.getAdminStats);
 router.get('/admin/companies', authenticate, requireRole('super_admin'), adminCtrl.getCompanies);
 router.get('/admin/companies/:id', authenticate, requireRole('super_admin'), adminCtrl.getCompany);
+router.get('/admin/companies/:id/invoice', authenticate, requireRole('super_admin'), adminCtrl.downloadCompanyInvoice);
 router.post('/admin/companies', authenticate, requireRole('super_admin'), adminCtrl.createCompany);
 router.put('/admin/companies/:id', authenticate, requireRole('super_admin'), adminCtrl.updateCompany);
 router.patch('/admin/companies/:id/status', authenticate, requireRole('super_admin'), adminCtrl.updateCompanyStatus);

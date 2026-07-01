@@ -43,7 +43,11 @@ ENV NODE_ENV=production
 ENV PORT=3001
 ENV SESSIONS_DIR=/data/sessions
 
-RUN mkdir -p /data/sessions \
+# Baileys: HTTPS (versiyon kontrolü) ve WhatsApp WebSocket için gerekli
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates \
+  && rm -rf /var/lib/apt/lists/* \
+  && mkdir -p /data/sessions \
   && chown -R node:node /data/sessions /app
 
 COPY --from=builder /app/backend/package.json /app/backend/package-lock.json ./backend/

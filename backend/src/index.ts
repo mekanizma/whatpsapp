@@ -5,7 +5,7 @@
 
 import app from './app';
 import { config } from './config';
-import { restoreBaileysSessions } from './whatsapp/qr.service';
+import { restoreBaileysSessions, verifySessionsDirWritable } from './whatsapp/qr.service';
 import { recoverPendingKnowledgeIndexing } from './services/knowledge-index.service';
 
 app.listen(config.port, '0.0.0.0', async () => {
@@ -21,6 +21,16 @@ app.listen(config.port, '0.0.0.0', async () => {
   }
 
   if (!config.isVercel) {
+    const sessionsCheck = verifySessionsDirWritable();
+    if (sessionsCheck.ok) {
+      console.log(`📂 Sessions dizini hazır: ${sessionsCheck.path}`);
+    } else {
+      console.error(
+        `❌ Sessions dizini yazılamıyor: ${sessionsCheck.path} — ${sessionsCheck.error}. ` +
+          'Coolify → Storages → /data/sessions mount edin ve SESSIONS_DIR=/data/sessions ayarlayın.'
+      );
+    }
+
     try {
       await restoreBaileysSessions();
       console.log('📲 Baileys oturumları kontrol edildi');

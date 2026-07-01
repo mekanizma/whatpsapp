@@ -755,7 +755,14 @@
         "general": "Genel Bilgiler",
         "subscription": "Abonelik & Kota",
         "users": "Kullanıcılar"
-      }
+      },
+      "invoiceCard": "E-Fatura (MEKANİZMA)",
+      "invoiceDesc": "Şirketin aldığı pakete göre MEKANİZMA e-fatura belgesi oluşturulur. Paket bilgileri, tutarlar, abonelik tarihleri ve ek paketler PDF olarak indirilebilir.",
+      "invoicePeriod": "Fatura Dönemi",
+      "invoiceMonthly": "Aylık",
+      "invoiceYearly": "Yıllık",
+      "downloadInvoice": "PDF Fatura İndir",
+      "invoiceError": "Fatura oluşturulamadı"
     }
   }
 }

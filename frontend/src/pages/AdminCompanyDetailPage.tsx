@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowLeft, Save, RotateCcw, Smartphone, Users, MessageSquare, Zap, Ticket,
+  ArrowLeft, Save, RotateCcw, Smartphone, Users, MessageSquare, Zap, Ticket, FileDown,
 } from 'lucide-react';
 import { api } from '@/services/api';
 import { PageHeader } from '@/components/PageHeader';
@@ -29,6 +29,9 @@ export function AdminCompanyDetailPage() {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<'genel' | 'abonelik' | 'kullanicilar'>('genel');
+  const [invoicePeriod, setInvoicePeriod] = useState<'monthly' | 'yearly'>('monthly');
+  const [invoiceError, setInvoiceError] = useState<string | null>(null);
+  const [invoiceLoading, setInvoiceLoading] = useState(false);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['admin-company', id],
@@ -81,6 +84,19 @@ export function AdminCompanyDetailPage() {
   ];
 
   const planLabel = t(`common.plans.${company.subscription_plan}`, { defaultValue: company.subscription_plan });
+
+  const handleDownloadInvoice = async () => {
+    if (!id) return;
+    setInvoiceError(null);
+    setInvoiceLoading(true);
+    try {
+      await api.downloadBlob(`/admin/companies/${id}/invoice?period=${invoicePeriod}`);
+    } catch (err) {
+      setInvoiceError(err instanceof Error ? err.message : t('admin.companyDetail.invoiceError'));
+    } finally {
+      setInvoiceLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -178,7 +194,40 @@ export function AdminCompanyDetailPage() {
       )}
 
       {tab === 'abonelik' && subscription && (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="space-y-4">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base sm:text-lg">{t('admin.companyDetail.invoiceCard')}</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-slate-600">{t('admin.companyDetail.invoiceDesc')}</p>
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+                <div className="w-full space-y-2 sm:w-auto sm:min-w-[180px]">
+                  <Label>{t('admin.companyDetail.invoicePeriod')}</Label>
+                  <select
+                    className="flex h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
+                    value={invoicePeriod}
+                    onChange={(e) => setInvoicePeriod(e.target.value as 'monthly' | 'yearly')}
+                  >
+                    <option value="monthly">{t('admin.companyDetail.invoiceMonthly')}</option>
+                    <option value="yearly">{t('admin.companyDetail.invoiceYearly')}</option>
+                  </select>
+                </div>
+                <Button
+                  className="w-full sm:w-auto"
+                  onClick={handleDownloadInvoice}
+                  disabled={invoiceLoading}
+                >
+                  {invoiceLoading ? <Spinner /> : <><FileDown className="h-4 w-4" /> {t('admin.companyDetail.downloadInvoice')}</>}
+                </Button>
+              </div>
+              {invoiceError && (
+                <p className="text-sm text-rose-600">{invoiceError}</p>
+              )}
+            </CardContent>
+          </Card>
+
+          <div className="grid gap-4 lg:grid-cols-2">
           <Card>
             <CardHeader><CardTitle>{t('admin.companyDetail.subscription')}</CardTitle></CardHeader>
             <CardContent className="space-y-4">
@@ -254,6 +303,7 @@ export function AdminCompanyDetailPage() {
               <p className="mt-4 text-xs text-slate-500">{t('admin.companyDetail.planFeaturesHint')}</p>
             </CardContent>
           </Card>
+          </div>
         </div>
       )}
 

@@ -755,7 +755,14 @@
         "general": "General",
         "subscription": "Subscription & Quota",
         "users": "Users"
-      }
+      },
+      "invoiceCard": "E-Invoice (MEKANİZMA)",
+      "invoiceDesc": "Generates a MEKANİZMA e-invoice based on the company's plan. Package details, amounts, subscription dates and add-ons are included in the downloadable PDF.",
+      "invoicePeriod": "Billing Period",
+      "invoiceMonthly": "Monthly",
+      "invoiceYearly": "Yearly",
+      "downloadInvoice": "Download PDF Invoice",
+      "invoiceError": "Could not generate invoice"
     }
   }
 }
