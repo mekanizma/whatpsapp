@@ -216,7 +216,12 @@ export async function generateAIResponse(
     shouldTransfer,
     skippedAI: false,
     appointmentMode,
+    kbHasNoMatch: retrieval.kbHasNoMatch,
   });
+
+  if (knowledgeMiss) {
+    console.log(`[KB Miss] Bilinmeyen soru kaydedilecek → ${trimmed.slice(0, 80)}`);
+  }
 
   return {
     message,

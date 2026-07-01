@@ -12,6 +12,8 @@ export interface KnowledgeRetrievalResult {
   chunks: RetrievedKnowledgeChunk[];
   usedRag: boolean;
   fallbackItems: KnowledgeItem[];
+  /** İndeks hazır ama sorguya uygun chunk bulunamadı */
+  kbHasNoMatch: boolean;
 }
 
 function buildContextFromChunks(chunks: RetrievedKnowledgeChunk[]): string {
@@ -49,6 +51,7 @@ export async function retrieveKnowledgeContext(
       chunks: [],
       usedRag: false,
       fallbackItems,
+      kbHasNoMatch: false,
     };
   }
 
@@ -64,6 +67,7 @@ export async function retrieveKnowledgeContext(
       chunks: [],
       usedRag: false,
       fallbackItems,
+      kbHasNoMatch: false,
     };
   }
 
@@ -87,6 +91,7 @@ export async function retrieveKnowledgeContext(
         chunks: [],
         usedRag: false,
         fallbackItems,
+        kbHasNoMatch: true,
       };
     }
 
@@ -100,6 +105,7 @@ export async function retrieveKnowledgeContext(
         chunks: [],
         usedRag: false,
         fallbackItems,
+        kbHasNoMatch: true,
       };
     }
 
@@ -108,6 +114,7 @@ export async function retrieveKnowledgeContext(
       chunks,
       usedRag: true,
       fallbackItems,
+      kbHasNoMatch: false,
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -117,6 +124,7 @@ export async function retrieveKnowledgeContext(
       chunks: [],
       usedRag: false,
       fallbackItems,
+      kbHasNoMatch: true,
     };
   }
 }

@@ -124,6 +124,12 @@ export async function recordUnknownQuestion(params: {
     occurrence_count: 1,
     last_asked_at: now,
     updated_at: now,
+  }).then(({ error }) => {
+    if (error) {
+      console.error('[UnknownQuestions] Kayıt hatası:', error.message);
+    } else {
+      console.log(`[UnknownQuestions] Kaydedildi: ${params.question.slice(0, 60)}`);
+    }
   });
 }
 
