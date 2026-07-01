@@ -11,6 +11,19 @@ const MAX_EXTRACTED_CHARS = 200_000;
 
 const ALLOWED_EXTENSIONS = new Set(['.pdf', '.docx', '.xlsx', '.xls', '.md', '.txt', '.markdown']);
 
+const MARKDOWN_MIME_TYPES = new Set([
+  'text/markdown',
+  'text/x-markdown',
+  'application/markdown',
+]);
+
+const TEXT_MIME_TYPES = new Set(['text/plain']);
+
+const TEXT_EXTENSIONS = new Set(['.md', '.txt', '.markdown']);
+
+export const KNOWLEDGE_FILE_FORMATS_MESSAGE =
+  'Desteklenen formatlar: PDF, Word (.docx), Excel (.xlsx, .xls), Markdown (.md), Metin (.txt)';
+
 export function getFileExtension(filename: string): string {
   const dot = filename.lastIndexOf('.');
   if (dot < 0) return '';
@@ -21,10 +34,42 @@ export function isAllowedKnowledgeFile(filename: string): boolean {
   return ALLOWED_EXTENSIONS.has(getFileExtension(filename));
 }
 
+export function isAllowedKnowledgeMimeType(
+  mimeType: string | undefined,
+  filename = ''
+): boolean {
+  if (!mimeType) return false;
+  const normalized = mimeType.toLowerCase().split(';')[0].trim();
+  if (MARKDOWN_MIME_TYPES.has(normalized)) return true;
+  if (!TEXT_MIME_TYPES.has(normalized)) return false;
+
+  const ext = getFileExtension(filename);
+  return !ext || TEXT_EXTENSIONS.has(ext);
+}
+
+export function inferExtensionFromMime(mimeType: string | undefined): string | null {
+  if (!mimeType) return null;
+  const normalized = mimeType.toLowerCase().split(';')[0].trim();
+  if (MARKDOWN_MIME_TYPES.has(normalized)) return '.md';
+  if (TEXT_MIME_TYPES.has(normalized)) return '.txt';
+  return null;
+}
+
 export function titleFromFilename(filename: string): string {
   const ext = getFileExtension(filename);
   const base = ext ? filename.slice(0, -ext.length) : filename;
   return base.replace(/[-_]+/g, ' ').trim() || 'Dosyadan içe aktarılan bilgi';
+}
+
+function parsePlainText(buffer: Buffer): string {
+  let text = buffer.toString('utf8');
+  if (text.includes('\u0000')) {
+    text = buffer.toString('utf16le');
+  }
+  if (text.charCodeAt(0) === 0xfeff) {
+    text = text.slice(1);
+  }
+  return text;
 }
 
 function normalizeText(text: string): string {
@@ -86,12 +131,23 @@ export interface ParsedDocument {
 
 export async function parseKnowledgeDocument(
   buffer: Buffer,
-  originalFilename: string
+  originalFilename: string,
+  mimeType?: string
 ): Promise<ParsedDocument> {
-  const ext = getFileExtension(originalFilename);
+  let ext = getFileExtension(originalFilename);
 
   if (!ALLOWED_EXTENSIONS.has(ext)) {
-    throw new Error('Desteklenen formatlar: PDF, Word (.docx), Excel (.xlsx, .xls), Markdown (.md), Metin (.txt)');
+    const inferred = inferExtensionFromMime(mimeType);
+    if (inferred) {
+      ext = inferred;
+      if (!getFileExtension(originalFilename)) {
+        originalFilename = `${originalFilename}${ext}`;
+      }
+    }
+  }
+
+  if (!ALLOWED_EXTENSIONS.has(ext)) {
+    throw new Error(KNOWLEDGE_FILE_FORMATS_MESSAGE);
   }
 
   let raw = '';
@@ -110,7 +166,7 @@ export async function parseKnowledgeDocument(
     case '.md':
     case '.markdown':
     case '.txt':
-      raw = buffer.toString('utf8');
+      raw = parsePlainText(buffer);
       break;
     default:
       throw new Error('Desteklenmeyen dosya türü');

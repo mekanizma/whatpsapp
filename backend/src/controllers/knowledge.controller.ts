@@ -133,7 +133,7 @@ export async function parseKnowledgeFile(req: AuthRequest, res: Response): Promi
   }
 
   try {
-    const parsed = await parseKnowledgeDocument(file.buffer, file.originalname);
+    const parsed = await parseKnowledgeDocument(file.buffer, file.originalname, file.mimetype);
 
     await logActivity({
       userId: req.userId,

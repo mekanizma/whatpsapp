@@ -5,8 +5,15 @@
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, Upload, FileText, X, RefreshCw } from 'lucide-react';
+import { Plus, Pencil, Trash2, Upload, FileText, X, RefreshCw, Eye, PenLine } from 'lucide-react';
 import { api } from '@/services/api';
+import { MarkdownPreview } from '@/components/MarkdownPreview';
+import {
+  KNOWLEDGE_ACCEPTED_FILES,
+  isMarkdownContent,
+  isTextKnowledgeFile,
+  titleFromKnowledgeFilename,
+} from '@/lib/knowledge-files';
 import {
   Button,
   Input,
@@ -19,9 +26,10 @@ import {
   Spinner,
   Badge,
 } from '@/components/ui';
+import { cn } from '@/lib/utils';
 import type { KnowledgeItem, ParsedKnowledgeFile } from '@/types';
 
-const ACCEPTED_FILES = '.pdf,.docx,.xlsx,.xls,.md,.txt,.markdown';
+type ContentView = 'edit' | 'preview';
 
 function indexStatusVariant(status?: KnowledgeItem['index_status']) {
   switch (status) {
@@ -47,6 +55,7 @@ export function KnowledgePage() {
   const [category, setCategory] = useState('');
   const [uploadInfo, setUploadInfo] = useState<ParsedKnowledgeFile | null>(null);
   const [uploadError, setUploadError] = useState('');
+  const [contentView, setContentView] = useState<ContentView>('edit');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
@@ -113,6 +122,7 @@ export function KnowledgePage() {
     setCategory('');
     setUploadInfo(null);
     setUploadError('');
+    setContentView('edit');
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -123,13 +133,35 @@ export function KnowledgePage() {
     setCategory(item.category || '');
     setUploadInfo(null);
     setUploadError('');
+    setContentView('edit');
     setShowForm(true);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const showMarkdownPreview = isMarkdownContent(
+    content,
+    uploadInfo?.source_filename ?? editItem?.source_filename,
+    uploadInfo?.file_type ?? null
+  );
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploadError('');
+
+    if (isTextKnowledgeFile(file)) {
+      try {
+        const text = await file.text();
+        if (text.trim()) {
+          const derivedTitle = titleFromKnowledgeFilename(file.name);
+          if (!title.trim()) setTitle(derivedTitle || file.name);
+          setContent(text);
+          setContentView('preview');
+        }
+      } catch {
+        setUploadError(t('knowledge.fileReadError'));
+      }
+    }
+
     uploadMutation.mutate(file);
   };
 
@@ -185,7 +217,7 @@ export function KnowledgePage() {
                   <input
                     ref={fileInputRef}
                     type="file"
-                    accept={ACCEPTED_FILES}
+                    accept={KNOWLEDGE_ACCEPTED_FILES}
                     className="hidden"
                     onChange={handleFileChange}
                   />
@@ -231,14 +263,46 @@ export function KnowledgePage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label>{t('knowledge.content')}</Label>
-              <Textarea
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                rows={8}
-                placeholder={t('knowledge.contentPlaceholder')}
-                className="min-h-[10rem] font-mono text-sm"
-              />
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <Label>{t('knowledge.content')}</Label>
+                {showMarkdownPreview && (
+                  <div className="flex w-full rounded-lg border border-slate-200 p-0.5 sm:w-auto">
+                    <button
+                      type="button"
+                      onClick={() => setContentView('edit')}
+                      className={cn(
+                        'flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium sm:flex-none',
+                        contentView === 'edit' ? 'bg-primary text-white' : 'text-slate-600 hover:bg-slate-50'
+                      )}
+                    >
+                      <PenLine className="h-3.5 w-3.5" />
+                      {t('knowledge.editContent')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setContentView('preview')}
+                      className={cn(
+                        'flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium sm:flex-none',
+                        contentView === 'preview' ? 'bg-primary text-white' : 'text-slate-600 hover:bg-slate-50'
+                      )}
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                      {t('knowledge.previewContent')}
+                    </button>
+                  </div>
+                )}
+              </div>
+              {contentView === 'preview' && showMarkdownPreview ? (
+                <MarkdownPreview content={content} />
+              ) : (
+                <Textarea
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  rows={8}
+                  placeholder={t('knowledge.contentPlaceholder')}
+                  className="min-h-[10rem] font-mono text-sm"
+                />
+              )}
               <p className="text-xs text-slate-500">{t('knowledge.contentHint')}</p>
             </div>
             <div className="flex flex-col-reverse gap-2 sm:flex-row">
