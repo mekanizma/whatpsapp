@@ -230,9 +230,11 @@ export interface SubscriptionPlan {
   plan_type: string;
   name: string;
   description: string | null;
+  features?: string[];
   message_limit: number;
   user_limit: number;
   price_monthly: number;
+  currency?: string;
   is_active: boolean;
   created_at?: string;
 }

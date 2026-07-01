@@ -33,7 +33,9 @@ export function isAppointmentConfirmation(message: string): boolean {
 
 export async function extractAppointmentFromConversation(
   history: HistoryMsg[],
-  latestMessage: string
+  latestMessage: string,
+  companyId?: string,
+  customerPhone?: string
 ): Promise<ParsedAppointmentAction | null> {
   const transcript = history
     .slice(-14)
@@ -59,7 +61,22 @@ Eksik varsa ready:false`,
         content: `${transcript}\nMüşteri: ${latestMessage}`,
       },
     ],
-    { maxTokens: 400, temperature: 0, responseFormat: { type: 'json_object' } }
+    {
+      maxTokens: 400,
+      temperature: 0,
+      responseFormat: { type: 'json_object' },
+      ...(companyId
+        ? {
+            usageLog: {
+              companyId,
+              customerPhone: customerPhone || '',
+              skipped: false,
+              cached: false,
+              skipReason: 'appointment_extract',
+            },
+          }
+        : {}),
+    }
   );
 
   const raw = completion.choices[0]?.message?.content?.trim();
@@ -157,7 +174,7 @@ export async function tryStructuredAppointmentBooking(
   const fromHistory = await bookFromConfirmation(companyId, customerPhone, history, latestMessage);
   if (fromHistory?.appointment) return fromHistory;
 
-  const extracted = await extractAppointmentFromConversation(history, latestMessage);
+  const extracted = await extractAppointmentFromConversation(history, latestMessage, companyId, customerPhone);
   if (!extracted) return fromHistory;
 
   const gate = blockBookingIfIncomplete(history, latestMessage, extracted, lang);

@@ -131,6 +131,7 @@
     "nav": {
       "dashboard": "Dashboard",
       "messages": "Messages",
+      "customers": "Active Customers",
       "knowledge": "Knowledge Base",
       "tickets": "Support",
       "calendar": "Calendar",
@@ -212,7 +213,10 @@
     "count": "{{count}} customers",
     "empty": "No customers yet",
     "emptyDesc": "Customers will appear here once WhatsApp is connected",
-    "transferred": "Transferred"
+    "transferred": "Transferred",
+    "editName": "Edit name",
+    "openChat": "Messages",
+    "namePlaceholder": "Customer name"
   },
   "todayActivity": {
     "title": "Today's Messages",
@@ -392,7 +396,9 @@
     "messages": "{{count}} messages",
     "unlimitedUsers": "Unlimited users",
     "users": "{{count}} users",
-    "perMonth": "/mo"
+    "perMonth": "/mo",
+    "availablePlans": "Plans",
+    "planLimits": "Quota summary"
   },
   "settings": {
     "title": "Account Settings",
@@ -520,10 +526,22 @@
       "title": "Subscription Plans",
       "description": "Edit pricing and limits for Starter, Business, and Enterprise. Changes appear on the customer subscription page.",
       "name": "Plan Name",
-      "fieldDescription": "Description",
+      "fieldDescription": "Short description",
+      "descriptionPlaceholder": "Starter package for small businesses",
+      "descriptionHint": "One-line summary shown at the top of the plan card.",
+      "features": "Features",
+      "featuresPlaceholder": "One feature per line",
+      "featuresHint": "Listed as bullet points. Legacy descriptions with ✅ are parsed automatically.",
+      "currency": "Currency",
       "messageLimit": "Monthly Message Limit",
       "userLimit": "User Limit",
-      "priceMonthly": "Monthly Price (₺)",
+      "priceMonthly": "Monthly price",
+      "currencies": {
+        "TRY": "Turkish Lira (₺)",
+        "USD": "US Dollar ($)",
+        "EUR": "Euro (€)",
+        "GBP": "British Pound (£)"
+      },
       "active": "Active",
       "inactive": "Inactive",
       "activeHint": "Show this plan on the customer panel",

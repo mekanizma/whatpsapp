@@ -41,7 +41,8 @@ export async function getConversations(req: AuthRequest, res: Response): Promise
   }>();
 
   for (const msg of messages || []) {
-    if (!conversationMap.has(msg.customer_phone)) {
+    const existing = conversationMap.get(msg.customer_phone);
+    if (!existing) {
       conversationMap.set(msg.customer_phone, {
         customer_phone: msg.customer_phone,
         customer_name: msg.customer_name,
@@ -50,6 +51,11 @@ export async function getConversations(req: AuthRequest, res: Response): Promise
         unread_count: msg.sender_type === 'customer' && msg.status === 'open' ? 1 : 0,
         status: msg.status,
       });
+      continue;
+    }
+
+    if (!existing.customer_name && msg.customer_name) {
+      existing.customer_name = msg.customer_name;
     }
   }
 
@@ -72,6 +78,55 @@ export async function getConversationMessages(req: AuthRequest, res: Response): 
   }
 
   res.json({ success: true, data });
+}
+
+export async function updateCustomerName(req: AuthRequest, res: Response): Promise<void> {
+  const phone = resolvePhoneParam(req.params.phone as string);
+  const { customer_name } = req.body;
+  const name = typeof customer_name === 'string' ? customer_name.trim() : '';
+
+  if (!name) {
+    res.status(400).json({ success: false, error: 'Müşteri adı boş olamaz' });
+    return;
+  }
+
+  if (name.length > 120) {
+    res.status(400).json({ success: false, error: 'Müşteri adı en fazla 120 karakter olabilir' });
+    return;
+  }
+
+  if (!req.companyId) {
+    res.status(403).json({ success: false, error: 'Şirket bilgisi bulunamadı' });
+    return;
+  }
+
+  const filter = { company_id: req.companyId, customer_phone: phone };
+
+  const [messagesResult, ticketsResult, appointmentsResult] = await Promise.all([
+    adminClient.from('messages').update({ customer_name: name }).match(filter),
+    adminClient.from('tickets').update({ customer_name: name }).match(filter),
+    adminClient.from('appointments').update({ customer_name: name }).match(filter),
+  ]);
+
+  const error = messagesResult.error || ticketsResult.error || appointmentsResult.error;
+  if (error) {
+    res.status(400).json({ success: false, error: error.message });
+    return;
+  }
+
+  await logActivity({
+    userId: req.userId,
+    companyId: req.companyId,
+    action: 'customer_name_updated',
+    entityType: 'customer',
+    metadata: { customer_phone: phone, customer_name: name },
+  });
+
+  res.json({
+    success: true,
+    data: { customer_phone: phone, customer_name: name },
+    message: 'Müşteri adı güncellendi',
+  });
 }
 
 export async function replyToConversation(req: AuthRequest, res: Response): Promise<void> {

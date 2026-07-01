@@ -399,9 +399,11 @@ export async function updateSubscriptionPlanAdmin(req: AuthRequest, res: Respons
   const {
     name,
     description,
+    features,
     message_limit,
     user_limit,
     price_monthly,
+    currency,
     is_active,
     sync_subscriptions,
   } = req.body;
@@ -410,9 +412,11 @@ export async function updateSubscriptionPlanAdmin(req: AuthRequest, res: Respons
     const data = await updateSubscriptionPlan(String(req.params.id), {
       name,
       description,
+      features: Array.isArray(features) ? features : undefined,
       message_limit: message_limit !== undefined ? Number(message_limit) : undefined,
       user_limit: user_limit !== undefined ? Number(user_limit) : undefined,
       price_monthly: price_monthly !== undefined ? Number(price_monthly) : undefined,
+      currency: typeof currency === 'string' ? currency : undefined,
       is_active,
       sync_subscriptions: !!sync_subscriptions,
     });

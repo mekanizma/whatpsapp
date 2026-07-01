@@ -131,6 +131,7 @@
     "nav": {
       "dashboard": "Dashboard",
       "messages": "Mesajlar",
+      "customers": "Aktif Müşteriler",
       "knowledge": "Bilgi Bankası",
       "tickets": "Destek",
       "calendar": "Takvim",
@@ -212,7 +213,10 @@
     "count": "{{count}} müşteri",
     "empty": "Henüz müşteri yok",
     "emptyDesc": "WhatsApp bağlantısı kurulduğunda müşteriler burada listelenir",
-    "transferred": "Aktarıldı"
+    "transferred": "Aktarıldı",
+    "editName": "Adı düzenle",
+    "openChat": "Mesajlar",
+    "namePlaceholder": "Müşteri adı"
   },
   "todayActivity": {
     "title": "Bugünkü Mesajlar",
@@ -392,7 +396,9 @@
     "messages": "{{count}} mesaj",
     "unlimitedUsers": "Sınırsız kullanıcı",
     "users": "{{count}} kullanıcı",
-    "perMonth": "/ay"
+    "perMonth": "/ay",
+    "availablePlans": "Paketler",
+    "planLimits": "Kota özeti"
   },
   "settings": {
     "title": "Hesap Ayarları",
@@ -520,10 +526,22 @@
       "title": "Abonelik Paketleri",
       "description": "Starter, Business ve Enterprise paketlerinin fiyat ve limitlerini buradan düzenleyin. Değişiklikler müşteri abonelik sayfasına yansır.",
       "name": "Paket Adı",
-      "fieldDescription": "Açıklama",
+      "fieldDescription": "Kısa açıklama",
+      "descriptionPlaceholder": "Küçük işletmeler için başlangıç paketi",
+      "descriptionHint": "Paket kartının üstünde görünen tek satırlık özet.",
+      "features": "Özellikler",
+      "featuresPlaceholder": "Her satıra bir özellik yazın",
+      "featuresHint": "Madde madde listelenir. Eski ✅ ile yazılmış açıklamalar otomatik ayrıştırılır.",
+      "currency": "Para birimi",
       "messageLimit": "Aylık Mesaj Limiti",
       "userLimit": "Kullanıcı Limiti",
-      "priceMonthly": "Aylık Fiyat (₺)",
+      "priceMonthly": "Aylık fiyat",
+      "currencies": {
+        "TRY": "Türk Lirası (₺)",
+        "USD": "ABD Doları ($)",
+        "EUR": "Euro (€)",
+        "GBP": "İngiliz Sterlini (£)"
+      },
       "active": "Aktif",
       "inactive": "Pasif",
       "activeHint": "Paket müşteri panelinde listelensin",

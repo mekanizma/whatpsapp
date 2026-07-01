@@ -144,21 +144,16 @@ export async function generateAIResponse(
   const completion = await createChatCompletion(chatMessages, {
     maxTokens: config.ai.maxTokens,
     temperature: config.ai.temperature,
+    usageLog: {
+      companyId,
+      customerPhone,
+      skipped: false,
+      cached: false,
+    },
   });
 
   const usage = completion.usage;
   const totalTokens = usage?.total_tokens || 0;
-
-  await logAIUsage({
-    companyId,
-    customerPhone,
-    promptTokens: usage?.prompt_tokens || 0,
-    completionTokens: usage?.completion_tokens || 0,
-    totalTokens,
-    cached: false,
-    skipped: false,
-    model: config.openai.model,
-  });
 
   const raw = completion.choices[0]?.message?.content?.trim() || '';
   const { message, shouldTransfer } = stripTransferMarker(raw);

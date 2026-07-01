@@ -5,6 +5,7 @@
 import { adminClient } from '../database/supabase';
 import { config } from '../config';
 import { normalizePhoneNumber } from '../whatsapp/message.handler';
+import { getMonthStartISO } from '../utils/date';
 
 export interface QuotaStatus {
   allowed: boolean;
@@ -37,7 +38,7 @@ export async function checkAIQuota(companyId: string): Promise<QuotaStatus> {
     .eq('company_id', companyId)
     .eq('skipped', false)
     .eq('cached', false)
-    .gte('created_at', new Date(new Date().setDate(1)).toISOString());
+    .gte('created_at', getMonthStartISO());
 
   const aiUsed = aiCallsUsed || 0;
   const allowed = messagesUsed < messagesLimit && aiUsed < aiCallsLimit;
@@ -83,9 +84,9 @@ export async function logAIUsage(params: {
   if (config.demoMode) return;
 
   try {
-    await adminClient.from('ai_usage_logs').insert({
+    const { error } = await adminClient.from('ai_usage_logs').insert({
       company_id: params.companyId,
-      customer_phone: params.customerPhone,
+      customer_phone: params.customerPhone || null,
       prompt_tokens: params.promptTokens,
       completion_tokens: params.completionTokens,
       total_tokens: params.totalTokens,
@@ -94,7 +95,11 @@ export async function logAIUsage(params: {
       skip_reason: params.skipReason || null,
       model: params.model,
     });
-  } catch {
-    // Tablo yoksa sessizce geç (migration öncesi uyumluluk)
+
+    if (error) {
+      console.error('[AI Usage] Log kaydı başarısız:', error.message, error.code);
+    }
+  } catch (err) {
+    console.error('[AI Usage] Log kaydı hatası:', err);
   }
 }

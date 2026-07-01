@@ -91,6 +91,7 @@ router.post('/knowledge/:id/index-now', authenticate, requireRole('company_admin
 // Messages
 router.get('/messages', authenticate, requireCompany, messagesCtrl.getConversations);
 router.get('/messages/:phone', authenticate, requireCompany, messagesCtrl.getConversationMessages);
+router.patch('/messages/:phone/customer-name', authenticate, requireRole('company_admin'), requireCompany, messagesCtrl.updateCustomerName);
 router.post('/messages/:phone/reply', authenticate, requireCompany, messagesCtrl.replyToConversation);
 
 // Tickets

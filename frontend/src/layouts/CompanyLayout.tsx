@@ -16,7 +16,7 @@ import {
 
   LayoutDashboard, MessageSquare, BookOpen, Users, Ticket,
 
-  LogOut, Menu, X, CreditCard, Smartphone, Bell, Settings, CalendarDays,
+  LogOut, Menu, X, CreditCard, Smartphone, Bell, Settings, CalendarDays, UserRound,
 
 } from 'lucide-react';
 
@@ -37,6 +37,8 @@ const allNav = [
   { to: '/panel/dashboard', icon: LayoutDashboard, labelKey: 'layout.nav.dashboard', roles: ['company_admin'] as UserRole[] },
 
   { to: '/panel/messages', icon: MessageSquare, labelKey: 'layout.nav.messages', roles: ['company_admin', 'staff'] as UserRole[] },
+
+  { to: '/panel/customers', icon: UserRound, labelKey: 'layout.nav.customers', roles: ['company_admin'] as UserRole[] },
 
   { to: '/panel/knowledge', icon: BookOpen, labelKey: 'layout.nav.knowledge', roles: ['company_admin'] as UserRole[] },
 

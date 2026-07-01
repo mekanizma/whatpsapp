@@ -5,7 +5,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { CreditCard, Save, Pencil, X, Check } from 'lucide-react';
+import { CreditCard, Save, Pencil, X } from 'lucide-react';
 import { api } from '@/services/api';
 import { getErrorMessage } from '@/lib/errors';
 import { PageHeader } from '@/components/PageHeader';
@@ -24,31 +24,48 @@ import {
 import type { SubscriptionPlan } from '@/types';
 import { cn } from '@/lib/utils';
 import { isDemoMode } from '@/lib/env';
+import {
+  PLAN_CURRENCIES,
+  featuresToTextarea,
+  parseLegacyDescriptionFeatures,
+  textareaToFeatures,
+} from '@/lib/plan-format';
+import { PlanCard } from '@/components/PlanCard';
 
 interface PlanForm {
   name: string;
   description: string;
+  features: string;
   message_limit: string;
   user_limit: string;
   price_monthly: string;
+  currency: string;
   is_active: boolean;
   sync_subscriptions: boolean;
 }
 
 function toForm(plan: SubscriptionPlan): PlanForm {
+  const features =
+    plan.features && plan.features.length > 0
+      ? featuresToTextarea(plan.features)
+      : featuresToTextarea(parseLegacyDescriptionFeatures(plan.description || ''));
+
   return {
     name: plan.name,
     description: plan.description || '',
+    features,
     message_limit: String(plan.message_limit),
     user_limit: String(plan.user_limit),
     price_monthly: String(plan.price_monthly),
+    currency: (plan.currency || 'TRY').toUpperCase(),
     is_active: plan.is_active,
     sync_subscriptions: false,
   };
 }
 
 export function AdminPlansPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const locale = i18n.language?.startsWith('en') ? 'en-US' : 'tr-TR';
   const queryClient = useQueryClient();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<PlanForm | null>(null);
@@ -94,25 +111,19 @@ export function AdminPlansPage() {
       body: {
         name: form.name.trim(),
         description: form.description.trim() || null,
+        features: textareaToFeatures(form.features),
         message_limit: Number(form.message_limit),
         user_limit: Number(form.user_limit),
         price_monthly: Number(form.price_monthly),
+        currency: form.currency,
         is_active: form.is_active,
         sync_subscriptions: form.sync_subscriptions,
       },
     });
   };
 
-  const formatLimit = (value: number, type: 'messages' | 'users') => {
-    const unlimited = type === 'messages' ? 999999 : 999;
-    if (value >= unlimited) {
-      return type === 'messages' ? t('subscription.unlimitedMessages') : t('subscription.unlimitedUsers');
-    }
-    if (type === 'messages') {
-      return t('subscription.messages', { count: value.toLocaleString() });
-    }
-    return t('subscription.users', { count: value });
-  };
+  const currencyLabel = (code: string) =>
+    t(`admin.plans.currencies.${code}`, { defaultValue: code });
 
   if (isLoading) {
     return (
@@ -188,12 +199,23 @@ export function AdminPlansPage() {
                     </div>
                     <div className="space-y-2">
                       <Label>{t('admin.plans.fieldDescription')}</Label>
-                      <Textarea
+                      <Input
                         value={form.description}
                         onChange={(e) => setForm({ ...form, description: e.target.value })}
-                        rows={3}
-                        className="min-h-[5rem] resize-y"
+                        placeholder={t('admin.plans.descriptionPlaceholder')}
                       />
+                      <p className="text-xs text-slate-500">{t('admin.plans.descriptionHint')}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>{t('admin.plans.features')}</Label>
+                      <Textarea
+                        value={form.features}
+                        onChange={(e) => setForm({ ...form, features: e.target.value })}
+                        rows={6}
+                        placeholder={t('admin.plans.featuresPlaceholder')}
+                        className="min-h-[8rem] resize-y font-mono text-sm"
+                      />
+                      <p className="text-xs text-slate-500">{t('admin.plans.featuresHint')}</p>
                     </div>
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div className="space-y-2">
@@ -215,15 +237,31 @@ export function AdminPlansPage() {
                         />
                       </div>
                     </div>
-                    <div className="space-y-2">
-                      <Label>{t('admin.plans.priceMonthly')}</Label>
-                      <Input
-                        type="number"
-                        min={0}
-                        step="0.01"
-                        value={form.price_monthly}
-                        onChange={(e) => setForm({ ...form, price_monthly: e.target.value })}
-                      />
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>{t('admin.plans.currency')}</Label>
+                        <select
+                          value={form.currency}
+                          onChange={(e) => setForm({ ...form, currency: e.target.value })}
+                          className="flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                        >
+                          {PLAN_CURRENCIES.map((code) => (
+                            <option key={code} value={code}>
+                              {currencyLabel(code)}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>{t('admin.plans.priceMonthly')}</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={form.price_monthly}
+                          onChange={(e) => setForm({ ...form, price_monthly: e.target.value })}
+                        />
+                      </div>
                     </div>
                     <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-slate-50/80 p-3">
                       <input
@@ -265,21 +303,7 @@ export function AdminPlansPage() {
                   </>
                 ) : (
                   <>
-                    <p className="text-sm text-slate-600">{plan.description || t('admin.plans.noDescription')}</p>
-                    <p className="text-2xl font-bold text-slate-900">
-                      ₺{Number(plan.price_monthly).toLocaleString()}
-                      <span className="text-sm font-normal text-slate-500">{t('subscription.perMonth')}</span>
-                    </p>
-                    <ul className="space-y-2 text-sm text-slate-700">
-                      <li className="flex items-center gap-2">
-                        <Check className="h-4 w-4 shrink-0 text-emerald-500" />
-                        {formatLimit(plan.message_limit, 'messages')}
-                      </li>
-                      <li className="flex items-center gap-2">
-                        <Check className="h-4 w-4 shrink-0 text-emerald-500" />
-                        {formatLimit(plan.user_limit, 'users')}
-                      </li>
-                    </ul>
+                    <PlanCard plan={plan} locale={locale} embedded />
                     {saveMsg?.id === plan.id && saveMsg.type === 'ok' && (
                       <p className="text-sm text-emerald-600">{saveMsg.text}</p>
                     )}

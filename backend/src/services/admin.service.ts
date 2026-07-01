@@ -5,6 +5,7 @@
 import { adminClient } from '../database/supabase';
 import { config } from '../config';
 import { getDashboardStats } from './dashboard.service';
+import { getMonthStartISO } from '../utils/date';
 
 const PLAN_LIMITS: Record<string, { messages: number; users: number }> = {
   starter: { messages: 1000, users: 1 },
@@ -13,8 +14,7 @@ const PLAN_LIMITS: Record<string, { messages: number; users: number }> = {
 };
 
 export async function getExtendedPlatformStats() {
-  const monthStart = new Date(new Date().setDate(1));
-  monthStart.setHours(0, 0, 0, 0);
+  const monthStart = getMonthStartISO();
 
   const [companies, messages, subs, aiLogs, tickets, waConnected] = await Promise.all([
     adminClient.from('companies').select('id', { count: 'exact', head: true }),
@@ -23,7 +23,7 @@ export async function getExtendedPlatformStats() {
     adminClient
       .from('ai_usage_logs')
       .select('total_tokens, cached, skipped')
-      .gte('created_at', monthStart.toISOString()),
+      .gte('created_at', monthStart),
     adminClient
       .from('tickets')
       .select('id', { count: 'exact', head: true })
@@ -36,6 +36,14 @@ export async function getExtendedPlatformStats() {
 
   const allSubs = subs.data || [];
   const ai = aiLogs.data || [];
+  const aiMessageFallback = await adminClient
+    .from('messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('sender_type', 'ai')
+    .gte('created_at', monthStart);
+
+  const apiCallsFromLogs = ai.filter((l) => !l.skipped && !l.cached).length;
+  const apiCallsFromMessages = aiMessageFallback.count || 0;
 
   return {
     total_companies: companies.count || 0,
@@ -45,7 +53,7 @@ export async function getExtendedPlatformStats() {
     open_tickets: tickets.count || 0,
     whatsapp_connected: waConnected.count || 0,
     ai_tokens_month: ai.reduce((s, l) => s + (l.total_tokens || 0), 0),
-    ai_api_calls_month: ai.filter((l) => !l.skipped && !l.cached).length,
+    ai_api_calls_month: Math.max(apiCallsFromLogs, apiCallsFromMessages),
     ai_saved_month: ai.filter((l) => l.skipped || l.cached).length,
     ai_model: config.openai.model,
   };
@@ -76,7 +84,7 @@ export async function getCompaniesWithUsage(page = 1, limit = 50, search = '') {
   let aiTokens: Record<string, number> = {};
 
   if (ids.length) {
-    const monthStart = new Date(new Date().setDate(1)).toISOString();
+    const monthStart = getMonthStartISO();
     const [msgs, ai] = await Promise.all([
       adminClient.from('messages').select('company_id').in('company_id', ids),
       adminClient
@@ -252,17 +260,34 @@ export async function createCompanyAdminUser(
 }
 
 export async function getPlatformAIUsage() {
-  const monthStart = new Date(new Date().setDate(1)).toISOString();
+  const monthStart = getMonthStartISO();
 
-  const { data: logs } = await adminClient
-    .from('ai_usage_logs')
-    .select('company_id, total_tokens, cached, skipped, created_at')
-    .gte('created_at', monthStart);
+  const [logsResult, companiesResult, aiMessagesResult] = await Promise.all([
+    adminClient
+      .from('ai_usage_logs')
+      .select('company_id, total_tokens, cached, skipped, created_at')
+      .gte('created_at', monthStart),
+    adminClient.from('companies').select('id, company_name'),
+    adminClient
+      .from('messages')
+      .select('company_id')
+      .eq('sender_type', 'ai')
+      .gte('created_at', monthStart),
+  ]);
 
-  const { data: companies } = await adminClient.from('companies').select('id, company_name');
+  if (logsResult.error) {
+    console.error('[AI Usage] Log sorgusu başarısız:', logsResult.error.message);
+  }
+  if (aiMessagesResult.error) {
+    console.error('[AI Usage] Mesaj sorgusu başarısız:', aiMessagesResult.error.message);
+  }
+
+  const logs = logsResult.data || [];
+  const companies = companiesResult.data || [];
 
   const byCompany: Record<string, { tokens: number; api_calls: number; saved: number }> = {};
-  for (const log of logs || []) {
+  for (const log of logs) {
+    if (!log.company_id) continue;
     if (!byCompany[log.company_id]) {
       byCompany[log.company_id] = { tokens: 0, api_calls: 0, saved: 0 };
     }
@@ -271,11 +296,25 @@ export async function getPlatformAIUsage() {
     else byCompany[log.company_id].api_calls += 1;
   }
 
-  return (companies || []).map((c) => ({
-    company_id: c.id,
-    company_name: c.company_name,
-    ...(byCompany[c.id] || { tokens: 0, api_calls: 0, saved: 0 }),
-  }));
+  const aiMsgCounts: Record<string, number> = {};
+  for (const msg of aiMessagesResult.data || []) {
+    if (!msg.company_id) continue;
+    aiMsgCounts[msg.company_id] = (aiMsgCounts[msg.company_id] || 0) + 1;
+  }
+
+  return companies
+    .map((c) => {
+      const fromLogs = byCompany[c.id] || { tokens: 0, api_calls: 0, saved: 0 };
+      const messageCalls = aiMsgCounts[c.id] || 0;
+      return {
+        company_id: c.id,
+        company_name: c.company_name,
+        tokens: fromLogs.tokens,
+        api_calls: Math.max(fromLogs.api_calls, messageCalls),
+        saved: fromLogs.saved,
+      };
+    })
+    .sort((a, b) => b.api_calls - a.api_calls || b.tokens - a.tokens);
 }
 
 export async function getActivityLogs(page = 1, limit = 30, companyId?: string) {

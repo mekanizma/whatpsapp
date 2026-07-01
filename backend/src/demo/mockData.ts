@@ -104,9 +104,39 @@ export const demoSubscriptionUsage = {
 };
 
 export const demoPlans = [
-  { id: '1', plan_type: 'starter', name: 'Starter', description: 'Küçük işletmeler', message_limit: 1000, user_limit: 1, price_monthly: 499 },
-  { id: '2', plan_type: 'business', name: 'Business', description: 'Orta ölçekli', message_limit: 5000, user_limit: 5, price_monthly: 1499 },
-  { id: '3', plan_type: 'enterprise', name: 'Enterprise', description: 'Sınırsız', message_limit: 999999, user_limit: 999, price_monthly: 4999 },
+  {
+    id: '1',
+    plan_type: 'starter',
+    name: 'Starter',
+    description: 'Küçük işletmeler için başlangıç paketi',
+    features: ['1 WhatsApp numarası', 'AI müşteri temsilcisi', 'Web panel erişimi'],
+    message_limit: 1000,
+    user_limit: 1,
+    price_monthly: 499,
+    currency: 'TRY',
+  },
+  {
+    id: '2',
+    plan_type: 'business',
+    name: 'Business',
+    description: 'Büyüyen ekipler için',
+    features: ['Gelişmiş AI bilgi bankası', 'Personel aktarımı', 'Ticket sistemi', 'Raporlama paneli'],
+    message_limit: 5000,
+    user_limit: 5,
+    price_monthly: 1499,
+    currency: 'TRY',
+  },
+  {
+    id: '3',
+    plan_type: 'enterprise',
+    name: 'Enterprise',
+    description: 'Kurumsal ölçek',
+    features: ['Özel AI modeli', 'CRM entegrasyonu', 'SLA destek', 'Ücretsiz kurulum'],
+    message_limit: 999999,
+    user_limit: 999,
+    price_monthly: 4999,
+    currency: 'TRY',
+  },
 ];
 
 // Demo QR sessions (in-memory)

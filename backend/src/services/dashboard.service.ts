@@ -5,14 +5,14 @@
 import { adminClient } from '../database/supabase';
 import { demoDashboardStats, demoPlatformStats } from '../demo/mockData';
 import { DashboardStats } from '../types';
+import { getMonthStartISO } from '../utils/date';
 
 export async function getDashboardStats(companyId: string, useDemoData = false): Promise<DashboardStats> {
   if (useDemoData) return demoDashboardStats;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const monthStart = new Date(new Date().setDate(1));
-  monthStart.setHours(0, 0, 0, 0);
+  const monthStart = getMonthStartISO();
 
   const [
     totalResult,
@@ -56,7 +56,7 @@ export async function getDashboardStats(companyId: string, useDemoData = false):
       .from('ai_usage_logs')
       .select('cached, skipped, total_tokens')
       .eq('company_id', companyId)
-      .gte('created_at', monthStart.toISOString()),
+      .gte('created_at', monthStart),
   ]);
 
   const uniqueCustomers = new Set(
@@ -64,7 +64,9 @@ export async function getDashboardStats(companyId: string, useDemoData = false):
   );
 
   const aiLogs = aiLogsResult.data || [];
-  const aiApiCalls = aiLogs.filter((l) => !l.skipped && !l.cached).length;
+  const aiApiCallsFromLogs = aiLogs.filter((l) => !l.skipped && !l.cached).length;
+  const aiApiCallsFromMessages = aiResult.count || 0;
+  const aiApiCalls = Math.max(aiApiCallsFromLogs, aiApiCallsFromMessages);
   const aiCachedHits = aiLogs.filter((l) => l.cached).length;
   const aiSkipped = aiLogs.filter((l) => l.skipped).length;
   const aiTokensUsed = aiLogs.reduce((sum, l) => sum + (l.total_tokens || 0), 0);

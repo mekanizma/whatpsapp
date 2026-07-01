@@ -27,9 +27,11 @@ export function AdminUsagePage() {
   });
 
   const rows = usage || [];
-  const totalTokens = rows.reduce((s, r) => s + r.tokens, 0);
-  const totalApi = rows.reduce((s, r) => s + r.api_calls, 0);
-  const totalSaved = rows.reduce((s, r) => s + r.saved, 0);
+  const activeRows = rows.filter((r) => r.tokens > 0 || r.api_calls > 0 || r.saved > 0);
+  const displayRows = activeRows.length > 0 ? activeRows : rows;
+  const totalTokens = displayRows.reduce((s, r) => s + r.tokens, 0);
+  const totalApi = displayRows.reduce((s, r) => s + r.api_calls, 0);
+  const totalSaved = displayRows.reduce((s, r) => s + r.saved, 0);
 
   return (
     <div className="space-y-6">
@@ -93,7 +95,7 @@ export function AdminUsagePage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row) => (
+                  {displayRows.map((row) => (
                     <tr key={row.company_id} className="border-b border-slate-50 hover:bg-slate-50/50">
                       <td className="px-4 py-3">
                         <Link to={`/admin/companies/${row.company_id}`} className="font-medium text-teal-600 hover:underline">
@@ -112,7 +114,7 @@ export function AdminUsagePage() {
             </div>
 
             <div className="space-y-3 p-4 md:hidden">
-              {rows.map((row) => (
+              {displayRows.map((row) => (
                 <Link
                   key={row.company_id}
                   to={`/admin/companies/${row.company_id}`}
@@ -130,7 +132,7 @@ export function AdminUsagePage() {
               ))}
             </div>
 
-            {rows.length === 0 && (
+            {displayRows.length === 0 && (
               <p className="p-6 text-center text-sm text-slate-500">{t('admin.usage.empty')}</p>
             )}
           </CardContent>
