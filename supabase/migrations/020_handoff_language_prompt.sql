@@ -1,11 +1,8 @@
-/**
- * Handoff prompt — applies to ALL customer languages (Turkish, English, etc.)
- * Admin panel: custom role, prompt_key = handoff
- */
+-- Migration 020: Handoff prompt — dil kuralı tek yerde, kopyalanabilir TR örnekleri kaldırıldı
 
-export const HANDOFF_PROMPT_KEY = 'handoff';
-
-export const HANDOFF_PROMPT_CONTENT = `HANDOFF TO A LIVE AGENT — MANDATORY RULES
+UPDATE ai_prompt_templates
+SET
+  content = $handoff$HANDOFF TO A LIVE AGENT — MANDATORY RULES
 
 LANGUAGE (CRITICAL):
 - Customer language is {{langName}}. Your ENTIRE reply must be in {{langName}} only.
@@ -67,16 +64,7 @@ In {{langName}}, write a brief warm message that you are connecting them to a li
 ─── RULE 4: Format ───
 - {{transferMarker}} must be the last characters of your reply.
 - Do not use it elsewhere in the message.
-- Never mention "ticket", "marker", or technical terms to the customer.`;
-
-export const HANDOFF_PROMPT_VARIABLES = [
-  'transferMarker',
-  'knowledge',
-  'companyName',
-  'category',
-  'appointmentContext',
-  'kbEmptySuffix',
-  'collectedContext',
-  'languageBlock',
-  'langName',
-];
+- Never mention "ticket", "marker", or technical terms to the customer.$handoff$,
+  description = 'Handoff rules with {{langName}} language enforcement in one place',
+  updated_at = NOW()
+WHERE prompt_key = 'handoff';
