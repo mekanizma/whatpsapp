@@ -7,6 +7,7 @@ import { config } from '../config';
 import { adminClient } from '../database/supabase';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { logActivity } from '../services/log.service';
+import { createStaffUser, deleteStaffUser } from '../services/staff.service';
 
 export async function getStaff(req: AuthRequest, res: Response): Promise<void> {
   if (config.demoMode) {
@@ -29,28 +30,40 @@ export async function getStaff(req: AuthRequest, res: Response): Promise<void> {
 }
 
 export async function createStaff(req: AuthRequest, res: Response): Promise<void> {
-  const { name, email, role } = req.body;
+  const { name, email, password, role } = req.body;
 
-  const { data, error } = await adminClient
-    .from('staff')
-    .insert({ company_id: req.companyId, name, email, role: role || 'agent' })
-    .select()
-    .single();
-
-  if (error) {
-    res.status(400).json({ success: false, error: error.message });
+  if (!name?.trim() || !email?.trim() || !password) {
+    res.status(400).json({ success: false, error: 'Ad, e-posta ve şifre zorunludur' });
     return;
   }
 
-  await logActivity({
-    userId: req.userId,
-    companyId: req.companyId,
-    action: 'staff_created',
-    entityType: 'staff',
-    entityId: data.id,
-  });
+  if (config.demoMode) {
+    res.status(400).json({ success: false, error: 'Demo modda personel eklenemez' });
+    return;
+  }
 
-  res.status(201).json({ success: true, data });
+  try {
+    const data = await createStaffUser(
+      req.companyId!,
+      email,
+      password,
+      name.trim(),
+      role || 'agent'
+    );
+
+    await logActivity({
+      userId: req.userId,
+      companyId: req.companyId,
+      action: 'staff_created',
+      entityType: 'staff',
+      entityId: data.id,
+    });
+
+    res.status(201).json({ success: true, data });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Personel oluşturulamadı';
+    res.status(400).json({ success: false, error: message });
+  }
 }
 
 export async function updateStaff(req: AuthRequest, res: Response): Promise<void> {
@@ -73,16 +86,16 @@ export async function updateStaff(req: AuthRequest, res: Response): Promise<void
 }
 
 export async function deleteStaff(req: AuthRequest, res: Response): Promise<void> {
-  const { error } = await adminClient
-    .from('staff')
-    .delete()
-    .eq('id', req.params.id)
-    .eq('company_id', req.companyId);
-
-  if (error) {
-    res.status(400).json({ success: false, error: error.message });
+  if (config.demoMode) {
+    res.status(400).json({ success: false, error: 'Demo modda personel silinemez' });
     return;
   }
 
-  res.json({ success: true, message: 'Personel silindi' });
+  try {
+    await deleteStaffUser(String(req.params.id), req.companyId!);
+    res.json({ success: true, message: 'Personel silindi' });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Personel silinemedi';
+    res.status(400).json({ success: false, error: message });
+  }
 }

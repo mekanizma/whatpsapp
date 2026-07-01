@@ -34,7 +34,7 @@ import type { UserRole } from '@/types';
 
 const allNav = [
 
-  { to: '/panel/dashboard', icon: LayoutDashboard, labelKey: 'layout.nav.dashboard', roles: ['company_admin', 'staff'] as UserRole[] },
+  { to: '/panel/dashboard', icon: LayoutDashboard, labelKey: 'layout.nav.dashboard', roles: ['company_admin'] as UserRole[] },
 
   { to: '/panel/messages', icon: MessageSquare, labelKey: 'layout.nav.messages', roles: ['company_admin', 'staff'] as UserRole[] },
 
@@ -42,7 +42,7 @@ const allNav = [
 
   { to: '/panel/tickets', icon: Ticket, labelKey: 'layout.nav.tickets', roles: ['company_admin', 'staff'] as UserRole[] },
 
-  { to: '/panel/calendar', icon: CalendarDays, labelKey: 'layout.nav.calendar', roles: ['company_admin', 'staff'] as UserRole[] },
+  { to: '/panel/calendar', icon: CalendarDays, labelKey: 'layout.nav.calendar', roles: ['company_admin'] as UserRole[] },
 
   { to: '/panel/staff', icon: Users, labelKey: 'layout.nav.staff', roles: ['company_admin'] as UserRole[] },
 

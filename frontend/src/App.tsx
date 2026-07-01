@@ -8,6 +8,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/authStore';
 import { RoleRoute } from '@/components/RoleRoute';
+import { AdminOnlyRoute, PanelIndexRedirect } from '@/components/AdminOnlyRoute';
 import { AdminLayout } from '@/layouts/AdminLayout';
 import { CompanyLayout } from '@/layouts/CompanyLayout';
 import { LoginPage } from '@/pages/LoginPage';
@@ -78,18 +79,18 @@ function AppRoutes() {
           </RoleRoute>
         }
       >
-        <Route index element={<Navigate to="/panel/dashboard" replace />} />
-        <Route path="dashboard" element={<DashboardPage />} />
+        <Route index element={<PanelIndexRedirect />} />
+        <Route path="dashboard" element={<AdminOnlyRoute><DashboardPage /></AdminOnlyRoute>} />
         <Route path="messages" element={<MessagesPage />} />
-        <Route path="activity/today" element={<TodayActivityPage />} />
-        <Route path="ai-insights" element={<AiInsightsPage />} />
-        <Route path="customers" element={<CustomersPage />} />
-        <Route path="knowledge" element={<KnowledgePage />} />
+        <Route path="activity/today" element={<AdminOnlyRoute><TodayActivityPage /></AdminOnlyRoute>} />
+        <Route path="ai-insights" element={<AdminOnlyRoute><AiInsightsPage /></AdminOnlyRoute>} />
+        <Route path="customers" element={<AdminOnlyRoute><CustomersPage /></AdminOnlyRoute>} />
+        <Route path="knowledge" element={<AdminOnlyRoute><KnowledgePage /></AdminOnlyRoute>} />
         <Route path="tickets" element={<TicketsPage />} />
-        <Route path="calendar" element={<CalendarPage />} />
-        <Route path="staff" element={<StaffPage />} />
-        <Route path="whatsapp" element={<WhatsAppPage />} />
-        <Route path="subscription" element={<SubscriptionPage />} />
+        <Route path="calendar" element={<AdminOnlyRoute><CalendarPage /></AdminOnlyRoute>} />
+        <Route path="staff" element={<AdminOnlyRoute><StaffPage /></AdminOnlyRoute>} />
+        <Route path="whatsapp" element={<AdminOnlyRoute><WhatsAppPage /></AdminOnlyRoute>} />
+        <Route path="subscription" element={<AdminOnlyRoute><SubscriptionPage /></AdminOnlyRoute>} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>
 

@@ -290,10 +290,13 @@
   },
   "staff": {
     "title": "Personel",
-    "description": "Firma çalışanlarını yönetin",
+    "description": "Firma çalışanlarını yönetin. Eklediğiniz personel belirlediğiniz şifre ile panele giriş yapabilir.",
     "add": "Personel Ekle",
     "new": "Yeni Personel",
-    "fullName": "Ad Soyad"
+    "fullName": "Ad Soyad",
+    "fullNamePlaceholder": "Örn. Ayşe Yılmaz",
+    "passwordPlaceholder": "Giriş şifresi belirleyin",
+    "passwordHint": "Personel bu şifre ile panele giriş yapacak (en az 6 karakter)"
   },
   "knowledge": {
     "title": "Bilgi Bankası",

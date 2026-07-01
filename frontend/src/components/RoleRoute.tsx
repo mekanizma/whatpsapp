@@ -29,7 +29,12 @@ export function RoleRoute({ children, allowedRoles, redirectTo }: RoleRouteProps
   }
 
   if (!user?.role || !allowedRoles.includes(user.role)) {
-    const fallback = user?.role === 'super_admin' ? '/admin' : '/panel/dashboard';
+    const fallback =
+      user?.role === 'super_admin'
+        ? '/admin'
+        : user?.role === 'staff'
+          ? '/panel/messages'
+          : '/panel/dashboard';
     return <Navigate to={fallback} replace />;
   }
 

@@ -33,6 +33,7 @@ interface AuthState {
 
 export function getRedirectPath(role?: UserRole): string {
   if (role === 'super_admin') return '/admin';
+  if (role === 'staff') return '/panel/messages';
   return '/panel/dashboard';
 }
 

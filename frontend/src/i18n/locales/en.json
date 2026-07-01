@@ -293,7 +293,10 @@
     "description": "Manage your company employees",
     "add": "Add Staff",
     "new": "New Staff Member",
-    "fullName": "Full Name"
+    "fullName": "Full Name",
+    "fullNamePlaceholder": "e.g. Jane Doe",
+    "passwordPlaceholder": "Set login password",
+    "passwordHint": "Staff will use this password to sign in (min. 6 characters)"
   },
   "knowledge": {
     "title": "Knowledge Base",
