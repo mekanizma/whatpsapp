@@ -6,17 +6,16 @@ import type OpenAI from 'openai';
 import { config } from '../config';
 import { createChatCompletion } from './openai-client';
 import { adminClient } from '../database/supabase';
-import { Company, KnowledgeItem } from '../types';
+import { Company } from '../types';
 import { buildAdminPanelPrompt } from './admin-prompt-builder';
-import { detectConversationLanguage } from './language.service';
+import { detectConversationLanguage, t } from './language.service';
 import { logAIUsage } from './ai-quota.service';
 import { getAllActivePromptContentsForAI } from '../services/prompt.service';
 import { getAppointmentContextForAI, finalizeCustomerFacingMessage, APPOINTMENT_MARKER } from '../services/appointment.service';
 import { preAIGate } from './ai-gate.service';
 import { stripTransferMarker } from './transfer.service';
-import { retrieveKnowledgeContext } from '../services/knowledge-retrieval.service';
-import { resolveKnowledgeContextForAI } from '../services/knowledge-context.service';
-import { filterRelevantKnowledge, isAppointmentIntent } from './knowledge-filter.service';
+import { searchKnowledge } from '../services/knowledge-search.service';
+import { isAppointmentIntent, isKnowledgeQuestion } from './knowledge-filter.service';
 import { shouldRecordUnknownQuestion } from './knowledge-miss.service';
 import { buildCollectedFieldsContext, parseCollectedFields } from './appointment-collect.service';
 import { buildParsedSlotHint, reconcileAppointmentAiResponse } from './appointment-response.service';
@@ -49,14 +48,6 @@ async function getCompany(companyId: string): Promise<Company> {
   return company;
 }
 
-function formatKnowledgeFallback(items: KnowledgeItem[]): string {
-  if (!items.length) return '';
-  const text = items.map((k) => `### ${k.title}\n${k.content}`).join('\n\n');
-  return text.length > config.rag.maxContextChars
-    ? `${text.slice(0, config.rag.maxContextChars)}\n...[kısaltıldı]`
-    : text;
-}
-
 export async function generateAIResponse(
   companyId: string,
   customerMessage: string,
@@ -65,7 +56,7 @@ export async function generateAIResponse(
 ): Promise<AIResponse> {
   const trimmed = customerMessage.trim();
 
-  const [historyResult, company, knowledgeResult, appointmentContext] = await Promise.all([
+  const [historyResult, company, appointmentContext] = await Promise.all([
     adminClient
       .from('messages')
       .select('sender_type, message')
@@ -74,11 +65,6 @@ export async function generateAIResponse(
       .order('created_at', { ascending: false })
       .limit(config.ai.maxHistoryMessages),
     getCompany(companyId),
-    adminClient
-      .from('knowledge_base')
-      .select('title, content, category')
-      .eq('company_id', companyId)
-      .eq('is_active', true),
     getAppointmentContextForAI(companyId).catch(() => ''),
   ]);
 
@@ -87,20 +73,6 @@ export async function generateAIResponse(
     .filter((m) => m.message !== trimmed);
 
   const conversationLang = detectConversationLanguage(trimmed, history);
-  const allKnowledge = (knowledgeResult.data || []) as KnowledgeItem[];
-
-  const kbFilter = filterRelevantKnowledge(allKnowledge, trimmed);
-  const retrieval = await retrieveKnowledgeContext(companyId, trimmed, allKnowledge);
-  const knowledge =
-    resolveKnowledgeContextForAI(retrieval, kbFilter, allKnowledge, trimmed) ||
-    formatKnowledgeFallback(allKnowledge);
-
-  if (retrieval.usedRag) {
-    console.log(
-      `[RAG] ${retrieval.chunks.length} chunk retrieved (top score: ${retrieval.chunks[0]?.combined_score?.toFixed(3) ?? 'n/a'})`
-    );
-  }
-
   const appointmentMode = isAppointmentIntent(trimmed, history);
 
   const gate = preAIGate(trimmed, history, conversationLang);
@@ -123,6 +95,31 @@ export async function generateAIResponse(
       skippedAI: true,
       skipReason: gate.reason,
       tokensUsed: 0,
+    };
+  }
+
+  const search = await searchKnowledge(companyId, trimmed);
+  const knowledge = search.context;
+
+  if (search.usedSemanticSearch) {
+    console.log(
+      `[RAG] ${search.chunks.length} chunk (top similarity: ${search.topSimilarity.toFixed(3)})` +
+        (search.analysis ? ` | lang=${search.analysis.language} intent=${search.analysis.intent}` : '')
+    );
+  }
+
+  if (
+    search.kbHasNoMatch &&
+    isKnowledgeQuestion(trimmed) &&
+    !appointmentMode
+  ) {
+    const noInfoMessage = t(conversationLang, 'kb_no_verified_info');
+    return {
+      message: noInfoMessage,
+      shouldTransfer: false,
+      skippedAI: false,
+      tokensUsed: 0,
+      knowledgeMiss: true,
     };
   }
 
@@ -220,7 +217,7 @@ export async function generateAIResponse(
     shouldTransfer,
     skippedAI: false,
     appointmentMode,
-    kbHasNoMatch: retrieval.kbHasNoMatch,
+    kbHasNoMatch: search.kbHasNoMatch,
   });
 
   if (knowledgeMiss) {

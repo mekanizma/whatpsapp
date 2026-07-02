@@ -4,7 +4,7 @@
 
 import { getPromptContent, renderPromptTemplate } from '../services/prompt.service';
 
-export type ConversationLang = 'tr' | 'en' | 'de' | 'ar' | 'ru' | 'fr' | 'es';
+export type ConversationLang = 'tr' | 'en' | 'de' | 'ar' | 'ru' | 'fr' | 'es' | 'el';
 
 export const LANG_NAMES: Record<ConversationLang, string> = {
   tr: 'Turkish',
@@ -14,6 +14,7 @@ export const LANG_NAMES: Record<ConversationLang, string> = {
   ru: 'Russian',
   fr: 'French',
   es: 'Spanish',
+  el: 'Greek',
 };
 
 type MessageKey =
@@ -39,9 +40,10 @@ type MessageKey =
   | 'appointment_confirmed'
   | 'appointment_confirmed_doctor'
   | 'appointment_processing'
-  | 'kb_topic_intro';
+  | 'kb_topic_intro'
+  | 'kb_no_verified_info';
 
-const MESSAGES: Record<MessageKey, Record<ConversationLang, string>> = {
+const MESSAGES: Record<MessageKey, Partial<Record<ConversationLang, string>> & { tr: string; en: string }> = {
   greeting: {
     tr: 'Merhaba, ben AI destek asistanıyım. Bilgi bankamızdaki konularda size yardımcı olabilirim.',
     en: 'Hello, I am an AI support assistant. I can help you with topics in our knowledge base.',
@@ -248,11 +250,23 @@ const MESSAGES: Record<MessageKey, Record<ConversationLang, string>> = {
     ru: 'О чём вы хотите узнать? Напишите одну из тем:',
     fr: 'Sur quel sujet souhaitez-vous des informations ? Choisissez un thème ci-dessous :',
     es: '¿Sobre qué tema desea información? Puede escribir uno de estos temas:',
+    el: 'Τι θα θέλατε να μάθετε; Μπορείτε να γράψετε ένα από τα παρακάτω θέματα:',
+  },
+  kb_no_verified_info: {
+    tr: 'Bu konu hakkında bilgi bankasında doğrulanmış bir bilgi bulunamadı. Size yardımcı olabilmesi için ilgili birime yönlendirebilirim.',
+    en: 'No verified information was found in the knowledge base on this topic. I can direct you to the relevant department for assistance.',
+    de: 'Zu diesem Thema wurde keine verifizierte Information in der Wissensdatenbank gefunden. Ich kann Sie an die zuständige Abteilung weiterleiten.',
+    ar: 'لم يتم العثور على معلومات موثقة في قاعدة المعرفة حول هذا الموضوع. يمكنني توجيهك إلى القسم المعني للمساعدة.',
+    ru: 'В базе знаний не найдено проверенной информации по этой теме. Могу направить вас в соответствующий отдел.',
+    fr: 'Aucune information vérifiée n\'a été trouvée dans la base de connaissances sur ce sujet. Je peux vous orienter vers le service concerné.',
+    es: 'No se encontró información verificada en la base de conocimientos sobre este tema. Puedo dirigirle al departamento correspondiente.',
+    el: 'Δεν βρέθηκε επαληθευμένη πληροφορία στη βάση γνώσεων για αυτό το θέμα. Μπορώ να σας κατευθύνω στο αρμόδιο τμήμα.',
   },
 };
 
 export function t(lang: ConversationLang, key: MessageKey, vars?: Record<string, string>): string {
-  let text = MESSAGES[key][lang] || MESSAGES[key].en;
+  const row = MESSAGES[key];
+  let text = row[lang] || row.en || row.tr;
   if (vars) {
     for (const [k, v] of Object.entries(vars)) {
       text = text.replace(`{${k}}`, v);
@@ -269,6 +283,7 @@ const LANG_HINTS: Record<ConversationLang, RegExp> = {
   ru: /\b(привет|спасибо|запись|да|нет|пожалуйста)\b/gi,
   fr: /\b(bonjour|merci|rendez-vous|oui|non|s'il vous plaît)\b/gi,
   es: /\b(hola|gracias|cita|sí|si|no|por favor)\b/gi,
+  el: /\b(γεια|ευχαριστώ|ραντεβού|ναι|όχι|παρακαλώ)\b/gi,
 };
 
 /** Müşterinin yalnızca son mesajından dil algıla — geçmiş konuşma dikkate alınmaz */
@@ -283,7 +298,7 @@ export function detectConversationLanguage(
   if (/[\u0400-\u04FF]/.test(text)) return 'ru';
 
   const scores: Record<ConversationLang, number> = {
-    tr: 0, en: 0, de: 0, ar: 0, ru: 0, fr: 0, es: 0,
+    tr: 0, en: 0, de: 0, ar: 0, ru: 0, fr: 0, es: 0, el: 0,
   };
 
   for (const lang of Object.keys(LANG_HINTS) as ConversationLang[]) {
@@ -292,6 +307,8 @@ export function detectConversationLanguage(
   }
 
   if (/[ğüşöçıİĞÜŞÖÇ]/.test(text)) scores.tr += 4;
+
+  if (/[\u0370-\u03FF]/.test(text)) scores.el += 3;
 
   const ranked = (Object.entries(scores) as [ConversationLang, number][])
     .sort((a, b) => b[1] - a[1]);
@@ -316,6 +333,7 @@ export function localeForLang(lang: ConversationLang): string {
     ru: 'ru-RU',
     fr: 'fr-FR',
     es: 'es-ES',
+    el: 'el-GR',
   };
   return map[lang] || 'en-US';
 }
