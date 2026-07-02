@@ -6,7 +6,7 @@ import { adminClient } from '../database/supabase';
 import { demoDashboardStats, demoPlatformStats } from '../demo/mockData';
 import { DashboardStats } from '../types';
 import { getMonthStartISO } from '../utils/date';
-import { getConversationStatsForCompany } from './conversation-count.service';
+import { getConversationStatsForCompany, getPlatformConversationCount } from './conversation-count.service';
 
 export async function getDashboardStats(companyId: string, useDemoData = false): Promise<DashboardStats> {
   if (useDemoData) return demoDashboardStats;

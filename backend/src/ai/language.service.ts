@@ -381,7 +381,8 @@ export function getAppointmentProviderLabel(
 ): string {
   if (custom?.trim()) return custom.trim();
   if (config.ai.appointmentProviderLabel) return config.ai.appointmentProviderLabel;
-  return PROVIDER_LABELS[lang] || PROVIDER_LABELS.en;
+  const templateLang = lang === 'other' ? 'en' : lang;
+  return PROVIDER_LABELS[templateLang] || PROVIDER_LABELS.en;
 }
 
 /**
