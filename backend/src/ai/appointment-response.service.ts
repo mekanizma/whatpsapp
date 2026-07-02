@@ -2,7 +2,7 @@
  * Randevu modunda AI yanıtını parser ile hizalar — yanlış tarih/red önlenir
  */
 
-import { HistoryMsg, CollectedAppointmentFields, parseCollectedFields } from './appointment-collect.service';
+import { HistoryMsg, CollectedAppointmentFields, parseCollectedFields, getMissingRequiredFields } from './appointment-collect.service';
 import {
   parseSlotFromTurkishText,
   extractSlotFromConversation,
@@ -44,11 +44,12 @@ export function reconcileAppointmentAiResponse(
   lang: ConversationLang = 'tr'
 ): string {
   const collected = parseCollectedFields(history, latestMessage);
-  if (!collected.customer_name || !collected.customer_phone || !collected.title) {
+  if (getMissingRequiredFields(collected).length > 0) {
     return rawAiResponse;
   }
 
-  const slot = resolveRequestedSlot(history, latestMessage);
+  const customerGaveTime = hasDateTimeIntent(latestMessage);
+  const slot = customerGaveTime ? resolveRequestedSlot(history, latestMessage) : null;
   if (!slot) return rawAiResponse;
 
   const hours = validateSlotWorkingHours(slot);
@@ -60,7 +61,6 @@ export function reconcileAppointmentAiResponse(
 
   const aiRejected = REJECTION_RE.test(rawAiResponse);
   const aiConfirming = CONFIRMATION_RE.test(rawAiResponse);
-  const customerGaveTime = hasDateTimeIntent(latestMessage);
 
   if (customerGaveTime && (aiRejected || aiConfirming || /randevu özeti|tarih.*saat/i.test(rawAiResponse))) {
     return buildAppointmentConfirmationPrompt(collected, slot, lang);
@@ -86,6 +86,8 @@ export function buildParsedSlotHint(
   if (!collected.customer_name || !collected.customer_phone || !collected.title) {
     return '';
   }
+
+  if (!hasDateTimeIntent(latestMessage)) return '';
 
   const slot = resolveRequestedSlot(history, latestMessage);
   if (!slot) return '';

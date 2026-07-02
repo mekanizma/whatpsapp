@@ -8,10 +8,12 @@ import { blockBookingIfIncomplete, parseCollectedFields } from './appointment-co
 const REF = new Date('2026-06-30T10:00:00.000Z');
 
 describe('randevu onay akışı (birim)', () => {
-  it('onaylıyorum / evet / tamam tanınır', () => {
+  it('onaylıyorum / evet tanınır; tamam yalnızca özet sonrası', () => {
     assert.equal(isAppointmentConfirmation('onaylıyorum'), true);
     assert.equal(isAppointmentConfirmation('Evet'), true);
-    assert.equal(isAppointmentConfirmation('tamam'), true);
+    assert.equal(isAppointmentConfirmation('tamam'), false);
+    const history = [{ sender_type: 'ai', message: 'Bu bilgileri onaylıyor musunuz?' }];
+    assert.equal(isAppointmentConfirmation('tamam', history), true);
     assert.equal(isAppointmentConfirmation('hayır'), false);
   });
 

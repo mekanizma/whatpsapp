@@ -7,6 +7,7 @@ import { Appointment, AppointmentSource, AppointmentStatus } from '../types';
 
 import { preferHistorySlot, formatSlotLocalized, turkeyLocalToUtc, turkeyDateParts, turkeyTimeParts, CLINIC_TZ } from '../ai/appointment-slot.service';
 import type { HistoryMsg } from '../ai/appointment-collect.service';
+import { isValidFullName, isValidProcedureTitle } from '../ai/appointment-collect.service';
 import { ConversationLang, t, getAppointmentProviderLabel } from '../ai/language.service';
 
 const APPOINTMENT_BLOCK_RE = /\[APPOINTMENT\]([\s\S]*?)\[\/APPOINTMENT\]/gi;
@@ -76,18 +77,14 @@ export function validateAppointmentAction(
   action: ParsedAppointmentAction,
   _fallbackPhone = ''
 ): string | null {
-  if (!action.customer_name?.trim()) {
+  if (!action.customer_name?.trim() || !isValidFullName(action.customer_name)) {
     return 'Randevu için ad ve soyadınızı yazar mısınız?';
-  }
-  const nameParts = action.customer_name.trim().split(/\s+/).filter(Boolean);
-  if (nameParts.length < 2) {
-    return 'Lütfen ad ve soyadınızı birlikte yazın (ör. Ali Yılmaz).';
   }
   const phone = normalizePhone(action.customer_phone?.trim() || '');
   if (!phone || phone.length < 10) {
     return 'Randevu için cep telefon numaranızı yazar mısınız?';
   }
-  if (!action.title?.trim()) {
+  if (!action.title?.trim() || !isValidProcedureTitle(action.title)) {
     return 'Hangi işlem için randevu almak istediğinizi yazar mısınız?';
   }
   if (!action.starts_at || !action.ends_at) {

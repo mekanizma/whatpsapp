@@ -21,13 +21,37 @@ import {
   parseCollectedFields,
   HistoryMsg,
 } from './appointment-collect.service';
-import { extractSlotForConfirmation, preferHistorySlot, extractNumberedAlternative } from './appointment-slot.service';
+import { extractSlotForConfirmation, preferHistorySlot, extractNumberedAlternative, parseSlotFromTurkishText, validateSlotWorkingHours } from './appointment-slot.service';
 import { ConversationLang, detectConversationLanguage } from './language.service';
 
-const CONFIRM_RE = /^(evet|onayl?[iıİI]yorum|onaylıyorum|onayliyorum|onay|tamam|uygun|olur|kabul|ok|yes)\b/iu;
+function customerProvidedTimeInHistory(history: HistoryMsg[]): boolean {
+  return history.some(
+    (m) =>
+      m.sender_type === 'customer' &&
+      /yarın|yarin|saat\s*\d|cuma|perşembe|pazartesi|\d{1,2}[:.]\d{2}/i.test(m.message) &&
+      !!parseSlotFromTurkishText(m.message)
+  );
+}
 
-export function isAppointmentConfirmation(message: string): boolean {
-  return CONFIRM_RE.test(message.trim());
+const STRONG_CONFIRM_RE = /^(evet|onayl?[iıİI]yorum|onaylıyorum|onayliyorum|onay|yes)\b/iu;
+const WEAK_CONFIRM_RE = /^(tamam|uygun|olur|kabul|ok)\s*$/iu;
+const PENDING_CONFIRM_RE =
+  /onaylıyor musunuz|onayliyor musunuz|randevu özeti|onaylıyor musun|do you confirm/i;
+
+export function hasPendingAppointmentConfirmation(history: HistoryMsg[]): boolean {
+  for (let i = history.length - 1; i >= 0; i--) {
+    const m = history[i];
+    if (m.sender_type !== 'ai' && m.sender_type !== 'assistant') continue;
+    if (PENDING_CONFIRM_RE.test(m.message)) return true;
+  }
+  return false;
+}
+
+export function isAppointmentConfirmation(message: string, history: HistoryMsg[] = []): boolean {
+  const trimmed = message.trim();
+  if (STRONG_CONFIRM_RE.test(trimmed)) return true;
+  if (WEAK_CONFIRM_RE.test(trimmed) && hasPendingAppointmentConfirmation(history)) return true;
+  return false;
 }
 
 function isAlternativeSlotSelection(history: HistoryMsg[], latestMessage: string): boolean {
@@ -162,7 +186,7 @@ export async function bookFromConfirmation(
   history: HistoryMsg[],
   latestMessage: string
 ): Promise<{ message: string; appointment: Appointment | null } | null> {
-  if (!isAppointmentConfirmation(latestMessage) && !isAlternativeSlotSelection(history, latestMessage)) {
+  if (!isAppointmentConfirmation(latestMessage, history) && !isAlternativeSlotSelection(history, latestMessage)) {
     return null;
   }
 
@@ -171,6 +195,21 @@ export async function bookFromConfirmation(
   const gate = blockBookingIfIncomplete(history, latestMessage, undefined, lang);
   if (gate.blocked) {
     return { message: gate.message!, appointment: null };
+  }
+
+  if (
+    !hasPendingAppointmentConfirmation(history) &&
+    !customerProvidedTimeInHistory(history) &&
+    !parseSlotFromTurkishText(latestMessage) &&
+    !extractNumberedAlternative(history, latestMessage)
+  ) {
+    return {
+      message:
+        lang === 'tr'
+          ? 'Randevuyu kaydetmeden önce özet bilgileri onaylamanız gerekiyor. Lütfen önce tarih/saat ve bilgilerinizi tamamlayın.'
+          : 'Please review the appointment summary before confirming.',
+      appointment: null,
+    };
   }
 
   const offered = extractSlotForConfirmation(history, latestMessage);
@@ -192,6 +231,17 @@ export async function bookFromConfirmation(
   const err = validateAppointmentAction(merged, customerPhone);
   if (err) return { message: err, appointment: null };
 
+  const hours = validateSlotWorkingHours({
+    starts_at: merged.starts_at,
+    ends_at: merged.ends_at,
+  });
+  if (!hours.valid) {
+    return {
+      message: `${hours.reason} Lütfen çalışma saatleri içinde başka bir saat yazın.`,
+      appointment: null,
+    };
+  }
+
   try {
     return await persistAppointment(companyId, merged, lang);
   } catch (e) {
@@ -205,7 +255,7 @@ export async function tryStructuredAppointmentBooking(
   history: HistoryMsg[],
   latestMessage: string
 ): Promise<{ message: string; appointment: Appointment | null } | null> {
-  if (!isAppointmentConfirmation(latestMessage)) return null;
+  if (!isAppointmentConfirmation(latestMessage, history)) return null;
 
   const lang = detectConversationLanguage(latestMessage, history);
   const fromHistory = await bookFromConfirmation(companyId, customerPhone, history, latestMessage);
@@ -266,7 +316,7 @@ export async function handleAppointmentBooking(
 ): Promise<{ message: string; appointment: Appointment | null }> {
   const conversationLang = lang ?? detectConversationLanguage(latestMessage, history);
   const confirmed =
-    isAppointmentConfirmation(latestMessage) || isAlternativeSlotSelection(history, latestMessage);
+    isAppointmentConfirmation(latestMessage, history) || isAlternativeSlotSelection(history, latestMessage);
 
   if (confirmed) {
     const booking = await bookFromConfirmation(companyId, customerPhone, history, latestMessage);

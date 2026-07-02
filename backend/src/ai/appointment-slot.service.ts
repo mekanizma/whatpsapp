@@ -404,6 +404,9 @@ export function extractNumberedAlternative(
   return null;
 }
 
+const WORKING_HOURS_INFO_RE =
+  /çalışma saat|calisma saat|hafta içi|hafta ici|pazartesi.*cuma|pzt.*cum|öğle.*kapalı|ogle.*kapali|09:00.*18:00/i;
+
 /** Konuşmadan (müşteri + AI) en güncel tarih/saat teklifini bul */
 export function extractSlotFromConversation(
   history: HistoryMsg[],
@@ -435,7 +438,8 @@ export function extractOfferedSlotFromHistory(
     const m = history[i];
     if (m.sender_type !== 'ai') continue;
     const text = m.message;
-    if (!OFFER_CONTEXT_RE.test(text) && !/\d{1,2}[:.]?\d{0,2}|saat\s*\d/i.test(text)) continue;
+    if (WORKING_HOURS_INFO_RE.test(text) && !OFFER_CONTEXT_RE.test(text)) continue;
+    if (!OFFER_CONTEXT_RE.test(text)) continue;
     const slot = parseSlotFromTurkishText(text, ref);
     if (slot) return slot;
   }

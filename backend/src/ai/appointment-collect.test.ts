@@ -79,13 +79,21 @@ describe('appointment-collect.service', () => {
     assert.equal(gate.collected.title, 'kurulum desteği');
   });
 
-  it('konu sorusuna verilen yanıt ad olarak algılanmaz', () => {
+  it('sohbet cümleleri ad veya konu olarak alınmaz', () => {
     const history = [
-      { sender_type: 'ai', message: 'Hangi konu/hizmet için randevu almak istediğinizi yazar mısınız?' },
-      { sender_type: 'customer', message: 'Teknik destek' },
+      { sender_type: 'customer', message: 'Randevu verebilirmisin' },
+      { sender_type: 'ai', message: 'Teşekkürler. Randevu için cep telefon numaranızı yazar mısınız?' },
+      { sender_type: 'customer', message: '05338398293' },
+      { sender_type: 'ai', message: 'Randevu için hangi işlem veya ziyaret sebebiyle gelmek istediğinizi belirtir misiniz?' },
+      { sender_type: 'customer', message: 'Hocayla görüşücem' },
+      { sender_type: 'customer', message: 'Ne diyosun' },
+      { sender_type: 'customer', message: 'Vizyonunuz nedir peki' },
     ];
     const collected = parseCollectedFields(history, 'onaylıyorum');
     assert.equal(collected.customer_name, null);
-    assert.equal(collected.title, 'Teknik destek');
+    assert.equal(collected.title, 'Hocayla görüşücem');
+    const gate = blockBookingIfIncomplete(history, 'onaylıyorum');
+    assert.equal(gate.blocked, true);
+    assert.match(gate.message!, /ad ve soyad/i);
   });
 });
