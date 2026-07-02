@@ -5,7 +5,7 @@
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, Upload, FileText, X, RefreshCw, Eye, PenLine, Sparkles } from 'lucide-react';
+import { Plus, Pencil, Trash2, Upload, FileText, X, RefreshCw, Eye, PenLine } from 'lucide-react';
 import { api } from '@/services/api';
 import { MarkdownPreview } from '@/components/MarkdownPreview';
 import {
@@ -27,25 +27,9 @@ import {
   Badge,
 } from '@/components/ui';
 import { cn } from '@/lib/utils';
-import type {
-  KnowledgeItem,
-  ParsedKnowledgeFile,
-  KnowledgeSmartAnalysis,
-  AnalyzedKnowledgeEntry,
-} from '@/types';
+import type { KnowledgeItem, ParsedKnowledgeFile } from '@/types';
 
 type ContentView = 'edit' | 'preview';
-
-function tagsToString(tags?: string[]): string {
-  return tags?.join(', ') ?? '';
-}
-
-function parseTagsInput(value: string): string[] {
-  return value
-    .split(',')
-    .map((t) => t.trim())
-    .filter(Boolean);
-}
 
 function indexStatusVariant(status?: KnowledgeItem['index_status']) {
   switch (status) {
@@ -69,8 +53,6 @@ export function KnowledgePage() {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [category, setCategory] = useState('');
-  const [tags, setTags] = useState('');
-  const [smartAnalysis, setSmartAnalysis] = useState<KnowledgeSmartAnalysis | null>(null);
   const [uploadInfo, setUploadInfo] = useState<ParsedKnowledgeFile | null>(null);
   const [uploadError, setUploadError] = useState('');
   const [contentView, setContentView] = useState<ContentView>('edit');
@@ -94,7 +76,6 @@ export function KnowledgePage() {
       title: string;
       content: string;
       category: string;
-      tags: string[];
       source_filename?: string;
     }) =>
       editItem
@@ -106,54 +87,15 @@ export function KnowledgePage() {
     },
   });
 
-  const analyzeMutation = useMutation({
-    mutationFn: (payload: { content: string; source_filename?: string }) =>
-      api.post<{
-        entries: AnalyzedKnowledgeEntry[];
-        analyzed: boolean;
-        split: boolean;
-      }>('/knowledge/analyze', payload),
-    onSuccess: (data, variables) => {
-      const primary = data.entries[0];
-      if (!primary) return;
-      setSmartAnalysis({
-        analyzed: data.analyzed,
-        split: data.split,
-        entry_count: data.entries.length,
-        entries: data.entries,
-      });
-      if (!title.trim()) setTitle(primary.title);
-      const preservedContent =
-        data.entries.length === 1 && variables.content.length > primary.content.length
-          ? variables.content
-          : primary.content;
-      setContent(preservedContent);
-      if (!category.trim()) setCategory(primary.category);
-      if (!tags.trim()) setTags(tagsToString(primary.tags));
-    },
-  });
-
-  const smartImportMutation = useMutation({
-    mutationFn: (payload: { content: string; source_filename?: string }) =>
-      api.post<KnowledgeItem[]>('/knowledge/smart-import', payload),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['knowledge'] });
-      resetForm();
-    },
-  });
-
   const uploadMutation = useMutation({
     mutationFn: (file: File) => api.upload<ParsedKnowledgeFile>('/knowledge/parse-file', file),
     onSuccess: (data) => {
       setUploadError('');
       setUploadInfo(data);
-      setTitle(data.title);
-      setContent(data.raw_content || data.content);
-      setCategory(data.category || data.file_type || '');
-      setTags(tagsToString(data.tags));
-      setSmartAnalysis(data.smart_analysis ?? null);
-      if (data.smart_analysis?.analyzed) {
-        setContentView('edit');
+      if (!title.trim()) setTitle(data.title);
+      setContent(data.content);
+      if (!category.trim() && data.file_type) {
+        setCategory(data.file_type);
       }
     },
     onError: (err: Error) => {
@@ -178,8 +120,6 @@ export function KnowledgePage() {
     setTitle('');
     setContent('');
     setCategory('');
-    setTags('');
-    setSmartAnalysis(null);
     setUploadInfo(null);
     setUploadError('');
     setContentView('edit');
@@ -191,8 +131,8 @@ export function KnowledgePage() {
     setTitle(item.title);
     setContent(item.content);
     setCategory(item.category || '');
-    setTags(tagsToString(item.tags));
-    setSmartAnalysis(null);
+    setUploadInfo(null);
+    setUploadError('');
     setContentView('edit');
     setShowForm(true);
   };
@@ -265,7 +205,7 @@ export function KnowledgePage() {
                     {uploadMutation.isPending ? (
                       <>
                         <Spinner className="h-4 w-4" />
-                        {t('knowledge.analyzing')}
+                        {t('knowledge.reading')}
                       </>
                     ) : (
                       <>
@@ -306,13 +246,6 @@ export function KnowledgePage() {
                   </div>
                 )}
 
-                {uploadInfo?.smart_analysis?.analyzed && (
-                  <div className="mt-3 flex items-center gap-2 rounded-lg bg-violet-50 px-3 py-2 text-xs text-violet-800 ring-1 ring-violet-200/60">
-                    <Sparkles className="h-3.5 w-3.5 shrink-0" />
-                    <span>{t('knowledge.smartAnalyzed')}</span>
-                  </div>
-                )}
-
                 {uploadError && (
                   <p className="mt-3 text-sm text-red-600">{uploadError}</p>
                 )}
@@ -330,45 +263,8 @@ export function KnowledgePage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label>{t('knowledge.tags')}</Label>
-              <Input
-                value={tags}
-                onChange={(e) => setTags(e.target.value)}
-                placeholder={t('knowledge.tagsPlaceholder')}
-              />
-              <p className="text-xs text-slate-500">{t('knowledge.tagsHint')}</p>
-            </div>
-            <div className="space-y-2">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <Label>{t('knowledge.content')}</Label>
-                <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-                  {!editItem && content.trim().length > 80 && (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="w-full sm:w-auto"
-                      disabled={analyzeMutation.isPending || uploadMutation.isPending}
-                      onClick={() =>
-                        analyzeMutation.mutate({
-                          content,
-                          source_filename: uploadInfo?.source_filename,
-                        })
-                      }
-                    >
-                      {analyzeMutation.isPending ? (
-                        <>
-                          <Spinner className="h-3.5 w-3.5" />
-                          {t('knowledge.analyzing')}
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="h-3.5 w-3.5" />
-                          {t('knowledge.autoFill')}
-                        </>
-                      )}
-                    </Button>
-                  )}
                 {showMarkdownPreview && (
                   <div className="flex w-full rounded-lg border border-slate-200 p-0.5 sm:w-auto">
                     <button
@@ -395,7 +291,6 @@ export function KnowledgePage() {
                     </button>
                   </div>
                 )}
-                </div>
               </div>
               {contentView === 'preview' && showMarkdownPreview ? (
                 <MarkdownPreview content={content} />
@@ -410,42 +305,6 @@ export function KnowledgePage() {
               )}
               <p className="text-xs text-slate-500">{t('knowledge.contentHint')}</p>
             </div>
-
-            {!editItem && smartAnalysis && smartAnalysis.entry_count > 1 && (
-              <div className="rounded-xl border border-amber-200 bg-amber-50/80 p-4">
-                <p className="text-sm font-medium text-amber-900">
-                  {t('knowledge.multiEntryDetected', { count: smartAnalysis.entry_count })}
-                </p>
-                <ul className="mt-2 space-y-1 text-xs text-amber-800">
-                  {smartAnalysis.entries.map((entry, i) => (
-                    <li key={i}>• {entry.title} — {entry.category}</li>
-                  ))}
-                </ul>
-                <Button
-                  className="mt-3 w-full sm:w-auto"
-                  disabled={smartImportMutation.isPending || !content.trim()}
-                  onClick={() =>
-                    smartImportMutation.mutate({
-                      content: uploadInfo?.raw_content || content,
-                      source_filename: uploadInfo?.source_filename,
-                    })
-                  }
-                >
-                  {smartImportMutation.isPending ? (
-                    <>
-                      <Spinner className="h-4 w-4" />
-                      {t('knowledge.smartImporting')}
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="h-4 w-4" />
-                      {t('knowledge.smartImport', { count: smartAnalysis.entry_count })}
-                    </>
-                  )}
-                </Button>
-              </div>
-            )}
-
             <div className="flex flex-col-reverse gap-2 sm:flex-row">
               <Button variant="outline" onClick={resetForm} className="w-full sm:w-auto">
                 {t('common.cancel')}
@@ -456,17 +315,10 @@ export function KnowledgePage() {
                     title,
                     content,
                     category,
-                    tags: parseTagsInput(tags),
                     source_filename: uploadInfo?.source_filename,
                   })
                 }
-                disabled={
-                  saveMutation.isPending ||
-                  smartImportMutation.isPending ||
-                  !title.trim() ||
-                  !content.trim() ||
-                  (smartAnalysis?.entry_count ?? 0) > 1
-                }
+                disabled={saveMutation.isPending || !title.trim() || !content.trim()}
                 className="w-full sm:w-auto"
               >
                 {saveMutation.isPending ? <Spinner /> : t('common.save')}
@@ -505,9 +357,6 @@ export function KnowledgePage() {
                 </div>
                 <div className="mb-2 flex flex-wrap gap-1.5">
                   {item.category && <Badge variant="info">{item.category}</Badge>}
-                  {item.tags?.slice(0, 3).map((tag) => (
-                    <Badge key={tag} variant="default">{tag}</Badge>
-                  ))}
                   {item.index_status && (
                     <Badge variant={indexStatusVariant(item.index_status)}>
                       {t(`knowledge.indexStatus.${item.index_status}`)}

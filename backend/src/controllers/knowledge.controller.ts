@@ -8,86 +8,13 @@ import { AuthRequest, isDemoSession } from '../middleware/auth.middleware';
 import { logActivity } from '../services/log.service';
 import { parseKnowledgeDocument } from '../services/document-parser.service';
 import {
-  analyzeKnowledgeContent,
-  primaryEntryToPreview,
-  normalizeTags,
-  type AnalyzedKnowledgeEntry,
-} from '../services/knowledge-analysis.service';
-import {
   scheduleKnowledgeIndexing,
   indexKnowledgeItem,
 } from '../services/knowledge-index.service';
 import { getKnowledgeChunkPreviews } from '../services/knowledge-retrieval.service';
-import type { KnowledgeItem } from '../types';
 
 function paramId(value: string | string[]): string {
   return Array.isArray(value) ? value[0] : value;
-}
-
-async function fetchCompanyCategories(companyId: string): Promise<string[]> {
-  const { data } = await adminClient
-    .from('knowledge_base')
-    .select('category')
-    .eq('company_id', companyId)
-    .not('category', 'is', null);
-
-  const categories = new Set<string>();
-  for (const row of data || []) {
-    if (row.category?.trim()) categories.add(row.category.trim());
-  }
-  return [...categories];
-}
-
-async function insertKnowledgeEntries(
-  companyId: string,
-  userId: string | undefined,
-  entries: AnalyzedKnowledgeEntry[],
-  sourceFilename?: string | null
-): Promise<KnowledgeItem[]> {
-  const created: KnowledgeItem[] = [];
-
-  for (const entry of entries) {
-    const charCount = entry.content.length;
-    const { data, error } = await adminClient
-      .from('knowledge_base')
-      .insert({
-        company_id: companyId,
-        title: entry.title,
-        content: entry.content,
-        category: entry.category,
-        tags: entry.tags,
-        source_filename: sourceFilename || null,
-        char_count: charCount,
-        index_status: 'pending',
-        chunk_count: 0,
-        index_error: null,
-      })
-      .select()
-      .single();
-
-    if (error || !data) {
-      throw new Error(error?.message || 'Kayıt oluşturulamadı');
-    }
-
-    scheduleKnowledgeIndexing(data.id, companyId);
-    created.push(data as KnowledgeItem);
-
-    await logActivity({
-      userId,
-      companyId,
-      action: 'knowledge_created',
-      entityType: 'knowledge_base',
-      entityId: data.id,
-      metadata: {
-        char_count: charCount,
-        smart_analysis: true,
-        category: entry.category,
-        tag_count: entry.tags.length,
-      },
-    });
-  }
-
-  return created;
 }
 
 export async function getKnowledgeItems(req: AuthRequest, res: Response): Promise<void> {
@@ -111,39 +38,18 @@ export async function getKnowledgeItems(req: AuthRequest, res: Response): Promis
 }
 
 export async function createKnowledgeItem(req: AuthRequest, res: Response): Promise<void> {
-  const { title, content, category, source_filename, tags, smart_analyze } = req.body;
+  const { title, content, category, source_filename } = req.body;
   const charCount = typeof content === 'string' ? content.length : 0;
-  const normalizedTags = normalizeTags(tags);
-
-  let finalTitle = typeof title === 'string' ? title.trim() : '';
-  let finalContent = typeof content === 'string' ? content : '';
-  let finalCategory = typeof category === 'string' ? category.trim() : '';
-  let finalTags = normalizedTags;
-
-  if (smart_analyze === true && finalContent.trim()) {
-    const existingCategories = await fetchCompanyCategories(req.companyId!);
-    const analysis = await analyzeKnowledgeContent(finalContent, {
-      filenameHint: source_filename || finalTitle,
-      existingCategories,
-      companyId: req.companyId!,
-    });
-    const primary = primaryEntryToPreview(analysis, source_filename, finalContent);
-    if (!finalTitle) finalTitle = primary.title;
-    if (!finalCategory) finalCategory = primary.category;
-    if (!finalTags.length) finalTags = primary.tags;
-    finalContent = primary.content;
-  }
 
   const { data, error } = await adminClient
     .from('knowledge_base')
     .insert({
       company_id: req.companyId,
-      title: finalTitle,
-      content: finalContent,
-      category: finalCategory || null,
-      tags: finalTags,
+      title,
+      content,
+      category,
       source_filename: source_filename || null,
-      char_count: finalContent.length || charCount,
+      char_count: charCount,
       index_status: 'pending',
       chunk_count: 0,
       index_error: null,
@@ -172,9 +78,8 @@ export async function createKnowledgeItem(req: AuthRequest, res: Response): Prom
 
 export async function updateKnowledgeItem(req: AuthRequest, res: Response): Promise<void> {
   const id = paramId(req.params.id);
-  const { title, content, category, is_active, source_filename, tags } = req.body;
+  const { title, content, category, is_active, source_filename } = req.body;
   const charCount = typeof content === 'string' ? content.length : undefined;
-  const normalizedTags = tags !== undefined ? normalizeTags(tags) : undefined;
 
   const { data, error } = await adminClient
     .from('knowledge_base')
@@ -185,7 +90,6 @@ export async function updateKnowledgeItem(req: AuthRequest, res: Response): Prom
       is_active,
       ...(source_filename !== undefined ? { source_filename } : {}),
       ...(charCount !== undefined ? { char_count: charCount } : {}),
-      ...(normalizedTags !== undefined ? { tags: normalizedTags } : {}),
       index_status: 'pending',
       index_error: null,
     })
@@ -231,14 +135,6 @@ export async function parseKnowledgeFile(req: AuthRequest, res: Response): Promi
   try {
     const parsed = await parseKnowledgeDocument(file.buffer, file.originalname, file.mimetype);
 
-    const existingCategories = await fetchCompanyCategories(req.companyId!);
-    const analysis = await analyzeKnowledgeContent(parsed.content, {
-      filenameHint: parsed.source_filename,
-      existingCategories,
-      companyId: req.companyId!,
-    });
-    const primary = primaryEntryToPreview(analysis, parsed.source_filename, parsed.content);
-
     await logActivity({
       userId: req.userId,
       companyId: req.companyId,
@@ -250,156 +146,10 @@ export async function parseKnowledgeFile(req: AuthRequest, res: Response): Promi
         char_count: parsed.char_count,
         truncated: parsed.truncated,
         chunk_estimate: parsed.chunk_estimate,
-        smart_analysis: analysis.analyzed,
-        entry_count: analysis.entries.length,
       },
     });
 
-    res.json({
-      success: true,
-      data: {
-        ...parsed,
-        title: primary.title,
-        content: primary.content,
-        category: primary.category,
-        tags: primary.tags,
-        raw_content: parsed.content,
-        smart_analysis: {
-          analyzed: analysis.analyzed,
-          split: analysis.split,
-          entry_count: analysis.entries.length,
-          entries: analysis.entries,
-        },
-      },
-    });
-  } catch (err) {
-    res.status(400).json({ success: false, error: (err as Error).message });
-  }
-}
-
-/** Metin içeriğini analiz eder (kaydetmez) */
-export async function analyzeKnowledgeContentHandler(req: AuthRequest, res: Response): Promise<void> {
-  const { content, source_filename } = req.body;
-
-  if (!content || typeof content !== 'string' || !content.trim()) {
-    res.status(400).json({ success: false, error: 'İçerik gerekli' });
-    return;
-  }
-
-  try {
-    const existingCategories = await fetchCompanyCategories(req.companyId!);
-    const analysis = await analyzeKnowledgeContent(content, {
-      filenameHint: typeof source_filename === 'string' ? source_filename : undefined,
-      existingCategories,
-      companyId: req.companyId!,
-    });
-
-    res.json({ success: true, data: analysis });
-  } catch (err) {
-    res.status(400).json({ success: false, error: (err as Error).message });
-  }
-}
-
-/** Analiz edip birden fazla kayıt oluşturur (akıllı içe aktarma) */
-export async function smartImportKnowledge(req: AuthRequest, res: Response): Promise<void> {
-  const { content, source_filename } = req.body;
-
-  if (!content || typeof content !== 'string' || !content.trim()) {
-    res.status(400).json({ success: false, error: 'İçerik gerekli' });
-    return;
-  }
-
-  try {
-    const existingCategories = await fetchCompanyCategories(req.companyId!);
-    const analysis = await analyzeKnowledgeContent(content, {
-      filenameHint: typeof source_filename === 'string' ? source_filename : undefined,
-      existingCategories,
-      companyId: req.companyId!,
-    });
-
-    if (!analysis.entries.length) {
-      res.status(400).json({ success: false, error: 'Analiz sonucu kayıt üretilemedi' });
-      return;
-    }
-
-    const created = await insertKnowledgeEntries(
-      req.companyId!,
-      req.userId,
-      analysis.entries,
-      typeof source_filename === 'string' ? source_filename : null
-    );
-
-    res.status(201).json({
-      success: true,
-      data: created,
-      meta: {
-        entry_count: created.length,
-        analyzed: analysis.analyzed,
-        split: analysis.split,
-      },
-    });
-  } catch (err) {
-    res.status(400).json({ success: false, error: (err as Error).message });
-  }
-}
-
-/** Mevcut kaydı arka planda yeniden analiz eder */
-export async function reanalyzeKnowledgeItem(req: AuthRequest, res: Response): Promise<void> {
-  const id = paramId(req.params.id);
-
-  const { data: kb, error } = await adminClient
-    .from('knowledge_base')
-    .select('id, content, source_filename, title')
-    .eq('id', id)
-    .eq('company_id', req.companyId)
-    .single();
-
-  if (error || !kb) {
-    res.status(404).json({ success: false, error: 'Kayıt bulunamadı' });
-    return;
-  }
-
-  try {
-    const existingCategories = await fetchCompanyCategories(req.companyId!);
-    const analysis = await analyzeKnowledgeContent(kb.content, {
-      filenameHint: kb.source_filename || kb.title,
-      existingCategories,
-      companyId: req.companyId!,
-    });
-    const primary = primaryEntryToPreview(analysis, kb.source_filename || kb.title, kb.content);
-
-    const { data, error: updateError } = await adminClient
-      .from('knowledge_base')
-      .update({
-        title: primary.title,
-        content: primary.content,
-        category: primary.category,
-        tags: primary.tags,
-        char_count: primary.content.length,
-        index_status: 'pending',
-        index_error: null,
-      })
-      .eq('id', id)
-      .eq('company_id', req.companyId)
-      .select()
-      .single();
-
-    if (updateError || !data) {
-      res.status(400).json({ success: false, error: updateError?.message || 'Güncelleme başarısız' });
-      return;
-    }
-
-    scheduleKnowledgeIndexing(id, req.companyId!);
-
-    res.json({
-      success: true,
-      data,
-      meta: {
-        analyzed: analysis.analyzed,
-        additional_entries: analysis.entries.length > 1 ? analysis.entries.slice(1) : [],
-        split_available: analysis.split,
-      },
-    });
+    res.json({ success: true, data: parsed });
   } catch (err) {
     res.status(400).json({ success: false, error: (err as Error).message });
   }

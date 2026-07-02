@@ -84,18 +84,12 @@ export const config = {
     embeddingDimensions: parseInt(process.env.OPENAI_EMBEDDING_DIMENSIONS || '1536', 10),
     chunkSize: parseInt(process.env.RAG_CHUNK_SIZE || '1200', 10),
     chunkOverlap: parseInt(process.env.RAG_CHUNK_OVERLAP || '150', 10),
-    topK: parseInt(process.env.RAG_TOP_K || '5', 10),
-    matchThreshold: parseFloat(process.env.RAG_MATCH_THRESHOLD || '0.35'),
+    topK: parseInt(process.env.RAG_TOP_K || '10', 10),
+    matchThreshold: parseFloat(process.env.RAG_MATCH_THRESHOLD || '0.5'),
+    vectorWeight: parseFloat(process.env.RAG_VECTOR_WEIGHT || '0.7'),
+    textWeight: parseFloat(process.env.RAG_TEXT_WEIGHT || '0.3'),
     maxContextChars: parseInt(process.env.RAG_MAX_CONTEXT_CHARS || '6000', 10),
     indexBatchSize: parseInt(process.env.RAG_INDEX_BATCH_SIZE || '50', 10),
-    queryAnalysisTimeoutMs: parseInt(process.env.RAG_QUERY_ANALYSIS_TIMEOUT_MS || '2500', 10),
-  },
-
-  knowledgeAnalysis: {
-    enabled: process.env.KNOWLEDGE_ANALYSIS_ENABLED !== 'false',
-    timeoutMs: parseInt(process.env.KNOWLEDGE_ANALYSIS_TIMEOUT_MS || '30000', 10),
-    maxContentChars: parseInt(process.env.KNOWLEDGE_ANALYSIS_MAX_CHARS || '50000', 10),
-    maxOutputTokens: parseInt(process.env.KNOWLEDGE_ANALYSIS_MAX_OUTPUT_TOKENS || '2000', 10),
   },
 
   ai: {

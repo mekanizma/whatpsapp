@@ -6,7 +6,6 @@ import { config } from '../config';
 import { adminClient } from '../database/supabase';
 import { chunkText } from './chunking.service';
 import { createEmbeddings } from './embedding.service';
-import { buildIndexableText } from './knowledge-analysis.service';
 import type { KnowledgeIndexStatus } from '../types';
 
 const DEBOUNCE_MS = 1500;
@@ -98,7 +97,7 @@ export async function indexKnowledgeItem(
   try {
     const { data: kb, error: kbError } = await adminClient
       .from('knowledge_base')
-      .select('id, title, content, category, tags, source_filename, is_active')
+      .select('id, title, content, category, source_filename, is_active')
       .eq('id', knowledgeBaseId)
       .eq('company_id', companyId)
       .single();
@@ -141,13 +140,10 @@ export async function indexKnowledgeItem(
       return;
     }
 
-    const tags = Array.isArray(kb.tags) ? kb.tags : [];
     const batchSize = config.rag.indexBatchSize;
     for (let offset = 0; offset < chunks.length; offset += batchSize) {
       const batch = chunks.slice(offset, offset + batchSize);
-      const embeddings = await createEmbeddings(
-        batch.map((c) => buildIndexableText(c.content, tags, kb.title))
-      );
+      const embeddings = await createEmbeddings(batch.map((c) => c.content));
 
       const rows = batch.map((chunk, i) => ({
         company_id: companyId,

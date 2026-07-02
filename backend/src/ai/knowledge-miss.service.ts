@@ -38,12 +38,6 @@ const KNOWLEDGE_MISS_PATTERNS = [
   /keine information(en)? (zu|uber|hierzu)/,
   /no tengo informacion/,
   /no dispongo de informacion/,
-  /dogrulanmis bir bilgi bulunamadi/,
-  /verified information was found in the knowledge base/,
-  /verifizierte information in der wissensdatenbank gefunden/,
-  /informations verifiees n.a ete trouvee/,
-  /informacion verificada en la base de conocimientos/,
-  /epalithevmeni pliroforia sti vasi gnoseon/,
 ];
 
 /** KB miss sonrası temsilci teklifi — tek başına yeterli değil, bilgi yok ifadesiyle birlikte */
@@ -89,7 +83,11 @@ export function shouldRecordUnknownQuestion(ctx: UnknownQuestionContext): boolea
 
   if (isKnowledgeMissAiResponse(ctx.aiResponse)) return true;
 
-  if (ctx.kbHasNoMatch && isKnowledgeQuestion(ctx.customerMessage)) {
+  if (
+    ctx.kbHasNoMatch &&
+    isKnowledgeQuestion(ctx.customerMessage) &&
+    isKnowledgeMissAiResponse(ctx.aiResponse)
+  ) {
     return true;
   }
 

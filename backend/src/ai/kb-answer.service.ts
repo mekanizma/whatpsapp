@@ -1,68 +1,18 @@
 /**
  * Bilgi bankasından kısa, konuya özel yanıt — gereksiz içerik dökülmez
- * (Ana arama yolu knowledge-search.service üzerinden semantik çalışır)
  */
 
 import { KnowledgeItem } from '../types';
 import { config } from '../config';
 import { ConversationLang, LANG_NAMES, t } from './language.service';
+import {
+  extractKeywords,
+  haystackMatchesKeyword,
+  isPriceQuery,
+  isGeneralPriceListQuery,
+} from './knowledge-filter.service';
 import { getPromptContent, renderPromptTemplate } from '../services/prompt.service';
 import { createChatCompletion } from './openai-client';
-
-const STOP_WORDS = new Set([
-  'bir', 've', 'ile', 'için', 'icin', 'mi', 'mı', 'mu', 'mü', 'ne', 'nasıl', 'nasil',
-  'kaç', 'kac', 'var', 'yok', 'bu', 'şu', 'de', 'da', 'ki', 'ben', 'siz', 'verin',
-  'ver', 'bilgi', 'hakkinda', 'hakkında', 'nedir', 'neler', 'about', 'your', 'the', 'and',
-]);
-
-const TR_SUFFIXES = [
-  'leriniz', 'larınız', 'leri', 'ları', 'ler', 'lar', 'niz', 'nız', 'siniz', 'sınız',
-  'dir', 'dır', 'dur', 'dür', 'ti', 'tı', 'tu', 'tü',
-];
-
-function stemTurkishWord(word: string): string {
-  let w = word.toLowerCase();
-  for (const suffix of TR_SUFFIXES) {
-    if (w.length > suffix.length + 2 && w.endsWith(suffix)) {
-      return w.slice(0, -suffix.length);
-    }
-  }
-  return w;
-}
-
-function extractKeywords(text: string): string[] {
-  return text
-    .toLowerCase()
-    .replace(/[^\wğüşıöçĞÜŞİÖÇ\s]/g, ' ')
-    .split(/\s+/)
-    .filter((w) => w.length > 2 && !STOP_WORDS.has(w));
-}
-
-function haystackMatchesKeyword(haystack: string, keyword: string): boolean {
-  const kw = keyword.toLowerCase();
-  if (haystack.includes(kw)) return true;
-  const stem = stemTurkishWord(kw);
-  return stem.length >= 3 && haystack.includes(stem);
-}
-
-const PRICE_QUERY_RE =
-  /fiyat|ücret|ucret|ne kadar|kaç tl|kac tl|price|prices|pricing|cost|fee|fees|tuition|how much/i;
-
-const GENERAL_PRICE_LIST_RE =
-  /fiyatlar|ücretler|your prices|price list|pricing information|what are your prices/i;
-
-const DURATION_QUERY_RE =
-  /ne kadar sür|how long|how many sessions|duration of/i;
-
-function isPriceQuery(message: string): boolean {
-  const n = message.toLowerCase();
-  if (DURATION_QUERY_RE.test(n)) return false;
-  return PRICE_QUERY_RE.test(n);
-}
-
-function isGeneralPriceListQuery(message: string): boolean {
-  return GENERAL_PRICE_LIST_RE.test(message.toLowerCase());
-}
 
 function truncateSmart(text: string, maxChars: number): string {
   const trimmed = text.trim();

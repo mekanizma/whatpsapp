@@ -89,14 +89,11 @@ router.post(
   knowledgeCtrl.parseKnowledgeFile
 );
 router.post('/knowledge', authenticate, requireRole('company_admin'), requireCompany, knowledgeCtrl.createKnowledgeItem);
-router.post('/knowledge/analyze', authenticate, requireRole('company_admin'), requireCompany, knowledgeCtrl.analyzeKnowledgeContentHandler);
-router.post('/knowledge/smart-import', authenticate, requireRole('company_admin'), requireCompany, knowledgeCtrl.smartImportKnowledge);
 router.put('/knowledge/:id', authenticate, requireRole('company_admin'), requireCompany, knowledgeCtrl.updateKnowledgeItem);
 router.delete('/knowledge/:id', authenticate, requireRole('company_admin'), requireCompany, knowledgeCtrl.deleteKnowledgeItem);
 router.get('/knowledge/:id/index-status', authenticate, requireCompany, knowledgeCtrl.getKnowledgeIndexStatus);
 router.get('/knowledge/:id/chunks', authenticate, requireRole('company_admin'), requireCompany, knowledgeCtrl.getKnowledgeChunks);
 router.post('/knowledge/:id/reindex', authenticate, requireRole('company_admin'), requireCompany, knowledgeCtrl.reindexKnowledgeItem);
-router.post('/knowledge/:id/reanalyze', authenticate, requireRole('company_admin'), requireCompany, knowledgeCtrl.reanalyzeKnowledgeItem);
 router.post('/knowledge/:id/index-now', authenticate, requireRole('company_admin'), requireCompany, knowledgeCtrl.indexKnowledgeNow);
 
 // Messages
