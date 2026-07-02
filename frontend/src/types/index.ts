@@ -135,6 +135,115 @@ export interface InvoiceIssuerSettings {
   footerNote: string | null;
 }
 
+export type InvoiceFieldDataKey =
+  | 'static'
+  | 'issuer.name'
+  | 'issuer.legalName'
+  | 'issuer.address'
+  | 'issuer.taxOffice'
+  | 'issuer.taxNumber'
+  | 'issuer.email'
+  | 'issuer.phone'
+  | 'issuer.contact'
+  | 'buyer.name'
+  | 'buyer.address'
+  | 'buyer.email'
+  | 'buyer.phone'
+  | 'meta.invoiceNumber'
+  | 'meta.ettn'
+  | 'meta.issueDate'
+  | 'meta.scenario'
+  | 'subscription.plan'
+  | 'subscription.period'
+  | 'subscription.startsAt'
+  | 'subscription.endsAt'
+  | 'subscription.status'
+  | 'subscription.messagesLimit'
+  | 'subscription.usersLimit'
+  | 'subscription.messagesUsed';
+
+export type InvoiceSectionKey =
+  | 'seller'
+  | 'buyer'
+  | 'subscription'
+  | 'features'
+  | 'lineItems'
+  | 'totals'
+  | 'footer';
+
+export type InvoiceCustomBlockPosition =
+  | 'after_subscription'
+  | 'before_line_items'
+  | 'after_line_items'
+  | 'before_footer';
+
+export interface InvoiceTemplateField {
+  id: string;
+  label: string;
+  dataKey: InvoiceFieldDataKey;
+  enabled: boolean;
+  customValue?: string;
+}
+
+export interface InvoiceTemplateSection {
+  key: InvoiceSectionKey;
+  title: string;
+  enabled: boolean;
+  fields: InvoiceTemplateField[];
+}
+
+export type InvoiceLineItemColumnKey = 'index' | 'description' | 'quantity' | 'unitPrice' | 'total';
+
+export interface InvoiceLineItemColumn {
+  id: string;
+  key: InvoiceLineItemColumnKey;
+  label: string;
+  enabled: boolean;
+}
+
+export interface InvoiceCustomBlock {
+  id: string;
+  title: string;
+  content: string;
+  enabled: boolean;
+  position: InvoiceCustomBlockPosition;
+}
+
+export interface InvoiceTemplateConfig {
+  documentTitle: string;
+  scenario: string;
+  scenarioLabel: string;
+  invoiceNumberLabel: string;
+  dateLabel: string;
+  ettnLabel: string;
+  showEttn: boolean;
+  invoiceNumberPrefix: string;
+  filenamePrefix: string;
+  primaryColor: string;
+  headerBgColor: string;
+  vatSuffixText: string;
+  showVatSuffix: boolean;
+  subtotalLabel: string;
+  grandTotalLabel: string;
+  featuresTitle: string;
+  defaultFooterText: string;
+  showFooterContact: boolean;
+  sections: InvoiceTemplateSection[];
+  lineItemColumns: InvoiceLineItemColumn[];
+  customBlocks: InvoiceCustomBlock[];
+}
+
+export interface InvoiceFieldOption {
+  key: InvoiceFieldDataKey;
+  label: string;
+}
+
+export interface InvoiceSettingsResponse {
+  issuer: InvoiceIssuerSettings;
+  template: InvoiceTemplateConfig;
+  fieldOptions: InvoiceFieldOption[];
+}
+
 export interface AIPromptTemplate {
   id: string;
   prompt_key: string;

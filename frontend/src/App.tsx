@@ -36,6 +36,7 @@ import { AdminActivityPage } from '@/pages/AdminActivityPage';
 import { AdminSettingsPage } from '@/pages/AdminSettingsPage';
 import { AdminPromptsPage } from '@/pages/AdminPromptsPage';
 import { AdminPlansPage } from '@/pages/AdminPlansPage';
+import { AdminInvoiceEditorPage } from '@/pages/AdminInvoiceEditorPage';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30000 } },
@@ -71,6 +72,7 @@ function AppRoutes() {
         <Route path="activity" element={<AdminActivityPage />} />
         <Route path="prompts" element={<AdminPromptsPage />} />
         <Route path="plans" element={<AdminPlansPage />} />
+        <Route path="invoice-editor" element={<AdminInvoiceEditorPage />} />
         <Route path="settings" element={<AdminSettingsPage />} />
       </Route>
 

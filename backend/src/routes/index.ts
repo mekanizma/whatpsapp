@@ -41,6 +41,7 @@ router.get('/admin/activity', authenticate, requireRole('super_admin'), adminCtr
 router.get('/admin/settings', authenticate, requireRole('super_admin'), adminCtrl.getPlatformSettings);
 router.get('/admin/invoice-settings', authenticate, requireRole('super_admin'), adminCtrl.getInvoiceSettings);
 router.put('/admin/invoice-settings', authenticate, requireRole('super_admin'), adminCtrl.updateInvoiceSettings);
+router.get('/admin/invoice-preview', authenticate, requireRole('super_admin'), adminCtrl.downloadInvoicePreview);
 router.get('/admin/prompts', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.getPrompts));
 router.get('/admin/prompt-roles', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.getPromptRoles));
 router.get('/admin/prompts/:key', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.getPrompt));
