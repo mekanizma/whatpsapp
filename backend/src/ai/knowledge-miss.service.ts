@@ -14,6 +14,8 @@ const KNOWLEDGE_MISS_PATTERNS = [
   /net bilgi bulamadim/,
   /yanlis yonlendirmemek icin/,
   /bilgi bankasinda (yok|bulunmuyor|mevcut degil)/,
+  /eslesen icerik bulunamadi/,
+  /bilgi bankasinda eslesen/,
   /bilgiye sahip degilim/,
   /bu konuda bilgiye sahip degilim/,
   /bu konu hakkinda bilgiye sahip degilim/,
@@ -77,12 +79,13 @@ export interface UnknownQuestionContext {
 
 /** Bilinmeyen soru kaydı gerekip gerekmediğini belirler */
 export function shouldRecordUnknownQuestion(ctx: UnknownQuestionContext): boolean {
-  if (ctx.skippedAI || ctx.shouldTransfer || ctx.appointmentMode) return false;
+  if (ctx.skippedAI || ctx.appointmentMode) return false;
   if (!ctx.aiResponse.trim()) return false;
 
-  if (isKnowledgeMissAiResponse(ctx.aiResponse)) return true;
-
+  // KB eşleşmesi yoksa temsilci aktarımı olsa bile kaydet
   if (ctx.kbHasNoMatch) return true;
+
+  if (isKnowledgeMissAiResponse(ctx.aiResponse)) return true;
 
   return false;
 }

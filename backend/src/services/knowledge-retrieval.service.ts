@@ -146,13 +146,17 @@ export async function retrieveKnowledgeContext(
       };
     }
 
+    const hasStrongMatch = chunks.some(
+      (chunk) => chunk.combined_score >= config.rag.matchThreshold
+    );
+
     return {
       context: buildContextFromChunks(chunks),
       chunks,
       usedRag: true,
       usedLexicalFallback: false,
       fallbackItems,
-      kbHasNoMatch: false,
+      kbHasNoMatch: !hasStrongMatch,
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

@@ -25,7 +25,7 @@ import { prepareConversationHistoryForChat } from './conversation-history.servic
 import { buildCollectedFieldsContext, parseCollectedFields } from './appointment-collect.service';
 import { buildParsedSlotHint, reconcileAppointmentAiResponse } from './appointment-response.service';
 import { handleAppointmentBooking } from './appointment-extract.service';
-import { shouldRecordUnknownQuestion } from './knowledge-miss.service';
+import { shouldRecordUnknownQuestion, isKnowledgeMissAiResponse } from './knowledge-miss.service';
 import {
   getCachedResponse,
   setCachedResponse,
@@ -150,12 +150,22 @@ export async function generateAIResponse(
         model: config.openai.model,
       });
 
+      const knowledgeMiss = shouldRecordUnknownQuestion({
+        customerMessage: trimmed,
+        aiResponse: cachedResponse.message,
+        shouldTransfer: cachedResponse.shouldTransfer,
+        skippedAI: false,
+        appointmentMode: false,
+        kbHasNoMatch: isKnowledgeMissAiResponse(cachedResponse.message),
+      });
+
       return {
         message: cachedResponse.message,
         shouldTransfer: cachedResponse.shouldTransfer,
         skippedAI: false,
         skipReason: undefined,
         tokensUsed: 0,
+        knowledgeMiss,
       };
     }
   }

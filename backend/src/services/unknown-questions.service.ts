@@ -25,11 +25,11 @@ export interface UnknownQuestionRow {
 async function getCompanyPlanType(companyId: string): Promise<string> {
   const { data: sub } = await adminClient
     .from('subscriptions')
-    .select('subscription_plans(plan_type), plan:subscription_plans(plan_type)')
+    .select('plan:plan_id(plan_type)')
     .eq('company_id', companyId)
     .maybeSingle();
 
-  const planRow = sub?.subscription_plans ?? sub?.plan;
+  const planRow = sub?.plan;
   const plan = Array.isArray(planRow) ? planRow[0] : planRow;
   if (plan && typeof plan === 'object' && 'plan_type' in plan) {
     return String((plan as { plan_type: string }).plan_type);
