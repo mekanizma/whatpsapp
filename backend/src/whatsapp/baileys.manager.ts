@@ -391,8 +391,13 @@ async function connectBaileysSocket(companyId: string, session: BaileysSession):
       const statusCode = (lastDisconnect?.error as { output?: { statusCode?: number } })?.output?.statusCode;
       const wasConnected = session.status === 'connected';
       const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+      const isQrPairing = session.status === 'pending' || session.status === 'scanned';
+      const hasCreds = hasStoredCredentials(companyId);
+      const isRestartRequired = statusCode === DisconnectReason.restartRequired;
 
-      console.log(`[Baileys] Bağlantı kapandı: ${companyId}, kod: ${statusCode}, bağlıydı: ${wasConnected}`);
+      console.log(
+        `[Baileys] Bağlantı kapandı: ${companyId}, kod: ${statusCode}, bağlıydı: ${wasConnected}, qr: ${isQrPairing}, creds: ${hasCreds}`
+      );
 
       connections.delete(companyId);
 
@@ -420,25 +425,56 @@ async function connectBaileysSocket(companyId: string, session: BaileysSession):
 
       if (!shouldReconnect) return;
 
-      // QR aşamasında süre dolmuşsa yeniden bağlanma
-      if (!wasConnected && new Date(session.expires_at) <= new Date()) {
+      // QR henüz taranmadıysa ve süre dolduysa sonlandır (taranmış oturumda devam et)
+      if (!wasConnected && session.status === 'pending' && new Date(session.expires_at) <= new Date()) {
         session.status = 'expired';
         return;
       }
 
-      // Yalnızca daha önce bağlı oturumlar veya sunucu restart restore için otomatik yeniden dene
+      // QR tarandıktan sonra creds kaydedilir; Baileys genelde restartRequired ile kapanır
       const canAutoReconnect =
-        wasConnected || autoRestoreActive.has(companyId);
+        wasConnected ||
+        autoRestoreActive.has(companyId) ||
+        (isQrPairing && hasCreds);
 
       if (!canAutoReconnect) {
         if (session.status !== 'connected') {
           session.status = 'failed';
+          session.failure_reason =
+            session.failure_reason ||
+            (statusCode != null ? `WhatsApp bağlantısı kapandı (kod: ${statusCode})` : 'WhatsApp bağlantısı kurulamadı');
         }
         return;
       }
 
       if (wasConnected) {
         await markWhatsAppDisconnected(companyId);
+      }
+
+      if (isQrPairing && hasCreds) {
+        if (session.status !== 'connected') {
+          session.status = 'scanned';
+        }
+        reconnectAttempts.set(companyId, 0);
+        const existingTimer = reconnectTimers.get(companyId);
+        if (existingTimer) clearTimeout(existingTimer);
+        reconnectTimers.delete(companyId);
+
+        const delay = isRestartRequired ? 0 : getReconnectDelay(companyId);
+        const reconnect = () => {
+          connectBaileysSocket(companyId, session).catch((err) => {
+            console.error(`[Baileys] QR sonrası yeniden bağlanma hatası (${companyId}):`, err);
+          });
+        };
+
+        if (delay === 0) {
+          console.log(`[Baileys] QR sonrası hemen yeniden bağlanılıyor: ${companyId}`);
+          reconnect();
+        } else {
+          const timer = setTimeout(reconnect, delay);
+          reconnectTimers.set(companyId, timer);
+        }
+        return;
       }
 
       await scheduleReconnect(companyId, session);

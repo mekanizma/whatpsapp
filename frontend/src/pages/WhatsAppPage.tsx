@@ -114,7 +114,7 @@ export function WhatsAppPage() {
   });
 
   const pollQrStatus = useCallback(async () => {
-    if (!session || session.status === 'connected' || session.status === 'expired') return;
+    if (!session || session.status === 'connected' || session.status === 'expired' || session.status === 'failed') return;
     try {
       const data = await api.get<QrSession>(`/whatsapp/qr/${session.session_token}/status`);
       setSession(data);
@@ -130,7 +130,7 @@ export function WhatsAppPage() {
   }, [session, queryClient]);
 
   useEffect(() => {
-    if (!session || session.status === 'connected' || session.status === 'expired') return;
+    if (!session || session.status === 'connected' || session.status === 'expired' || session.status === 'failed') return;
     const interval = setInterval(pollQrStatus, 3500);
     pollQrStatus();
     return () => clearInterval(interval);
