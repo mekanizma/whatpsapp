@@ -19,4 +19,11 @@ describe('query-expansion', () => {
     const query = 'Merhaba';
     assert.equal(expandQueryForRetrieval(query), query);
   });
+
+  it('İngilizce fiyat sorusunda Türkçe eş anlamlılar ekler', () => {
+    const expanded = expandQueryForRetrieval('Could I get information about your prices?');
+    assert.match(expanded, /fiyat/);
+    assert.match(expanded, /ücret/);
+    assert.match(expanded, /your prices/);
+  });
 });

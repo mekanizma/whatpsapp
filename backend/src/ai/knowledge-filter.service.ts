@@ -54,16 +54,25 @@ export function extractKeywords(text: string): string[] {
     .filter((w) => w.length > 2 && !STOP_WORDS.has(w));
 }
 
+const PRICE_QUERY_RE =
+  /fiyat|ücret|ucret|ne kadar|kaç tl|kac tl|kaça|kaca|\btl\b|₺|eur|euro|\$|price|prices|pricing|cost|costs|fee|fees|tuition|how much|tariff|tarife|preis|preise|prix|tarif|ücretlendirme|ucretlendirme/i;
+
+const GENERAL_PRICE_LIST_RE =
+  /fiyatlar|fiyat list|ücretler|ucretler|fiyatlarınız|fiyatlariniz|fiyat bilgi|ücret bilgi|fiyatlariniz nedir|ücretleriniz|ucretleriniz|your prices|about your prices|price list|pricing information|our prices|what are your prices|information about (your )?prices|your fees|fee schedule|tuition fees|cost of|how much (do|does|is|are)/i;
+
+const DURATION_QUERY_RE =
+  /ne kadar sür|surer|süre|sure|kaç seans|kac seans|kaç dakika|kac dakika|ne zaman biter|how long|how many sessions|how many minutes|how much time|takes how long|duration of|how many hours/i;
+
 /** Genel / belirsiz bilgi talebi — tüm KB dökülmemeli */
 export function isBroadKnowledgeQuery(message: string): boolean {
   const n = message.toLowerCase().trim();
   const specific =
-    /fiyat|ücret|ucret|ne kadar|kaç tl|kac tl|ağrı|agri|acı|aci|nasıl yapıl|nasil yapil|nedir|kaç seans|kac seans|sürer|surer|randevu|dolgu|kanal|implant|beyazlat|ortodont|çekim|cekim|protez|kaplama|muayene/.test(
+    /fiyat|ücret|ucret|ne kadar|kaç tl|kac tl|ağrı|agri|acı|aci|nasıl yapıl|nasil yapil|nedir|kaç seans|kac seans|sürer|surer|randevu|dolgu|kanal|implant|beyazlat|ortodont|çekim|cekim|protez|kaplama|muayene|price|prices|pricing|cost|fee|fees|tuition|how much|working hours|opening hours|where are you|location|address/.test(
       n
     );
   if (specific) return false;
 
-  return /bilgi ver|hakkında bilgi|hakkinda bilgi|genel bilgi|neler yap|hangi hizmet|tanıt|tanit|kliniğiniz|kliniginiz|hakkında|hakkinda|about your|tell me about|what do you offer|services/i.test(
+  return /bilgi ver|hakkında bilgi|hakkinda bilgi|genel bilgi|neler yap|hangi hizmet|tanıt|tanit|kliniğiniz|kliniginiz|hakkında|hakkinda|about your (clinic|services|company)|tell me about (your )?(clinic|services|company)|what do you offer|services you offer/i.test(
     n
   );
 }
@@ -82,17 +91,13 @@ function scoreItem(item: KnowledgeItem, keywords: string[]): number {
 /** Fiyat / ücret sorusu (süre sorusu değil) */
 export function isPriceQuery(message: string): boolean {
   const n = message.toLowerCase();
-  const duration =
-    /ne kadar sür|surer|süre|sure|kaç seans|kac seans|kaç dakika|kac dakika|ne zaman biter/.test(n);
-  if (duration) return false;
-  return /fiyat|ücret|ucret|ne kadar|kaç tl|kac tl|kaça|kaca|\btl\b|₺|eur|euro|\$/.test(n);
+  if (DURATION_QUERY_RE.test(n)) return false;
+  return PRICE_QUERY_RE.test(n);
 }
 
 /** Genel fiyat listesi talebi */
 export function isGeneralPriceListQuery(message: string): boolean {
-  return /fiyatlar|fiyat list|ücretler|ucretler|fiyatlarınız|fiyatlariniz|fiyat bilgi|ücret bilgi|fiyatlarınız|fiyatlariniz nedir|ücretleriniz|ucretleriniz/.test(
-    message.toLowerCase()
-  );
+  return GENERAL_PRICE_LIST_RE.test(message.toLowerCase());
 }
 
 function isPriceKnowledgeItem(item: KnowledgeItem): boolean {
@@ -110,7 +115,7 @@ export function isOffTopicQuery(message: string): boolean {
 /** Bilgi sorusu — randevu akışından önce KB yanıtı verilmeli */
 export function isKnowledgeQuestion(message: string): boolean {
   const n = message.toLowerCase().trim();
-  return /[?？]|\bnedir\b|\bne kadar\b|\bfiyat|\bücret|\bucret|\bnasıl\b|\bnasil\b|\bvar mı\b|\bvarmi\b|\bhangi\b|\bnerede\b|\bkaç\b|\bkac\b|\bbilgi\b|\baçıkla|\bacikla|\btanıt|\btanit|\bhizmet|\bçalışma saat|\bcalisma saat/.test(
+  return /[?？]|\bnedir\b|\bne kadar\b|\bfiyat|\bücret|\bucret|\bnasıl\b|\bnasil\b|\bvar mı\b|\bvarmi\b|\bhangi\b|\bnerede\b|\bkaç\b|\bkac\b|\bbilgi\b|\baçıkla|\bacikla|\btanıt|\btanit|\bhizmet|\bçalışma saat|\bcalisma saat|\bwhat\b|\bwhere\b|\bwhen\b|\bhow\b|\bprice|\bprices|\bpricing|\bcost|\bfee|\bfees|\btuition|\bworking hours|\bopening hours|\blocation|\baddress|\binformation about/.test(
     n
   );
 }

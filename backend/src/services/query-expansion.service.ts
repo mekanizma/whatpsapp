@@ -11,28 +11,30 @@ interface ExpansionRule {
 
 const EXPANSION_RULES: ExpansionRule[] = [
   {
-    pattern: /fiyat|ücret|ucret|ne kadar|kaç tl|kac tl|maliyet|tarife|kaça|kaca|bedel|tutar/i,
-    terms: 'fiyat ücret tarife maliyet bedel',
+    pattern:
+      /fiyat|ücret|ucret|ne kadar|kaç tl|kac tl|maliyet|tarife|kaça|kaca|bedel|tutar|price|prices|pricing|cost|fee|fees|tuition|how much/i,
+    terms: 'fiyat ücret tarife maliyet bedel price cost fee',
   },
   {
-    pattern: /çalışma saat|calisma saat|açılış|acilis|kapanış|kapanis|mesai|ne zaman açık|ne zaman acik/i,
-    terms: 'çalışma saatleri mesai açılış kapanış',
+    pattern:
+      /çalışma saat|calisma saat|açılış|acilis|kapanış|kapanis|mesai|ne zaman açık|ne zaman acik|working hours|opening hours|business hours|when are you open/i,
+    terms: 'çalışma saatleri mesai açılış kapanış working hours',
   },
   {
-    pattern: /adres|nerede|konum|yol tarifi|lokasyon|location|harita/i,
-    terms: 'adres konum yer yol tarifi',
+    pattern: /adres|nerede|konum|yol tarifi|lokasyon|location|harita|address|where are you|directions/i,
+    terms: 'adres konum yer yol tarifi address location',
   },
   {
-    pattern: /randevu|rezervasyon|müsait|musait|boş saat|bos saat|uygun saat/i,
-    terms: 'randevu rezervasyon müsaitlik',
+    pattern: /randevu|rezervasyon|müsait|musait|boş saat|bos saat|uygun saat|appointment|book an appointment/i,
+    terms: 'randevu rezervasyon müsaitlik appointment',
   },
   {
-    pattern: /ağrı|agri|acı|aci|sız|siz|rahatsız|rahatsiz/i,
-    terms: 'ağrı acı sızı rahatsızlık',
+    pattern: /ağrı|agri|acı|aci|sız|siz|rahatsız|rahatsiz|pain|hurt|ache/i,
+    terms: 'ağrı acı sızı rahatsızlık pain',
   },
   {
-    pattern: /nasıl yapıl|nasil yapil|süreç|surec|işlem süreci|islem sureci/i,
-    terms: 'nasıl yapılır süreç işlem',
+    pattern: /nasıl yapıl|nasil yapil|süreç|surec|işlem süreci|islem sureci|how is .* done|procedure/i,
+    terms: 'nasıl yapılır süreç işlem procedure',
   },
 ];
 

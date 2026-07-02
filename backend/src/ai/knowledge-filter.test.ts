@@ -5,6 +5,8 @@ import {
   isBroadKnowledgeQuery,
   isAppointmentIntent,
   isKnowledgeQuestion,
+  isPriceQuery,
+  isGeneralPriceListQuery,
   extractKeywords,
 } from './knowledge-filter.service';
 import {
@@ -64,6 +66,28 @@ describe('knowledge-filter', () => {
     assert.equal(r.items[0].title, 'Fiyat Bilgileri');
   });
 
+  it('İngilizce fiyat sorusunda fiyat kaydı seçilir', () => {
+    assert.equal(isPriceQuery('Could I get information about your prices?'), true);
+    assert.equal(isGeneralPriceListQuery('Could I get information about your prices?'), true);
+    assert.equal(isBroadKnowledgeQuery('Could I get information about your prices?'), false);
+
+    const r = filterRelevantKnowledge(SAMPLE_KB, 'Could I get information about your prices?');
+    assert.equal(r.isBroadQuery, false);
+    assert.equal(r.items[0].title, 'Fiyat Bilgileri');
+    assert.match(r.context, /1500 TL/);
+  });
+
+  it('İngilizce genel fiyat listesi talebini algılar', () => {
+    assert.equal(isGeneralPriceListQuery('What are your prices?'), true);
+    const r = filterRelevantKnowledge(SAMPLE_KB, 'What are your prices?');
+    assert.equal(r.items[0].title, 'Fiyat Bilgileri');
+  });
+
+  it('İngilizce süre sorusu fiyat sayılmaz', () => {
+    assert.equal(isPriceQuery('How long does a filling take?'), false);
+    assert.equal(isPriceQuery('How much does a filling cost?'), true);
+  });
+
   it('tek kelime eşleşmesinde de kayıt döner', () => {
     const r = filterRelevantKnowledge(SAMPLE_KB, 'diş tedavisi var mı');
     assert.equal(r.hasRelevantContent, true);
@@ -115,5 +139,14 @@ describe('kb-answer', () => {
     const answer = formatConciseKnowledgeAnswer([SAMPLE_KB[0]], 'Dolgu ne kadar');
     assert.match(answer, /Dolgu: 2000/);
     assert.doesNotMatch(answer, /Kanal tedavisi/);
+  });
+
+  it('İngilizce fiyat sorusunda fiyat listesi döner', () => {
+    const answer = formatConciseKnowledgeAnswer(
+      [SAMPLE_KB[0]],
+      'Could I get information about your prices?'
+    );
+    assert.match(answer, /1500 TL/);
+    assert.match(answer, /Dolgu: 2000/);
   });
 });

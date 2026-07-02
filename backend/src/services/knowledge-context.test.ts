@@ -54,4 +54,26 @@ describe('knowledge-context', () => {
 
     assert.match(knowledge, /Dolgu: 2000/);
   });
+
+  it('İngilizce fiyat sorusunda RAG yanlış chunk getirse fiyat bölümünü ekler', () => {
+    const kbFilter = filterRelevantKnowledge(
+      SAMPLE_KB,
+      'Could I get information about your prices?'
+    );
+    const knowledge = resolveKnowledgeContextForAI(
+      {
+        context: '### Dolgu İşlemleri\nKompozit dolgu uygulanır.',
+        chunks: [],
+        usedRag: true,
+        fallbackItems: SAMPLE_KB,
+        kbHasNoMatch: false,
+      },
+      kbFilter,
+      SAMPLE_KB,
+      'Could I get information about your prices?'
+    );
+
+    assert.match(knowledge, /1500 TL/);
+    assert.match(knowledge, /Dolgu: 2000/);
+  });
 });
