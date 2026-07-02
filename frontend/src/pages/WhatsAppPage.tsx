@@ -60,7 +60,14 @@ export function WhatsAppPage() {
   const { data: status } = useQuery({
     queryKey: ['whatsapp-status'],
     queryFn: () => api.get<WaStatus>('/whatsapp/status'),
-    refetchInterval: 5000,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (session && session.status !== 'connected' && session.status !== 'expired') {
+        return false;
+      }
+      if (data?.status === 'connected') return false;
+      return data?.status === 'reconnecting' ? 8000 : 10000;
+    },
   });
 
   const { data: config } = useQuery({
@@ -114,14 +121,18 @@ export function WhatsAppPage() {
       if (data.status === 'connected') {
         queryClient.invalidateQueries({ queryKey: ['whatsapp-status'] });
       }
-    } catch {
-      /* ignore */
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '';
+      if (message.includes('429') || message.includes('Çok fazla istek')) {
+        return;
+      }
     }
   }, [session, queryClient]);
 
   useEffect(() => {
     if (!session || session.status === 'connected' || session.status === 'expired') return;
-    const interval = setInterval(pollQrStatus, 2000);
+    const interval = setInterval(pollQrStatus, 3500);
+    pollQrStatus();
     return () => clearInterval(interval);
   }, [session, pollQrStatus]);
 
