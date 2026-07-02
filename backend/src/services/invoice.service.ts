@@ -299,6 +299,45 @@ function drawTableRow(
   return y + rowHeight;
 }
 
+function drawMetaLine(
+  doc: PDFKit.PDFDocument,
+  text: string,
+  x: number,
+  y: number,
+  width: number,
+  options?: { fontSize?: number; bold?: boolean }
+): number {
+  const fontSize = options?.fontSize ?? 9;
+  doc
+    .fillColor('#ffffff')
+    .font(options?.bold ? INVOICE_FONT_BOLD : INVOICE_FONT)
+    .fontSize(fontSize);
+  doc.text(text, x, y, { width, align: 'right' });
+  return y + doc.heightOfString(text, { width }) + 3;
+}
+
+function drawTotalRow(
+  doc: PDFKit.PDFDocument,
+  y: number,
+  label: string,
+  value: string,
+  options?: { bold?: boolean; labelWidth?: number }
+): number {
+  const labelX = 340;
+  const valueX = 455;
+  const valueW = 90;
+  const labelW = options?.labelWidth ?? 108;
+  const fontSize = options?.bold ? 10 : 9;
+
+  doc
+    .fillColor(options?.bold ? '#0f172a' : '#334155')
+    .font(options?.bold ? INVOICE_FONT_BOLD : INVOICE_FONT)
+    .fontSize(fontSize);
+  doc.text(label, labelX, y, { width: labelW, lineBreak: false });
+  doc.text(value, valueX, y, { width: valueW, align: 'right', lineBreak: false });
+  return y + (options?.bold ? 20 : 18);
+}
+
 export function generateInvoicePdf(data: InvoiceData): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ size: 'A4', margin: 40 });
@@ -311,15 +350,18 @@ export function generateInvoicePdf(data: InvoiceData): Promise<Buffer> {
     registerInvoiceFonts(doc);
 
     const periodLabel = data.billingPeriod === 'yearly' ? 'Yıllık' : 'Aylık';
+    const metaX = 300;
+    const metaW = 275;
 
     // Header band
     doc.rect(0, 0, 595.28, 90).fill('#0f172a');
     doc.fillColor('#ffffff').font(INVOICE_FONT_BOLD).fontSize(26).text(data.issuer.name, 40, 28);
-    doc.font(INVOICE_FONT).fontSize(10).text('E-FATURA / E-ARŞİV FATURA', 40, 58);
-    doc.fontSize(9).text(`Fatura No: ${data.invoiceNumber}`, 350, 30, { width: 205, align: 'right' });
-    doc.text(`ETTN: ${data.ettn}`, 350, 44, { width: 205, align: 'right' });
-    doc.text(`Tarih: ${formatDate(data.issueDate)}`, 350, 58, { width: 205, align: 'right' });
-    doc.text('Senaryo: TEMELFATURA', 350, 72, { width: 205, align: 'right' });
+    doc.font(INVOICE_FONT).fontSize(10).text('E-FATURA / E-ARŞİV FATURA', 40, 62);
+
+    let metaY = 20;
+    metaY = drawMetaLine(doc, `Fatura No: ${data.invoiceNumber}`, metaX, metaY, metaW, { bold: true });
+    metaY = drawMetaLine(doc, `Tarih: ${formatDate(data.issueDate)}`, metaX, metaY, metaW);
+    drawMetaLine(doc, 'Senaryo: TEMELFATURA', metaX, metaY, metaW);
 
     let y = 110;
 
@@ -350,20 +392,14 @@ export function generateInvoicePdf(data: InvoiceData): Promise<Buffer> {
     // Subscription summary
     doc.fillColor('#0f172a').font(INVOICE_FONT_BOLD).fontSize(11).text('ABONELİK DETAYLARI', 40, y);
     y += 16;
-    doc.rect(40, y, 515, 72).fill('#f8fafc').stroke('#e2e8f0');
+    doc.rect(40, y, 515, 58).fill('#f8fafc').stroke('#e2e8f0');
     doc.fillColor('#334155').font(INVOICE_FONT).fontSize(8.5);
     doc.text(`Paket: ${data.subscription.planName} (${data.subscription.planType})`, 48, y + 8);
     doc.text(`Dönem: ${periodLabel}`, 48, y + 22);
     doc.text(`Abonelik Başlangıç: ${formatDateTime(data.subscription.startsAt)}`, 48, y + 36);
     doc.text(`Abonelik Bitiş: ${formatDateTime(data.subscription.endsAt)}`, 48, y + 50);
-    doc.text(
-      `Durum: ${STATUS_LABELS[data.subscription.status] || data.subscription.status} · Kullanım: ${data.subscription.messagesUsed.toLocaleString('tr-TR')} / ${data.subscription.messagesLimit.toLocaleString('tr-TR')} AI görüşme · ${data.subscription.usersLimit} kullanıcı`,
-      48,
-      y + 64,
-      { width: 500 }
-    );
 
-    y += 88;
+    y += 74;
 
     if (data.subscription.features.length > 0) {
       doc.font(INVOICE_FONT_BOLD).fontSize(9).fillColor('#111827').text('Paket Özellikleri:', 40, y);
@@ -413,20 +449,27 @@ export function generateInvoicePdf(data: InvoiceData): Promise<Buffer> {
     });
 
     y += 10;
-    doc.rect(330, y, 225, 50).stroke('#e2e8f0');
-    doc.font(INVOICE_FONT).fontSize(9).fillColor('#334155');
-    doc.text('Ara Toplam:', 340, y + 10);
-    doc.text(formatMoney(data.subtotal, data.currency), 420, y + 10, { width: 125, align: 'right' });
-    doc.font(INVOICE_FONT_BOLD).fontSize(10).fillColor('#0f172a');
-    doc.text('GENEL TOPLAM (KDV Hariç):', 340, y + 30);
-    doc.text(formatMoney(data.grandTotal, data.currency), 420, y + 30, { width: 125, align: 'right' });
+    const totalsTop = y;
+    doc.rect(330, totalsTop, 225, 62).stroke('#e2e8f0');
+    let totalsY = totalsTop + 10;
+    totalsY = drawTotalRow(doc, totalsY, 'Ara Toplam:', formatMoney(data.subtotal, data.currency));
 
-    y += 70;
+    doc.fillColor('#0f172a').font(INVOICE_FONT_BOLD).fontSize(10);
+    doc.text('GENEL TOPLAM', 340, totalsY, { width: 95, lineBreak: false });
+    doc.text(formatMoney(data.grandTotal, data.currency), 455, totalsY, {
+      width: 90,
+      align: 'right',
+      lineBreak: false,
+    });
+    doc.fillColor('#64748b').font(INVOICE_FONT).fontSize(7.5);
+    doc.text('(KDV Hariç)', 340, totalsY + 13, { width: 95, lineBreak: false });
+
+    y = totalsTop + 72;
     doc.font(INVOICE_FONT).fontSize(7.5).fillColor('#94a3b8');
     const footerText =
       data.issuer.footerNote ||
       'Bu belge elektronik ortamda oluşturulmuş olup 5070 sayılı Elektronik İmza Kanunu kapsamında geçerlidir. ' +
-        `${data.issuer.name} WhatsApp AI SaaS abonelik hizmeti faturasıdır. Fiyatlar KDV hariçtir.`;
+        `${data.issuer.name} WhatsApp AI SaaS abonelik hizmeti faturasıdır.`;
     doc.text(footerText, 40, y, { width: 515, align: 'center' });
     doc.text(`${data.issuer.website} · ${data.issuer.email}`, 40, y + 24, { width: 515, align: 'center' });
 

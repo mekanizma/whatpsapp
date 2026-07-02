@@ -5,6 +5,7 @@
 import { config } from '../config';
 import { adminClient } from '../database/supabase';
 import { createEmbedding } from './embedding.service';
+import { expandQueryForRetrieval } from './query-expansion.service';
 import type { KnowledgeItem, RetrievedKnowledgeChunk } from '../types';
 
 export interface KnowledgeRetrievalResult {
@@ -72,12 +73,13 @@ export async function retrieveKnowledgeContext(
   }
 
   try {
-    const embedding = await createEmbedding(trimmed);
+    const searchQuery = expandQueryForRetrieval(trimmed);
+    const embedding = await createEmbedding(searchQuery);
 
     const { data, error } = await adminClient.rpc('match_knowledge_chunks', {
       p_company_id: companyId,
       query_embedding: embedding,
-      query_text: trimmed,
+      query_text: searchQuery,
       match_count: config.rag.topK,
       match_threshold: config.rag.matchThreshold,
       vector_weight: config.rag.vectorWeight,
