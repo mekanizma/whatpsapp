@@ -183,7 +183,7 @@
     "customersDesc": "Bu dönemde mesaj gönderen benzersiz kişi sayısı",
     "aiHint": "AI asistanınız bilgi bankanızdaki bilgilere göre müşterilerinize 7/24 yanıt verir.",
     "monthlyQuota": "Aylık AI Görüşme Kotası",
-    "monthlyQuotaDesc": "Paketinize dahil AI görüşme hakkı. Her kişi için 50 mesaj veya 12 saat aradan sonra yeni görüşme sayılır.",
+    "monthlyQuotaDesc": "Paketinize dahil AI görüşme hakkı.",
     "messagesLeft": "AI görüşme hakkınız kaldı",
     "used": "Kullanılan",
     "total": "Toplam",

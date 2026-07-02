@@ -183,7 +183,7 @@
     "customersDesc": "Unique people who messaged in this period",
     "aiHint": "Your AI assistant replies 24/7 based on your knowledge base.",
     "monthlyQuota": "Monthly AI Conversation Quota",
-    "monthlyQuotaDesc": "AI conversations included in your plan. A new conversation is counted every 50 customer messages per person, or after a 12-hour gap.",
+    "monthlyQuotaDesc": "AI conversations included in your plan.",
     "messagesLeft": "AI conversations remaining",
     "used": "Used",
     "total": "Total",
