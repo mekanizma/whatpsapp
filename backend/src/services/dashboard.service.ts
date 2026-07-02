@@ -6,32 +6,22 @@ import { adminClient } from '../database/supabase';
 import { demoDashboardStats, demoPlatformStats } from '../demo/mockData';
 import { DashboardStats } from '../types';
 import { getMonthStartISO } from '../utils/date';
+import { getConversationStatsForCompany } from './conversation-count.service';
 
 export async function getDashboardStats(companyId: string, useDemoData = false): Promise<DashboardStats> {
   if (useDemoData) return demoDashboardStats;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
 
   const monthStart = getMonthStartISO();
 
   const [
-    totalResult,
-    todayResult,
+    conversationStats,
     aiResult,
     transferredResult,
     customersResult,
     subscriptionResult,
     aiLogsResult,
   ] = await Promise.all([
-    adminClient
-      .from('messages')
-      .select('id', { count: 'exact', head: true })
-      .eq('company_id', companyId),
-    adminClient
-      .from('messages')
-      .select('id', { count: 'exact', head: true })
-      .eq('company_id', companyId)
-      .gte('created_at', today.toISOString()),
+    getConversationStatsForCompany(companyId),
     adminClient
       .from('messages')
       .select('id', { count: 'exact', head: true })
@@ -72,8 +62,8 @@ export async function getDashboardStats(companyId: string, useDemoData = false):
   const aiTokensUsed = aiLogs.reduce((sum, l) => sum + (l.total_tokens || 0), 0);
 
   return {
-    total_messages: totalResult.count || 0,
-    today_messages: todayResult.count || 0,
+    total_conversations: conversationStats.total_conversations,
+    today_conversations: conversationStats.today_conversations,
     ai_responses: aiResult.count || 0,
     transferred: transferredResult.count || 0,
     active_customers: uniqueCustomers.size,
@@ -88,9 +78,9 @@ export async function getDashboardStats(companyId: string, useDemoData = false):
 
 export async function getPlatformStats(useDemoData = false) {
   if (useDemoData) return demoPlatformStats;
-  const [companies, messages, subscriptions] = await Promise.all([
+  const [companies, totalConversations, subscriptions] = await Promise.all([
     adminClient.from('companies').select('id', { count: 'exact', head: true }),
-    adminClient.from('messages').select('id', { count: 'exact', head: true }),
+    getPlatformConversationCount(),
     adminClient
       .from('subscriptions')
       .select('messages_used')
@@ -104,7 +94,7 @@ export async function getPlatformStats(useDemoData = false) {
 
   return {
     total_companies: companies.count || 0,
-    total_messages: messages.count || 0,
+    total_conversations: totalConversations,
     total_messages_used: totalMessagesUsed,
     active_subscriptions: subscriptions.data?.length || 0,
   };

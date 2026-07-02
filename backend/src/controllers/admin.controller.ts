@@ -55,7 +55,7 @@ export async function getCompanies(req: AuthRequest, res: Response): Promise<voi
   if (isDemoSession(req)) {
     res.json({
       success: true,
-      data: [{ ...demoCompany, message_count: 0, ai_tokens_month: 0 }],
+      data: [{ ...demoCompany, conversation_count: 0, ai_tokens_month: 0 }],
       pagination: { page: 1, limit: 20, total: 1, totalPages: 1 },
     });
     return;

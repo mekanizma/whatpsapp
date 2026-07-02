@@ -78,12 +78,12 @@ export const demoCompany: Company = {
 };
 
 export const demoDashboardStats: DashboardStats = {
-  total_messages: 1247,
-  today_messages: 38,
+  total_conversations: 248,
+  today_conversations: 12,
   ai_responses: 982,
   transferred: 45,
   active_customers: 156,
-  messages_used: 1247,
+  messages_used: 248,
   messages_limit: 5000,
   ai_api_calls: 312,
   ai_cached_hits: 89,
@@ -93,7 +93,7 @@ export const demoDashboardStats: DashboardStats = {
 
 export const demoPlatformStats = {
   total_companies: 12,
-  total_messages: 8432,
+  total_conversations: 1680,
   total_messages_used: 6210,
   active_subscriptions: 10,
 };

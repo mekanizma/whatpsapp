@@ -42,7 +42,7 @@ export interface CompanyPlan {
 }
 
 export interface AdminCompany extends Company {
-  message_count?: number;
+  conversation_count?: number;
   ai_tokens_month?: number;
   plan?: CompanyPlan | null;
   subscription?: {
@@ -59,7 +59,7 @@ export interface AdminCompany extends Company {
 
 export interface PlatformStats {
   total_companies: number;
-  total_messages: number;
+  total_conversations: number;
   total_messages_used: number;
   active_subscriptions: number;
   open_tickets: number;
@@ -154,8 +154,8 @@ export interface AIPromptTemplate {
 export type PromptRole = AIPromptTemplate['prompt_role'];
 
 export interface DashboardStats {
-  total_messages: number;
-  today_messages: number;
+  total_conversations: number;
+  today_conversations: number;
   ai_responses: number;
   transferred: number;
   active_customers: number;

@@ -6,6 +6,7 @@ import { adminClient } from '../database/supabase';
 import { config } from '../config';
 import { getDashboardStats } from './dashboard.service';
 import { getMonthStartISO } from '../utils/date';
+import { getPlatformConversationCount, getConversationCountsByCompany } from './conversation-count.service';
 import { mapSubscriptionToCompanyPlan } from './plan-capabilities.service';
 
 const PLAN_LIMITS: Record<string, { messages: number; users: number }> = {
@@ -17,9 +18,9 @@ const PLAN_LIMITS: Record<string, { messages: number; users: number }> = {
 export async function getExtendedPlatformStats() {
   const monthStart = getMonthStartISO();
 
-  const [companies, messages, subs, aiLogs, tickets, waConnected] = await Promise.all([
+  const [companies, totalConversations, subs, aiLogs, tickets, waConnected] = await Promise.all([
     adminClient.from('companies').select('id', { count: 'exact', head: true }),
-    adminClient.from('messages').select('id', { count: 'exact', head: true }),
+    getPlatformConversationCount(),
     adminClient.from('subscriptions').select('messages_used, messages_limit, status'),
     adminClient
       .from('ai_usage_logs')
@@ -48,7 +49,7 @@ export async function getExtendedPlatformStats() {
 
   return {
     total_companies: companies.count || 0,
-    total_messages: messages.count || 0,
+    total_conversations: totalConversations,
     total_messages_used: allSubs.reduce((s, x) => s + (x.messages_used || 0), 0),
     active_subscriptions: allSubs.filter((s) => s.status === 'active' || s.status === 'trial').length,
     open_tickets: tickets.count || 0,
@@ -81,17 +82,13 @@ export async function getCompaniesWithUsage(page = 1, limit = 50, search = '') {
   const companies = data || [];
   const ids = companies.map((c) => c.id);
 
-  let msgCounts: Record<string, number> = {};
+  let conversationCounts: Record<string, number> = {};
   let aiTokens: Record<string, number> = {};
 
   if (ids.length) {
     const monthStart = getMonthStartISO();
-    const [msgs, ai] = await Promise.all([
-      adminClient
-        .from('messages')
-        .select('company_id')
-        .in('company_id', ids)
-        .eq('sender_type', 'ai'),
+    const [convCounts, ai] = await Promise.all([
+      getConversationCountsByCompany(ids),
       adminClient
         .from('ai_usage_logs')
         .select('company_id, total_tokens')
@@ -99,12 +96,10 @@ export async function getCompaniesWithUsage(page = 1, limit = 50, search = '') {
         .gte('created_at', monthStart),
     ]);
 
-    for (const m of msgs.data || []) {
-      msgCounts[m.company_id] = (msgCounts[m.company_id] || 0) + 1;
-    }
     for (const a of ai.data || []) {
       aiTokens[a.company_id] = (aiTokens[a.company_id] || 0) + (a.total_tokens || 0);
     }
+    conversationCounts = convCounts;
   }
 
   return {
@@ -116,7 +111,7 @@ export async function getCompaniesWithUsage(page = 1, limit = 50, search = '') {
 
       return {
         ...c,
-        message_count: msgCounts[c.id] || 0,
+        conversation_count: conversationCounts[c.id] || 0,
         ai_tokens_month: aiTokens[c.id] || 0,
         subscription: subscription
           ? {

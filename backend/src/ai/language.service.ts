@@ -2,10 +2,14 @@
  * Konuşma dili algılama ve şablon çevirileri
  */
 
+import { detectAll } from 'tinyld';
 import { getPromptContent, renderPromptTemplate } from '../services/prompt.service';
 import { config } from '../config';
 
-export type ConversationLang = 'tr' | 'en' | 'de' | 'ar' | 'ru' | 'fr' | 'es';
+export type ConversationLang = 'tr' | 'en' | 'de' | 'ar' | 'ru' | 'fr' | 'es' | 'other';
+
+const TEMPLATE_LANGS = ['tr', 'en', 'de', 'ar', 'ru', 'fr', 'es'] as const;
+type TemplateLang = (typeof TEMPLATE_LANGS)[number];
 
 export const LANG_NAMES: Record<ConversationLang, string> = {
   tr: 'Turkish',
@@ -15,7 +19,104 @@ export const LANG_NAMES: Record<ConversationLang, string> = {
   ru: 'Russian',
   fr: 'French',
   es: 'Spanish',
+  other: "the customer's language (mirror naturally)",
 };
+
+const MIN_STICKY_LENGTH = 15;
+const HIGH_CONFIDENCE_ACCURACY = 0.5;
+const MIN_RELATIVE_CONFIDENCE_RATIO = 1.5;
+const MIN_ABSOLUTE_ACCURACY_LONG = 0.12;
+
+const TURKISH_CHAR_RE = /[ğüşıİĞÜŞ]/;
+const ARABIC_SCRIPT_RE = /[\u0600-\u06FF]/;
+const CYRILLIC_SCRIPT_RE = /[\u0400-\u04FF]/;
+
+function isTemplateLang(code: string): code is TemplateLang {
+  return (TEMPLATE_LANGS as readonly string[]).includes(code);
+}
+
+function mapDetectedIsoLang(iso2: string): ConversationLang {
+  return isTemplateLang(iso2) ? iso2 : 'other';
+}
+
+interface MessageLanguageDetection {
+  lang: ConversationLang;
+  confident: boolean;
+}
+
+function isConfidentDetection(
+  text: string,
+  topLang: string,
+  topAccuracy: number,
+  secondAccuracy: number
+): boolean {
+  const len = text.trim().length;
+  if (len < MIN_STICKY_LENGTH) return false;
+
+  const mapped = mapDetectedIsoLang(topLang);
+  if (mapped === 'other') {
+    return (
+      topAccuracy >= 0.05 &&
+      (secondAccuracy <= 0 || topAccuracy >= secondAccuracy * MIN_RELATIVE_CONFIDENCE_RATIO)
+    );
+  }
+
+  if (topAccuracy >= HIGH_CONFIDENCE_ACCURACY) return true;
+  return (
+    topAccuracy >= MIN_ABSOLUTE_ACCURACY_LONG &&
+    (secondAccuracy <= 0 || topAccuracy >= secondAccuracy * MIN_RELATIVE_CONFIDENCE_RATIO)
+  );
+}
+
+/** Tek mesaj için offline dil algılama — konuşma yapışkanlığı uygulanmaz */
+function detectSingleMessageLanguage(text: string): MessageLanguageDetection {
+  const trimmed = text.trim();
+  if (!trimmed) return { lang: 'tr', confident: false };
+
+  if (ARABIC_SCRIPT_RE.test(trimmed)) {
+    return { lang: 'ar', confident: true };
+  }
+  if (CYRILLIC_SCRIPT_RE.test(trimmed)) {
+    return { lang: 'ru', confident: true };
+  }
+
+  const ranked = detectAll(trimmed);
+  if (!ranked.length) return { lang: 'tr', confident: false };
+
+  let top = ranked[0];
+  const second = ranked[1]?.accuracy ?? 0;
+
+  if (TURKISH_CHAR_RE.test(trimmed)) {
+    const tr = ranked.find((r) => r.lang === 'tr');
+    if (tr && (tr.accuracy >= top.accuracy * 0.75 || top.lang !== 'tr')) {
+      top = tr.accuracy >= top.accuracy ? tr : { lang: 'tr', accuracy: Math.max(tr.accuracy, top.accuracy) };
+    } else if (!tr) {
+      top = { lang: 'tr', accuracy: Math.max(top.accuracy, MIN_ABSOLUTE_ACCURACY_LONG) };
+    }
+  }
+
+  const lang = mapDetectedIsoLang(top.lang);
+  return {
+    lang,
+    confident: isConfidentDetection(trimmed, top.lang, top.accuracy, second),
+  };
+}
+
+function getStickyLanguageFromHistory(
+  history: { sender_type: string; message: string }[]
+): ConversationLang | null {
+  for (let i = history.length - 1; i >= 0; i--) {
+    const entry = history[i];
+    if (entry.sender_type !== 'customer') continue;
+    const detection = detectSingleMessageLanguage(entry.message);
+    if (detection.confident) return detection.lang;
+  }
+  return null;
+}
+
+export function getLanguageHintName(lang: ConversationLang): string {
+  return LANG_NAMES[lang];
+}
 
 type MessageKey =
   | 'greeting'
@@ -42,7 +143,7 @@ type MessageKey =
   | 'appointment_processing'
   | 'kb_topic_intro';
 
-const MESSAGES: Record<MessageKey, Record<ConversationLang, string>> = {
+const MESSAGES: Record<MessageKey, Record<TemplateLang, string>> = {
   greeting: {
     tr: 'Merhaba, ben AI destek asistanıyım. Bilgi bankamızdaki konularda size yardımcı olabilirim.',
     en: 'Hello, I am an AI support assistant. I can help you with topics in our knowledge base.',
@@ -253,7 +354,8 @@ const MESSAGES: Record<MessageKey, Record<ConversationLang, string>> = {
 };
 
 export function t(lang: ConversationLang, key: MessageKey, vars?: Record<string, string>): string {
-  let text = MESSAGES[key][lang] || MESSAGES[key].en;
+  const templateLang = lang === 'other' ? 'en' : lang;
+  let text = MESSAGES[key][templateLang as TemplateLang] || MESSAGES[key].en;
   if (vars) {
     for (const [k, v] of Object.entries(vars)) {
       text = text.replace(`{${k}}`, v);
@@ -262,7 +364,7 @@ export function t(lang: ConversationLang, key: MessageKey, vars?: Record<string,
   return text;
 }
 
-const PROVIDER_LABELS: Record<ConversationLang, string> = {
+const PROVIDER_LABELS: Record<TemplateLang, string> = {
   tr: 'İlgili kişi',
   en: 'Staff',
   de: 'Ansprechpartner',
@@ -282,54 +384,41 @@ export function getAppointmentProviderLabel(
   return PROVIDER_LABELS[lang] || PROVIDER_LABELS.en;
 }
 
-const LANG_HINTS: Record<ConversationLang, RegExp> = {
-  tr: /\b(merhaba|selam|teşekkür|tesekkur|evet|hayır|hayir|onaylıyorum|onayliyorum)\b/gi,
-  en: /\b(hello|hi|thanks|thank|yes|no|confirm)\b/gi,
-  de: /\b(hallo|danke|bitte|termin|möchte|mochte|ich|sie)\b/gi,
-  ar: /\b(مرحبا|شكرا|موعد|نعم|لا|من فضلك)\b/g,
-  ru: /\b(привет|спасибо|запись|да|нет|пожалуйста)\b/gi,
-  fr: /\b(bonjour|merci|rendez-vous|oui|non|s'il vous plaît)\b/gi,
-  es: /\b(hola|gracias|cita|sí|si|no|por favor)\b/gi,
-};
-
-/** Müşterinin yalnızca son mesajından dil algıla — geçmiş konuşma dikkate alınmaz */
+/**
+ * Konuşma dili — yapışkan: kısa/düşük güven mesajları son güvenilir müşteri dilini korur.
+ * Offline tinyld + script kısayolları; ağ çağrısı yok.
+ */
 export function detectConversationLanguage(
   message: string,
-  _history: { sender_type: string; message: string }[] = []
+  history: { sender_type: string; message: string }[] = []
 ): ConversationLang {
   const text = message.trim();
-  if (!text) return 'tr';
+  const stickyLang = getStickyLanguageFromHistory(history);
 
-  if (/[\u0600-\u06FF]/.test(text)) return 'ar';
-  if (/[\u0400-\u04FF]/.test(text)) return 'ru';
+  if (!text) return stickyLang ?? 'tr';
 
-  const scores: Record<ConversationLang, number> = {
-    tr: 0, en: 0, de: 0, ar: 0, ru: 0, fr: 0, es: 0,
-  };
+  const detection = detectSingleMessageLanguage(text);
+  if (!detection.confident) return stickyLang ?? 'tr';
 
-  for (const lang of Object.keys(LANG_HINTS) as ConversationLang[]) {
-    const matches = text.match(LANG_HINTS[lang]);
-    scores[lang] = matches ? matches.length : 0;
-  }
-
-  if (/[ğüşöçıİĞÜŞÖÇ]/.test(text)) scores.tr += 4;
-
-  const ranked = (Object.entries(scores) as [ConversationLang, number][])
-    .sort((a, b) => b[1] - a[1]);
-
-  if (ranked[0][1] === 0) return 'tr';
-  return ranked[0][0];
+  return detection.lang;
 }
 
+
+export const DEFAULT_LANGUAGE_BLOCK_FALLBACK =
+  'LANGUAGE — PRIMARY RULE:\n' +
+  "- Always reply in the same language as the customer's most recent message, regardless of the knowledge base language.\n" +
+  '- Detected language hint: {{langName}}. Use this only as a hint; mirror the customer\'s actual wording language.\n' +
+  '- If the customer switches language, switch immediately.\n' +
+  "- Pass knowledge base content in the customer's language; do not add information in another language.";
 
 export async function getLanguagePromptBlock(lang: ConversationLang): Promise<string> {
   const template = await getPromptContent('language_block');
-  if (!template.trim()) return '';
-  return renderPromptTemplate(template, { langName: LANG_NAMES[lang] });
+  const content = template.trim() || DEFAULT_LANGUAGE_BLOCK_FALLBACK;
+  return renderPromptTemplate(content, { langName: getLanguageHintName(lang) });
 }
 
 export function localeForLang(lang: ConversationLang): string {
-  const map: Record<ConversationLang, string> = {
+  const map: Record<TemplateLang, string> = {
     tr: 'tr-TR',
     en: 'en-US',
     de: 'de-DE',
@@ -338,5 +427,6 @@ export function localeForLang(lang: ConversationLang): string {
     fr: 'fr-FR',
     es: 'es-ES',
   };
+  if (lang === 'other') return 'en-US';
   return map[lang] || 'en-US';
 }

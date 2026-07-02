@@ -8,7 +8,7 @@ import {
   getActivePromptsVersionKey,
   renderPromptTemplate,
 } from '../services/prompt.service';
-import { ConversationLang, LANG_NAMES } from './language.service';
+import { ConversationLang, DEFAULT_LANGUAGE_BLOCK_FALLBACK, getLanguageHintName } from './language.service';
 import { TRANSFER_MARKER } from './system-prompt';
 
 export interface AdminPromptContext {
@@ -100,7 +100,7 @@ export async function buildLanguageBlockForTurn(lang: ConversationLang): Promise
   if (!languagePrompt?.content.trim()) return '';
 
   return renderPromptTemplate(languagePrompt.content, {
-    langName: LANG_NAMES[lang],
+    langName: getLanguageHintName(lang),
   });
 }
 
@@ -114,7 +114,9 @@ export function buildDynamicUserMessage(
 
   const langSection =
     ctx.languageBlock?.trim() ||
-    `Müşteri dili: ${LANG_NAMES[lang]}. Yanıtınız yalnızca bu dilde olmalıdır.`;
+    renderPromptTemplate(DEFAULT_LANGUAGE_BLOCK_FALLBACK, {
+      langName: getLanguageHintName(lang),
+    });
   sections.push(`### Dil\n${langSection}`);
 
   const knowledge = ctx.knowledge?.trim() || '';

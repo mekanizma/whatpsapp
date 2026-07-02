@@ -253,7 +253,7 @@ export function AdminCompaniesPage() {
                       )}
                       {sub && <div className="max-w-xs"><UsageBar used={sub.messages_used} limit={sub.messages_limit} /></div>}
                       <div className="flex flex-wrap gap-3 text-xs text-slate-500">
-                        <span>{t('admin.companies.messageCount', { count: company.message_count ?? 0 })}</span>
+                        <span>{t('admin.companies.conversationCount', { count: company.conversation_count ?? 0 })}</span>
                         <span>{t('admin.companies.aiTokens', { count: (company.ai_tokens_month ?? 0).toLocaleString(locale) })}</span>
                         <span className="flex items-center gap-1">
                           <Smartphone className="h-3 w-3" />

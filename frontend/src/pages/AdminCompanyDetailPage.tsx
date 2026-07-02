@@ -124,7 +124,7 @@ export function AdminCompanyDetailPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard title={t('admin.companyDetail.messages')} value={stats.total_messages} icon={MessageSquare} color="text-blue-600" bgColor="bg-blue-50" />
+        <StatCard title={t('admin.companyDetail.conversations')} value={stats.total_conversations} icon={MessageSquare} color="text-blue-600" bgColor="bg-blue-50" />
         <StatCard title={t('admin.companyDetail.aiResponse')} value={stats.ai_responses} icon={Zap} color="text-teal-600" bgColor="bg-teal-50" />
         <StatCard title={t('admin.companyDetail.transfer')} value={stats.transferred} icon={Ticket} color="text-amber-600" bgColor="bg-amber-50" />
         <StatCard title={t('admin.companyDetail.staff')} value={staff_count} icon={Users} color="text-violet-600" bgColor="bg-violet-50" />

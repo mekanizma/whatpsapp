@@ -10,6 +10,7 @@ import { hasActiveTransferTicket } from '../ai/ai-quota.service';
 import { logActivity } from '../services/log.service';
 import { createTicketAndNotify } from '../services/ticket-notification.service';
 import { recordUnknownQuestion } from '../services/unknown-questions.service';
+import { shouldIncrementConversationUsage } from '../services/conversation-count.service';
 
 const DEBOUNCE_MS = 3000;
 const TRANSFER_REPLY_COOLDOWN_MS = 60_000;
@@ -189,6 +190,10 @@ export async function processInboundMessage(
 
     if (whatsappMessageId) markProcessedWaId(companyId, whatsappMessageId);
 
+    if (await shouldIncrementConversationUsage(companyId, phone)) {
+      await incrementConversationUsage(companyId);
+    }
+
     if (await hasActiveTransferTicket(companyId, phone)) {
       console.log(`[WhatsApp] Aktif ticket — AI yanıt atlandı → ${phone}`);
       return '';
@@ -202,8 +207,6 @@ export async function processInboundMessage(
       console.error('[WhatsApp] AI hatası:', detail);
       return 'Üzgünüz, şu an yanıt veremiyoruz. Lütfen kısa süre sonra tekrar deneyin.';
     }
-
-    await incrementMessageUsage(companyId);
 
     let replyMessage = aiResponse.message;
     if (!replyMessage) return '';
@@ -289,7 +292,7 @@ export async function processInboundMessage(
   });
 }
 
-async function incrementMessageUsage(companyId: string): Promise<void> {
+async function incrementConversationUsage(companyId: string): Promise<void> {
   const { data: sub } = await adminClient
     .from('subscriptions')
     .select('id, messages_used')

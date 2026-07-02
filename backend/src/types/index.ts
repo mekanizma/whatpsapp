@@ -159,8 +159,8 @@ export interface Subscription {
 }
 
 export interface DashboardStats {
-  total_messages: number;
-  today_messages: number;
+  total_conversations: number;
+  today_conversations: number;
   ai_responses: number;
   transferred: number;
   active_customers: number;

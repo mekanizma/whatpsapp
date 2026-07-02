@@ -106,9 +106,10 @@ export async function localizeKnowledgeAnswer(
   lang: ConversationLang
 ): Promise<string> {
   if (!text) return text;
+  if (lang === 'other') return text;
 
   const sourceLang = detectConversationLanguage(text, []);
-  if (sourceLang === lang) return text;
+  if (sourceLang === lang || sourceLang === 'other') return text;
 
   const translatePrompt = await getPromptContent('kb_translate');
   const systemContent = translatePrompt.trim()

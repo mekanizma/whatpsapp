@@ -62,9 +62,9 @@ export function TodayActivityPage() {
           </div>
           <div>
             <p className="text-3xl font-bold tabular-nums sm:text-4xl">
-              {(stats?.today_messages ?? 0).toLocaleString(locale)}
+              {(stats?.today_conversations ?? 0).toLocaleString(locale)}
             </p>
-            <p className="mt-1 text-emerald-100">{t('dashboard.todayMessages')}</p>
+            <p className="mt-1 text-emerald-100">{t('dashboard.todayConversations')}</p>
             <p className="mt-3 text-sm text-emerald-200">
               {t('todayActivity.activeChats', { count: todayConversations.length })}
             </p>

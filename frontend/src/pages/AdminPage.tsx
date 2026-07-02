@@ -63,7 +63,7 @@ export function AdminPage() {
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard title={t('admin.overview.totalCompanies')} value={stats?.total_companies ?? 0} icon={Building2} color="text-blue-600" bgColor="bg-blue-50" />
-        <StatCard title={t('admin.overview.totalMessages')} value={stats?.total_messages ?? 0} icon={MessageSquare} color="text-emerald-600" bgColor="bg-emerald-50" />
+        <StatCard title={t('admin.overview.totalConversations')} value={stats?.total_conversations ?? 0} icon={MessageSquare} color="text-emerald-600" bgColor="bg-emerald-50" />
         <StatCard title={t('admin.overview.quotaUsed')} value={stats?.total_messages_used ?? 0} icon={CreditCard} color="text-violet-600" bgColor="bg-violet-50" />
         <StatCard title={t('admin.overview.activeSubs')} value={stats?.active_subscriptions ?? 0} icon={CreditCard} color="text-amber-600" bgColor="bg-amber-50" />
       </div>
