@@ -39,4 +39,10 @@ describe('preAIGate Turkish transfer', () => {
     assert.equal(g.shouldTransfer, true);
     assert.equal(g.reason, 'transfer_confirmed');
   });
+
+  it('konu dışı soruları ön filtrede engellemez (prompt + RAG karar verir)', () => {
+    const g = preAIGate('Bugün hava nasıl?', []);
+    assert.equal(g.skipAI, false);
+    assert.equal(g.reason, 'needs_ai');
+  });
 });

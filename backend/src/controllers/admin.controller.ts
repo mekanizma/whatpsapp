@@ -42,7 +42,6 @@ import {
 } from '../services/ai-addon.service';
 import {
   createCompanyInvoicePdf,
-  createPreviewInvoicePdf,
   type BillingPeriod,
   type InvoiceOptions,
 } from '../services/invoice.service';
@@ -50,12 +49,6 @@ import {
   getInvoiceIssuerSettings,
   updateInvoiceIssuerSettings,
 } from '../services/invoice-settings.service';
-import {
-  getInvoiceTemplateConfig,
-  updateInvoiceTemplateConfig,
-  INVOICE_FIELD_OPTIONS,
-} from '../services/invoice-template.service';
-import type { InvoiceTemplateConfig } from '../types/invoice-template';
 import { buildContentDisposition } from '../utils/content-disposition';
 
 export async function getCompanies(req: AuthRequest, res: Response): Promise<void> {
@@ -297,14 +290,8 @@ export async function getPlatformSettings(_req: AuthRequest, res: Response): Pro
 
 export async function getInvoiceSettings(_req: AuthRequest, res: Response): Promise<void> {
   try {
-    const [issuer, template] = await Promise.all([
-      getInvoiceIssuerSettings(),
-      getInvoiceTemplateConfig(),
-    ]);
-    res.json({
-      success: true,
-      data: { issuer, template, fieldOptions: INVOICE_FIELD_OPTIONS },
-    });
+    const data = await getInvoiceIssuerSettings();
+    res.json({ success: true, data });
   } catch (err) {
     res.status(400).json({
       success: false,
@@ -315,65 +302,18 @@ export async function getInvoiceSettings(_req: AuthRequest, res: Response): Prom
 
 export async function updateInvoiceSettings(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const body = req.body as Record<string, unknown>;
-
-    let issuer = await getInvoiceIssuerSettings();
-    let template = await getInvoiceTemplateConfig();
-
-    if (body.template && typeof body.template === 'object') {
-      template = await updateInvoiceTemplateConfig(
-        body.template as Partial<InvoiceTemplateConfig>,
-        req.userId
-      );
-    }
-
-    if (body.issuer && typeof body.issuer === 'object') {
-      issuer = await updateInvoiceIssuerSettings(
-        body.issuer as Parameters<typeof updateInvoiceIssuerSettings>[0],
-        req.userId
-      );
-    } else if (!body.template) {
-      issuer = await updateInvoiceIssuerSettings(
-        body as Parameters<typeof updateInvoiceIssuerSettings>[0],
-        req.userId
-      );
-    }
-
+    const data = await updateInvoiceIssuerSettings(req.body, req.userId);
     await logActivity({
       userId: req.userId,
       action: 'invoice_settings_updated',
       entityType: 'platform_invoice_settings',
       entityId: 'default',
     });
-
-    res.json({
-      success: true,
-      data: { issuer, template, fieldOptions: INVOICE_FIELD_OPTIONS },
-    });
+    res.json({ success: true, data });
   } catch (err) {
     res.status(400).json({
       success: false,
       error: err instanceof Error ? err.message : 'Fatura ayarları kaydedilemedi',
-    });
-  }
-}
-
-export async function downloadInvoicePreview(_req: AuthRequest, res: Response): Promise<void> {
-  if (isDemoSession(_req)) {
-    res.status(400).json({ success: false, error: 'Demo modda fatura oluşturulamaz' });
-    return;
-  }
-
-  try {
-    const { buffer, filename } = await createPreviewInvoicePdf();
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', buildContentDisposition(filename));
-    res.setHeader('Content-Length', buffer.length);
-    res.send(buffer);
-  } catch (err) {
-    res.status(400).json({
-      success: false,
-      error: err instanceof Error ? err.message : 'Önizleme faturası oluşturulamadı',
     });
   }
 }

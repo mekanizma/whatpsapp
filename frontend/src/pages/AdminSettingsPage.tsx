@@ -2,31 +2,83 @@
  * Super admin — platform ayarları + fatura satıcı bilgileri
  */
 
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useQuery } from '@tanstack/react-query';
-import { Settings, ExternalLink, Database, Cpu, Shield, Smartphone, FileText, ArrowRight } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Settings, ExternalLink, Database, Cpu, Shield, Smartphone, FileText } from 'lucide-react';
 import { api } from '@/services/api';
 import { PageHeader } from '@/components/PageHeader';
 import {
+  Button,
   Card,
   CardContent,
   CardHeader,
   CardTitle,
+  Input,
+  Label,
   Spinner,
   Badge,
-  Button,
+  Textarea,
 } from '@/components/ui';
-import type { PlatformSettings } from '@/types';
+import type { InvoiceIssuerSettings, PlatformSettings } from '@/types';
+
+const emptyInvoiceForm: InvoiceIssuerSettings = {
+  name: '',
+  legalName: '',
+  address: '',
+  taxOffice: '',
+  taxNumber: '',
+  email: '',
+  phone: '',
+  website: '',
+  vatRate: 0,
+  footerNote: '',
+};
 
 export function AdminSettingsPage() {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const [invoiceForm, setInvoiceForm] = useState<InvoiceIssuerSettings>(emptyInvoiceForm);
+  const [invoiceFeedback, setInvoiceFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   const { data: settings, isLoading } = useQuery({
     queryKey: ['admin-settings'],
     queryFn: () => api.get<PlatformSettings>('/admin/settings'),
   });
 
-  if (isLoading) {
+  const { data: invoiceSettings, isLoading: invoiceLoading } = useQuery({
+    queryKey: ['admin-invoice-settings'],
+    queryFn: () => api.get<InvoiceIssuerSettings>('/admin/invoice-settings'),
+  });
+
+  useEffect(() => {
+    if (invoiceSettings) {
+      setInvoiceForm({
+        ...invoiceSettings,
+        footerNote: invoiceSettings.footerNote || '',
+      });
+    }
+  }, [invoiceSettings]);
+
+  const saveInvoiceMutation = useMutation({
+    mutationFn: () =>
+      api.put<InvoiceIssuerSettings>('/admin/invoice-settings', {
+        ...invoiceForm,
+        footerNote: invoiceForm.footerNote?.trim() || null,
+      }),
+    onSuccess: () => {
+      setInvoiceFeedback({ type: 'success', text: t('admin.settings.invoiceSaved') });
+      queryClient.invalidateQueries({ queryKey: ['admin-invoice-settings'] });
+    },
+    onError: (err) => {
+      setInvoiceFeedback({
+        type: 'error',
+        text: err instanceof Error ? err.message : t('admin.settings.invoiceSaveError'),
+      });
+    },
+  });
+
+  if (isLoading || invoiceLoading) {
     return <div className="flex justify-center p-12"><Spinner className="h-8 w-8" /></div>;
   }
 
@@ -109,13 +161,90 @@ export function AdminSettingsPage() {
             {t('admin.settings.invoiceTitle')}
           </CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-sm text-slate-600">{t('admin.settings.invoiceEditorLinkDesc')}</p>
-          <Button asChild className="w-full shrink-0 sm:w-auto">
-            <Link to="/admin/invoice-editor">
-              {t('admin.settings.openInvoiceEditor')}
-              <ArrowRight className="h-4 w-4" />
-            </Link>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-slate-600">{t('admin.settings.invoiceDesc')}</p>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>{t('admin.settings.issuerName')}</Label>
+              <Input
+                value={invoiceForm.name}
+                onChange={(e) => setInvoiceForm({ ...invoiceForm, name: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>{t('admin.settings.legalName')}</Label>
+              <Input
+                value={invoiceForm.legalName}
+                onChange={(e) => setInvoiceForm({ ...invoiceForm, legalName: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label>{t('admin.settings.address')}</Label>
+              <Input
+                value={invoiceForm.address}
+                onChange={(e) => setInvoiceForm({ ...invoiceForm, address: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>{t('admin.settings.taxOffice')}</Label>
+              <Input
+                value={invoiceForm.taxOffice}
+                onChange={(e) => setInvoiceForm({ ...invoiceForm, taxOffice: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>{t('admin.settings.taxNumber')}</Label>
+              <Input
+                value={invoiceForm.taxNumber}
+                onChange={(e) => setInvoiceForm({ ...invoiceForm, taxNumber: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>{t('admin.settings.email')}</Label>
+              <Input
+                type="email"
+                value={invoiceForm.email}
+                onChange={(e) => setInvoiceForm({ ...invoiceForm, email: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>{t('admin.settings.phone')}</Label>
+              <Input
+                value={invoiceForm.phone}
+                onChange={(e) => setInvoiceForm({ ...invoiceForm, phone: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>{t('admin.settings.website')}</Label>
+              <Input
+                value={invoiceForm.website}
+                onChange={(e) => setInvoiceForm({ ...invoiceForm, website: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2 sm:col-span-2">
+              <Label>{t('admin.settings.footerNote')}</Label>
+              <Textarea
+                rows={3}
+                value={invoiceForm.footerNote || ''}
+                onChange={(e) => setInvoiceForm({ ...invoiceForm, footerNote: e.target.value })}
+                placeholder={t('admin.settings.footerNotePlaceholder')}
+              />
+            </div>
+          </div>
+          {invoiceFeedback && (
+            <p className={`text-sm ${invoiceFeedback.type === 'success' ? 'text-emerald-600' : 'text-rose-600'}`}>
+              {invoiceFeedback.text}
+            </p>
+          )}
+          <Button
+            className="w-full sm:w-auto"
+            onClick={() => {
+              setInvoiceFeedback(null);
+              saveInvoiceMutation.mutate();
+            }}
+            disabled={saveInvoiceMutation.isPending}
+          >
+            {saveInvoiceMutation.isPending ? <Spinner /> : t('admin.settings.saveInvoice')}
           </Button>
         </CardContent>
       </Card>

@@ -36,16 +36,19 @@ const SAMPLE_KB: KnowledgeItem[] = [
 ];
 
 describe('knowledge-filter', () => {
-  it('genel bilgi talebini algılar', () => {
-    assert.equal(isBroadKnowledgeQuery('Diş kliniğiniz hakkında bilgi verin'), true);
-    assert.equal(isBroadKnowledgeQuery('Dolgu fiyatı ne kadar'), false);
+  it('isBroadKnowledgeQuery yalnızca LLM bayrağını yansıtır', () => {
+    assert.equal(isBroadKnowledgeQuery(true), true);
+    assert.equal(isBroadKnowledgeQuery(false), false);
+    assert.equal(isBroadKnowledgeQuery(), false);
   });
 
   it('genel soruda tüm KB dökmez, konu menüsü döner', () => {
-    const r = filterRelevantKnowledge(SAMPLE_KB, 'Diş kliniğiniz hakkında bilgi verin');
+    const r = filterRelevantKnowledge(SAMPLE_KB, 'Şirketiniz hakkında bilgi verin', {
+      isBroad: true,
+    });
     assert.equal(r.isBroadQuery, true);
     assert.equal(r.items.length, 3);
-    const answer = formatConciseKnowledgeAnswer(r.items, 'Diş kliniğiniz hakkında bilgi verin', {
+    const answer = formatConciseKnowledgeAnswer(r.items, 'Şirketiniz hakkında bilgi verin', {
       isBroadQuery: true,
     });
     assert.match(answer, /hangi konuda/i);
@@ -69,7 +72,7 @@ describe('knowledge-filter', () => {
   it('İngilizce fiyat sorusunda fiyat kaydı seçilir', () => {
     assert.equal(isPriceQuery('Could I get information about your prices?'), true);
     assert.equal(isGeneralPriceListQuery('Could I get information about your prices?'), true);
-    assert.equal(isBroadKnowledgeQuery('Could I get information about your prices?'), false);
+    assert.equal(isBroadKnowledgeQuery(false), false);
 
     const r = filterRelevantKnowledge(SAMPLE_KB, 'Could I get information about your prices?');
     assert.equal(r.isBroadQuery, false);
@@ -111,16 +114,26 @@ describe('knowledge-filter', () => {
     assert.equal(isAppointmentIntent('dolgu fiyatı nedir', history), false);
     assert.equal(isKnowledgeQuestion('dolgu fiyatı nedir'), true);
   });
+
+  it('hem bilgi hem randevu niyetinde KB önceliklidir', () => {
+    assert.equal(
+      isAppointmentIntent('Dolgu fiyatı nedir, randevu da alabilir miyim?', []),
+      false
+    );
+  });
+
+  it('saf randevu talebi randevu moduna girer', () => {
+    assert.equal(isAppointmentIntent('Randevu almak istiyorum', []), true);
+  });
 });
 
 describe('kb-answer', () => {
-  it('FAQ içinden yalnızca ilgili blok çıkarılır', () => {
+  it('FAQ içeriğinin tamamı döner (LLM ilgili kısmı seçer)', () => {
     const content = SAMPLE_KB[2].content;
     const kw = extractKeywords('Dolgu işlemi nasıl yapılır');
     const snippet = extractRelevantSnippet(content, kw, 300);
     assert.match(snippet, /Dolgu işlemi nasıl yapılır/);
-    assert.match(snippet, /Çürük diş dokusu/);
-    assert.doesNotMatch(snippet, /Kanal tedavisi ağrılı/);
+    assert.match(snippet, /Kanal tedavisi ağrılı/);
   });
 
   it('yanıt karakter limitini aşmaz', () => {
@@ -135,10 +148,10 @@ describe('kb-answer', () => {
     assert.ok(menu.length < 350);
   });
 
-  it('fiyat sorusunda yalnızca ilgili satır döner', () => {
+  it('fiyat sorusunda tam fiyat listesi döner (LLM ilgili satırı seçer)', () => {
     const answer = formatConciseKnowledgeAnswer([SAMPLE_KB[0]], 'Dolgu ne kadar');
     assert.match(answer, /Dolgu: 2000/);
-    assert.doesNotMatch(answer, /Kanal tedavisi/);
+    assert.match(answer, /Kanal tedavisi/);
   });
 
   it('İngilizce fiyat sorusunda fiyat listesi döner', () => {

@@ -3,7 +3,6 @@
  */
 
 import { normalizeForGate } from './ai-gate.service';
-import { isKnowledgeQuestion } from './knowledge-filter.service';
 
 /** AI'ın bilgi bankasında cevap bulamadığını gösteren yanıt kalıpları (normalize edilmiş metin) */
 const KNOWLEDGE_MISS_PATTERNS = [
@@ -83,13 +82,7 @@ export function shouldRecordUnknownQuestion(ctx: UnknownQuestionContext): boolea
 
   if (isKnowledgeMissAiResponse(ctx.aiResponse)) return true;
 
-  if (
-    ctx.kbHasNoMatch &&
-    isKnowledgeQuestion(ctx.customerMessage) &&
-    isKnowledgeMissAiResponse(ctx.aiResponse)
-  ) {
-    return true;
-  }
+  if (ctx.kbHasNoMatch) return true;
 
   return false;
 }

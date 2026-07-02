@@ -26,11 +26,12 @@ export async function createChatCompletion(
   options?: {
     maxTokens?: number;
     temperature?: number;
+    model?: string;
     responseFormat?: OpenAI.Chat.ChatCompletionCreateParamsNonStreaming['response_format'];
     usageLog?: AIUsageLogContext;
   }
 ): Promise<OpenAI.Chat.ChatCompletion> {
-  const model = config.openai.model;
+  const model = options?.model ?? config.openai.model;
   const maxTokens = options?.maxTokens ?? config.ai.maxTokens;
 
   const completion = isGpt5Family(model)

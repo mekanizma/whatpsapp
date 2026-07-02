@@ -65,3 +65,58 @@ export function clearCompanyCache(companyId: string): void {
     if (key.startsWith(`${companyId}:`)) cache.delete(key);
   }
 }
+
+export interface QueryRewriteCacheEntry {
+  variants: string[];
+  isBroad: boolean;
+  embeddingText: string;
+}
+
+const rewriteCache = new Map<string, QueryRewriteCacheEntry & { expiresAt: number }>();
+
+function rewriteCacheKey(companyId: string, message: string): string {
+  return `rewrite:${companyId}:${normalizeForCache(message)}`;
+}
+
+export function getCachedQueryRewrite(
+  companyId: string,
+  message: string
+): QueryRewriteCacheEntry | null {
+  const key = rewriteCacheKey(companyId, message);
+  const entry = rewriteCache.get(key);
+  if (!entry || Date.now() > entry.expiresAt) {
+    rewriteCache.delete(key);
+    return null;
+  }
+  return {
+    variants: entry.variants,
+    isBroad: entry.isBroad,
+    embeddingText: entry.embeddingText,
+  };
+}
+
+export function setCachedQueryRewrite(
+  companyId: string,
+  message: string,
+  result: QueryRewriteCacheEntry
+): void {
+  const normalized = normalizeForCache(message);
+  if (normalized.length < 3) return;
+
+  const key = rewriteCacheKey(companyId, message);
+  rewriteCache.set(key, {
+    ...result,
+    expiresAt: Date.now() + config.ai.cacheTtlMs,
+  });
+
+  if (rewriteCache.size > 500) {
+    const oldest = rewriteCache.keys().next().value;
+    if (oldest) rewriteCache.delete(oldest);
+  }
+}
+
+export function clearCompanyRewriteCache(companyId: string): void {
+  for (const key of rewriteCache.keys()) {
+    if (key.startsWith(`rewrite:${companyId}:`)) rewriteCache.delete(key);
+  }
+}

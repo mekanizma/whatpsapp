@@ -84,8 +84,8 @@ export const config = {
     embeddingDimensions: parseInt(process.env.OPENAI_EMBEDDING_DIMENSIONS || '1536', 10),
     chunkSize: parseInt(process.env.RAG_CHUNK_SIZE || '1200', 10),
     chunkOverlap: parseInt(process.env.RAG_CHUNK_OVERLAP || '150', 10),
-    topK: parseInt(process.env.RAG_TOP_K || '10', 10),
-    matchThreshold: parseFloat(process.env.RAG_MATCH_THRESHOLD || '0.5'),
+    topK: parseInt(process.env.RAG_TOP_K || '6', 10),
+    matchThreshold: parseFloat(process.env.RAG_MATCH_THRESHOLD || '0.25'),
     vectorWeight: parseFloat(process.env.RAG_VECTOR_WEIGHT || '0.7'),
     textWeight: parseFloat(process.env.RAG_TEXT_WEIGHT || '0.3'),
     maxContextChars: parseInt(process.env.RAG_MAX_CONTEXT_CHARS || '6000', 10),
@@ -94,7 +94,7 @@ export const config = {
 
   ai: {
     maxTokens: parseInt(process.env.AI_MAX_TOKENS || '500', 10),
-    maxHistoryMessages: parseInt(process.env.AI_MAX_HISTORY || '60', 10),
+    maxHistoryMessages: parseInt(process.env.AI_MAX_HISTORY || '10', 10),
     maxKnowledgeItems: parseInt(process.env.AI_MAX_KNOWLEDGE_ITEMS || '3', 10),
     maxKnowledgeChars: parseInt(process.env.AI_MAX_KNOWLEDGE_CHARS || '1500', 10),
     maxKbAnswerChars: parseInt(process.env.AI_MAX_KB_ANSWER_CHARS || '650', 10),

@@ -15,8 +15,7 @@ import { getAppointmentContextForAI, finalizeCustomerFacingMessage, APPOINTMENT_
 import { preAIGate } from './ai-gate.service';
 import { stripTransferMarker } from './transfer.service';
 import { retrieveKnowledgeContext } from '../services/knowledge-retrieval.service';
-import { resolveKnowledgeContextForAI } from '../services/knowledge-context.service';
-import { filterRelevantKnowledge, isAppointmentIntent } from './knowledge-filter.service';
+import { isAppointmentIntent } from './knowledge-filter.service';
 import { shouldRecordUnknownQuestion } from './knowledge-miss.service';
 import { buildCollectedFieldsContext, parseCollectedFields } from './appointment-collect.service';
 import { buildParsedSlotHint, reconcileAppointmentAiResponse } from './appointment-response.service';
@@ -89,16 +88,17 @@ export async function generateAIResponse(
   const conversationLang = detectConversationLanguage(trimmed, history);
   const allKnowledge = (knowledgeResult.data || []) as KnowledgeItem[];
 
-  const kbFilter = filterRelevantKnowledge(allKnowledge, trimmed);
   const retrieval = await retrieveKnowledgeContext(companyId, trimmed, allKnowledge);
   const knowledge =
-    resolveKnowledgeContextForAI(retrieval, kbFilter, allKnowledge, trimmed) ||
-    formatKnowledgeFallback(allKnowledge);
+    retrieval.context ||
+    (retrieval.usedLexicalFallback ? formatKnowledgeFallback(retrieval.fallbackItems) : '');
 
   if (retrieval.usedRag) {
     console.log(
       `[RAG] ${retrieval.chunks.length} chunk retrieved (top score: ${retrieval.chunks[0]?.combined_score?.toFixed(3) ?? 'n/a'})`
     );
+  } else if (retrieval.usedLexicalFallback) {
+    console.warn('[RAG] Lexical fallback used — embedding retrieval unavailable');
   }
 
   const appointmentMode = isAppointmentIntent(trimmed, history);

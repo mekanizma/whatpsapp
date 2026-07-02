@@ -10,6 +10,7 @@ import { parseKnowledgeDocument } from '../services/document-parser.service';
 import {
   scheduleKnowledgeIndexing,
   indexKnowledgeItem,
+  indexKnowledgeWithRetry,
 } from '../services/knowledge-index.service';
 import { getKnowledgeChunkPreviews } from '../services/knowledge-retrieval.service';
 
@@ -62,7 +63,7 @@ export async function createKnowledgeItem(req: AuthRequest, res: Response): Prom
     return;
   }
 
-  scheduleKnowledgeIndexing(data.id, req.companyId!);
+  await indexKnowledgeWithRetry(data.id, req.companyId!);
 
   await logActivity({
     userId: req.userId,
@@ -103,7 +104,7 @@ export async function updateKnowledgeItem(req: AuthRequest, res: Response): Prom
     return;
   }
 
-  scheduleKnowledgeIndexing(data.id, req.companyId!);
+  await indexKnowledgeWithRetry(data.id, req.companyId!);
 
   res.json({ success: true, data });
 }

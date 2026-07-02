@@ -9,6 +9,8 @@ import { createEmbeddings } from './embedding.service';
 import type { KnowledgeIndexStatus } from '../types';
 
 const DEBOUNCE_MS = 1500;
+const INDEX_RETRY_DELAY_MS = 600;
+const INDEX_MAX_ATTEMPTS = 3;
 const pendingTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const inFlight = new Set<string>();
 
@@ -202,24 +204,90 @@ export function scheduleKnowledgeIndexing(
   pendingTimers.set(key, timer);
 }
 
-/** Resume pending/failed indexing after server restart */
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Create/update sonrası senkron indeksleme — başarısızsa kuyruğa alır */
+export async function indexKnowledgeWithRetry(
+  knowledgeBaseId: string,
+  companyId: string,
+  maxAttempts = INDEX_MAX_ATTEMPTS
+): Promise<void> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    await indexKnowledgeItem(knowledgeBaseId, companyId);
+
+    const { data } = await adminClient
+      .from('knowledge_base')
+      .select('index_status')
+      .eq('id', knowledgeBaseId)
+      .eq('company_id', companyId)
+      .single();
+
+    if (data?.index_status === 'ready') return;
+
+    if (attempt < maxAttempts) {
+      await delay(INDEX_RETRY_DELAY_MS * attempt);
+    }
+  }
+
+  console.warn(`[RAG] Index retry exhausted for ${knowledgeBaseId}, scheduling async`);
+  scheduleKnowledgeIndexing(knowledgeBaseId, companyId);
+}
+
+/** Resume pending/failed/never-indexed rows after server restart */
 export async function recoverPendingKnowledgeIndexing(): Promise<void> {
-  const { data, error } = await adminClient
+  const { data: kbRows, error } = await adminClient
     .from('knowledge_base')
-    .select('id, company_id')
-    .eq('is_active', true)
-    .in('index_status', ['pending', 'indexing', 'failed']);
+    .select('id, company_id, index_status, chunk_count, char_count')
+    .eq('is_active', true);
 
   if (error) {
     console.error('[RAG] Recovery query failed:', error.message);
     return;
   }
 
-  for (const row of data || []) {
+  const toIndex = new Map<string, { id: string; company_id: string }>();
+
+  for (const row of kbRows || []) {
+    const hasContent = (row.char_count ?? 0) > 0;
+    if (!hasContent) continue;
+
+    const status = row.index_status as string;
+    const needsByStatus =
+      status === 'pending' ||
+      status === 'indexing' ||
+      status === 'failed' ||
+      (status === 'ready' && (row.chunk_count ?? 0) === 0);
+
+    if (needsByStatus) {
+      toIndex.set(row.id, { id: row.id, company_id: row.company_id });
+    }
+  }
+
+  const candidateIds = (kbRows || [])
+    .filter((r) => (r.char_count ?? 0) > 0)
+    .map((r) => r.id);
+
+  if (candidateIds.length > 0) {
+    const { data: docs } = await adminClient
+      .from('knowledge_documents')
+      .select('knowledge_base_id')
+      .in('knowledge_base_id', candidateIds);
+
+    const withDoc = new Set((docs || []).map((d) => d.knowledge_base_id));
+    for (const row of kbRows || []) {
+      if ((row.char_count ?? 0) > 0 && !withDoc.has(row.id)) {
+        toIndex.set(row.id, { id: row.id, company_id: row.company_id });
+      }
+    }
+  }
+
+  for (const row of toIndex.values()) {
     scheduleKnowledgeIndexing(row.id, row.company_id);
   }
 
-  if (data?.length) {
-    console.log(`[RAG] ${data.length} kayıt için indeksleme kuyruğa alındı`);
+  if (toIndex.size) {
+    console.log(`[RAG] ${toIndex.size} kayıt için indeksleme kuyruğa alındı`);
   }
 }

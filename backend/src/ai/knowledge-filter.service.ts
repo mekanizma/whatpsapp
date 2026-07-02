@@ -63,18 +63,9 @@ const GENERAL_PRICE_LIST_RE =
 const DURATION_QUERY_RE =
   /ne kadar sür|surer|süre|sure|kaç seans|kac seans|kaç dakika|kac dakika|ne zaman biter|how long|how many sessions|how many minutes|how much time|takes how long|duration of|how many hours/i;
 
-/** Genel / belirsiz bilgi talebi — tüm KB dökülmemeli */
-export function isBroadKnowledgeQuery(message: string): boolean {
-  const n = message.toLowerCase().trim();
-  const specific =
-    /fiyat|ücret|ucret|ne kadar|kaç tl|kac tl|ağrı|agri|acı|aci|nasıl yapıl|nasil yapil|nedir|kaç seans|kac seans|sürer|surer|randevu|dolgu|kanal|implant|beyazlat|ortodont|çekim|cekim|protez|kaplama|muayene|price|prices|pricing|cost|fee|fees|tuition|how much|working hours|opening hours|where are you|location|address/.test(
-      n
-    );
-  if (specific) return false;
-
-  return /bilgi ver|hakkında bilgi|hakkinda bilgi|genel bilgi|neler yap|hangi hizmet|tanıt|tanit|kliniğiniz|kliniginiz|hakkında|hakkinda|about your (clinic|services|company)|tell me about (your )?(clinic|services|company)|what do you offer|services you offer/i.test(
-    n
-  );
+/** Genel / belirsiz bilgi talebi — query rewrite LLM is_broad bayrağından gelir */
+export function isBroadKnowledgeQuery(isBroad = false): boolean {
+  return isBroad;
 }
 
 function scoreItem(item: KnowledgeItem, keywords: string[]): number {
@@ -105,38 +96,35 @@ function isPriceKnowledgeItem(item: KnowledgeItem): boolean {
   return /fiyat|ücret|ucret|price/.test(meta) || /\d+\s*(tl|₺|try)/i.test(item.content);
 }
 
-/** Klinik bilgi bankası kapsamı dışı sorular */
-export function isOffTopicQuery(message: string): boolean {
-  return /üniversite|universite|hava (durumu|nasil|nasıl)|restoran|otel|maç|mac sonucu|borsa|döviz|doviz|futbol|dizi|film öner/i.test(
-    message.toLowerCase()
+/** Soru cümlesi — randevu adımında isim sanılmasını önlemek için (domain-bağımsız) */
+export function isKnowledgeQuestion(message: string): boolean {
+  const n = message.toLowerCase().trim();
+  return (
+    /[?？]/.test(n) ||
+    /\b(what|how|when|where|which|who|why|nedir|nasıl|nasil|ne kadar|kaç|kac|nerede|hangi|var mı|varmi|bilgi)\b/.test(
+      n
+    )
   );
 }
 
-/** Bilgi sorusu — randevu akışından önce KB yanıtı verilmeli */
-export function isKnowledgeQuestion(message: string): boolean {
-  const n = message.toLowerCase().trim();
-  return /[?？]|\bnedir\b|\bne kadar\b|\bfiyat|\bücret|\bucret|\bnasıl\b|\bnasil\b|\bvar mı\b|\bvarmi\b|\bhangi\b|\bnerede\b|\bkaç\b|\bkac\b|\bbilgi\b|\baçıkla|\bacikla|\btanıt|\btanit|\bhizmet|\bçalışma saat|\bcalisma saat|\bwhat\b|\bwhere\b|\bwhen\b|\bhow\b|\bprice|\bprices|\bpricing|\bcost|\bfee|\bfees|\btuition|\bworking hours|\bopening hours|\blocation|\baddress|\binformation about/.test(
-    n
+function looksLikeQuestion(message: string): boolean {
+  return isKnowledgeQuestion(message);
+}
+
+function hasAppointmentSignals(message: string): boolean {
+  const msg = message.toLowerCase();
+  return /randevu|rezervasyon|appointment|müsait|musait|uygun saat|boş saat|bos saat|tarih al|saat al|görüşme|gorusme|alabilir\s*miyim|alabilirmiyim|almak istiyorum/.test(
+    msg
   );
 }
 
 export function filterRelevantKnowledge(
   items: KnowledgeItem[],
-  customerMessage: string
+  customerMessage: string,
+  options?: { isBroad?: boolean }
 ): KnowledgeFilterResult {
   const keywords = extractKeywords(customerMessage);
-  const broad = isBroadKnowledgeQuery(customerMessage);
-
-  if (isOffTopicQuery(customerMessage)) {
-    return {
-      context: '',
-      items: [],
-      hasRelevantContent: false,
-      kbEmpty: items.length === 0,
-      isBroadQuery: false,
-      keywords,
-    };
-  }
+  const broad = isBroadKnowledgeQuery(options?.isBroad ?? false);
 
   if (!items.length) {
     return {
@@ -305,15 +293,6 @@ export function buildKnowledgeContextForAI(
     return kbFilter.context;
   }
 
-  if (allItems.length > 0 && isKnowledgeQuestion(customerMessage)) {
-    const fallback = allItems
-      .map((k) => `### ${k.title}\n${k.content}`)
-      .join('\n\n');
-    return fallback.length > config.ai.maxKnowledgeChars
-      ? `${fallback.slice(0, config.ai.maxKnowledgeChars)}\n...[kısaltıldı]`
-      : fallback;
-  }
-
   return '';
 }
 
@@ -346,13 +325,12 @@ export function isAppointmentIntent(
   history: { sender_type: string; message: string }[] = []
 ): boolean {
   const trimmed = message.trim();
-  const msg = trimmed.toLowerCase();
 
-  if (isKnowledgeQuestion(trimmed)) {
+  if (looksLikeQuestion(trimmed)) {
     return false;
   }
 
-  if (/randevu|rezervasyon|appointment|müsait|musait|uygun saat|boş saat|bos saat|tarih al|saat al|görüşme|gorusme|alabilir\s*miyim|alabilirmiyim|almak istiyorum/.test(msg)) {
+  if (hasAppointmentSignals(trimmed)) {
     return true;
   }
 
