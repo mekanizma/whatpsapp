@@ -5,6 +5,9 @@ FROM node:20-bookworm-slim AS builder
 
 WORKDIR /app
 
+# Coolify build-time NODE_ENV=production devDependencies'ı (tsc, vite) atlar
+ENV NODE_ENV=development
+
 # Küçük VPS / Coolify build sunucularında OOM önleme
 ENV NODE_OPTIONS=--max-old-space-size=2048
 

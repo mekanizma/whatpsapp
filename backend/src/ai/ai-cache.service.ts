@@ -242,7 +242,7 @@ export async function cleanupExpiredResponseCache(): Promise<number> {
   return data?.length ?? 0;
 }
 
-let cleanupTimer: ReturnType<typeof setInterval> | null = null;
+let cleanupTimer: NodeJS.Timeout | null = null;
 
 /** Günlük süresi dolmuş önbellek temizliği */
 export function startResponseCacheCleanupSchedule(): void {
@@ -258,7 +258,7 @@ export function startResponseCacheCleanupSchedule(): void {
 
   run();
   cleanupTimer = setInterval(run, 24 * 60 * 60 * 1000);
-  cleanupTimer.unref?.();
+  cleanupTimer.unref();
 }
 
 // --- Query rewrite cache (in-memory only) ---
