@@ -88,19 +88,20 @@ export const config = {
     matchThreshold: parseFloat(process.env.RAG_MATCH_THRESHOLD || '0.25'),
     vectorWeight: parseFloat(process.env.RAG_VECTOR_WEIGHT || '0.7'),
     textWeight: parseFloat(process.env.RAG_TEXT_WEIGHT || '0.3'),
-    maxContextChars: parseInt(process.env.RAG_MAX_CONTEXT_CHARS || '6000', 10),
+    maxContextChars: parseInt(process.env.RAG_MAX_CONTEXT_CHARS || '3500', 10),
     indexBatchSize: parseInt(process.env.RAG_INDEX_BATCH_SIZE || '50', 10),
   },
 
   ai: {
     maxTokens: parseInt(process.env.AI_MAX_TOKENS || '500', 10),
-    maxHistoryMessages: parseInt(process.env.AI_MAX_HISTORY || '10', 10),
+    maxHistoryMessages: parseInt(process.env.AI_MAX_HISTORY || '14', 10),
     maxKnowledgeItems: parseInt(process.env.AI_MAX_KNOWLEDGE_ITEMS || '3', 10),
     maxKnowledgeChars: parseInt(process.env.AI_MAX_KNOWLEDGE_CHARS || '1500', 10),
     maxKbAnswerChars: parseInt(process.env.AI_MAX_KB_ANSWER_CHARS || '650', 10),
     temperature: parseFloat(process.env.AI_TEMPERATURE || '0.2'),
-    cacheEnabled: process.env.AI_CACHE_ENABLED === 'true',
+    cacheEnabled: process.env.AI_CACHE_ENABLED !== 'false',
     cacheTtlMs: parseInt(process.env.AI_CACHE_TTL_MS || '3600000', 10), // 1 saat
+    appointmentProviderLabel: process.env.APPOINTMENT_PROVIDER_LABEL || '',
   },
 
   whatsapp: {

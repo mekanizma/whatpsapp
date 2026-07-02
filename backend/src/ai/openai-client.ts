@@ -51,13 +51,21 @@ export async function createChatCompletion(
 
   if (options?.usageLog) {
     const usage = completion.usage;
+    const cachedTokens =
+      (
+        usage as
+          | { prompt_tokens_details?: { cached_tokens?: number } }
+          | undefined
+      )?.prompt_tokens_details?.cached_tokens ?? 0;
+
     await logAIUsage({
       companyId: options.usageLog.companyId,
       customerPhone: options.usageLog.customerPhone || '',
       promptTokens: usage?.prompt_tokens || 0,
       completionTokens: usage?.completion_tokens || 0,
       totalTokens: usage?.total_tokens || 0,
-      cached: options.usageLog.cached ?? false,
+      cachedTokens,
+      cached: cachedTokens > 0 || (options.usageLog.cached ?? false),
       skipped: options.usageLog.skipped ?? false,
       skipReason: options.usageLog.skipReason,
       model,

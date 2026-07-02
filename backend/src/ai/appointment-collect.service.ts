@@ -2,7 +2,7 @@
  * Randevu bilgisi toplama — kayıt öncesi zorunlu alan kontrolü
  */
 
-import { ConversationLang, detectConversationLanguage, t } from './language.service';
+import { ConversationLang, detectConversationLanguage, t, getAppointmentProviderLabel } from './language.service';
 
 export interface HistoryMsg {
   sender_type: string;
@@ -36,7 +36,26 @@ function extractPhone(text: string): string | null {
 
 const CONFIRM_WORDS = /^(evet|onayl?[iıİI]yorum|onaylıyorum|onayliyorum|onay|tamam|uygun|olur|kabul|ok|yes|hayır|hayir)$/iu;
 const APPOINTMENT_REQUEST_RE = /randevu|rezervasyon|appointment|müsait|musait|alabilir\s*miyim|alabilirmiyim|almak istiyorum/i;
-const PROCEDURE_HINT = /diş|dis\b|muayene|kontrol|çekim|cekim|temizlik|dolgu|kanal|implant|ortodont|randevu/i;
+
+function isAskingForServiceTopic(aiMessage: string): boolean {
+  const ai = aiMessage.toLocaleLowerCase('tr');
+  return /konu|hizmet|işlem|islem|service|topic|ne için|ne icin|hangi konu|hangi hizmet|what.*(for|about)|which service/.test(
+    ai
+  );
+}
+
+function isAskingForProvider(aiMessage: string): boolean {
+  const ai = aiMessage.toLocaleLowerCase('tr');
+  return /personel|temsilci|sağlayıcı|saglayici|provider|staff|uzman|tercih|hekim|doktor|specialist|assigned/.test(
+    ai
+  );
+}
+
+function isServiceTopicReply(messages: HistoryMsg[], customerIndex: number): boolean {
+  if (customerIndex <= 0) return false;
+  const prev = messages[customerIndex - 1];
+  return isAiSender(prev.sender_type) && isAskingForServiceTopic(prev.message);
+}
 
 function isValidFullName(name: string): boolean {
   const trimmed = name.trim();
@@ -64,9 +83,9 @@ function isValidProcedureTitle(title: string): boolean {
   return true;
 }
 
-function looksLikeName(text: string): boolean {
+function looksLikeName(text: string, skipServiceReply = false): boolean {
   const t = text.trim();
-  if (!t || /^\d+$/.test(t) || extractPhone(t) || PROCEDURE_HINT.test(t)) return false;
+  if (!t || skipServiceReply || /^\d+$/.test(t) || extractPhone(t)) return false;
   const parts = t.split(/\s+/).filter(Boolean);
   return parts.length >= 2 && parts.every((p) => p.length >= 2 && /^[\p{L}'-]+$/u.test(p));
 }
@@ -102,10 +121,10 @@ export function parseCollectedFields(
       const p = extractPhone(cust);
       if (p) customer_phone = p;
     }
-    if (/işlem|islem|konu|muayene|hizmet|ne için|ne icin|hangi işlem/.test(ai)) {
+    if (isAskingForServiceTopic(ai)) {
       if (!extractPhone(cust) && !CONFIRM_WORDS.test(cust)) title = cust;
     }
-    if (/doktor|hekim|doktor tercih/.test(ai) && !/^(yok|hayır|hayir|farketmez|yoktur)$/i.test(cust)) {
+    if (isAskingForProvider(ai) && !/^(yok|hayır|hayir|farketmez|yoktur|no|none)$/i.test(cust)) {
       doctor_name = cust;
     }
   }
@@ -117,8 +136,12 @@ export function parseCollectedFields(
   }
 
   if (!customer_name) {
-    for (const m of messages) {
-      if (m.sender_type === 'customer' && looksLikeName(m.message)) {
+    for (let i = 0; i < messages.length; i++) {
+      const m = messages[i];
+      if (
+        m.sender_type === 'customer' &&
+        looksLikeName(m.message, isServiceTopicReply(messages, i))
+      ) {
         customer_name = m.message.trim();
         break;
       }
@@ -151,11 +174,12 @@ export function buildCollectedFieldsContext(
 ): string {
   const conversationLang = lang ?? detectConversationLanguage(latestMessage, history);
   const c = parseCollectedFields(history, latestMessage);
+  const providerLabel = getAppointmentProviderLabel(conversationLang);
   const lines = [
     `Ad soyad: ${c.customer_name || '(eksik)'}`,
     `Telefon: ${c.customer_phone || '(eksik)'}`,
-    `İşlem: ${c.title || '(eksik)'}`,
-    c.doctor_name ? `Doktor: ${c.doctor_name}` : '',
+    `Konu: ${c.title || '(eksik)'}`,
+    c.doctor_name ? `${providerLabel}: ${c.doctor_name}` : '',
   ].filter(Boolean);
 
   const missing = getMissingRequiredFields(c);

@@ -7,6 +7,7 @@ import app from './app';
 import { config } from './config';
 import { restoreBaileysSessions, verifySessionsDirWritable } from './whatsapp/qr.service';
 import { recoverPendingKnowledgeIndexing } from './services/knowledge-index.service';
+import { startResponseCacheCleanupSchedule } from './ai/ai-cache.service';
 
 app.listen(config.port, '0.0.0.0', async () => {
   console.log(`🚀 Server running on port ${config.port}`);
@@ -19,6 +20,8 @@ app.listen(config.port, '0.0.0.0', async () => {
   } catch (err) {
     console.error('RAG indeks kurtarma hatası:', err);
   }
+
+  startResponseCacheCleanupSchedule();
 
   if (!config.isVercel) {
     const sessionsCheck = verifySessionsDirWritable();

@@ -142,7 +142,16 @@ export async function processInboundMessage(
   const phone = resolveCustomerPhone(customerPhone);
 
   if (config.demoMode) {
-    return `Merhaba! Mesajınızı aldık. Demo Klinik olarak yardımcı olmaktan mutluluk duyarız.`;
+    const { data: company } = await adminClient
+      .from('companies')
+      .select('company_name')
+      .eq('id', companyId)
+      .single();
+    const name = company?.company_name?.trim();
+    if (name) {
+      return `Merhaba! Mesajınızı aldık. ${name} olarak yardımcı olmaktan mutluluk duyarız.`;
+    }
+    return 'Merhaba! Mesajınızı aldık. Size nasıl yardımcı olabiliriz?';
   }
 
   return withCustomerLock(`${companyId}:${phone}`, async () => {

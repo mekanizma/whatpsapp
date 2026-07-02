@@ -21,8 +21,8 @@ describe('randevu onay akışı (birim)', () => {
       { sender_type: 'customer', message: 'Mehmet Demir' },
       { sender_type: 'ai', message: 'Cep telefon numaranızı yazar mısınız?' },
       { sender_type: 'customer', message: '0532 111 22 33' },
-      { sender_type: 'ai', message: 'Hangi işlem için randevu?' },
-      { sender_type: 'customer', message: 'Genel muayene' },
+      { sender_type: 'ai', message: 'Hangi konu için randevu?' },
+      { sender_type: 'customer', message: 'Genel bilgilendirme' },
       { sender_type: 'ai', message: "Yarın saat 12:30'da randevu alabilirsiniz. Onaylıyor musunuz?" },
     ];
 

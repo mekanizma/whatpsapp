@@ -7,6 +7,7 @@ import { adminClient } from '../database/supabase';
 import { demoCompany } from '../demo/mockData';
 import { AuthRequest, isDemoSession } from '../middleware/auth.middleware';
 import { getDashboardStats } from '../services/dashboard.service';
+import { getAICostReport } from '../services/ai-cost.service';
 import { logActivity } from '../services/log.service';
 
 export async function getCompany(req: AuthRequest, res: Response): Promise<void> {
@@ -74,4 +75,24 @@ export async function getDashboard(req: AuthRequest, res: Response): Promise<voi
 
   const stats = await getDashboardStats(companyId as string, isDemoSession(req));
   res.json({ success: true, data: stats });
+}
+
+export async function getAICostReportHandler(req: AuthRequest, res: Response): Promise<void> {
+  const companyId = (req.params.id || req.companyId) as string;
+  if (!companyId) {
+    res.status(400).json({ success: false, error: 'Şirket ID gerekli' });
+    return;
+  }
+
+  const days = Math.min(parseInt(String(req.query.days || '30'), 10) || 30, 90);
+
+  try {
+    const report = await getAICostReport(companyId, days);
+    res.json({ success: true, data: report });
+  } catch (err) {
+    res.status(400).json({
+      success: false,
+      error: err instanceof Error ? err.message : 'Maliyet raporu alınamadı',
+    });
+  }
 }

@@ -29,8 +29,8 @@ function resolveRequestedSlot(
   latestMessage: string
 ): ParsedSlot | null {
   return (
-    parseSlotFromTurkishText(latestMessage) ||
-    extractSlotFromConversation(history, latestMessage)
+    extractSlotFromConversation(history, latestMessage) ||
+    parseSlotFromTurkishText(latestMessage)
   );
 }
 

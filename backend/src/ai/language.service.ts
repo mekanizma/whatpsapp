@@ -3,6 +3,7 @@
  */
 
 import { getPromptContent, renderPromptTemplate } from '../services/prompt.service';
+import { config } from '../config';
 
 export type ConversationLang = 'tr' | 'en' | 'de' | 'ar' | 'ru' | 'fr' | 'es';
 
@@ -187,22 +188,22 @@ const MESSAGES: Record<MessageKey, Record<ConversationLang, string>> = {
     es: 'Gracias. Indique su número de móvil para la cita.',
   },
   appointment_title: {
-    tr: 'Hangi işlem veya muayene için randevu almak istediğinizi kısaca yazar mısınız?',
-    en: 'Briefly, what procedure or consultation would you like to book?',
-    de: 'Wofür möchten Sie einen Termin? Bitte kurz beschreiben.',
-    ar: 'ما الإجراء أو الفحص الذي تريد حجز موعد له؟',
-    ru: 'Для какой процедуры или приёма вы хотите записаться?',
-    fr: 'Pour quel acte ou consultation souhaitez-vous un rendez-vous ?',
-    es: '¿Para qué procedimiento o consulta desea la cita?',
+    tr: 'Hangi konu/hizmet için randevu almak istediğinizi yazar mısınız?',
+    en: 'What topic or service would you like to book an appointment for?',
+    de: 'Für welches Thema oder welche Leistung möchten Sie einen Termin?',
+    ar: 'ما الموضوع أو الخدمة التي تريد حجز موعد لها؟',
+    ru: 'По какой теме или услуге вы хотите записаться?',
+    fr: 'Pour quel sujet ou prestation souhaitez-vous un rendez-vous ?',
+    es: '¿Para qué tema o servicio desea la cita?',
   },
   appointment_missing_default: {
-    tr: 'Randevu için eksik bilgileri tamamlayalım. Ad soyad, telefon ve işlem özetinizi yazar mısınız?',
-    en: 'Let us complete the missing appointment details: name, phone, and procedure summary.',
-    de: 'Bitte ergänzen Sie Name, Telefon und Behandlung für den Termin.',
-    ar: 'لنكمل بيانات الموعد: الاسم والهاتف وملخص الإجراء.',
-    ru: 'Дополните данные для записи: имя, телефон и цель визита.',
-    fr: 'Complétez les informations : nom, téléphone et motif du rendez-vous.',
-    es: 'Complete los datos: nombre, teléfono y motivo de la cita.',
+    tr: 'Randevu için eksik bilgileri tamamlayalım. Ad soyad, telefon ve konu/hizmet özetinizi yazar mısınız?',
+    en: 'Let us complete the missing appointment details: name, phone, and topic/service summary.',
+    de: 'Bitte ergänzen Sie Name, Telefon und Thema/Leistung für den Termin.',
+    ar: 'لنكمل بيانات الموعد: الاسم والهاتف وملخص الموضوع/الخدمة.',
+    ru: 'Дополните данные для записи: имя, телефон и тема/услуга.',
+    fr: 'Complétez les informations : nom, téléphone et sujet/prestation.',
+    es: 'Complete los datos: nombre, teléfono y tema/servicio.',
   },
   appointment_saved: {
     tr: 'Randevunuz kaydedildi: {slot}. {title}',
@@ -214,22 +215,22 @@ const MESSAGES: Record<MessageKey, Record<ConversationLang, string>> = {
     es: 'Su cita quedó registrada: {slot}. {title}',
   },
   appointment_confirmed: {
-    tr: 'Randevunuz oluşturuldu.\n\nTarih: {slot}\nAd Soyad: {name}\nİşlem: {title}\nTelefon: {phone}{doctor_line}\n\nRandevu saatinde sizi bekliyoruz. Değişiklik veya iptal için bize yazabilirsiniz.',
-    en: 'Your appointment is confirmed.\n\nDate: {slot}\nName: {name}\nService: {title}\nPhone: {phone}{doctor_line}\n\nWe look forward to seeing you. Message us for any changes or cancellation.',
-    de: 'Ihr Termin wurde bestätigt.\n\nDatum: {slot}\nName: {name}\nBehandlung: {title}\nTelefon: {phone}{doctor_line}\n\nWir freuen uns auf Ihren Besuch. Schreiben Sie uns bei Änderungen oder Absage.',
-    ar: 'تم تأكيد موعدك.\n\nالتاريخ: {slot}\nالاسم: {name}\nالإجراء: {title}\nالهاتف: {phone}{doctor_line}\n\nننتظر زيارتكم. راسلونا لأي تغيير أو إلغاء.',
-    ru: 'Ваша запись подтверждена.\n\nДата: {slot}\nИмя: {name}\nУслуга: {title}\nТелефон: {phone}{doctor_line}\n\nЖдём вас в назначенное время. Напишите нам для изменений или отмены.',
-    fr: 'Votre rendez-vous est confirmé.\n\nDate : {slot}\nNom : {name}\nPrestation : {title}\nTéléphone : {phone}{doctor_line}\n\nNous vous attendons. Écrivez-nous pour modifier ou annuler.',
-    es: 'Su cita está confirmada.\n\nFecha: {slot}\nNombre: {name}\nServicio: {title}\nTeléfono: {phone}{doctor_line}\n\nLe esperamos. Escríbanos para cambios o cancelación.',
+    tr: 'Randevunuz oluşturuldu.\n\nTarih: {slot}\nAd Soyad: {name}\nKonu: {title}\nTelefon: {phone}{doctor_line}\n\nRandevu saatinde sizi bekliyoruz. Değişiklik veya iptal için bize yazabilirsiniz.',
+    en: 'Your appointment is confirmed.\n\nDate: {slot}\nName: {name}\nTopic: {title}\nPhone: {phone}{doctor_line}\n\nWe look forward to seeing you. Message us for any changes or cancellation.',
+    de: 'Ihr Termin wurde bestätigt.\n\nDatum: {slot}\nName: {name}\nThema: {title}\nTelefon: {phone}{doctor_line}\n\nWir freuen uns auf Ihren Besuch. Schreiben Sie uns bei Änderungen oder Absage.',
+    ar: 'تم تأكيد موعدك.\n\nالتاريخ: {slot}\nالاسم: {name}\nالموضوع: {title}\nالهاتف: {phone}{doctor_line}\n\nننتظر زيارتكم. راسلونا لأي تغيير أو إلغاء.',
+    ru: 'Ваша запись подтверждена.\n\nДата: {slot}\nИмя: {name}\nТема: {title}\nТелефон: {phone}{doctor_line}\n\nЖдём вас в назначенное время. Напишите нам для изменений или отмены.',
+    fr: 'Votre rendez-vous est confirmé.\n\nDate : {slot}\nNom : {name}\nSujet : {title}\nTéléphone : {phone}{doctor_line}\n\nNous vous attendons. Écrivez-nous pour modifier ou annuler.',
+    es: 'Su cita está confirmada.\n\nFecha: {slot}\nNombre: {name}\nTema: {title}\nTeléfono: {phone}{doctor_line}\n\nLe esperamos. Escríbanos para cambios o cancelación.',
   },
   appointment_confirmed_doctor: {
-    tr: '\nDoktor: {doctor}',
-    en: '\nDoctor: {doctor}',
-    de: '\nArzt: {doctor}',
-    ar: '\nالطبيب: {doctor}',
-    ru: '\nВрач: {doctor}',
-    fr: '\nMédecin : {doctor}',
-    es: '\nDoctor: {doctor}',
+    tr: '\n{provider_label}: {doctor}',
+    en: '\n{provider_label}: {doctor}',
+    de: '\n{provider_label}: {doctor}',
+    ar: '\n{provider_label}: {doctor}',
+    ru: '\n{provider_label}: {doctor}',
+    fr: '\n{provider_label}: {doctor}',
+    es: '\n{provider_label}: {doctor}',
   },
   appointment_processing: {
     tr: 'Randevu bilgilerinizi aldım. Kayıt için kısa süre içinde size dönüş yapacağız.',
@@ -261,10 +262,30 @@ export function t(lang: ConversationLang, key: MessageKey, vars?: Record<string,
   return text;
 }
 
+const PROVIDER_LABELS: Record<ConversationLang, string> = {
+  tr: 'İlgili kişi',
+  en: 'Staff',
+  de: 'Ansprechpartner',
+  ar: 'الشخص المسؤول',
+  ru: 'Ответственный',
+  fr: 'Interlocuteur',
+  es: 'Persona de contacto',
+};
+
+/** Randevu onayında gösterilecek personel/sağlayıcı etiketi — env veya parametre ile özelleştirilebilir */
+export function getAppointmentProviderLabel(
+  lang: ConversationLang,
+  custom?: string
+): string {
+  if (custom?.trim()) return custom.trim();
+  if (config.ai.appointmentProviderLabel) return config.ai.appointmentProviderLabel;
+  return PROVIDER_LABELS[lang] || PROVIDER_LABELS.en;
+}
+
 const LANG_HINTS: Record<ConversationLang, RegExp> = {
-  tr: /\b(merhaba|selam|randevu|teşekkür|tesekkur|evet|hayır|hayir|için|icin|nasıl|nasil|istiyorum|lütfen|lutfen|muayene|diş|dis|çekim|cekim|onaylıyorum|onayliyorum)\b/gi,
-  en: /\b(hello|hi|thanks|thank|appointment|please|yes|no|how|want|would|could|book|tooth|dental|confirm)\b/gi,
-  de: /\b(hallo|danke|bitte|termin|möchte|mochte|ich|sie|zahn|arzt)\b/gi,
+  tr: /\b(merhaba|selam|teşekkür|tesekkur|evet|hayır|hayir|onaylıyorum|onayliyorum)\b/gi,
+  en: /\b(hello|hi|thanks|thank|yes|no|confirm)\b/gi,
+  de: /\b(hallo|danke|bitte|termin|möchte|mochte|ich|sie)\b/gi,
   ar: /\b(مرحبا|شكرا|موعد|نعم|لا|من فضلك)\b/g,
   ru: /\b(привет|спасибо|запись|да|нет|пожалуйста)\b/gi,
   fr: /\b(bonjour|merci|rendez-vous|oui|non|s'il vous plaît)\b/gi,

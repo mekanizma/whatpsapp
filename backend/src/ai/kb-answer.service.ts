@@ -4,7 +4,7 @@
 
 import { KnowledgeItem } from '../types';
 import { config } from '../config';
-import { ConversationLang, LANG_NAMES, t } from './language.service';
+import { ConversationLang, LANG_NAMES, t, detectConversationLanguage } from './language.service';
 import { getPromptContent, renderPromptTemplate } from '../services/prompt.service';
 import { createChatCompletion } from './openai-client';
 
@@ -79,12 +79,36 @@ export function formatKnowledgeOnlyAnswer(items: KnowledgeItem[]): string {
   return formatConciseKnowledgeAnswer(items, '', { isBroadQuery: false });
 }
 
+/** Eşleşme yokken tam KB dökmek yerine başlık listesi + talimat */
+export function buildKnowledgeNoMatchHint(
+  items: KnowledgeItem[],
+  lang: ConversationLang = 'tr'
+): string {
+  if (!items.length) return '';
+
+  const titles = [...new Set(items.map((k) => k.title?.trim()).filter(Boolean))] as string[];
+  let list = titles.map((title) => `• ${title}`).join('\n');
+  if (list.length > 400) {
+    list = `${list.slice(0, 397)}…`;
+  }
+
+  const instruction =
+    lang === 'tr'
+      ? 'Bu soru için bilgi bankasında eşleşen içerik bulunamadı. Bunu müşteriye belirt; bilgin yoksa canlı temsilciye aktarmayı teklif et.'
+      : 'No matching knowledge base content was found for this question. State that clearly; offer live agent handoff if you cannot answer.';
+
+  return list ? `${instruction}\n\nMevcut konular:\n${list}` : instruction;
+}
+
 /** KB metnini müşterinin diline çevir — içerik değiştirilmez, yalnızca dil */
 export async function localizeKnowledgeAnswer(
   text: string,
   lang: ConversationLang
 ): Promise<string> {
-  if (!text || lang === 'tr') return text;
+  if (!text) return text;
+
+  const sourceLang = detectConversationLanguage(text, []);
+  if (sourceLang === lang) return text;
 
   const translatePrompt = await getPromptContent('kb_translate');
   const systemContent = translatePrompt.trim()

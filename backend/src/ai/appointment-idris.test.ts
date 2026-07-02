@@ -18,7 +18,7 @@ describe('idris senaryosu', () => {
     { sender_type: 'customer', message: 'İdris Yıldırım' },
     { sender_type: 'ai', message: 'Cep telefon numaranızı yazar mısınız?' },
     { sender_type: 'customer', message: '05338398293' },
-    { sender_type: 'ai', message: 'Hangi işlem için randevu?' },
+    { sender_type: 'ai', message: 'Hangi konu için randevu?' },
     { sender_type: 'customer', message: 'genel bilgilendirme için' },
     { sender_type: 'ai', message: 'Uygun tarih ve saat belirtir misiniz?' },
     { sender_type: 'customer', message: 'yarın saat 3 de' },
@@ -57,15 +57,18 @@ describe('idris senaryosu', () => {
   });
 
   it('AI hatalı red yerine doğru onay özeti üretir', () => {
+    const slot = parseSlotFromTurkishText('yarın saat 3 de')!;
+    const dateLabel = formatSlotTurkish(slot.starts_at, slot.ends_at).split('-')[0].trim();
     const fixed = reconcileAppointmentAiResponse(
       "Üzgünüm, yarın saat 15:00'te randevu alamazsınız.",
       history.slice(0, 7),
       'yarın saat 3 de',
       'tr'
     );
-    assert.match(fixed, /02\.07\.2026 15:00/);
+    assert.match(fixed, new RegExp(dateLabel.replace(/\./g, '\\.')));
     assert.match(fixed, /onaylıyor musunuz/i);
     assert.doesNotMatch(fixed, /alamazsınız/i);
+    assert.match(fixed, /Konu:/);
   });
 
   it('onay özeti doğru gün adını içerir', () => {

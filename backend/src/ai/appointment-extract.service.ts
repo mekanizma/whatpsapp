@@ -54,7 +54,7 @@ export async function extractAppointmentFromConversation(
 ready:true YALNIZCA şunların HEPSİ konuşmada açıkça varsa:
 - Ad VE soyad (iki kelime)
 - Cep telefonu (10+ hane)
-- İşlem/muayene özeti
+- Konu/hizmet özeti
 - Müşteri onayladı
 - Geçerli gelecek tarih/saat
 Eksik varsa ready:false`,

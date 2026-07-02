@@ -76,6 +76,7 @@ export async function logAIUsage(params: {
   promptTokens: number;
   completionTokens: number;
   totalTokens: number;
+  cachedTokens?: number;
   cached: boolean;
   skipped: boolean;
   skipReason?: string;
@@ -90,6 +91,7 @@ export async function logAIUsage(params: {
       prompt_tokens: params.promptTokens,
       completion_tokens: params.completionTokens,
       total_tokens: params.totalTokens,
+      cached_tokens: params.cachedTokens ?? 0,
       cached: params.cached,
       skipped: params.skipped,
       skip_reason: params.skipReason || null,

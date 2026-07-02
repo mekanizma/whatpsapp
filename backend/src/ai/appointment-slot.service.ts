@@ -515,7 +515,7 @@ export function buildAppointmentConfirmationPrompt(
       'Randevu özeti:',
       `- Tarih/Saat: ${slotLabel}${weekdayLine}`,
       `- Ad Soyad: ${fields.customer_name || '—'}`,
-      `- İşlem: ${fields.title || '—'}`,
+      `- Konu: ${fields.title || '—'}`,
       `- Telefon: ${displayPhone}`,
       '',
       'Bu bilgileri onaylıyor musunuz?',

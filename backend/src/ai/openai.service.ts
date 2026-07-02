@@ -7,7 +7,11 @@ import { config } from '../config';
 import { createChatCompletion } from './openai-client';
 import { adminClient } from '../database/supabase';
 import { Company, KnowledgeItem } from '../types';
-import { buildAdminPanelPrompt } from './admin-prompt-builder';
+import {
+  buildStaticSystemPrompt,
+  buildDynamicUserMessage,
+  buildLanguageBlockForTurn,
+} from './admin-prompt-builder';
 import { detectConversationLanguage } from './language.service';
 import { logAIUsage } from './ai-quota.service';
 import { getAllActivePromptContentsForAI } from '../services/prompt.service';
@@ -16,10 +20,17 @@ import { preAIGate } from './ai-gate.service';
 import { stripTransferMarker } from './transfer.service';
 import { retrieveKnowledgeContext } from '../services/knowledge-retrieval.service';
 import { isAppointmentIntent } from './knowledge-filter.service';
-import { shouldRecordUnknownQuestion } from './knowledge-miss.service';
+import { buildKnowledgeNoMatchHint } from './kb-answer.service';
+import { prepareConversationHistoryForChat } from './conversation-history.service';
 import { buildCollectedFieldsContext, parseCollectedFields } from './appointment-collect.service';
 import { buildParsedSlotHint, reconcileAppointmentAiResponse } from './appointment-response.service';
 import { handleAppointmentBooking } from './appointment-extract.service';
+import { shouldRecordUnknownQuestion } from './knowledge-miss.service';
+import {
+  getCachedResponse,
+  setCachedResponse,
+  shouldCacheResponse,
+} from './ai-cache.service';
 
 export interface AIResponse {
   message: string;
@@ -39,7 +50,7 @@ async function getCompany(companyId: string): Promise<Company> {
 
   const { data } = await adminClient
     .from('companies')
-    .select('company_name, category, phone, email, address')
+    .select('id, company_name, category, phone, email, address')
     .eq('id', companyId)
     .single();
 
@@ -48,13 +59,7 @@ async function getCompany(companyId: string): Promise<Company> {
   return company;
 }
 
-function formatKnowledgeFallback(items: KnowledgeItem[]): string {
-  if (!items.length) return '';
-  const text = items.map((k) => `### ${k.title}\n${k.content}`).join('\n\n');
-  return text.length > config.rag.maxContextChars
-    ? `${text.slice(0, config.rag.maxContextChars)}\n...[kısaltıldı]`
-    : text;
-}
+const HISTORY_FETCH_EXTRA = 50;
 
 export async function generateAIResponse(
   companyId: string,
@@ -71,7 +76,7 @@ export async function generateAIResponse(
       .eq('company_id', companyId)
       .eq('customer_phone', customerPhone)
       .order('created_at', { ascending: false })
-      .limit(config.ai.maxHistoryMessages),
+      .limit(config.ai.maxHistoryMessages + HISTORY_FETCH_EXTRA),
     getCompany(companyId),
     adminClient
       .from('knowledge_base')
@@ -85,13 +90,16 @@ export async function generateAIResponse(
     .reverse()
     .filter((m) => m.message !== trimmed);
 
+  const chatHistory = prepareConversationHistoryForChat(history, trimmed);
+
   const conversationLang = detectConversationLanguage(trimmed, history);
   const allKnowledge = (knowledgeResult.data || []) as KnowledgeItem[];
 
   const retrieval = await retrieveKnowledgeContext(companyId, trimmed, allKnowledge);
-  const knowledge =
-    retrieval.context ||
-    (retrieval.usedLexicalFallback ? formatKnowledgeFallback(retrieval.fallbackItems) : '');
+  let knowledge = retrieval.context;
+  if (!knowledge.trim() && retrieval.kbHasNoMatch && allKnowledge.length > 0) {
+    knowledge = buildKnowledgeNoMatchHint(allKnowledge, conversationLang);
+  }
 
   if (retrieval.usedRag) {
     console.log(
@@ -126,6 +134,32 @@ export async function generateAIResponse(
     };
   }
 
+  if (!appointmentMode) {
+    const cachedResponse = await getCachedResponse(companyId, trimmed);
+    if (cachedResponse) {
+      await logAIUsage({
+        companyId,
+        customerPhone,
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        cachedTokens: 0,
+        cached: true,
+        skipped: true,
+        skipReason: 'response_cache',
+        model: config.openai.model,
+      });
+
+      return {
+        message: cachedResponse.message,
+        shouldTransfer: cachedResponse.shouldTransfer,
+        skippedAI: false,
+        skipReason: undefined,
+        tokensUsed: 0,
+      };
+    }
+  }
+
   const collectedContext = appointmentMode
     ? (() => {
         const collected = parseCollectedFields(history, trimmed);
@@ -134,41 +168,43 @@ export async function generateAIResponse(
       })()
     : '';
 
-  const systemPrompt = await buildAdminPanelPrompt(company, {
+  const languageBlock = await buildLanguageBlockForTurn(conversationLang);
+
+  const [staticSystemPrompt, activePrompts] = await Promise.all([
+    buildStaticSystemPrompt(companyId, company),
+    getAllActivePromptContentsForAI(),
+  ]);
+
+  const dynamicUserContent = buildDynamicUserMessage(trimmed.slice(0, 1000), {
     knowledge,
     appointmentContext,
     collectedContext,
     lang: conversationLang,
-    appointmentMode,
+    languageBlock,
   });
 
-  const activePrompts = await getAllActivePromptContentsForAI();
-  if (systemPrompt) {
+  if (staticSystemPrompt) {
     const usedKeys = activePrompts
-      .filter((p) => {
-        if (p.prompt_role === 'greeting' || p.prompt_role === 'translation') return false;
-        if (p.prompt_role === 'appointment') return appointmentMode;
-        return true;
-      })
+      .filter((p) => p.prompt_role !== 'greeting' && p.prompt_role !== 'translation')
       .map((p) => p.prompt_key);
     console.log(
-      `[AI] Admin prompt${appointmentMode ? ' [randevu]' : ''}: [${usedKeys.join(', ')}] (${systemPrompt.length} karakter)`
+      `[AI] Static system prompt [${usedKeys.join(', ')}] (${staticSystemPrompt.length} karakter) + dynamic user (${dynamicUserContent.length} karakter)`
     );
   } else {
     console.warn('[AI] Aktif admin prompt yok — panelden prompt kaydedin');
   }
 
   const chatMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [];
-  if (systemPrompt) {
-    chatMessages.push({ role: 'system', content: systemPrompt });
+  if (staticSystemPrompt) {
+    chatMessages.push({ role: 'system', content: staticSystemPrompt });
   }
 
   chatMessages.push(
-    ...history.map((m) => ({
+    ...chatHistory.map((m) => ({
       role: (m.sender_type === 'customer' ? 'user' : 'assistant') as 'user' | 'assistant',
-      content: m.message.slice(0, 500),
+      content: m.message,
     })),
-    { role: 'user', content: trimmed.slice(0, 1000) }
+    { role: 'user', content: dynamicUserContent }
   );
 
   const completion = await createChatCompletion(chatMessages, {
@@ -225,6 +261,19 @@ export async function generateAIResponse(
 
   if (knowledgeMiss) {
     console.log(`[KB Miss] Bilinmeyen soru kaydedilecek → ${trimmed.slice(0, 80)}`);
+  }
+
+  if (
+    !booking.appointment &&
+    shouldCacheResponse({
+      appointmentMode,
+      shouldTransfer,
+      response: message,
+      history,
+      latestMessage: trimmed,
+    })
+  ) {
+    void setCachedResponse(companyId, trimmed, message, shouldTransfer);
   }
 
   return {

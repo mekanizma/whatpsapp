@@ -61,6 +61,8 @@ router.get('/companies/:id', authenticate, companyCtrl.getCompany);
 router.put('/companies/:id', authenticate, requireRole('super_admin', 'company_admin'), requireCompany, companyCtrl.updateCompany);
 router.get('/companies/:id/dashboard', authenticate, requireCompany, companyCtrl.getDashboard);
 router.get('/dashboard', authenticate, requireCompany, companyCtrl.getDashboard);
+router.get('/companies/:id/ai-cost-report', authenticate, requireCompany, companyCtrl.getAICostReportHandler);
+router.get('/ai-cost-report', authenticate, requireCompany, companyCtrl.getAICostReportHandler);
 
 // WhatsApp
 router.get('/whatsapp/config', authenticate, requireRole('super_admin', 'company_admin'), requireCompany, whatsappCtrl.getWhatsAppConfig);

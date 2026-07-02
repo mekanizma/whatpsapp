@@ -114,9 +114,60 @@ export function invalidatePromptCache(key?: string): void {
     const role = resolvePromptRole(key);
     if (role) contentCache.delete(`role:${role}`);
     contentCache.delete('extensions');
-    return;
+    contentCache.delete('prompts_version_key');
+  } else {
+    contentCache.clear();
   }
-  contentCache.clear();
+
+  void import('../ai/admin-prompt-builder')
+    .then((m) => m.invalidateStaticSystemPromptCache())
+    .catch(() => {});
+
+  void import('../ai/ai-cache.service')
+    .then((m) => m.clearAllResponseCache())
+    .catch(() => {});
+}
+
+/** Statik system prompt önbelleği için aktif prompt sürüm imzası */
+export async function getActivePromptsVersionKey(): Promise<string> {
+  const cached = contentCache.get('prompts_version_key');
+  if (cached && Date.now() < cached.expires) {
+    return cached.content;
+  }
+
+  let versionKey = '';
+
+  if (config.demoMode) {
+    versionKey = [...initDemoStore().values()]
+      .filter((p) => p.is_active)
+      .map((p) => `${p.prompt_key}:v${p.version}`)
+      .sort()
+      .join('|');
+  } else {
+    const { data, error } = await adminClient
+      .from('ai_prompt_templates')
+      .select('prompt_key, version')
+      .eq('is_active', true);
+
+    if (error) {
+      if (isPromptTableMissing(error)) {
+        versionKey = DEFAULT_PROMPTS.map((p) => `${p.prompt_key}:v1`).sort().join('|');
+      } else {
+        versionKey = `err:${Date.now()}`;
+      }
+    } else {
+      versionKey = (data || [])
+        .map((r) => `${String(r.prompt_key)}:v${Number(r.version) || 1}`)
+        .sort()
+        .join('|');
+    }
+  }
+
+  contentCache.set('prompts_version_key', {
+    content: versionKey,
+    expires: Date.now() + CACHE_TTL_MS,
+  });
+  return versionKey;
 }
 
 function rowToTemplate(row: Record<string, unknown>): PromptTemplate {

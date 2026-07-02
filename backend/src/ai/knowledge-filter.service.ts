@@ -8,11 +8,15 @@ import { config } from '../config';
 const STOP_WORDS = new Set([
   'bir', 've', 'ile', 'için', 'icin', 'mi', 'mı', 'mu', 'mü', 'ne', 'nasıl', 'nasil',
   'kaç', 'kac', 'var', 'yok', 'bu', 'şu', 'de', 'da', 'ki', 'ben', 'siz', 'verin',
-  'ver', 'bilgi', 'hakkinda', 'hakkında', 'hakkinda', 'klinik', 'kliniğiniz', 'kliniginiz',
+  'ver', 'bilgi', 'hakkinda', 'hakkında', 'hakkinda',
   'nedir', 'neler', 'nelerdir', 'misiniz', 'musunuz', 'mısınız', 'olur', 'olurmu', 'olurmu',
   'hangisi', 'hangi', 'nerede', 'kim', 'en', 'deki', 'iyi', 'olan', 'olarak', 'için', 'icin',
-  'about', 'your', 'tell', 'give', 'information', 'clinic', 'what', 'how', 'the', 'and',
+  'about', 'your', 'tell', 'give', 'information', 'what', 'how', 'the', 'and',
 ]);
+
+/** "<konu> hakkında" / "about your <topic>" — konu kelimesi anahtar sayılmaz */
+const ABOUT_PHRASE_RE =
+  /\b\w+\s+hakkında\b|\b\w+\s+hakkinda\b|\babout\s+(?:your\s+)?\w+\b/gi;
 
 const TR_SUFFIXES = [
   'leriniz', 'larınız', 'lerimiz', 'larımız', 'siniz', 'sınız', 'leri', 'ları',
@@ -49,6 +53,7 @@ export interface KnowledgeFilterResult {
 export function extractKeywords(text: string): string[] {
   return text
     .toLowerCase()
+    .replace(ABOUT_PHRASE_RE, ' ')
     .replace(/[^\wğüşıöçĞÜŞİÖÇ\s]/g, ' ')
     .split(/\s+/)
     .filter((w) => w.length > 2 && !STOP_WORDS.has(w));
@@ -61,7 +66,7 @@ const GENERAL_PRICE_LIST_RE =
   /fiyatlar|fiyat list|ücretler|ucretler|fiyatlarınız|fiyatlariniz|fiyat bilgi|ücret bilgi|fiyatlariniz nedir|ücretleriniz|ucretleriniz|your prices|about your prices|price list|pricing information|our prices|what are your prices|information about (your )?prices|your fees|fee schedule|tuition fees|cost of|how much (do|does|is|are)/i;
 
 const DURATION_QUERY_RE =
-  /ne kadar sür|surer|süre|sure|kaç seans|kac seans|kaç dakika|kac dakika|ne zaman biter|how long|how many sessions|how many minutes|how much time|takes how long|duration of|how many hours/i;
+  /ne kadar sür|surer|süre|sure|kaç dakika|kac dakika|ne zaman biter|how long|how many minutes|how much time|takes how long|duration of|how many hours/i;
 
 /** Genel / belirsiz bilgi talebi — query rewrite LLM is_broad bayrağından gelir */
 export function isBroadKnowledgeQuery(isBroad = false): boolean {
@@ -338,7 +343,9 @@ export function isAppointmentIntent(
   const aiAskedAppointment = recent.some(
     (m) =>
       (m.sender_type === 'ai' || m.sender_type === 'assistant') &&
-      /randevu|ad soyad|cep telefon|işlem|doktor|tarih|saat|onay/.test(m.message.toLowerCase())
+      /randevu|ad.{0,5}soyad|cep telefon|telefon numara|hangi (konu|işlem|islem|hizmet)|konu\/hizmet|konu için|konu icin|işlem için|islem icin|hizmet için|hizmet icin|ne için randevu|tarih|saat|onaylıyor|onaylıyor musunuz|uygun saat/.test(
+        m.message.toLowerCase()
+      )
   );
 
   if (!aiAskedAppointment) return false;

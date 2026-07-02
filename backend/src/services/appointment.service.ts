@@ -7,7 +7,7 @@ import { Appointment, AppointmentSource, AppointmentStatus } from '../types';
 
 import { preferHistorySlot, formatSlotLocalized, turkeyLocalToUtc, turkeyDateParts, turkeyTimeParts, CLINIC_TZ } from '../ai/appointment-slot.service';
 import type { HistoryMsg } from '../ai/appointment-collect.service';
-import { ConversationLang, t } from '../ai/language.service';
+import { ConversationLang, t, getAppointmentProviderLabel } from '../ai/language.service';
 
 const APPOINTMENT_BLOCK_RE = /\[APPOINTMENT\]([\s\S]*?)\[\/APPOINTMENT\]/gi;
 const FALSE_SUCCESS_RE =
@@ -385,8 +385,12 @@ export function buildAppointmentConfirmationMessage(
   lang: ConversationLang = 'tr'
 ): string {
   const slot = formatSlotLocalized(appointment.starts_at, appointment.ends_at, lang);
+  const providerLabel = getAppointmentProviderLabel(lang);
   const doctorLine = appointment.preferred_doctor
-    ? t(lang, 'appointment_confirmed_doctor', { doctor: appointment.preferred_doctor })
+    ? t(lang, 'appointment_confirmed_doctor', {
+        doctor: appointment.preferred_doctor,
+        provider_label: providerLabel,
+      })
     : '';
 
   return t(lang, 'appointment_confirmed', {

@@ -12,16 +12,16 @@ describe('appointment-collect.service', () => {
     { sender_type: 'customer', message: 'Ali Yılmaz' },
     { sender_type: 'ai', message: 'Cep telefon numaranızı yazar mısınız?' },
     { sender_type: 'customer', message: '0555 123 45 67' },
-    { sender_type: 'ai', message: 'Hangi işlem için randevu almak istiyorsunuz?' },
-    { sender_type: 'customer', message: 'Diş temizliği' },
+    { sender_type: 'ai', message: 'Hangi konu için randevu almak istiyorsunuz?' },
+    { sender_type: 'customer', message: 'Teknik destek' },
     { sender_type: 'ai', message: "Yarın saat 12:30'da randevu alabilirsiniz. Onaylıyor musunuz?" },
   ];
 
-  it('tam konuşmadan ad, telefon ve işlem toplar', () => {
+  it('tam konuşmadan ad, telefon ve konu toplar', () => {
     const collected = parseCollectedFields(fullHistory, 'onaylıyorum');
     assert.equal(collected.customer_name, 'Ali Yılmaz');
     assert.equal(collected.customer_phone, '905551234567');
-    assert.equal(collected.title, 'Diş temizliği');
+    assert.equal(collected.title, 'Teknik destek');
   });
 
   it('eksik ad varken kaydı engeller', () => {
@@ -35,8 +35,8 @@ describe('appointment-collect.service', () => {
     const history = [
       { sender_type: 'ai', message: 'Ad soyadınız?' },
       { sender_type: 'customer', message: 'Ali Yılmaz' },
-      { sender_type: 'ai', message: 'İşlem?' },
-      { sender_type: 'customer', message: 'Kontrol' },
+      { sender_type: 'ai', message: 'Hangi konu için randevu?' },
+      { sender_type: 'customer', message: 'Genel bilgilendirme' },
     ];
     const missing = getMissingRequiredFields(parseCollectedFields(history, 'onaylıyorum'));
     assert.ok(missing.includes('phone'));
@@ -54,8 +54,8 @@ describe('appointment-collect.service', () => {
       { sender_type: 'customer', message: 'Ali' },
       { sender_type: 'ai', message: 'Telefon?' },
       { sender_type: 'customer', message: '05551234567' },
-      { sender_type: 'ai', message: 'İşlem?' },
-      { sender_type: 'customer', message: 'Muayene' },
+      { sender_type: 'ai', message: 'Hangi konu?' },
+      { sender_type: 'customer', message: 'Danışmanlık' },
     ];
     const gate = blockBookingIfIncomplete(history, 'onaylıyorum');
     assert.equal(gate.blocked, true);
@@ -67,12 +67,25 @@ describe('appointment-collect.service', () => {
       { sender_type: 'customer', message: 'gurcem semercioglu' },
       { sender_type: 'ai', message: 'Teşekkürler. Randevu için cep telefon numaranızı yazar mısınız?' },
       { sender_type: 'customer', message: '05338507761' },
-      { sender_type: 'ai', message: 'Hangi işlem veya muayene için randevu almak istediğinizi kısaca yazar mısınız?' },
+      {
+        sender_type: 'ai',
+        message: 'Hangi konu/hizmet için randevu almak istediğinizi yazar mısınız?',
+      },
     ];
     const truncated = full.slice(-4);
-    const gate = blockBookingIfIncomplete(truncated, 'diş çekimi');
+    const gate = blockBookingIfIncomplete(truncated, 'kurulum desteği');
     assert.equal(gate.blocked, false);
     assert.equal(gate.collected.customer_name, 'gurcem semercioglu');
-    assert.equal(gate.collected.title, 'diş çekimi');
+    assert.equal(gate.collected.title, 'kurulum desteği');
+  });
+
+  it('konu sorusuna verilen yanıt ad olarak algılanmaz', () => {
+    const history = [
+      { sender_type: 'ai', message: 'Hangi konu/hizmet için randevu almak istediğinizi yazar mısınız?' },
+      { sender_type: 'customer', message: 'Teknik destek' },
+    ];
+    const collected = parseCollectedFields(history, 'onaylıyorum');
+    assert.equal(collected.customer_name, null);
+    assert.equal(collected.title, 'Teknik destek');
   });
 });

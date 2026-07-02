@@ -13,6 +13,7 @@ import {
   indexKnowledgeWithRetry,
 } from '../services/knowledge-index.service';
 import { getKnowledgeChunkPreviews } from '../services/knowledge-retrieval.service';
+import { clearCompanyCache } from '../ai/ai-cache.service';
 
 function paramId(value: string | string[]): string {
   return Array.isArray(value) ? value[0] : value;
@@ -64,6 +65,7 @@ export async function createKnowledgeItem(req: AuthRequest, res: Response): Prom
   }
 
   await indexKnowledgeWithRetry(data.id, req.companyId!);
+  await clearCompanyCache(req.companyId!);
 
   await logActivity({
     userId: req.userId,
@@ -105,6 +107,7 @@ export async function updateKnowledgeItem(req: AuthRequest, res: Response): Prom
   }
 
   await indexKnowledgeWithRetry(data.id, req.companyId!);
+  await clearCompanyCache(req.companyId!);
 
   res.json({ success: true, data });
 }
@@ -121,6 +124,8 @@ export async function deleteKnowledgeItem(req: AuthRequest, res: Response): Prom
     res.status(400).json({ success: false, error: error.message });
     return;
   }
+
+  await clearCompanyCache(req.companyId!);
 
   res.json({ success: true, message: 'Bilgi silindi' });
 }
