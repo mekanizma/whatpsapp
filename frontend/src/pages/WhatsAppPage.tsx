@@ -87,7 +87,10 @@ export function WhatsAppPage() {
 
   const startQrMutation = useMutation({
     mutationFn: () => api.post<QrSession>('/whatsapp/qr/start'),
-    onSuccess: (data) => setSession(data),
+    onSuccess: (data) => {
+      setSession(data);
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-status'] });
+    },
   });
 
   const cloudConnectMutation = useMutation({
@@ -173,11 +176,35 @@ export function WhatsAppPage() {
         )}
       </div>
 
-      {isReconnecting ? (
+      {isReconnecting && !session ? (
         <Card>
-          <CardContent className="p-6 text-center sm:text-left">
-            <p className="font-medium text-amber-800">{t('whatsapp.reconnectingTitle')}</p>
-            <p className="mt-2 text-sm text-gray-600">{t('whatsapp.reconnectingDesc')}</p>
+          <CardContent className="space-y-4 p-6 text-center sm:text-left">
+            <div>
+              <p className="font-medium text-amber-800">{t('whatsapp.reconnectingTitle')}</p>
+              <p className="mt-2 text-sm text-gray-600">{t('whatsapp.reconnectingDesc')}</p>
+            </div>
+            <div className="border-t border-amber-100 pt-4">
+              <p className="mb-3 text-sm text-gray-500">{t('whatsapp.reconnectWithQrHint')}</p>
+              <Button
+                className="w-full sm:w-auto"
+                onClick={() => startQrMutation.mutate()}
+                disabled={startQrMutation.isPending}
+              >
+                {startQrMutation.isPending ? (
+                  <span className="flex items-center gap-2"><Spinner /> {t('whatsapp.generatingQr')}</span>
+                ) : (
+                  <>
+                    <QrCode className="h-4 w-4" />
+                    {t('whatsapp.reconnectWithQr')}
+                  </>
+                )}
+              </Button>
+              {startQrMutation.isError && (
+                <div className="mt-3 rounded-lg bg-red-50 p-3 text-sm text-red-600">
+                  {(startQrMutation.error as Error).message}
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
       ) : isConnected ? (
@@ -283,7 +310,7 @@ export function WhatsAppPage() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <QrCode className="h-5 w-5" />
-                {t('whatsapp.qrConnect')}
+                {session ? t('whatsapp.qrConnect') : t('whatsapp.reconnectWithQr')}
               </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col items-center space-y-4">
@@ -301,7 +328,7 @@ export function WhatsAppPage() {
                     {startQrMutation.isPending ? (
                       <span className="flex items-center gap-2"><Spinner /> {t('whatsapp.generatingQr')}</span>
                     ) : (
-                      t('whatsapp.generateQr')
+                      t('whatsapp.reconnectWithQr')
                     )}
                   </Button>
                 </>

@@ -6,19 +6,10 @@ import PDFDocument from 'pdfkit';
 import type PDFKit from 'pdfkit';
 import { randomUUID } from 'crypto';
 import { adminClient } from '../database/supabase';
-
-const VAT_RATE = 0.2;
-
-const ISSUER = {
-  name: process.env.INVOICE_ISSUER_NAME || 'MEKANİZMA',
-  legalName: process.env.INVOICE_ISSUER_LEGAL_NAME || 'MEKANİZMA Yazılım ve Teknoloji A.Ş.',
-  address: process.env.INVOICE_ISSUER_ADDRESS || 'Türkiye',
-  taxOffice: process.env.INVOICE_ISSUER_TAX_OFFICE || '—',
-  taxNumber: process.env.INVOICE_ISSUER_TAX_NUMBER || '—',
-  email: process.env.INVOICE_ISSUER_EMAIL || 'fatura@mekanizma.com',
-  phone: process.env.INVOICE_ISSUER_PHONE || '—',
-  website: process.env.INVOICE_ISSUER_WEBSITE || 'mekanizma.com',
-};
+import {
+  getInvoiceIssuerSettings,
+  type InvoiceIssuerSettings,
+} from './invoice-settings.service';
 
 export type BillingPeriod = 'monthly' | 'yearly';
 
@@ -36,7 +27,8 @@ export interface InvoiceData {
   ettn: string;
   issueDate: Date;
   billingPeriod: BillingPeriod;
-  issuer: typeof ISSUER;
+  issuer: InvoiceIssuerSettings;
+  vatRate: number;
   buyer: {
     name: string;
     email: string | null;
@@ -230,7 +222,9 @@ export async function buildInvoiceData(
   }
 
   const subtotal = lineItems.reduce((sum, item) => sum + item.total, 0);
-  const vatAmount = subtotal * VAT_RATE;
+  const issuer = await getInvoiceIssuerSettings();
+  const vatRate = issuer.vatRate / 100;
+  const vatAmount = subtotal * vatRate;
   const grandTotal = subtotal + vatAmount;
 
   return {
@@ -238,7 +232,8 @@ export async function buildInvoiceData(
     ettn: randomUUID().toUpperCase(),
     issueDate: new Date(),
     billingPeriod,
-    issuer: ISSUER,
+    issuer,
+    vatRate: issuer.vatRate,
     buyer: {
       name: company.company_name,
       email: company.email,
@@ -298,7 +293,7 @@ export function generateInvoicePdf(data: InvoiceData): Promise<Buffer> {
 
     // Header band
     doc.rect(0, 0, 595.28, 90).fill('#0f172a');
-    doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(26).text('MEKANİZMA', 40, 28);
+    doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(26).text(data.issuer.name, 40, 28);
     doc.font('Helvetica').fontSize(10).text('E-FATURA / E-ARŞİV FATURA', 40, 58);
     doc.fontSize(9).text(`Fatura No: ${data.invoiceNumber}`, 350, 30, { width: 205, align: 'right' });
     doc.text(`ETTN: ${data.ettn}`, 350, 44, { width: 205, align: 'right' });
@@ -404,7 +399,7 @@ export function generateInvoicePdf(data: InvoiceData): Promise<Buffer> {
     doc.font('Helvetica').fontSize(9).fillColor('#334155');
     doc.text('Ara Toplam:', 340, y + 10);
     doc.text(formatMoney(data.subtotal, data.currency), 420, y + 10, { width: 125, align: 'right' });
-    doc.text(`KDV (%${VAT_RATE * 100}):`, 340, y + 26);
+    doc.text(`KDV (%${data.vatRate}):`, 340, y + 26);
     doc.text(formatMoney(data.vatAmount, data.currency), 420, y + 26, { width: 125, align: 'right' });
     doc.font('Helvetica-Bold').fontSize(10).fillColor('#0f172a');
     doc.text('GENEL TOPLAM:', 340, y + 46);
@@ -412,13 +407,11 @@ export function generateInvoicePdf(data: InvoiceData): Promise<Buffer> {
 
     y += 90;
     doc.font('Helvetica').fontSize(7.5).fillColor('#94a3b8');
-    doc.text(
+    const footerText =
+      data.issuer.footerNote ||
       'Bu belge elektronik ortamda oluşturulmuş olup 5070 sayılı Elektronik İmza Kanunu kapsamında geçerlidir. ' +
-        'MEKANİZMA WhatsApp AI SaaS abonelik hizmeti faturasıdır.',
-      40,
-      y,
-      { width: 515, align: 'center' }
-    );
+        `${data.issuer.name} WhatsApp AI SaaS abonelik hizmeti faturasıdır.`;
+    doc.text(footerText, 40, y, { width: 515, align: 'center' });
     doc.text(`${data.issuer.website} · ${data.issuer.email}`, 40, y + 24, { width: 515, align: 'center' });
 
     doc.end();
@@ -432,7 +425,9 @@ export async function createCompanyInvoicePdf(
   const data = await buildInvoiceData(companyId, billingPeriod);
   const buffer = await generateInvoicePdf(data);
   const safeName = data.buyer.name
-    .replace(/[^a-zA-Z0-9ğüşıöçĞÜŞİÖÇ\s-]/g, '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9\s-]/g, '')
     .trim()
     .replace(/\s+/g, '-')
     .slice(0, 40);

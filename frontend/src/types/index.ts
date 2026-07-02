@@ -122,6 +122,19 @@ export interface PlatformSettings {
   whatsapp_mode: 'cloud_api' | 'baileys';
 }
 
+export interface InvoiceIssuerSettings {
+  name: string;
+  legalName: string;
+  address: string;
+  taxOffice: string;
+  taxNumber: string;
+  email: string;
+  phone: string;
+  website: string;
+  vatRate: number;
+  footerNote: string | null;
+}
+
 export interface AIPromptTemplate {
   id: string;
   prompt_key: string;

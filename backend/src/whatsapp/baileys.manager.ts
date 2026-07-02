@@ -52,12 +52,16 @@ interface CompanyConnection {
 const SESSION_TTL_MS = 3 * 60 * 1000;
 const RECONNECT_BASE_MS = 3_000;
 const RECONNECT_MAX_MS = 60_000;
+const MAX_RECONNECT_ATTEMPTS = 8;
 const QR_WAIT_MS = 30_000;
 const DEFAULT_BAILEYS_VERSION: [number, number, number] = [6, 7, 22];
 const sessions = new Map<string, BaileysSession>();
 const connections = new Map<string, CompanyConnection>();
 const tokenToCompany = new Map<string, string>();
 const reconnectAttempts = new Map<string, number>();
+const reconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
+/** Sunucu restart sonrası kayıtlı oturumdan otomatik bağlanma */
+const autoRestoreActive = new Set<string>();
 
 const logger = pino({ level: 'silent' });
 
@@ -111,8 +115,22 @@ async function qrToDataUrl(qr: string): Promise<string> {
   });
 }
 
+function clearReconnectState(companyId: string): void {
+  reconnectAttempts.delete(companyId);
+  autoRestoreActive.delete(companyId);
+  const timer = reconnectTimers.get(companyId);
+  if (timer) {
+    clearTimeout(timer);
+    reconnectTimers.delete(companyId);
+  }
+}
+
 export function isBaileysReconnecting(companyId: string): boolean {
-  return reconnectAttempts.has(companyId);
+  if (!hasStoredCredentials(companyId)) return false;
+  if (autoRestoreActive.has(companyId)) return true;
+  const attempts = reconnectAttempts.get(companyId);
+  if (!attempts) return false;
+  return attempts <= MAX_RECONNECT_ATTEMPTS;
 }
 
 export function getBaileysConnectionStatus(companyId: string) {
@@ -154,7 +172,9 @@ export async function startBaileysQrSession(
     );
   }
 
-  // Mevcut bağlantıyı kapat (logout yapmadan — yeni QR için yeterli)
+  clearReconnectState(companyId);
+
+  // Mevcut bağlantıyı kapat ve oturum dosyalarını temizle (yeni QR)
   await disconnectBaileys(companyId, { logout: false });
 
   const sessionToken = generateToken();
@@ -250,17 +270,34 @@ async function markWhatsAppDisconnected(companyId: string): Promise<void> {
 }
 
 async function scheduleReconnect(companyId: string, session: BaileysSession): Promise<void> {
+  if (!hasStoredCredentials(companyId)) {
+    clearReconnectState(companyId);
+    return;
+  }
+
   const attempt = (reconnectAttempts.get(companyId) ?? 0) + 1;
+  if (attempt > MAX_RECONNECT_ATTEMPTS) {
+    console.log(`[Baileys] Yeniden bağlanma limiti aşıldı: ${companyId}`);
+    clearReconnectState(companyId);
+    await markWhatsAppDisconnected(companyId);
+    return;
+  }
+
   reconnectAttempts.set(companyId, attempt);
   const delay = getReconnectDelay(companyId);
 
   console.log(`[Baileys] Yeniden bağlanma planlandı: ${companyId} (${attempt}. deneme, ${delay}ms)`);
 
-  setTimeout(() => {
+  const existingTimer = reconnectTimers.get(companyId);
+  if (existingTimer) clearTimeout(existingTimer);
+
+  const timer = setTimeout(() => {
+    reconnectTimers.delete(companyId);
     connectBaileysSocket(companyId, session).catch((err) => {
       console.error(`[Baileys] Yeniden bağlanma hatası (${companyId}):`, err);
     });
   }, delay);
+  reconnectTimers.set(companyId, timer);
 }
 
 async function connectBaileysSocket(companyId: string, session: BaileysSession): Promise<void> {
@@ -316,7 +353,7 @@ async function connectBaileysSocket(companyId: string, session: BaileysSession):
     if (connection === 'open') {
       session.status = 'connected';
       session.connected_at = new Date().toISOString();
-      reconnectAttempts.delete(companyId);
+      clearReconnectState(companyId);
       connections.set(companyId, { socket, session, isConnecting: false });
 
       const user = socket.user;
@@ -361,7 +398,7 @@ async function connectBaileysSocket(companyId: string, session: BaileysSession):
 
       if (statusCode === DisconnectReason.loggedOut) {
         session.status = 'expired';
-        reconnectAttempts.delete(companyId);
+        clearReconnectState(companyId);
 
         const sessionDir = path.join(config.sessionsDir, companyId);
         if (fs.existsSync(sessionDir)) {
@@ -386,6 +423,17 @@ async function connectBaileysSocket(companyId: string, session: BaileysSession):
       // QR aşamasında süre dolmuşsa yeniden bağlanma
       if (!wasConnected && new Date(session.expires_at) <= new Date()) {
         session.status = 'expired';
+        return;
+      }
+
+      // Yalnızca daha önce bağlı oturumlar veya sunucu restart restore için otomatik yeniden dene
+      const canAutoReconnect =
+        wasConnected || autoRestoreActive.has(companyId);
+
+      if (!canAutoReconnect) {
+        if (session.status !== 'connected') {
+          session.status = 'failed';
+        }
         return;
       }
 
@@ -485,7 +533,7 @@ export async function disconnectBaileys(
   options: { logout?: boolean } = {}
 ): Promise<void> {
   const shouldLogout = options.logout ?? true;
-  reconnectAttempts.delete(companyId);
+  clearReconnectState(companyId);
 
   const conn = connections.get(companyId);
   if (conn?.socket) {
@@ -612,8 +660,14 @@ async function restoreCompanySession(
   }
 
   console.log(`[Baileys] Oturum geri yükleniyor: ${companyId}`);
+  autoRestoreActive.add(companyId);
   const session = createRestoredSession(companyId, phoneNumber);
-  await connectBaileysSocket(companyId, session);
+  try {
+    await connectBaileysSocket(companyId, session);
+  } catch (err) {
+    autoRestoreActive.delete(companyId);
+    throw err;
+  }
 }
 
 // Sunucu başladığında mevcut oturumları yükle (Coolify restart / redeploy sonrası)

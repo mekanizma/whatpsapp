@@ -44,6 +44,11 @@ import {
   createCompanyInvoicePdf,
   type BillingPeriod,
 } from '../services/invoice.service';
+import {
+  getInvoiceIssuerSettings,
+  updateInvoiceIssuerSettings,
+} from '../services/invoice-settings.service';
+import { buildContentDisposition } from '../utils/content-disposition';
 
 export async function getCompanies(req: AuthRequest, res: Response): Promise<void> {
   if (isDemoSession(req)) {
@@ -88,7 +93,7 @@ export async function downloadCompanyInvoice(req: AuthRequest, res: Response): P
   try {
     const { buffer, filename } = await createCompanyInvoicePdf(companyId, period as BillingPeriod);
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Disposition', buildContentDisposition(filename));
     res.setHeader('Content-Length', buffer.length);
     res.send(buffer);
   } catch (err) {
@@ -267,6 +272,36 @@ export async function getPlatformSettings(_req: AuthRequest, res: Response): Pro
       whatsapp_mode: config.isVercel ? 'cloud_api' : 'baileys',
     },
   });
+}
+
+export async function getInvoiceSettings(_req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const data = await getInvoiceIssuerSettings();
+    res.json({ success: true, data });
+  } catch (err) {
+    res.status(400).json({
+      success: false,
+      error: err instanceof Error ? err.message : 'Fatura ayarları alınamadı',
+    });
+  }
+}
+
+export async function updateInvoiceSettings(req: AuthRequest, res: Response): Promise<void> {
+  try {
+    const data = await updateInvoiceIssuerSettings(req.body, req.userId);
+    await logActivity({
+      userId: req.userId,
+      action: 'invoice_settings_updated',
+      entityType: 'platform_invoice_settings',
+      entityId: 'default',
+    });
+    res.json({ success: true, data });
+  } catch (err) {
+    res.status(400).json({
+      success: false,
+      error: err instanceof Error ? err.message : 'Fatura ayarları kaydedilemedi',
+    });
+  }
 }
 
 export async function getPrompts(_req: AuthRequest, res: Response): Promise<void> {

@@ -17,6 +17,7 @@
     "db:push": "cd .. && npx supabase db push --yes",
     "db:setup": "tsx src/scripts/setup-supabase.ts",
     "db:test": "tsx src/scripts/test-supabase.ts",
+    "db:apply-invoice": "tsx src/scripts/apply-invoice-migration.ts",
     "prompts:reset": "tsx src/scripts/reset-prompts.ts",
     "prompts:cleanup": "tsx src/scripts/cleanup-prompts.ts"
   },

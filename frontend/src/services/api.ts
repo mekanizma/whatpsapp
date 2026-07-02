@@ -144,8 +144,11 @@ export const api = {
 
     const blob = await response.blob();
     const disposition = response.headers.get('Content-Disposition') || '';
-    const match = disposition.match(/filename="?([^"]+)"?/i);
-    const resolvedName = filename || (match ? decodeURIComponent(match[1]) : 'download');
+    const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+    const basicMatch = disposition.match(/filename="([^"]+)"/i);
+    const resolvedName =
+      filename ||
+      (utf8Match ? decodeURIComponent(utf8Match[1]) : basicMatch ? basicMatch[1] : 'download');
 
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
