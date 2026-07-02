@@ -30,6 +30,8 @@ export function AdminCompanyDetailPage() {
   const queryClient = useQueryClient();
   const [tab, setTab] = useState<'genel' | 'abonelik' | 'kullanicilar'>('genel');
   const [invoicePeriod, setInvoicePeriod] = useState<'monthly' | 'yearly'>('monthly');
+  const [setupFee, setSetupFee] = useState('');
+  const [setupFeeDescription, setSetupFeeDescription] = useState('');
   const [invoiceError, setInvoiceError] = useState<string | null>(null);
   const [invoiceLoading, setInvoiceLoading] = useState(false);
 
@@ -90,7 +92,15 @@ export function AdminCompanyDetailPage() {
     setInvoiceError(null);
     setInvoiceLoading(true);
     try {
-      await api.downloadBlob(`/admin/companies/${id}/invoice?period=${invoicePeriod}`);
+      const params = new URLSearchParams({ period: invoicePeriod });
+      const fee = setupFee.trim() ? Number(setupFee.replace(',', '.')) : 0;
+      if (fee > 0) {
+        params.set('setupFee', String(fee));
+        if (setupFeeDescription.trim()) {
+          params.set('setupFeeDescription', setupFeeDescription.trim());
+        }
+      }
+      await api.downloadBlob(`/admin/companies/${id}/invoice?${params.toString()}`);
     } catch (err) {
       setInvoiceError(err instanceof Error ? err.message : t('admin.companyDetail.invoiceError'));
     } finally {
@@ -201,8 +211,8 @@ export function AdminCompanyDetailPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-sm text-slate-600">{t('admin.companyDetail.invoiceDesc')}</p>
-              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-                <div className="w-full space-y-2 sm:w-auto sm:min-w-[180px]">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
                   <Label>{t('admin.companyDetail.invoicePeriod')}</Label>
                   <select
                     className="flex h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
@@ -213,14 +223,35 @@ export function AdminCompanyDetailPage() {
                     <option value="yearly">{t('admin.companyDetail.invoiceYearly')}</option>
                   </select>
                 </div>
-                <Button
-                  className="w-full sm:w-auto"
-                  onClick={handleDownloadInvoice}
-                  disabled={invoiceLoading}
-                >
-                  {invoiceLoading ? <Spinner /> : <><FileDown className="h-4 w-4" /> {t('admin.companyDetail.downloadInvoice')}</>}
-                </Button>
+                <div className="space-y-2">
+                  <Label>{t('admin.companyDetail.setupFee')}</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    placeholder="0"
+                    value={setupFee}
+                    onChange={(e) => setSetupFee(e.target.value)}
+                  />
+                  <p className="text-xs text-slate-500">{t('admin.companyDetail.setupFeeHint')}</p>
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>{t('admin.companyDetail.setupFeeDescription')}</Label>
+                  <Input
+                    placeholder={t('admin.companyDetail.setupFeeDescriptionPlaceholder')}
+                    value={setupFeeDescription}
+                    onChange={(e) => setSetupFeeDescription(e.target.value)}
+                    disabled={!setupFee.trim()}
+                  />
+                </div>
               </div>
+              <Button
+                className="w-full sm:w-auto"
+                onClick={handleDownloadInvoice}
+                disabled={invoiceLoading}
+              >
+                {invoiceLoading ? <Spinner /> : <><FileDown className="h-4 w-4" /> {t('admin.companyDetail.downloadInvoice')}</>}
+              </Button>
               {invoiceError && (
                 <p className="text-sm text-rose-600">{invoiceError}</p>
               )}

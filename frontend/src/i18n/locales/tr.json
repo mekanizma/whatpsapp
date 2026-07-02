@@ -682,7 +682,6 @@
       "email": "E-posta",
       "phone": "Telefon",
       "website": "Web Sitesi",
-      "vatRate": "KDV Oranı (%)",
       "footerNote": "Alt Bilgi Notu (isteğe bağlı)",
       "footerNotePlaceholder": "PDF altında görünecek ek açıklama",
       "saveInvoice": "Fatura Bilgilerini Kaydet",
@@ -780,7 +779,11 @@
       "invoiceMonthly": "Aylık",
       "invoiceYearly": "Yıllık",
       "downloadInvoice": "PDF Fatura İndir",
-      "invoiceError": "Fatura oluşturulamadı"
+      "invoiceError": "Fatura oluşturulamadı",
+      "setupFee": "Kurulum Ücreti (KDV Hariç)",
+      "setupFeeHint": "Bu faturaya özel tek seferlik ücret. Boş bırakırsanız eklenmez.",
+      "setupFeeDescription": "Kurulum Kalemi Açıklaması",
+      "setupFeeDescriptionPlaceholder": "Örn: Kurulum Ücreti (tek seferlik)"
     }
   }
 }

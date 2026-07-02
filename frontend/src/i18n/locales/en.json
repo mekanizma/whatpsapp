@@ -682,7 +682,6 @@
       "email": "Email",
       "phone": "Phone",
       "website": "Website",
-      "vatRate": "VAT Rate (%)",
       "footerNote": "Footer Note (optional)",
       "footerNotePlaceholder": "Extra text shown at the bottom of the PDF",
       "saveInvoice": "Save Invoice Details",
@@ -780,7 +779,11 @@
       "invoiceMonthly": "Monthly",
       "invoiceYearly": "Yearly",
       "downloadInvoice": "Download PDF Invoice",
-      "invoiceError": "Could not generate invoice"
+      "invoiceError": "Could not generate invoice",
+      "setupFee": "Setup Fee (excl. VAT)",
+      "setupFeeHint": "One-time fee for this invoice only. Leave empty to omit.",
+      "setupFeeDescription": "Setup Line Item Description",
+      "setupFeeDescriptionPlaceholder": "e.g. Setup Fee (one-time)"
     }
   }
 }

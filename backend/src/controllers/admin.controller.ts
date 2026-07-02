@@ -43,6 +43,7 @@ import {
 import {
   createCompanyInvoicePdf,
   type BillingPeriod,
+  type InvoiceOptions,
 } from '../services/invoice.service';
 import {
   getInvoiceIssuerSettings,
@@ -84,14 +85,27 @@ export async function getCompany(req: AuthRequest, res: Response): Promise<void>
 export async function downloadCompanyInvoice(req: AuthRequest, res: Response): Promise<void> {
   const companyId = req.params.id as string;
   const period = (req.query.period as string) === 'yearly' ? 'yearly' : 'monthly';
+  const setupFeeRaw = req.query.setupFee as string | undefined;
+  const setupFee = setupFeeRaw ? Math.max(0, Number(setupFeeRaw)) : 0;
+  const setupFeeDescription = (req.query.setupFeeDescription as string) || undefined;
 
   if (isDemoSession(req)) {
     res.status(400).json({ success: false, error: 'Demo modda fatura oluşturulamaz' });
     return;
   }
 
+  if (setupFeeRaw && Number.isNaN(Number(setupFeeRaw))) {
+    res.status(400).json({ success: false, error: 'Geçersiz kurulum ücreti' });
+    return;
+  }
+
   try {
-    const { buffer, filename } = await createCompanyInvoicePdf(companyId, period as BillingPeriod);
+    const options: InvoiceOptions = {
+      billingPeriod: period as BillingPeriod,
+      setupFee: setupFee > 0 ? setupFee : undefined,
+      setupFeeDescription,
+    };
+    const { buffer, filename } = await createCompanyInvoicePdf(companyId, options);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', buildContentDisposition(filename));
     res.setHeader('Content-Length', buffer.length);

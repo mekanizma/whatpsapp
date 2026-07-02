@@ -27,7 +27,7 @@ const ENV_DEFAULTS: InvoiceIssuerSettings = {
   email: process.env.INVOICE_ISSUER_EMAIL || 'fatura@mekanizma.com',
   phone: process.env.INVOICE_ISSUER_PHONE || '—',
   website: process.env.INVOICE_ISSUER_WEBSITE || 'mekanizma.com',
-  vatRate: Number(process.env.INVOICE_VAT_RATE) || 20,
+  vatRate: Number(process.env.INVOICE_VAT_RATE) || 0,
   footerNote: process.env.INVOICE_FOOTER_NOTE || null,
 };
 

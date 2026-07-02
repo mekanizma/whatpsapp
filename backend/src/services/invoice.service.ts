@@ -10,6 +10,7 @@ import {
   getInvoiceIssuerSettings,
   type InvoiceIssuerSettings,
 } from './invoice-settings.service';
+import { INVOICE_FONT, INVOICE_FONT_BOLD, registerInvoiceFonts } from '../utils/invoice-fonts';
 
 export type BillingPeriod = 'monthly' | 'yearly';
 
@@ -22,13 +23,19 @@ export interface InvoiceLineItem {
   currency: string;
 }
 
+export interface InvoiceOptions {
+  billingPeriod?: BillingPeriod;
+  /** Faturaya özel tek seferlik kurulum ücreti */
+  setupFee?: number;
+  setupFeeDescription?: string;
+}
+
 export interface InvoiceData {
   invoiceNumber: string;
   ettn: string;
   issueDate: Date;
   billingPeriod: BillingPeriod;
   issuer: InvoiceIssuerSettings;
-  vatRate: number;
   buyer: {
     name: string;
     email: string | null;
@@ -48,7 +55,6 @@ export interface InvoiceData {
   };
   lineItems: InvoiceLineItem[];
   subtotal: number;
-  vatAmount: number;
   grandTotal: number;
   currency: string;
 }
@@ -128,8 +134,12 @@ function generateInvoiceNumber(companyId: string): string {
 
 export async function buildInvoiceData(
   companyId: string,
-  billingPeriod: BillingPeriod = 'monthly'
+  options: InvoiceOptions = {}
 ): Promise<InvoiceData> {
+  const billingPeriod = options.billingPeriod ?? 'monthly';
+  const setupFee = Math.max(0, Number(options.setupFee) || 0);
+  const setupFeeDescription = options.setupFeeDescription?.trim() || 'Kurulum Ücreti (tek seferlik)';
+
   const { data: company, error: companyError } = await adminClient
     .from('companies')
     .select('*')
@@ -195,6 +205,17 @@ export async function buildInvoiceData(
     },
   ];
 
+  if (setupFee > 0) {
+    lineItems.push({
+      description: setupFeeDescription,
+      detail: 'Tek seferlik kurulum ve devreye alma hizmeti',
+      quantity: 1,
+      unitPrice: setupFee,
+      total: setupFee,
+      currency,
+    });
+  }
+
   const { data: addonPurchases } = await adminClient
     .from('ai_conversation_addon_purchases')
     .select('id, conversation_count, price_paid, currency, created_at, ai_conversation_addons(name)')
@@ -223,9 +244,6 @@ export async function buildInvoiceData(
 
   const subtotal = lineItems.reduce((sum, item) => sum + item.total, 0);
   const issuer = await getInvoiceIssuerSettings();
-  const vatRate = issuer.vatRate / 100;
-  const vatAmount = subtotal * vatRate;
-  const grandTotal = subtotal + vatAmount;
 
   return {
     invoiceNumber: generateInvoiceNumber(companyId),
@@ -233,7 +251,6 @@ export async function buildInvoiceData(
     issueDate: new Date(),
     billingPeriod,
     issuer,
-    vatRate: issuer.vatRate,
     buyer: {
       name: company.company_name,
       email: company.email,
@@ -253,8 +270,7 @@ export async function buildInvoiceData(
     },
     lineItems,
     subtotal,
-    vatAmount,
-    grandTotal,
+    grandTotal: subtotal,
     currency,
   };
 }
@@ -269,7 +285,10 @@ function drawTableRow(
   if (options?.fill) {
     doc.rect(40, y, 515, rowHeight).fill(options.fill);
   }
-  doc.fillColor('#111827').font(options?.bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(9);
+  doc
+    .fillColor('#111827')
+    .font(options?.bold ? INVOICE_FONT_BOLD : INVOICE_FONT)
+    .fontSize(9);
   for (const col of cols) {
     doc.text(col.text, col.x, y + 6, {
       width: col.width,
@@ -289,37 +308,39 @@ export function generateInvoicePdf(data: InvoiceData): Promise<Buffer> {
     doc.on('end', () => resolve(Buffer.concat(chunks)));
     doc.on('error', reject);
 
+    registerInvoiceFonts(doc);
+
     const periodLabel = data.billingPeriod === 'yearly' ? 'Yıllık' : 'Aylık';
 
     // Header band
     doc.rect(0, 0, 595.28, 90).fill('#0f172a');
-    doc.fillColor('#ffffff').font('Helvetica-Bold').fontSize(26).text(data.issuer.name, 40, 28);
-    doc.font('Helvetica').fontSize(10).text('E-FATURA / E-ARŞİV FATURA', 40, 58);
+    doc.fillColor('#ffffff').font(INVOICE_FONT_BOLD).fontSize(26).text(data.issuer.name, 40, 28);
+    doc.font(INVOICE_FONT).fontSize(10).text('E-FATURA / E-ARŞİV FATURA', 40, 58);
     doc.fontSize(9).text(`Fatura No: ${data.invoiceNumber}`, 350, 30, { width: 205, align: 'right' });
     doc.text(`ETTN: ${data.ettn}`, 350, 44, { width: 205, align: 'right' });
     doc.text(`Tarih: ${formatDate(data.issueDate)}`, 350, 58, { width: 205, align: 'right' });
-    doc.text(`Senaryo: TEMELFATURA`, 350, 72, { width: 205, align: 'right' });
+    doc.text('Senaryo: TEMELFATURA', 350, 72, { width: 205, align: 'right' });
 
     let y = 110;
 
     // Seller / Buyer blocks
-    doc.fillColor('#111827').font('Helvetica-Bold').fontSize(11).text('SATICI BİLGİLERİ', 40, y);
+    doc.fillColor('#111827').font(INVOICE_FONT_BOLD).fontSize(11).text('SATICI BİLGİLERİ', 40, y);
     doc.text('ALICI BİLGİLERİ', 310, y);
     y += 18;
 
     doc.rect(40, y, 250, 95).stroke('#e2e8f0');
     doc.rect(310, y, 245, 95).stroke('#e2e8f0');
 
-    doc.font('Helvetica-Bold').fontSize(10).text(data.issuer.name, 48, y + 8);
-    doc.font('Helvetica').fontSize(8.5);
+    doc.font(INVOICE_FONT_BOLD).fontSize(10).text(data.issuer.name, 48, y + 8);
+    doc.font(INVOICE_FONT).fontSize(8.5);
     doc.text(data.issuer.legalName, 48, y + 22, { width: 234 });
     doc.text(`Adres: ${data.issuer.address}`, 48, y + 36, { width: 234 });
     doc.text(`Vergi Dairesi: ${data.issuer.taxOffice}`, 48, y + 50, { width: 234 });
     doc.text(`VKN: ${data.issuer.taxNumber}`, 48, y + 64, { width: 234 });
     doc.text(`${data.issuer.email} · ${data.issuer.phone}`, 48, y + 78, { width: 234 });
 
-    doc.font('Helvetica-Bold').fontSize(10).text(data.buyer.name, 318, y + 8);
-    doc.font('Helvetica').fontSize(8.5);
+    doc.font(INVOICE_FONT_BOLD).fontSize(10).text(data.buyer.name, 318, y + 8);
+    doc.font(INVOICE_FONT).fontSize(8.5);
     if (data.buyer.address) doc.text(`Adres: ${data.buyer.address}`, 318, y + 24, { width: 229 });
     if (data.buyer.email) doc.text(`E-posta: ${data.buyer.email}`, 318, y + 40, { width: 229 });
     if (data.buyer.phone) doc.text(`Telefon: ${data.buyer.phone}`, 318, y + 56, { width: 229 });
@@ -327,17 +348,13 @@ export function generateInvoicePdf(data: InvoiceData): Promise<Buffer> {
     y += 110;
 
     // Subscription summary
-    doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(11).text('ABONELİK DETAYLARI', 40, y);
+    doc.fillColor('#0f172a').font(INVOICE_FONT_BOLD).fontSize(11).text('ABONELİK DETAYLARI', 40, y);
     y += 16;
     doc.rect(40, y, 515, 72).fill('#f8fafc').stroke('#e2e8f0');
-    doc.fillColor('#334155').font('Helvetica').fontSize(8.5);
+    doc.fillColor('#334155').font(INVOICE_FONT).fontSize(8.5);
     doc.text(`Paket: ${data.subscription.planName} (${data.subscription.planType})`, 48, y + 8);
     doc.text(`Dönem: ${periodLabel}`, 48, y + 22);
-    doc.text(
-      `Abonelik Başlangıç: ${formatDateTime(data.subscription.startsAt)}`,
-      48,
-      y + 36
-    );
+    doc.text(`Abonelik Başlangıç: ${formatDateTime(data.subscription.startsAt)}`, 48, y + 36);
     doc.text(`Abonelik Bitiş: ${formatDateTime(data.subscription.endsAt)}`, 48, y + 50);
     doc.text(
       `Durum: ${STATUS_LABELS[data.subscription.status] || data.subscription.status} · Kullanım: ${data.subscription.messagesUsed.toLocaleString('tr-TR')} / ${data.subscription.messagesLimit.toLocaleString('tr-TR')} AI görüşme · ${data.subscription.usersLimit} kullanıcı`,
@@ -349,16 +366,16 @@ export function generateInvoicePdf(data: InvoiceData): Promise<Buffer> {
     y += 88;
 
     if (data.subscription.features.length > 0) {
-      doc.font('Helvetica-Bold').fontSize(9).fillColor('#111827').text('Paket Özellikleri:', 40, y);
+      doc.font(INVOICE_FONT_BOLD).fontSize(9).fillColor('#111827').text('Paket Özellikleri:', 40, y);
       y += 14;
-      doc.font('Helvetica').fontSize(8).fillColor('#475569');
+      doc.font(INVOICE_FONT).fontSize(8).fillColor('#475569');
       const featureText = data.subscription.features.map((f) => `• ${f}`).join('\n');
       doc.text(featureText, 48, y, { width: 500 });
       y += doc.heightOfString(featureText, { width: 500 }) + 12;
     }
 
     // Line items table
-    doc.fillColor('#0f172a').font('Helvetica-Bold').fontSize(11).text('FATURA KALEMLERİ', 40, y);
+    doc.fillColor('#0f172a').font(INVOICE_FONT_BOLD).fontSize(11).text('FATURA KALEMLERİ', 40, y);
     y += 14;
 
     y = drawTableRow(
@@ -377,6 +394,7 @@ export function generateInvoicePdf(data: InvoiceData): Promise<Buffer> {
     data.lineItems.forEach((item, index) => {
       if (y > 700) {
         doc.addPage();
+        registerInvoiceFonts(doc);
         y = 50;
       }
       y = drawTableRow(
@@ -390,27 +408,25 @@ export function generateInvoicePdf(data: InvoiceData): Promise<Buffer> {
         ],
         y
       );
-      doc.font('Helvetica').fontSize(7.5).fillColor('#64748b').text(item.detail, 72, y - 4, { width: 200 });
+      doc.font(INVOICE_FONT).fontSize(7.5).fillColor('#64748b').text(item.detail, 72, y - 4, { width: 200 });
       y += 6;
     });
 
     y += 10;
-    doc.rect(330, y, 225, 70).stroke('#e2e8f0');
-    doc.font('Helvetica').fontSize(9).fillColor('#334155');
+    doc.rect(330, y, 225, 50).stroke('#e2e8f0');
+    doc.font(INVOICE_FONT).fontSize(9).fillColor('#334155');
     doc.text('Ara Toplam:', 340, y + 10);
     doc.text(formatMoney(data.subtotal, data.currency), 420, y + 10, { width: 125, align: 'right' });
-    doc.text(`KDV (%${data.vatRate}):`, 340, y + 26);
-    doc.text(formatMoney(data.vatAmount, data.currency), 420, y + 26, { width: 125, align: 'right' });
-    doc.font('Helvetica-Bold').fontSize(10).fillColor('#0f172a');
-    doc.text('GENEL TOPLAM:', 340, y + 46);
-    doc.text(formatMoney(data.grandTotal, data.currency), 420, y + 46, { width: 125, align: 'right' });
+    doc.font(INVOICE_FONT_BOLD).fontSize(10).fillColor('#0f172a');
+    doc.text('GENEL TOPLAM (KDV Hariç):', 340, y + 30);
+    doc.text(formatMoney(data.grandTotal, data.currency), 420, y + 30, { width: 125, align: 'right' });
 
-    y += 90;
-    doc.font('Helvetica').fontSize(7.5).fillColor('#94a3b8');
+    y += 70;
+    doc.font(INVOICE_FONT).fontSize(7.5).fillColor('#94a3b8');
     const footerText =
       data.issuer.footerNote ||
       'Bu belge elektronik ortamda oluşturulmuş olup 5070 sayılı Elektronik İmza Kanunu kapsamında geçerlidir. ' +
-        `${data.issuer.name} WhatsApp AI SaaS abonelik hizmeti faturasıdır.`;
+        `${data.issuer.name} WhatsApp AI SaaS abonelik hizmeti faturasıdır. Fiyatlar KDV hariçtir.`;
     doc.text(footerText, 40, y, { width: 515, align: 'center' });
     doc.text(`${data.issuer.website} · ${data.issuer.email}`, 40, y + 24, { width: 515, align: 'center' });
 
@@ -420,9 +436,9 @@ export function generateInvoicePdf(data: InvoiceData): Promise<Buffer> {
 
 export async function createCompanyInvoicePdf(
   companyId: string,
-  billingPeriod: BillingPeriod = 'monthly'
+  options: InvoiceOptions = {}
 ): Promise<{ buffer: Buffer; filename: string; invoiceNumber: string }> {
-  const data = await buildInvoiceData(companyId, billingPeriod);
+  const data = await buildInvoiceData(companyId, options);
   const buffer = await generateInvoicePdf(data);
   const safeName = data.buyer.name
     .normalize('NFD')

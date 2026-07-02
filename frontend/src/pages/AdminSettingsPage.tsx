@@ -31,7 +31,7 @@ const emptyInvoiceForm: InvoiceIssuerSettings = {
   email: '',
   phone: '',
   website: '',
-  vatRate: 20,
+  vatRate: 0,
   footerNote: '',
 };
 
@@ -65,7 +65,6 @@ export function AdminSettingsPage() {
       api.put<InvoiceIssuerSettings>('/admin/invoice-settings', {
         ...invoiceForm,
         footerNote: invoiceForm.footerNote?.trim() || null,
-        vatRate: Number(invoiceForm.vatRate) || 0,
       }),
     onSuccess: () => {
       setInvoiceFeedback({ type: 'success', text: t('admin.settings.invoiceSaved') });
@@ -220,17 +219,6 @@ export function AdminSettingsPage() {
               <Input
                 value={invoiceForm.website}
                 onChange={(e) => setInvoiceForm({ ...invoiceForm, website: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>{t('admin.settings.vatRate')}</Label>
-              <Input
-                type="number"
-                min={0}
-                max={100}
-                step={0.01}
-                value={invoiceForm.vatRate}
-                onChange={(e) => setInvoiceForm({ ...invoiceForm, vatRate: Number(e.target.value) })}
               />
             </div>
             <div className="space-y-2 sm:col-span-2">
