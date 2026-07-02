@@ -370,7 +370,16 @@
       "indexing": "Indexing",
       "ready": "Ready",
       "failed": "Failed"
-    }
+    },
+    "analyzing": "AI is analyzing...",
+    "autoFill": "Auto-fill",
+    "tags": "Tags",
+    "tagsPlaceholder": "dormitory, housing, accommodation",
+    "tagsHint": "Comma-separated. AI generates synonyms and multilingual tags for search.",
+    "smartAnalyzed": "AI analysis complete",
+    "multiEntryDetected": "{{count}} separate topics detected",
+    "smartImport": "Import {{count}} Entries",
+    "smartImporting": "Importing..."
   },
   "whatsapp": {
     "title": "WhatsApp Connection",

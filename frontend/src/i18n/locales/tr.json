@@ -370,7 +370,16 @@
       "indexing": "İndeksleniyor",
       "ready": "Hazır",
       "failed": "Hata"
-    }
+    },
+    "analyzing": "AI analiz ediyor...",
+    "autoFill": "Otomatik Doldur",
+    "tags": "Etiketler",
+    "tagsPlaceholder": "yurt, konaklama, dormitory",
+    "tagsHint": "Virgülle ayırın. AI arama için eş anlamlı ve çok dilli etiketler üretir.",
+    "smartAnalyzed": "AI analizi tamamlandı",
+    "multiEntryDetected": "{{count}} ayrı konu tespit edildi",
+    "smartImport": "{{count}} Kaydı İçe Aktar",
+    "smartImporting": "İçe aktarılıyor..."
   },
   "whatsapp": {
     "title": "WhatsApp Bağlantısı",

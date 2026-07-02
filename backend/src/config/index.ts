@@ -91,6 +91,13 @@ export const config = {
     queryAnalysisTimeoutMs: parseInt(process.env.RAG_QUERY_ANALYSIS_TIMEOUT_MS || '2500', 10),
   },
 
+  knowledgeAnalysis: {
+    enabled: process.env.KNOWLEDGE_ANALYSIS_ENABLED !== 'false',
+    timeoutMs: parseInt(process.env.KNOWLEDGE_ANALYSIS_TIMEOUT_MS || '30000', 10),
+    maxContentChars: parseInt(process.env.KNOWLEDGE_ANALYSIS_MAX_CHARS || '50000', 10),
+    maxOutputTokens: parseInt(process.env.KNOWLEDGE_ANALYSIS_MAX_OUTPUT_TOKENS || '2000', 10),
+  },
+
   ai: {
     maxTokens: parseInt(process.env.AI_MAX_TOKENS || '500', 10),
     maxHistoryMessages: parseInt(process.env.AI_MAX_HISTORY || '60', 10),

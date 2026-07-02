@@ -65,6 +65,7 @@ export interface KnowledgeItem {
   title: string;
   content: string;
   category: string | null;
+  tags?: string[];
   is_active: boolean;
   index_status?: KnowledgeIndexStatus;
   chunk_count?: number;

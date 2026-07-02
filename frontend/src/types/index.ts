@@ -300,6 +300,7 @@ export interface KnowledgeItem {
   title: string;
   content: string;
   category: string | null;
+  tags?: string[];
   is_active: boolean;
   index_status?: 'pending' | 'indexing' | 'ready' | 'failed';
   chunk_count?: number;
@@ -309,14 +310,32 @@ export interface KnowledgeItem {
   created_at: string;
 }
 
+export interface AnalyzedKnowledgeEntry {
+  title: string;
+  category: string;
+  tags: string[];
+  content: string;
+}
+
+export interface KnowledgeSmartAnalysis {
+  analyzed: boolean;
+  split: boolean;
+  entry_count: number;
+  entries: AnalyzedKnowledgeEntry[];
+}
+
 export interface ParsedKnowledgeFile {
   title: string;
   content: string;
+  category?: string;
+  tags?: string[];
   source_filename: string;
   file_type: string;
   truncated: boolean;
   char_count: number;
   chunk_estimate: number;
+  raw_content?: string;
+  smart_analysis?: KnowledgeSmartAnalysis;
 }
 
 export interface KnowledgeChunkPreview {
