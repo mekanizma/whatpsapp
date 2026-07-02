@@ -120,7 +120,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         isAuthenticated: true,
         isLoading: false,
       });
-    } catch {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : '';
+      if (message.includes('429') || message.includes('Çok fazla istek')) {
+        set({ isLoading: false });
+        return;
+      }
       set({ user: null, company: null, companyPlan: null, isAuthenticated: false, isLoading: false });
     }
   },

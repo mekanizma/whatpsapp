@@ -8,11 +8,11 @@ import fs from 'fs';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
 import { config } from './config';
 import apiRoutes from './routes';
 import { verifyWebhook, handleWebhook } from './controllers/webhook.controller';
 import { errorHandler, notFoundHandler } from './middleware/error.middleware';
+import { applyApiRateLimit } from './middleware/rate-limit.middleware';
 
 const app = express();
 
@@ -47,43 +47,11 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-/** QR / durum sorguları sık poll edilir — genel API limitine dahil edilmez */
-function isLightPollingRequest(req: express.Request): boolean {
-  const path = (req.path || req.url?.split('?')[0] || '').replace(/\/+$/, '');
-  return (
-    /^\/v1\/whatsapp\/qr\/[^/]+\/status$/.test(path) ||
-    /^\/v1\/whatsapp\/status$/.test(path)
-  );
-}
-
-const pollingLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: config.isDev ? 5000 : 2000,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, error: 'Çok fazla istek gönderildi' },
-});
-
-const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: config.isDev ? 2000 : 300,
-  standardHeaders: true,
-  legacyHeaders: false,
-  skip: (req) => isLightPollingRequest(req),
-  message: { success: false, error: 'Çok fazla istek gönderildi' },
-});
-
 app.use('/api', (_req, res, next) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
   next();
 });
-app.use('/api', (req, res, next) => {
-  if (isLightPollingRequest(req)) {
-    pollingLimiter(req, res, next);
-    return;
-  }
-  apiLimiter(req, res, next);
-});
+app.use('/api', applyApiRateLimit);
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
