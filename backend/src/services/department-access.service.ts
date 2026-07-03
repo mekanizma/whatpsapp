@@ -78,27 +78,31 @@ export async function getDepartmentsForWhatsAppAccount(
   companyId: string,
   whatsappAccountId?: string | null
 ): Promise<Department[]> {
-  if (!whatsappAccountId) {
-    return listActiveDepartments(companyId);
+  let accountId = whatsappAccountId;
+  if (!accountId) {
+    const { data: defaultAccount } = await adminClient
+      .from('whatsapp_configs')
+      .select('id')
+      .eq('company_id', companyId)
+      .eq('is_default', true)
+      .maybeSingle();
+    accountId = defaultAccount?.id ?? null;
   }
+
+  if (!accountId) return [];
 
   const { data: links, error } = await adminClient
     .from('whatsapp_department_links')
     .select('department_id, departments:department_id(*)')
-    .eq('whatsapp_account_id', whatsappAccountId);
+    .eq('whatsapp_account_id', accountId);
 
   if (error) throw new Error(error.message);
 
-  const departments = (links || [])
+  return (links || [])
     .map((row) => {
       const dept = row.departments as Department | Department[] | null;
       return Array.isArray(dept) ? dept[0] : dept;
     })
-    .filter((d): d is Department => !!d && d.is_active);
-
-  if (departments.length > 0) {
-    return departments.sort((a, b) => a.name.localeCompare(b.name));
-  }
-
-  return listActiveDepartments(companyId);
+    .filter((d): d is Department => !!d && d.is_active)
+    .sort((a, b) => a.name.localeCompare(b.name));
 }

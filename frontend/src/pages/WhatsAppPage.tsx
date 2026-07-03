@@ -458,7 +458,11 @@ function AccountCard({
             />
             <InfoRow
               label={t('whatsapp.linkedDepartments')}
-              value={account.departments.length ? account.departments.map((d) => d.name).join(', ') : '—'}
+              value={
+                account.departments.length
+                  ? account.departments.map((d) => d.name).join(', ')
+                  : t('whatsapp.noLinkedDepartments')
+              }
             />
           </div>
 
@@ -492,6 +496,7 @@ function AccountCard({
           {departments.length > 0 && (
             <div className="space-y-2">
               <Label>{t('whatsapp.linkDepartments')}</Label>
+              <p className="text-xs text-gray-500">{t('whatsapp.linkDepartmentsHint')}</p>
               <div className="flex flex-wrap gap-2">
                 {departments.map((dept) => {
                   const selected = selectedDeptIds.includes(dept.id);
