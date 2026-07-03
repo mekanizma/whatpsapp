@@ -107,6 +107,7 @@ export const config = {
     vectorWeight: parseFloat(process.env.RAG_VECTOR_WEIGHT || '0.7'),
     textWeight: parseFloat(process.env.RAG_TEXT_WEIGHT || '0.3'),
     maxContextChars: parseInt(process.env.RAG_MAX_CONTEXT_CHARS || '3500', 10),
+    maxVariants: parseInt(process.env.RAG_MAX_VARIANTS || '5', 10),
     indexBatchSize: parseInt(process.env.RAG_INDEX_BATCH_SIZE || '50', 10),
   },
 

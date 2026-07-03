@@ -23,9 +23,16 @@ export interface KnowledgeRetrievalResult {
   kbHasNoMatch: boolean;
 }
 
-export function buildRetrievalTexts(rawMessage: string, variants: string[]): string[] {
-  const parts = [rawMessage, ...variants].map((p) => p.trim()).filter(Boolean);
-  return [...new Set(parts)].slice(0, 4);
+export function buildRetrievalTexts(
+  rawMessage: string,
+  variants: string[],
+  intentVariant: string | null = null
+): string[] {
+  const parts = [rawMessage, intentVariant, ...variants]
+    .filter((p): p is string => typeof p === 'string')
+    .map((p) => p.trim())
+    .filter(Boolean);
+  return [...new Set(parts)].slice(0, config.rag.maxVariants);
 }
 
 export function mergeRetrievalChunksByMax(
@@ -179,7 +186,7 @@ export async function retrieveKnowledgeContext(
   }
 
   const rewrite = await expandQueryForRetrieval(companyId, trimmed);
-  const texts = buildRetrievalTexts(trimmed, rewrite.variants);
+  const texts = buildRetrievalTexts(trimmed, rewrite.variants, rewrite.intentVariant);
 
   try {
     const embeddings = await createEmbeddings(texts);

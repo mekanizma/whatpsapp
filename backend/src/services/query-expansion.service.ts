@@ -62,6 +62,8 @@ Rules:
 
 export interface QueryRewriteResult extends QueryRewriteCacheEntry {
   rawMessage: string;
+  /** Canonical KB keywords from universal intent rules (not part of LLM variants) */
+  intentVariant: string | null;
 }
 
 export function parseQueryRewriteResponse(text: string): { variants: string[]; isBroad: boolean } {
@@ -88,7 +90,8 @@ function fallbackRewrite(message: string): QueryRewriteResult {
   const trimmed = message.trim();
   return {
     rawMessage: trimmed,
-    variants: appendUniversalIntentVariant([trimmed], trimmed),
+    variants: trimmed ? [trimmed] : [],
+    intentVariant: detectUniversalIntentVariant(trimmed),
     isBroad: false,
   };
 }
@@ -104,8 +107,8 @@ export async function expandQueryForRetrieval(
   if (cached) {
     return {
       ...cached,
-      variants: appendUniversalIntentVariant(cached.variants, trimmed),
       rawMessage: trimmed,
+      intentVariant: detectUniversalIntentVariant(trimmed),
     };
   }
 
@@ -128,13 +131,13 @@ export async function expandQueryForRetrieval(
 
     const content = completion.choices[0]?.message?.content?.trim() || '';
     const parsed = parseQueryRewriteResponse(content);
-    const baseVariants =
+    const variants =
       parsed.variants.length > 0 ? parsed.variants : [trimmed];
-    const variants = appendUniversalIntentVariant(baseVariants, trimmed);
 
     const result: QueryRewriteResult = {
       rawMessage: trimmed,
       variants,
+      intentVariant: detectUniversalIntentVariant(trimmed),
       isBroad: parsed.isBroad,
     };
 

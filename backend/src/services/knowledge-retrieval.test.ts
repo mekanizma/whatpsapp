@@ -85,17 +85,29 @@ describe('knowledge-retrieval', () => {
     assert.equal(chunks.length, 2);
   });
 
-  it('buildRetrievalTexts dedupes and caps at 4 texts', () => {
-    const texts = buildRetrievalTexts('üniversite nerede', [
+  it('buildRetrievalTexts dedupes and caps at maxVariants (default 5)', () => {
+    const texts = buildRetrievalTexts(
       'üniversite nerede',
-      'üniversite adresi',
-      'kampüs konumu',
-      'okul yeri',
-      'fazla varyant',
-    ]);
-    assert.equal(texts.length, 4);
+      ['üniversite nerede', 'üniversite adresi', 'kampüs konumu', 'okul yeri', 'fazla varyant'],
+      'adres konum ulaşım'
+    );
+    assert.equal(texts.length, 5);
     assert.equal(texts[0], 'üniversite nerede');
+    assert.equal(texts[1], 'adres konum ulaşım');
     assert.ok(texts.includes('üniversite adresi'));
+    assert.ok(!texts.includes('fazla varyant'));
+  });
+
+  it('buildRetrievalTexts prioritizes intent variant over LLM variants when capping', () => {
+    const texts = buildRetrievalTexts(
+      'üniversite nerede',
+      ['üniversite konumu', 'kampüs adresi', 'okul yeri', 'harita'],
+      'adres konum ulaşım'
+    );
+    assert.equal(texts[0], 'üniversite nerede');
+    assert.ok(texts.includes('adres konum ulaşım'));
+    assert.equal(texts[1], 'adres konum ulaşım');
+    assert.equal(texts.length, 5);
   });
 
   it('mergeRetrievalChunksByMax keeps max similarity, text_rank, and combined_score per chunk', () => {
@@ -248,12 +260,14 @@ describe('knowledge-retrieval', () => {
     assert.equal(hasStrongRetrievalMatch(chunks), true);
   });
 
-  it('buildRetrievalTexts includes universal intent variant from expansion', () => {
-    const texts = buildRetrievalTexts('üniversite nerede', [
-      'üniversite konumu',
-      'adres konum ulaşım',
-    ]);
+  it('buildRetrievalTexts includes universal intent variant passed separately from expansion', () => {
+    const texts = buildRetrievalTexts(
+      'üniversite nerede',
+      ['üniversite konumu', 'kampüs adresi', 'okul yeri'],
+      'adres konum ulaşım'
+    );
     assert.ok(texts.includes('adres konum ulaşım'));
     assert.equal(texts[0], 'üniversite nerede');
+    assert.equal(texts[1], 'adres konum ulaşım');
   });
 });
