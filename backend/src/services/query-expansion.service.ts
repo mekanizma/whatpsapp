@@ -11,6 +11,47 @@ import {
 
 const REWRITE_MODEL = 'gpt-4o-mini';
 
+/** Universal intents → canonical Turkish KB keywords (multi-tenant safe) */
+const UNIVERSAL_INTENT_RULES: { pattern: RegExp; canonical: string }[] = [
+  {
+    pattern:
+      /\b(nerede|neredesiniz|konum|where|located|address|adres)\b/i,
+    canonical: 'adres konum ulaşım',
+  },
+  {
+    pattern: /\b(fiyat|ücret|kaç para|price|cost|fee|tuition)\b/i,
+    canonical: 'ücret fiyat',
+  },
+  {
+    pattern: /\b(kaçta|saat kaça|açık mı|hours|open)\b/i,
+    canonical: 'çalışma saatleri',
+  },
+  {
+    pattern: /\b(telefon|numara|phone|contact|email)\b/i,
+    canonical: 'iletişim telefon',
+  },
+];
+
+export function detectUniversalIntentVariant(message: string): string | null {
+  const trimmed = message.trim();
+  if (!trimmed) return null;
+
+  for (const { pattern, canonical } of UNIVERSAL_INTENT_RULES) {
+    if (pattern.test(trimmed)) return canonical;
+  }
+  return null;
+}
+
+export function appendUniversalIntentVariant(
+  variants: string[],
+  message: string
+): string[] {
+  const intent = detectUniversalIntentVariant(message);
+  if (!intent) return variants;
+  if (variants.some((v) => v.trim() === intent)) return variants;
+  return [...variants, intent];
+}
+
 const REWRITE_SYSTEM_PROMPT = `Rewrite the customer message for knowledge-base semantic search.
 Output ONLY valid JSON with this shape:
 {"variants":["phrase1","phrase2","phrase3"],"is_broad":false}
@@ -47,7 +88,7 @@ function fallbackRewrite(message: string): QueryRewriteResult {
   const trimmed = message.trim();
   return {
     rawMessage: trimmed,
-    variants: [trimmed],
+    variants: appendUniversalIntentVariant([trimmed], trimmed),
     isBroad: false,
   };
 }
@@ -61,7 +102,11 @@ export async function expandQueryForRetrieval(
 
   const cached = getCachedQueryRewrite(companyId, trimmed);
   if (cached) {
-    return { ...cached, rawMessage: trimmed };
+    return {
+      ...cached,
+      variants: appendUniversalIntentVariant(cached.variants, trimmed),
+      rawMessage: trimmed,
+    };
   }
 
   try {
@@ -83,8 +128,9 @@ export async function expandQueryForRetrieval(
 
     const content = completion.choices[0]?.message?.content?.trim() || '';
     const parsed = parseQueryRewriteResponse(content);
-    const variants =
+    const baseVariants =
       parsed.variants.length > 0 ? parsed.variants : [trimmed];
+    const variants = appendUniversalIntentVariant(baseVariants, trimmed);
 
     const result: QueryRewriteResult = {
       rawMessage: trimmed,

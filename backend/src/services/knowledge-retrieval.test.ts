@@ -188,4 +188,72 @@ describe('knowledge-retrieval', () => {
     };
     assert.equal(hasStrongRetrievalMatch([weak]), false);
   });
+
+  it('"üniversite nerede" mock RPC: Turkish FTS stem hit ranks address chunk first', () => {
+    const addressChunk: RetrievedKnowledgeChunk = {
+      id: 'chunk-address',
+      document_id: 'doc-addr',
+      knowledge_base_id: 'kb-addr',
+      chunk_index: 0,
+      heading: 'Adres',
+      content: 'Üniversitemiz İstanbul Kadıköy\'de yer almaktadır. Ulaşım bilgileri...',
+      similarity: 0.12,
+      text_rank: 0,
+      combined_score: 0.084,
+    };
+    const bursChunk: RetrievedKnowledgeChunk = {
+      id: 'chunk-burs',
+      document_id: 'doc-burs',
+      knowledge_base_id: 'kb-burs',
+      chunk_index: 0,
+      heading: 'Burslar',
+      content: 'Üniversitesi burs başvuruları mart ayında açılır.',
+      similarity: 0.22,
+      text_rank: 0.08,
+      combined_score: 0.178,
+    };
+    const fakulteChunk: RetrievedKnowledgeChunk = {
+      id: 'chunk-fak',
+      document_id: 'doc-fak',
+      knowledge_base_id: 'kb-fak',
+      chunk_index: 0,
+      heading: 'Fakülteler',
+      content: 'Üniversitesi mühendislik ve tıp fakülteleri bulunmaktadır.',
+      similarity: 0.2,
+      text_rank: 0.06,
+      combined_score: 0.158,
+    };
+
+    const rawRpcResults = [bursChunk, fakulteChunk, addressChunk];
+    const ftsStemRpcResults = [
+      {
+        ...addressChunk,
+        similarity: 0.12,
+        text_rank: 0.62,
+        combined_score: 0.27,
+      },
+      {
+        ...bursChunk,
+        similarity: 0.22,
+        text_rank: 0.18,
+        combined_score: 0.208,
+      },
+    ];
+
+    const merged = mergeRetrievalChunksByMax([rawRpcResults, ftsStemRpcResults]);
+    const chunks = finalizeRetrievalChunks(merged, 6, 0.25);
+
+    assert.equal(chunks[0].heading, 'Adres');
+    assert.ok(chunks[0].text_rank >= 0.62);
+    assert.equal(hasStrongRetrievalMatch(chunks), true);
+  });
+
+  it('buildRetrievalTexts includes universal intent variant from expansion', () => {
+    const texts = buildRetrievalTexts('üniversite nerede', [
+      'üniversite konumu',
+      'adres konum ulaşım',
+    ]);
+    assert.ok(texts.includes('adres konum ulaşım'));
+    assert.equal(texts[0], 'üniversite nerede');
+  });
 });

@@ -320,7 +320,7 @@ export interface QueryRewriteCacheEntry {
 const rewriteCache = new Map<string, QueryRewriteCacheEntry & { expiresAt: number }>();
 
 function rewriteCacheKey(companyId: string, message: string): string {
-  return `rewrite:${companyId}:${hashNormalizedMessage(message)}`;
+  return `rewrite:${config.ai.rewriteCacheVersion}:${companyId}:${hashNormalizedMessage(message)}`;
 }
 
 export function getCachedQueryRewrite(
@@ -359,7 +359,8 @@ export function setCachedQueryRewrite(
 }
 
 export function clearCompanyRewriteCache(companyId: string): void {
+  const prefix = `rewrite:${config.ai.rewriteCacheVersion}:${companyId}:`;
   for (const key of rewriteCache.keys()) {
-    if (key.startsWith(`rewrite:${companyId}:`)) rewriteCache.delete(key);
+    if (key.startsWith(prefix)) rewriteCache.delete(key);
   }
 }

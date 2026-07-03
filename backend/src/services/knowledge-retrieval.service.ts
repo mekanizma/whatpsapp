@@ -86,6 +86,19 @@ export function finalizeRetrievalChunks(
   return pool.slice(0, topK);
 }
 
+export function logRetrievalDiagnostics(
+  query: string,
+  chunks: RetrievedKnowledgeChunk[]
+): void {
+  const q = query.slice(0, 40);
+  const top = chunks
+    .slice(0, 3)
+    .map((c) => `${c.heading ?? '—'}:${c.combined_score.toFixed(3)}`)
+    .join(', ');
+  const strong = hasStrongRetrievalMatch(chunks);
+  console.log(`[RAG] q="${q}" top=[${top}] strong=${strong}`);
+}
+
 function buildLexicalFallbackResult(
   fallbackItems: KnowledgeItem[],
   query: string,
@@ -177,6 +190,7 @@ export async function retrieveKnowledgeContext(
     );
     const merged = mergeRetrievalChunksByMax(resultSets);
     const chunks = finalizeRetrievalChunks(merged);
+    logRetrievalDiagnostics(trimmed, chunks);
 
     if (!chunks.length) {
       return {

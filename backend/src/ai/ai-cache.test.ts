@@ -14,6 +14,8 @@ import {
   setCachedResponse,
   getCachedResponse,
   clearCompanyCache,
+  getCachedQueryRewrite,
+  setCachedQueryRewrite,
 } from './ai-cache.service';
 import { isKnowledgeMissAiResponse } from './knowledge-miss.service';
 
@@ -233,5 +235,23 @@ describe('ai-cache.service', () => {
 
     assert.equal(await getCachedResponse('tenant-a', message), null);
     assert.ok(await getCachedResponse('tenant-b', message));
+  });
+
+  it('rewrite cache key includes REWRITE_CACHE_VERSION (default 2)', () => {
+    assert.equal(config.ai.rewriteCacheVersion, '2');
+    const companyId = 'tenant-a';
+    const message = 'üniversite nerede';
+    setCachedQueryRewrite(companyId, message, {
+      variants: ['old variant'],
+      isBroad: false,
+    });
+    assert.deepEqual(getCachedQueryRewrite(companyId, message), {
+      variants: ['old variant'],
+      isBroad: false,
+    });
+    const hash = hashNormalizedMessage(message);
+    const v1Key = `rewrite:1:${companyId}:${hash}`;
+    const v2Key = `rewrite:2:${companyId}:${hash}`;
+    assert.notEqual(v1Key, v2Key);
   });
 });
