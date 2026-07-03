@@ -66,24 +66,104 @@ const autoRestoreActive = new Set<string>();
 
 const logger = pino({ level: 'silent' });
 
-function resolveSessionDir(accountId: string, companyId: string): string {
-  const accountDir = path.join(config.sessionsDir, accountId);
+function getAccountSessionDir(accountId: string): string {
+  return path.join(config.sessionsDir, accountId);
+}
+
+function getLegacySessionDir(companyId: string): string {
+  return path.join(config.sessionsDir, companyId);
+}
+
+async function isDefaultAccount(accountId: string, companyId: string): Promise<boolean> {
+  if (config.demoMode) return true;
+  const { data } = await adminClient
+    .from('whatsapp_configs')
+    .select('is_default')
+    .eq('id', accountId)
+    .eq('company_id', companyId)
+    .maybeSingle();
+  return data?.is_default === true;
+}
+
+/** Oturum dosyası yolu — legacy yalnızca varsayılan hat için (çoklu hat çakışmasını önler) */
+function findSessionDirWithCreds(
+  accountId: string,
+  companyId: string,
+  allowLegacy: boolean
+): string | null {
+  const accountDir = getAccountSessionDir(accountId);
   if (fs.existsSync(path.join(accountDir, 'creds.json'))) {
     return accountDir;
   }
-  const legacyDir = path.join(config.sessionsDir, companyId);
-  if (fs.existsSync(path.join(legacyDir, 'creds.json'))) {
-    return legacyDir;
+  if (allowLegacy) {
+    const legacyDir = getLegacySessionDir(companyId);
+    if (fs.existsSync(path.join(legacyDir, 'creds.json'))) {
+      return legacyDir;
+    }
   }
+  return null;
+}
+
+function resolveSessionDir(accountId: string, companyId: string, allowLegacy: boolean): string {
+  const existing = findSessionDirWithCreds(accountId, companyId, allowLegacy);
+  if (existing) return existing;
+
+  const accountDir = getAccountSessionDir(accountId);
   if (!fs.existsSync(accountDir)) {
     fs.mkdirSync(accountDir, { recursive: true });
   }
   return accountDir;
 }
 
-function hasStoredCredentials(accountId: string, companyId: string): boolean {
-  const dir = resolveSessionDir(accountId, companyId);
-  return fs.existsSync(path.join(dir, 'creds.json'));
+function migrateLegacySessionToAccount(accountId: string, companyId: string): void {
+  if (accountId === companyId) return;
+
+  const accountDir = getAccountSessionDir(accountId);
+  const legacyDir = getLegacySessionDir(companyId);
+  if (!fs.existsSync(path.join(legacyDir, 'creds.json'))) return;
+  if (fs.existsSync(path.join(accountDir, 'creds.json'))) return;
+
+  fs.cpSync(legacyDir, accountDir, { recursive: true });
+  fs.rmSync(legacyDir, { recursive: true, force: true });
+  console.log(`[Baileys] Legacy oturum taşındı: ${companyId} → ${accountId}`);
+}
+
+function removeSessionFiles(accountId: string, companyId: string, removeLegacy: boolean): void {
+  const accountDir = getAccountSessionDir(accountId);
+  if (fs.existsSync(accountDir)) {
+    fs.rmSync(accountDir, { recursive: true, force: true });
+  }
+  if (removeLegacy) {
+    const legacyDir = getLegacySessionDir(companyId);
+    if (fs.existsSync(legacyDir)) {
+      fs.rmSync(legacyDir, { recursive: true, force: true });
+    }
+  }
+}
+
+async function endBaileysSocket(accountId: string): Promise<void> {
+  clearReconnectState(accountId);
+
+  const conn = connections.get(accountId);
+  if (conn?.socket) {
+    try {
+      conn.socket.end(undefined);
+    } catch {
+      /* socket zaten kapanmış olabilir */
+    }
+  }
+  connections.delete(accountId);
+
+  for (const [token, session] of sessions.entries()) {
+    if (session.whatsapp_account_id === accountId) {
+      sessions.delete(token);
+    }
+  }
+}
+
+async function hasStoredCredentials(accountId: string, companyId: string): Promise<boolean> {
+  const allowLegacy = await isDefaultAccount(accountId, companyId);
+  return findSessionDirWithCreds(accountId, companyId, allowLegacy) !== null;
 }
 
 export function verifySessionsDirWritable(): { ok: boolean; path: string; error?: string } {
@@ -188,7 +268,7 @@ export async function startBaileysQrSession(
   }
 
   clearReconnectState(accountId);
-  await disconnectBaileys(accountId, companyId, { logout: false });
+  await endBaileysSocket(accountId);
 
   const sessionToken = generateToken();
   const sessionId = crypto.randomUUID();
@@ -286,7 +366,7 @@ async function scheduleReconnect(
   companyId: string,
   session: BaileysSession
 ): Promise<void> {
-  if (!hasStoredCredentials(accountId, companyId)) {
+  if (!(await hasStoredCredentials(accountId, companyId))) {
     clearReconnectState(accountId);
     return;
   }
@@ -331,7 +411,12 @@ async function connectBaileysSocket(
       }
     }
 
-    const sessionDir = resolveSessionDir(accountId, companyId);
+    const allowLegacy = await isDefaultAccount(accountId, companyId);
+    const sessionDir = resolveSessionDir(accountId, companyId, allowLegacy);
+    const loadedFromLegacy =
+      allowLegacy &&
+      sessionDir === getLegacySessionDir(companyId) &&
+      accountId !== companyId;
     const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
     const version = await resolveBaileysVersion();
 
@@ -340,7 +425,7 @@ async function connectBaileysSocket(
       auth: state,
       logger,
       printQRInTerminal: false,
-      browser: ['WhatsApp AI SaaS', 'Chrome', '1.0.0'],
+      browser: ['WhatsApp AI SaaS', 'Chrome', accountId.slice(0, 8)],
       syncFullHistory: false,
       markOnlineOnConnect: true,
       generateHighQualityLinkPreview: false,
@@ -375,6 +460,10 @@ async function connectBaileysSocket(
         session.connected_at = new Date().toISOString();
         clearReconnectState(accountId);
         connections.set(accountId, { socket, session, isConnecting: false });
+
+        if (loadedFromLegacy) {
+          migrateLegacySessionToAccount(accountId, companyId);
+        }
 
         const user = socket.user;
         if (user) {
@@ -415,7 +504,7 @@ async function connectBaileysSocket(
         const wasConnected = session.status === 'connected';
         const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
         const isQrPairing = session.status === 'pending' || session.status === 'scanned';
-        const hasCreds = hasStoredCredentials(accountId, companyId);
+        const hasCreds = await hasStoredCredentials(accountId, companyId);
         const isRestartRequired = statusCode === DisconnectReason.restartRequired;
 
         console.log(
@@ -428,13 +517,8 @@ async function connectBaileysSocket(
           session.status = 'expired';
           clearReconnectState(accountId);
 
-          const accountDir = path.join(config.sessionsDir, accountId);
-          const legacyDir = path.join(config.sessionsDir, companyId);
-          for (const dir of [accountDir, legacyDir]) {
-            if (fs.existsSync(dir)) {
-              fs.rmSync(dir, { recursive: true, force: true });
-            }
-          }
+          const removeLegacy = await isDefaultAccount(accountId, companyId);
+          removeSessionFiles(accountId, companyId, removeLegacy);
 
           if (!config.demoMode) {
             await adminClient
@@ -633,29 +717,27 @@ export async function disconnectBaileys(
   }
   connections.delete(accountId);
 
-  for (const dirName of [accountId, companyId]) {
-    const sessionDir = path.join(config.sessionsDir, dirName);
-    if (fs.existsSync(sessionDir)) {
-      fs.rmSync(sessionDir, { recursive: true, force: true });
-    }
-  }
-
   for (const [token, session] of sessions.entries()) {
     if (session.whatsapp_account_id === accountId) {
       sessions.delete(token);
     }
   }
 
-  if (!config.demoMode) {
-    await adminClient
-      .from('whatsapp_configs')
-      .update({
-        status: 'disconnected',
-        phone_number: null,
-        profile_name: null,
-        business_account_id: null,
-      })
-      .eq('id', accountId);
+  if (shouldLogout) {
+    const removeLegacy = await isDefaultAccount(accountId, companyId);
+    removeSessionFiles(accountId, companyId, removeLegacy);
+
+    if (!config.demoMode) {
+      await adminClient
+        .from('whatsapp_configs')
+        .update({
+          status: 'disconnected',
+          phone_number: null,
+          profile_name: null,
+          business_account_id: null,
+        })
+        .eq('id', accountId);
+    }
   }
 }
 
@@ -747,7 +829,7 @@ async function restoreAccountSession(
   companyId: string,
   phoneNumber?: string | null
 ): Promise<void> {
-  if (!hasStoredCredentials(accountId, companyId)) {
+  if (!(await hasStoredCredentials(accountId, companyId))) {
     console.warn(`[Baileys] Oturum dosyası yok, atlanıyor: ${accountId}`);
     return;
   }
@@ -812,6 +894,45 @@ export async function restoreBaileysSessions(): Promise<void> {
   const companyDirs = fs.readdirSync(sessionsDir, { withFileTypes: true });
   for (const entry of companyDirs) {
     if (!entry.isDirectory() || restored.has(entry.name)) continue;
+
+    const credsPath = path.join(sessionsDir, entry.name, 'creds.json');
+    if (!fs.existsSync(credsPath)) continue;
+
+    if (!config.demoMode) {
+      const { data: accountRow } = await adminClient
+        .from('whatsapp_configs')
+        .select('id, company_id')
+        .eq('id', entry.name)
+        .maybeSingle();
+
+      if (accountRow?.company_id) {
+        restored.add(accountRow.id);
+        try {
+          await restoreAccountSession(accountRow.id, accountRow.company_id);
+        } catch (err) {
+          console.error(`[Baileys] Disk oturum kurtarma hatası (${accountRow.id}):`, err);
+        }
+        continue;
+      }
+
+      const { data: defaultAccount } = await adminClient
+        .from('whatsapp_configs')
+        .select('id, company_id')
+        .eq('company_id', entry.name)
+        .eq('is_default', true)
+        .maybeSingle();
+
+      if (defaultAccount && !restored.has(defaultAccount.id)) {
+        restored.add(defaultAccount.id);
+        try {
+          await restoreAccountSession(defaultAccount.id, defaultAccount.company_id);
+        } catch (err) {
+          console.error(`[Baileys] Legacy disk oturum kurtarma hatası (${defaultAccount.id}):`, err);
+        }
+      }
+      continue;
+    }
+
     try {
       await restoreAccountSession(entry.name, entry.name);
     } catch (err) {
