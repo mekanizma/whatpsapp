@@ -39,6 +39,7 @@ interface WhatsAppAccount {
   label: string | null;
   phone_number: string | null;
   profile_name: string | null;
+  business_account_id?: string | null;
   status: string;
   is_active: boolean;
   is_default: boolean;
@@ -55,7 +56,9 @@ interface AccountsResponse {
   used: number;
   plan_type: string;
   supports_qr?: boolean;
+  supports_cloud_api?: boolean;
   webhook_url?: string | null;
+  webhook_verify_token?: string | null;
 }
 
 export function WhatsAppPage() {
@@ -66,7 +69,9 @@ export function WhatsAppPage() {
   const [newDeptName, setNewDeptName] = useState('');
   const [testState, setTestState] = useState<Record<string, { phone: string; message: string; feedback?: { type: 'success' | 'error'; text: string } }>>({});
   const [cloudForms, setCloudForms] = useState<Record<string, { phone_number: string; business_account_id: string; access_token: string }>>({});
-  const [copied, setCopied] = useState(false);
+  const [connectionModes, setConnectionModes] = useState<Record<string, 'qr' | 'api'>>({});
+  const [cloudFeedback, setCloudFeedback] = useState<Record<string, { type: 'success' | 'error'; text: string }>>({});
+  const [copied, setCopied] = useState<'url' | 'token' | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['whatsapp-accounts'],
@@ -89,9 +94,18 @@ export function WhatsAppPage() {
   const limit = data?.limit ?? getWhatsAppLineLimit(data?.plan_type);
   const used = data?.used ?? accounts.length;
   const canAdd = used < limit;
-  const useCloudApi = data?.supports_qr === false;
+  const supportsQr = data?.supports_qr !== false;
+  const supportsCloudApi = data?.supports_cloud_api !== false;
   const webhookUrl = data?.webhook_url || `${window.location.origin}/webhook/whatsapp`;
+  const webhookVerifyToken = data?.webhook_verify_token || '';
   const webhookSteps = t('whatsapp.webhookSteps', { returnObjects: true }) as string[];
+
+  const getConnectionMode = (account: WhatsAppAccount): 'qr' | 'api' => {
+    if (connectionModes[account.id]) return connectionModes[account.id];
+    if (account.connection_type === 'api') return 'api';
+    if (account.connection_type === 'qr') return 'qr';
+    return supportsQr ? 'qr' : 'api';
+  };
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['whatsapp-accounts'] });
@@ -136,7 +150,19 @@ export function WhatsAppPage() {
   const cloudConnectMutation = useMutation({
     mutationFn: ({ accountId, form }: { accountId: string; form: { phone_number: string; business_account_id: string; access_token: string } }) =>
       api.put(`/whatsapp/accounts/${accountId}/config`, form),
-    onSuccess: invalidate,
+    onSuccess: (_data, { accountId }) => {
+      setCloudFeedback((f) => ({
+        ...f,
+        [accountId]: { type: 'success', text: t('whatsapp.cloudConnectSuccess') },
+      }));
+      invalidate();
+    },
+    onError: (err, { accountId }) => {
+      setCloudFeedback((f) => ({
+        ...f,
+        [accountId]: { type: 'error', text: (err as Error).message },
+      }));
+    },
   });
 
   const createDeptMutation = useMutation({
@@ -203,10 +229,10 @@ export function WhatsAppPage() {
     }
   };
 
-  const copyWebhook = async () => {
-    await navigator.clipboard.writeText(webhookUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const copyToClipboard = async (text: string, kind: 'url' | 'token') => {
+    await navigator.clipboard.writeText(text);
+    setCopied(kind);
+    setTimeout(() => setCopied(null), 2000);
   };
 
   const connectedCount = accounts.filter((a) => a.status === 'connected').length;
@@ -271,9 +297,20 @@ export function WhatsAppPage() {
               departments={departments}
               isExpanded={expandedAccount === account.id}
               onToggle={() => setExpandedAccount(expandedAccount === account.id ? null : account.id)}
-              useCloudApi={useCloudApi}
+              connectionMode={getConnectionMode(account)}
+              supportsQr={supportsQr}
+              supportsCloudApi={supportsCloudApi}
+              onConnectionModeChange={(mode) => {
+                setConnectionModes((m) => ({ ...m, [account.id]: mode }));
+                setCloudFeedback((f) => {
+                  const next = { ...f };
+                  delete next[account.id];
+                  return next;
+                });
+              }}
               activeQr={activeQr?.accountId === account.id ? activeQr.session : null}
               cloudForm={cloudForms[account.id]}
+              cloudFeedback={cloudFeedback[account.id]}
               testState={testState[account.id]}
               onCloudFormChange={(form) => setCloudForms((f) => ({ ...f, [account.id]: form }))}
               onTestChange={(state) => setTestState((s) => ({ ...s, [account.id]: state }))}
@@ -289,6 +326,7 @@ export function WhatsAppPage() {
               onCancelQr={cancelQr}
               onRefreshQr={() => startQrMutation.mutate(account.id)}
               isQrPending={startQrMutation.isPending && startQrMutation.variables === account.id}
+              isCloudPending={cloudConnectMutation.isPending && cloudConnectMutation.variables?.accountId === account.id}
               isDisconnecting={disconnectMutation.isPending && disconnectMutation.variables === account.id}
               onSendTest={() => sendTest(account.id)}
             />
@@ -344,21 +382,35 @@ export function WhatsAppPage() {
         </CardContent>
       </Card>
 
-      {/* Webhook info for Cloud API */}
-      {useCloudApi && (
+      {/* Webhook info for Meta Cloud API */}
+      {supportsCloudApi && (
         <Card>
           <CardHeader><CardTitle>{t('whatsapp.webhookTitle')}</CardTitle></CardHeader>
           <CardContent className="space-y-4 text-sm text-gray-600">
             <p>{t('whatsapp.webhookDesc')}</p>
             <div className="space-y-2">
               <Label>{t('whatsapp.callbackUrl')}</Label>
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2 sm:flex-row">
                 <Input readOnly value={webhookUrl} className="text-xs" />
-                <Button type="button" variant="outline" size="icon" onClick={copyWebhook}>
-                  {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                <Button type="button" variant="outline" className="shrink-0 w-full sm:w-auto" onClick={() => copyToClipboard(webhookUrl, 'url')}>
+                  {copied === 'url' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                  {copied === 'url' ? t('common.copied') : t('common.copy')}
                 </Button>
               </div>
             </div>
+            {webhookVerifyToken && (
+              <div className="space-y-2">
+                <Label>{t('whatsapp.verifyToken')}</Label>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Input readOnly value={webhookVerifyToken} className="text-xs font-mono" />
+                  <Button type="button" variant="outline" className="shrink-0 w-full sm:w-auto" onClick={() => copyToClipboard(webhookVerifyToken, 'token')}>
+                    {copied === 'token' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    {copied === 'token' ? t('common.copied') : t('common.copy')}
+                  </Button>
+                </div>
+                <p className="text-xs text-gray-500">{t('whatsapp.webhookHint')}</p>
+              </div>
+            )}
             <ol className="list-inside list-decimal space-y-1">
               {webhookSteps.map((step) => <li key={step}>{step}</li>)}
             </ol>
@@ -374,9 +426,13 @@ interface AccountCardProps {
   departments: Department[];
   isExpanded: boolean;
   onToggle: () => void;
-  useCloudApi: boolean;
+  connectionMode: 'qr' | 'api';
+  supportsQr: boolean;
+  supportsCloudApi: boolean;
+  onConnectionModeChange: (mode: 'qr' | 'api') => void;
   activeQr: QrSession | null;
   cloudForm?: { phone_number: string; business_account_id: string; access_token: string };
+  cloudFeedback?: { type: 'success' | 'error'; text: string };
   testState?: { phone: string; message: string; feedback?: { type: 'success' | 'error'; text: string } };
   onCloudFormChange: (form: { phone_number: string; business_account_id: string; access_token: string }) => void;
   onTestChange: (state: { phone: string; message: string }) => void;
@@ -390,21 +446,28 @@ interface AccountCardProps {
   onCancelQr: () => void;
   onRefreshQr: () => void;
   isQrPending: boolean;
+  isCloudPending: boolean;
   isDisconnecting: boolean;
   onSendTest: () => void;
 }
 
 function AccountCard({
-  account, departments, isExpanded, onToggle, useCloudApi, activeQr,
-  cloudForm, testState, onCloudFormChange, onTestChange,
+  account, departments, isExpanded, onToggle,
+  connectionMode, supportsQr, supportsCloudApi, onConnectionModeChange,
+  activeQr, cloudForm, cloudFeedback, testState, onCloudFormChange, onTestChange,
   onStartQr, onDisconnect, onDelete, onToggleActive, onSetDefault,
   onDepartmentsChange, onCloudConnect, onCancelQr, onRefreshQr,
-  isQrPending, isDisconnecting, onSendTest,
+  isQrPending, isCloudPending, isDisconnecting, onSendTest,
 }: AccountCardProps) {
   const { t } = useTranslation();
   const isConnected = account.status === 'connected';
   const isReconnecting = account.status === 'reconnecting' || account.reconnecting;
+  const isCloudConnected = isConnected && account.connection_type === 'api';
+  const isQrConnected = isConnected && account.connection_type === 'qr';
   const selectedDeptIds = account.departments.map((d) => d.id);
+  const showModeTabs = supportsQr && supportsCloudApi;
+  const useQrPanel = connectionMode === 'qr' && supportsQr;
+  const useCloudPanel = connectionMode === 'api' && supportsCloudApi;
 
   const statusBadge = isConnected ? (
     <Badge variant="success"><Wifi className="mr-1 h-3 w-3" /> {t('whatsapp.connected')}</Badge>
@@ -441,6 +504,12 @@ function AccountCard({
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
+            {account.connection_type === 'api' && (
+              <Badge variant="default"><Cloud className="mr-1 h-3 w-3" /> Cloud API</Badge>
+            )}
+            {account.connection_type === 'qr' && isConnected && (
+              <Badge variant="default"><QrCode className="mr-1 h-3 w-3" /> QR</Badge>
+            )}
             {statusBadge}
           </div>
         </CardContent>
@@ -523,35 +592,95 @@ function AccountCard({
             </div>
           )}
 
+          {/* Connection method */}
+          {showModeTabs && (
+            <div className="space-y-2">
+              <Label>{t('whatsapp.connectionMethod')}</Label>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  className={cn(
+                    'rounded-lg border p-3 text-left transition-colors',
+                    connectionMode === 'qr'
+                      ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                      : 'border-gray-200 hover:border-gray-300'
+                  )}
+                  onClick={() => onConnectionModeChange('qr')}
+                >
+                  <div className="flex items-center gap-2 font-medium">
+                    <QrCode className="h-4 w-4 shrink-0" />
+                    {t('whatsapp.connectionQr')}
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">{t('whatsapp.connectionQrDesc')}</p>
+                </button>
+                <button
+                  type="button"
+                  className={cn(
+                    'rounded-lg border p-3 text-left transition-colors',
+                    connectionMode === 'api'
+                      ? 'border-primary bg-primary/5 ring-1 ring-primary'
+                      : 'border-gray-200 hover:border-gray-300'
+                  )}
+                  onClick={() => onConnectionModeChange('api')}
+                >
+                  <div className="flex items-center gap-2 font-medium">
+                    <Cloud className="h-4 w-4 shrink-0" />
+                    {t('whatsapp.connectionCloud')}
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">{t('whatsapp.connectionCloudDesc')}</p>
+                </button>
+              </div>
+              {isCloudConnected && connectionMode === 'qr' && (
+                <p className="text-xs text-amber-700">{t('whatsapp.disconnectCloudFirst')}</p>
+              )}
+              {isQrConnected && connectionMode === 'api' && (
+                <p className="text-xs text-amber-700">{t('whatsapp.disconnectQrFirst')}</p>
+              )}
+            </div>
+          )}
+
           {/* Connection */}
-          {useCloudApi ? (
+          {useCloudPanel ? (
             <CloudApiForm
               account={account}
-              form={cloudForm || { phone_number: account.phone_number || '', business_account_id: '', access_token: '' }}
+              form={cloudForm || {
+                phone_number: account.phone_number || '',
+                business_account_id:
+                  account.connection_type === 'api' &&
+                  account.business_account_id &&
+                  !account.business_account_id.startsWith('baileys:')
+                    ? account.business_account_id
+                    : '',
+                access_token: '',
+              }}
               onChange={onCloudFormChange}
               onConnect={onCloudConnect}
               onDisconnect={onDisconnect}
               isDisconnecting={isDisconnecting}
+              isPending={isCloudPending}
+              feedback={cloudFeedback}
             />
-          ) : isConnected ? (
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <Button variant="outline" className="w-full sm:w-auto" onClick={onDisconnect} disabled={isDisconnecting}>
-                <Unplug className="h-4 w-4" /> {t('whatsapp.disconnect')}
-              </Button>
-              <Button variant="outline" className="w-full sm:w-auto" onClick={onStartQr}>
-                <RefreshCw className="h-4 w-4" /> {t('whatsapp.reconnectWithQr')}
-              </Button>
-            </div>
-          ) : (
-            <QrPanel
-              activeQr={activeQr}
-              isReconnecting={!!isReconnecting}
-              isPending={isQrPending}
-              onStart={onStartQr}
-              onRefresh={onRefreshQr}
-              onCancel={onCancelQr}
-            />
-          )}
+          ) : useQrPanel ? (
+            isQrConnected ? (
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button variant="outline" className="w-full sm:w-auto" onClick={onDisconnect} disabled={isDisconnecting}>
+                  <Unplug className="h-4 w-4" /> {t('whatsapp.disconnect')}
+                </Button>
+                <Button variant="outline" className="w-full sm:w-auto" onClick={onStartQr}>
+                  <RefreshCw className="h-4 w-4" /> {t('whatsapp.reconnectWithQr')}
+                </Button>
+              </div>
+            ) : (
+              <QrPanel
+                activeQr={activeQr}
+                isReconnecting={!!isReconnecting}
+                isPending={isQrPending}
+                onStart={onStartQr}
+                onRefresh={onRefreshQr}
+                onCancel={onCancelQr}
+              />
+            )
+          ) : null}
 
           {/* Test message */}
           {isConnected && (
@@ -642,7 +771,7 @@ function QrPanel({
 }
 
 function CloudApiForm({
-  account, form, onChange, onConnect, onDisconnect, isDisconnecting,
+  account, form, onChange, onConnect, onDisconnect, isDisconnecting, isPending, feedback,
 }: {
   account: WhatsAppAccount;
   form: { phone_number: string; business_account_id: string; access_token: string };
@@ -650,15 +779,22 @@ function CloudApiForm({
   onConnect: (f: { phone_number: string; business_account_id: string; access_token: string }) => void;
   onDisconnect: () => void;
   isDisconnecting: boolean;
+  isPending?: boolean;
+  feedback?: { type: 'success' | 'error'; text: string };
 }) {
   const { t } = useTranslation();
-  const isConnected = account.status === 'connected';
+  const isConnected = account.status === 'connected' && account.connection_type === 'api';
+  const canSubmit =
+    form.phone_number.trim() &&
+    form.business_account_id.trim() &&
+    form.access_token.trim();
 
   return (
     <div className="space-y-3 rounded-lg border p-4">
       <p className="flex items-center gap-2 text-sm font-medium">
         <Cloud className="h-4 w-4" /> {t('whatsapp.cloudApi')}
       </p>
+      <p className="text-xs text-gray-500">{t('whatsapp.cloudApiDesc')}</p>
       <div className="space-y-2">
         <Label>{t('whatsapp.businessPhone')}</Label>
         <Input value={form.phone_number} onChange={(e) => onChange({ ...form, phone_number: e.target.value })} placeholder={t('whatsapp.phonePlaceholder')} />
@@ -670,10 +806,19 @@ function CloudApiForm({
       <div className="space-y-2">
         <Label>{t('whatsapp.accessToken')}</Label>
         <Input type="password" value={form.access_token} onChange={(e) => onChange({ ...form, access_token: e.target.value })} placeholder={t('whatsapp.accessTokenPlaceholder')} />
+        {isConnected && (
+          <p className="text-xs text-gray-500">{t('whatsapp.accessTokenKeepHint')}</p>
+        )}
       </div>
+      {feedback && (
+        <div className={cn('rounded-lg p-2 text-sm', feedback.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600')}>
+          {feedback.text}
+        </div>
+      )}
       <div className="flex flex-col gap-2 sm:flex-row">
-        <Button className="w-full sm:w-auto" onClick={() => onConnect(form)} disabled={!form.access_token}>
-          {t('whatsapp.connectCloud')}
+        <Button className="w-full sm:w-auto" onClick={() => onConnect(form)} disabled={!canSubmit || isPending}>
+          {isPending ? <Spinner /> : null}
+          {isConnected ? t('whatsapp.updateCloud') : t('whatsapp.connectCloud')}
         </Button>
         {isConnected && (
           <Button variant="outline" className="w-full sm:w-auto" onClick={onDisconnect} disabled={isDisconnecting}>

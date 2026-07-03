@@ -12,6 +12,7 @@ import {
   sendBaileysMessage,
   restoreBaileysSessions,
   verifySessionsDirWritable,
+  isSessionsDirVolumeMounted,
   type BaileysSession,
   type QrSessionStatus,
 } from './baileys.manager';
@@ -94,4 +95,5 @@ export {
   restoreBaileysSessions,
   isBaileysReconnecting,
   verifySessionsDirWritable,
+  isSessionsDirVolumeMounted,
 };

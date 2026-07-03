@@ -5,7 +5,11 @@
 
 import app from './app';
 import { config } from './config';
-import { restoreBaileysSessions, verifySessionsDirWritable } from './whatsapp/qr.service';
+import {
+  restoreBaileysSessions,
+  verifySessionsDirWritable,
+  isSessionsDirVolumeMounted,
+} from './whatsapp/qr.service';
 import { recoverPendingKnowledgeIndexing } from './services/knowledge-index.service';
 import { startResponseCacheCleanupSchedule } from './ai/ai-cache.service';
 
@@ -50,7 +54,18 @@ async function runDeferredStartup(): Promise<void> {
   if (!config.isVercel) {
     const sessionsCheck = verifySessionsDirWritable();
     if (sessionsCheck.ok) {
-      console.log(`📂 Sessions dizini hazır: ${sessionsCheck.path}`);
+      const volumeMounted = isSessionsDirVolumeMounted(sessionsCheck.path);
+      if (volumeMounted) {
+        console.log(`📂 Sessions dizini hazır (kalıcı volume): ${sessionsCheck.path}`);
+      } else if (config.nodeEnv === 'production' && config.isCoolify) {
+        console.error(
+          `❌ KRİTİK: ${sessionsCheck.path} kalıcı volume olarak mount edilmemiş — ` +
+            'sunucu restart/deploy sonrası tüm WhatsApp hatları kopar. ' +
+            'Coolify → Storages → Destination: /data/sessions, SESSIONS_DIR=/data/sessions'
+        );
+      } else {
+        console.warn(`⚠️ Sessions dizini yazılabilir ama kalıcı volume değil: ${sessionsCheck.path}`);
+      }
     } else {
       console.error(
         `❌ Sessions dizini yazılamıyor: ${sessionsCheck.path} — ${sessionsCheck.error}. ` +

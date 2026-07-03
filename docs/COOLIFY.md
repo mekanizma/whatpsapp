@@ -60,7 +60,7 @@ Coolify otomatik ekler: `PORT`, `COOLIFY_URL`, `COOLIFY_FQDN`, `HOST`
 
 ## 3. WhatsApp QR (Baileys) — Kalıcı Depolama
 
-QR bağlantısı için **Persistent Storage** gerekir:
+QR bağlantısı için **Persistent Storage zorunludur**. Volume mount yoksa container restart/deploy sonrası `/data/sessions` silinir ve **tüm WhatsApp hatları** (çoklu hesap dahil) kopar — her hat için yeniden QR gerekir.
 
 | Ayar | Değer |
 |------|-------|
@@ -73,6 +73,8 @@ Coolify → Uygulama → **Storages** → Add:
 - **Destination Path:** `/data/sessions`
 
 Deploy veya restart sonrası WhatsApp oturumu volume'dan geri yüklenir.
+
+**Doğrulama:** Deploy loglarında `volume mount: true` ve `Sessions dizini hazır (kalıcı volume)` görünmeli. `volume mount: false` veya `KRİTİK` uyarısı varsa Storages ayarını kontrol edin.
 
 **Render'dan fark:** Coolify'da uyku modu yok — keep-alive cron job gerekmez.
 

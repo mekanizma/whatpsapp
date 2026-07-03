@@ -182,6 +182,20 @@ export function verifySessionsDirWritable(): { ok: boolean; path: string; error?
   }
 }
 
+/** Docker/Coolify volume mount — overlay FS üzerindeki geçici dizinden ayırır */
+export function isSessionsDirVolumeMounted(dir: string = config.sessionsDir): boolean {
+  try {
+    if (!fs.existsSync(dir)) return false;
+    const dirStat = fs.statSync(dir);
+    const parent = path.dirname(dir);
+    if (!fs.existsSync(parent)) return false;
+    const parentStat = fs.statSync(parent);
+    return dirStat.dev !== parentStat.dev;
+  } catch {
+    return false;
+  }
+}
+
 async function resolveBaileysVersion(): Promise<[number, number, number]> {
   try {
     const { version, error } = await fetchLatestBaileysVersion();
@@ -847,7 +861,14 @@ async function restoreAccountSession(
 
 export async function restoreBaileysSessions(): Promise<void> {
   const sessionsDir = config.sessionsDir;
-  console.log(`[Baileys] Oturum dizini: ${sessionsDir} (kalıcı volume: ${config.isCoolify})`);
+  const volumeMounted = isSessionsDirVolumeMounted(sessionsDir);
+  console.log(`[Baileys] Oturum dizini: ${sessionsDir} (volume mount: ${volumeMounted})`);
+  if (config.nodeEnv === 'production' && config.isCoolify && !volumeMounted) {
+    console.error(
+      '[Baileys] KRİTİK: /data/sessions kalıcı volume değil — restart/deploy sonrası tüm hatlar kopar. ' +
+        'Coolify → Storages → Destination: /data/sessions, SESSIONS_DIR=/data/sessions'
+    );
+  }
 
   if (!fs.existsSync(sessionsDir)) {
     fs.mkdirSync(sessionsDir, { recursive: true });

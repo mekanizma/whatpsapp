@@ -79,6 +79,8 @@ export async function listAccounts(req: AuthRequest, res: Response): Promise<voi
         limit: 1,
         used: 1,
         plan_type: 'starter',
+        supports_qr: false,
+        supports_cloud_api: true,
       },
     });
     return;
@@ -99,15 +101,23 @@ export async function listAccounts(req: AuthRequest, res: Response): Promise<voi
     })
   );
 
+  const safeAccounts = enriched.map((account) => ({
+    ...account,
+    business_account_id:
+      account.connection_type === 'api' ? account.business_account_id : null,
+  }));
+
   res.json({
     success: true,
     data: {
-      accounts: enriched,
+      accounts: safeAccounts,
       limit: getWhatsAppLineLimit(planType),
       used: accounts.length,
       plan_type: planType,
       supports_qr: !config.isVercel,
+      supports_cloud_api: true,
       webhook_url: config.publicUrl ? `${config.publicUrl}/webhook/whatsapp` : null,
+      webhook_verify_token: config.whatsapp.verifyToken,
     },
   });
 }
@@ -236,6 +246,18 @@ export async function startAccountQr(req: AuthRequest, res: Response): Promise<v
     return;
   }
 
+  const isCloudApi =
+    !!account.access_token &&
+    !!account.business_account_id &&
+    !account.business_account_id.startsWith('baileys:');
+  if (isCloudApi) {
+    res.status(400).json({
+      success: false,
+      error: 'Bu hat Meta Cloud API ile bağlı. QR kullanmak için önce Cloud API bağlantısını kesin.',
+    });
+    return;
+  }
+
   try {
     const session = await startQrSession(accountId, req.companyId!, req.userId);
     res.json({ success: true, data: session });
@@ -284,17 +306,56 @@ export async function disconnectAccountHandler(req: AuthRequest, res: Response):
 
 export async function updateAccountCloudConfig(req: AuthRequest, res: Response): Promise<void> {
   const accountId = req.params.accountId as string;
+  const companyId = req.companyId!;
   const { phone_number, business_account_id, access_token, webhook_verify_token } = req.body;
 
+  const existing = await getWhatsAppAccount(companyId, accountId);
+  if (!existing) {
+    res.status(404).json({ success: false, error: 'WhatsApp hesabı bulunamadı' });
+    return;
+  }
+
+  const trimmedPhone = typeof phone_number === 'string' ? phone_number.trim() : '';
+  const trimmedPhoneNumberId =
+    typeof business_account_id === 'string' ? business_account_id.trim() : '';
+  const trimmedToken = typeof access_token === 'string' ? access_token.trim() : '';
+
+  if (!trimmedToken) {
+    res.status(400).json({ success: false, error: 'Access Token gerekli' });
+    return;
+  }
+  if (!trimmedPhoneNumberId) {
+    res.status(400).json({ success: false, error: 'Phone Number ID gerekli' });
+    return;
+  }
+  if (!trimmedPhone) {
+    res.status(400).json({ success: false, error: 'İş telefonu gerekli' });
+    return;
+  }
+
   try {
-    const account = await updateWhatsAppAccount(req.companyId!, accountId, {
-      phone_number,
-      business_account_id,
-      access_token,
+    if (existing.business_account_id?.startsWith('baileys:')) {
+      await disconnectAccount(accountId, companyId);
+    }
+
+    const account = await updateWhatsAppAccount(companyId, accountId, {
+      phone_number: trimmedPhone,
+      business_account_id: trimmedPhoneNumberId,
+      access_token: trimmedToken,
       webhook_verify_token,
-      status: access_token ? 'connected' : 'disconnected',
+      status: 'connected',
     });
-    res.json({ success: true, data: account });
+
+    await logActivity({
+      userId: req.userId,
+      companyId,
+      action: 'whatsapp_cloud_api_connected',
+      entityType: 'whatsapp_account',
+      entityId: accountId,
+    });
+
+    const { access_token: _, webhook_verify_token: __, ...safe } = account;
+    res.json({ success: true, data: safe });
   } catch (err) {
     res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'Güncellenemedi' });
   }
