@@ -10,6 +10,7 @@ import { Send, Search, Phone, Bot, User, CheckCircle2, Headphones, MessageSquare
 import { api } from '@/services/api';
 import { Button, Input, Spinner, Badge } from '@/components/ui';
 import { EmptyState } from '@/components/EmptyState';
+import { TransferTicketControl } from '@/components/TransferTicketControl';
 import { cn } from '@/lib/utils';
 import type { Conversation, Message, Ticket } from '@/types';
 
@@ -181,10 +182,25 @@ export function MessagesPage() {
                 )}
               </div>
               {hasActiveTicket && activeTicket && (
-                <div className="flex items-center gap-2 border-t border-amber-100 bg-amber-50/80 px-4 py-2.5 text-xs text-amber-900">
-                  <Headphones className="h-4 w-4 shrink-0 text-amber-600" />
-                  <span className="truncate font-medium">{activeTicket.subject}</span>
-                  <Badge variant="warning" className="ml-auto shrink-0">{t('messages.liveSupport')}</Badge>
+                <div className="border-t border-amber-100 bg-amber-50/80 px-4 py-3 space-y-3">
+                  <div className="flex items-center gap-2 text-xs text-amber-900">
+                    <Headphones className="h-4 w-4 shrink-0 text-amber-600" />
+                    <span className="truncate font-medium">{activeTicket.subject}</span>
+                    {activeTicket.department?.name && (
+                      <span className="hidden truncate text-amber-700/80 sm:inline">
+                        · {activeTicket.department.name}
+                      </span>
+                    )}
+                    <Badge variant="warning" className="ml-auto shrink-0">{t('messages.liveSupport')}</Badge>
+                  </div>
+                  <TransferTicketControl
+                    ticket={activeTicket}
+                    compact
+                    onSuccess={() => {
+                      queryClient.invalidateQueries({ queryKey: ['active-ticket', selectedPhone] });
+                      setSearchParams({ phone: selectedPhone! });
+                    }}
+                  />
                 </div>
               )}
             </div>

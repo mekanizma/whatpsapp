@@ -11,6 +11,7 @@ import { authQueryKey } from '@/lib/query-keys';
 import { useAuthStore } from '@/store/authStore';
 import { PageHeader } from '@/components/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
+import { TransferTicketControl } from '@/components/TransferTicketControl';
 import { Card, CardContent, Badge, Spinner, Button } from '@/components/ui';
 import type { Ticket as TicketType } from '@/types';
 
@@ -114,7 +115,11 @@ export function TicketsPage() {
                       </div>
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-2 sm:shrink-0" onClick={(e) => e.stopPropagation()}>
+                  <div className="flex w-full flex-col gap-3 sm:w-auto sm:shrink-0" onClick={(e) => e.stopPropagation()}>
+                    {(ticket.status === 'open' || ticket.status === 'in_progress') && (
+                      <TransferTicketControl ticket={ticket} compact />
+                    )}
+                    <div className="flex flex-wrap gap-2">
                     {ticket.status === 'open' && (
                       <Button size="sm" onClick={() => claimMutation.mutate(ticket)} disabled={claimMutation.isPending}>
                         <UserCheck className="h-4 w-4" />
@@ -149,6 +154,7 @@ export function TicketsPage() {
                         {t('tickets.goToChat')}
                       </Button>
                     )}
+                    </div>
                   </div>
                 </div>
               </CardContent>

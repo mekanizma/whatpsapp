@@ -139,6 +139,7 @@ router.get('/tickets/active/:phone', authenticate, requireCompany, ticketsCtrl.g
 router.post('/tickets', authenticate, requireCompany, ticketsCtrl.createTicket);
 router.put('/tickets/:id', authenticate, requireCompany, ticketsCtrl.updateTicket);
 router.patch('/tickets/:id/claim', authenticate, requireCompany, ticketsCtrl.claimTicket);
+router.patch('/tickets/:id/transfer', authenticate, requireCompany, ticketsCtrl.transferTicket);
 router.patch('/tickets/:id/assign', authenticate, requireRole('company_admin'), requireCompany, ticketsCtrl.assignTicket);
 
 // Notifications

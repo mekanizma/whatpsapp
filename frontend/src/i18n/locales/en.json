@@ -257,7 +257,12 @@
     "department": "Department: {{name}}",
     "claim": "Assign to Me",
     "goToChat": "Go to Chat",
-    "markResolved": "Resolved"
+    "markResolved": "Resolved",
+    "transfer": "Transfer",
+    "transferLabel": "Transfer to another department",
+    "transferSelect": "Select department",
+    "transferSuccess": "Ticket transferred to {{name}}",
+    "transferFailed": "Transfer failed"
   },
   "unknownQuestions": {
     "title": "Unknown Questions",

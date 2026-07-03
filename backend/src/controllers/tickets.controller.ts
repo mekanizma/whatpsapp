@@ -7,8 +7,8 @@ import { adminClient } from '../database/supabase';
 import { AuthRequest, isDemoSession } from '../middleware/auth.middleware';
 import { logActivity } from '../services/log.service';
 import { clearTransferState, normalizePhoneNumber } from '../whatsapp/message.handler';
-import { createTicketAndNotify } from '../services/ticket-notification.service';
-import { getStaffDepartmentId } from '../services/department-access.service';
+import { createTicketAndNotify, notifyTicketRecipients } from '../services/ticket-notification.service';
+import { getStaffDepartmentId, getStaffRecord, validateDepartmentBelongsToCompany } from '../services/department-access.service';
 
 async function getStaffIdForProfile(
   companyId: string,
@@ -22,6 +22,26 @@ async function getStaffIdForProfile(
     .eq('company_id', companyId)
     .single();
   return data?.id || null;
+}
+
+async function canUserTransferTicket(
+  req: AuthRequest,
+  ticket: { status: string; assigned_staff: string | null; department_id: string | null }
+): Promise<boolean> {
+  if (req.role === 'company_admin' || req.role === 'super_admin') return true;
+  if (req.role !== 'staff') return false;
+
+  const staff = await getStaffRecord(req.companyId!, req.profile?.id);
+  if (!staff) return false;
+
+  if (ticket.status === 'in_progress' && ticket.assigned_staff === staff.id) return true;
+
+  if (ticket.status === 'open') {
+    if (!staff.department_id) return true;
+    if (!ticket.department_id || ticket.department_id === staff.department_id) return true;
+  }
+
+  return false;
 }
 
 export async function getTickets(req: AuthRequest, res: Response): Promise<void> {
@@ -216,6 +236,96 @@ export async function assignTicket(req: AuthRequest, res: Response): Promise<voi
     res.status(400).json({ success: false, error: error.message });
     return;
   }
+
+  res.json({ success: true, data });
+}
+
+/** Aktif talebi başka departmana transfer et — atama sıfırlanır, yeni departman bildirilir */
+export async function transferTicket(req: AuthRequest, res: Response): Promise<void> {
+  const ticketId = req.params.id as string;
+  const companyId = req.companyId!;
+  const { department_id: targetDepartmentId } = req.body;
+
+  if (!targetDepartmentId || typeof targetDepartmentId !== 'string') {
+    res.status(400).json({ success: false, error: 'Hedef departman gerekli' });
+    return;
+  }
+
+  const departmentValid = await validateDepartmentBelongsToCompany(companyId, targetDepartmentId);
+  if (!departmentValid) {
+    res.status(400).json({ success: false, error: 'Geçersiz departman' });
+    return;
+  }
+
+  const { data: ticket, error: fetchError } = await adminClient
+    .from('tickets')
+    .select('id, status, assigned_staff, department_id, customer_phone, customer_name, subject, priority')
+    .eq('id', ticketId)
+    .eq('company_id', companyId)
+    .single();
+
+  if (fetchError || !ticket) {
+    res.status(404).json({ success: false, error: 'Talep bulunamadı' });
+    return;
+  }
+
+  if (!['open', 'in_progress'].includes(ticket.status)) {
+    res.status(400).json({
+      success: false,
+      error: 'Yalnızca açık veya işlemdeki talepler transfer edilebilir',
+    });
+    return;
+  }
+
+  if (ticket.department_id === targetDepartmentId) {
+    res.status(400).json({ success: false, error: 'Talep zaten bu departmanda' });
+    return;
+  }
+
+  const allowed = await canUserTransferTicket(req, ticket);
+  if (!allowed) {
+    res.status(403).json({ success: false, error: 'Bu talebi transfer etme yetkiniz yok' });
+    return;
+  }
+
+  const { data, error } = await adminClient
+    .from('tickets')
+    .update({
+      department_id: targetDepartmentId,
+      assigned_staff: null,
+      status: 'open',
+    })
+    .eq('id', ticketId)
+    .eq('company_id', companyId)
+    .select('*, staff:assigned_staff(name, email), department:department_id(id, name)')
+    .single();
+
+  if (error) {
+    res.status(400).json({ success: false, error: error.message });
+    return;
+  }
+
+  void notifyTicketRecipients(companyId, {
+    id: data.id,
+    customer_phone: data.customer_phone,
+    customer_name: data.customer_name,
+    subject: data.subject,
+    priority: data.priority,
+    department_id: targetDepartmentId,
+  });
+
+  await logActivity({
+    userId: req.userId,
+    companyId,
+    action: 'ticket_transferred',
+    entityType: 'ticket',
+    entityId: ticketId,
+    metadata: {
+      from_department_id: ticket.department_id,
+      to_department_id: targetDepartmentId,
+      customer_phone: ticket.customer_phone,
+    },
+  });
 
   res.json({ success: true, data });
 }

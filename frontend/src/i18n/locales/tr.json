@@ -257,7 +257,12 @@
     "department": "Departman: {{name}}",
     "claim": "Bana Ata",
     "goToChat": "Sohbete Git",
-    "markResolved": "Çözüldü"
+    "markResolved": "Çözüldü",
+    "transfer": "Transfer Et",
+    "transferLabel": "Başka departmana aktar",
+    "transferSelect": "Departman seçin",
+    "transferSuccess": "Talep {{name}} departmanına aktarıldı",
+    "transferFailed": "Transfer başarısız"
   },
   "unknownQuestions": {
     "title": "Bilinmeyen Sorular",
