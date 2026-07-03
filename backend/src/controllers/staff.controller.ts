@@ -7,6 +7,10 @@ import { adminClient } from '../database/supabase';
 import { AuthRequest, isDemoSession } from '../middleware/auth.middleware';
 import { logActivity } from '../services/log.service';
 import { createStaffUser, deleteStaffUser, formatServiceError, updateStaffMember } from '../services/staff.service';
+import {
+  companyHasActiveDepartments,
+  validateDepartmentBelongsToCompany,
+} from '../services/department-access.service';
 
 export async function getStaff(req: AuthRequest, res: Response): Promise<void> {
   res.set('Cache-Control', 'no-store');
@@ -18,7 +22,7 @@ export async function getStaff(req: AuthRequest, res: Response): Promise<void> {
 
   const { data, error } = await adminClient
     .from('staff')
-    .select('*')
+    .select('*, department:department_id(id, name)')
     .eq('company_id', req.companyId)
     .order('created_at', { ascending: false });
 
@@ -31,7 +35,7 @@ export async function getStaff(req: AuthRequest, res: Response): Promise<void> {
 }
 
 export async function createStaff(req: AuthRequest, res: Response): Promise<void> {
-  const { name, email, password, role, phone } = req.body;
+  const { name, email, password, role, phone, department_id } = req.body;
 
   if (!name?.trim() || !email?.trim() || !password) {
     res.status(400).json({ success: false, error: 'Ad, e-posta ve şifre zorunludur' });
@@ -44,13 +48,27 @@ export async function createStaff(req: AuthRequest, res: Response): Promise<void
   }
 
   try {
+    const hasDepartments = await companyHasActiveDepartments(req.companyId!);
+    if (hasDepartments && !department_id) {
+      res.status(400).json({ success: false, error: 'Departman seçimi zorunludur' });
+      return;
+    }
+    if (department_id) {
+      const valid = await validateDepartmentBelongsToCompany(req.companyId!, department_id);
+      if (!valid) {
+        res.status(400).json({ success: false, error: 'Geçersiz departman' });
+        return;
+      }
+    }
+
     const data = await createStaffUser(
       req.companyId!,
       email,
       password,
       name.trim(),
       role || 'agent',
-      phone
+      phone,
+      department_id || null
     );
 
     await logActivity({
@@ -69,7 +87,7 @@ export async function createStaff(req: AuthRequest, res: Response): Promise<void
 }
 
 export async function updateStaff(req: AuthRequest, res: Response): Promise<void> {
-  const { name, email, phone, role, is_active } = req.body;
+  const { name, email, phone, role, is_active, department_id } = req.body;
 
   if (isDemoSession(req)) {
     res.status(400).json({ success: false, error: 'Demo modda personel düzenlenemez' });
@@ -77,12 +95,21 @@ export async function updateStaff(req: AuthRequest, res: Response): Promise<void
   }
 
   try {
+    if (department_id) {
+      const valid = await validateDepartmentBelongsToCompany(req.companyId!, department_id);
+      if (!valid) {
+        res.status(400).json({ success: false, error: 'Geçersiz departman' });
+        return;
+      }
+    }
+
     const data = await updateStaffMember(String(req.params.id), req.companyId!, {
       name,
       email,
       phone,
       role,
       is_active,
+      department_id,
     });
 
     await logActivity({

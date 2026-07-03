@@ -27,6 +27,7 @@ export interface TicketNotificationPayload {
   customer_name: string | null;
   subject: string;
   priority?: string;
+  department_id?: string | null;
 }
 
 async function getProfileEmail(userId: string): Promise<string | null> {
@@ -132,59 +133,98 @@ export async function updateNotificationSettings(
   return getNotificationSettings(companyId);
 }
 
-function buildTicketNotificationMessage(ticket: TicketNotificationPayload): string {
+function buildTicketNotificationMessage(ticket: TicketNotificationPayload, departmentName?: string): string {
   const customerLabel = ticket.customer_name
     ? `${ticket.customer_name} (${ticket.customer_phone})`
     : ticket.customer_phone;
 
-  return [
+  const lines = [
     '🔔 Yeni destek talebi',
     '',
     `Müşteri: ${customerLabel}`,
     `Konu: ${ticket.subject}`,
-    '',
-    'Panele girip talebi inceleyebilirsiniz.',
-  ].join('\n');
+  ];
+  if (departmentName) {
+    lines.push(`Departman: ${departmentName}`);
+  }
+  lines.push('', 'Panele girip talebi inceleyebilirsiniz.');
+  return lines.join('\n');
 }
 
 export async function notifyTicketRecipients(
   companyId: string,
   ticket: TicketNotificationPayload
 ): Promise<void> {
-  const { data: recipients, error: recipientsError } = await adminClient
-    .from('ticket_notification_recipients')
-    .select('profile_id, profiles:profile_id(id, phone, full_name, is_active)')
-    .eq('company_id', companyId);
+  let departmentName: string | undefined;
+  const phonesToNotify = new Set<string>();
 
-  if (recipientsError) {
-    console.error('[TicketNotify] Alıcı listesi alınamadı:', recipientsError.message);
-    return;
+  if (ticket.department_id) {
+    const { data: dept } = await adminClient
+      .from('departments')
+      .select('name')
+      .eq('id', ticket.department_id)
+      .maybeSingle();
+    departmentName = dept?.name;
+
+    const { data: deptStaff, error: staffError } = await adminClient
+      .from('staff')
+      .select('profile_id, phone, profiles:profile_id(id, phone, full_name, is_active)')
+      .eq('company_id', companyId)
+      .eq('department_id', ticket.department_id)
+      .eq('is_active', true);
+
+    if (staffError) {
+      console.error('[TicketNotify] Departman personeli alınamadı:', staffError.message);
+    } else {
+      for (const member of deptStaff || []) {
+        const profile = member.profiles as
+          | { id: string; phone: string | null; full_name: string; is_active: boolean }
+          | { id: string; phone: string | null; full_name: string; is_active: boolean }[]
+          | null;
+        const profileData = Array.isArray(profile) ? profile[0] : profile;
+        const rawPhone = profileData?.phone?.trim() || member.phone?.trim();
+        if (!profileData?.is_active || !rawPhone) continue;
+        const phone = normalizePhoneNumber(rawPhone);
+        if (phone) phonesToNotify.add(phone);
+      }
+    }
   }
 
-  const message = buildTicketNotificationMessage(ticket);
+  if (!phonesToNotify.size) {
+    const { data: recipients, error: recipientsError } = await adminClient
+      .from('ticket_notification_recipients')
+      .select('profile_id, profiles:profile_id(id, phone, full_name, is_active)')
+      .eq('company_id', companyId);
+
+    if (recipientsError) {
+      console.error('[TicketNotify] Alıcı listesi alınamadı:', recipientsError.message);
+      return;
+    }
+
+    for (const row of recipients || []) {
+      const profile = row.profiles as
+        | { id: string; phone: string | null; full_name: string; is_active: boolean }
+        | { id: string; phone: string | null; full_name: string; is_active: boolean }[]
+        | null;
+      const profileData = Array.isArray(profile) ? profile[0] : profile;
+      if (!profileData?.is_active || !profileData.phone?.trim()) continue;
+      const phone = normalizePhoneNumber(profileData.phone.trim());
+      if (phone) phonesToNotify.add(phone);
+    }
+  }
+
+  const message = buildTicketNotificationMessage(ticket, departmentName);
   const sentPhones = new Set<string>();
 
-  for (const row of recipients || []) {
-    const profile = row.profiles as
-      | { id: string; phone: string | null; full_name: string; is_active: boolean }
-      | { id: string; phone: string | null; full_name: string; is_active: boolean }[]
-      | null;
-
-    const profileData = Array.isArray(profile) ? profile[0] : profile;
-    if (!profileData?.is_active || !profileData.phone?.trim()) continue;
-
-    const phone = normalizePhoneNumber(profileData.phone.trim());
-    if (!phone || sentPhones.has(phone)) continue;
-
+  for (const phone of phonesToNotify) {
+    if (sentPhones.has(phone)) continue;
     sentPhones.add(phone);
 
     const result = await sendMessageToCustomer(companyId, phone, message);
     if (result.success) {
-      console.log(`[TicketNotify] Bildirim gönderildi → ${profileData.full_name} (${phone})`);
+      console.log(`[TicketNotify] Bildirim gönderildi → ${phone}`);
     } else {
-      console.error(
-        `[TicketNotify] Bildirim gönderilemedi → ${profileData.full_name} (${phone}): ${result.error}`
-      );
+      console.error(`[TicketNotify] Bildirim gönderilemedi → ${phone}: ${result.error}`);
     }
   }
 }
@@ -197,6 +237,7 @@ export async function createTicketAndNotify(
     subject: string;
     priority?: string;
     status?: string;
+    department_id?: string | null;
   }
 ): Promise<{ created: boolean; ticket?: TicketNotificationPayload }> {
   const { data, error } = await adminClient
@@ -208,8 +249,9 @@ export async function createTicketAndNotify(
       subject: input.subject,
       priority: input.priority || 'medium',
       status: input.status || 'open',
+      department_id: input.department_id || null,
     })
-    .select('id, customer_phone, customer_name, subject, priority')
+    .select('id, customer_phone, customer_name, subject, priority, department_id')
     .single();
 
   if (error) {

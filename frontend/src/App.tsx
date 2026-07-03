@@ -89,7 +89,7 @@ function AppRoutes() {
         <Route path="activity/today" element={<PlanModuleRoute module="dashboard"><AdminOnlyRoute><TodayActivityPage /></AdminOnlyRoute></PlanModuleRoute>} />
         <Route path="ai-insights" element={<PlanModuleRoute module="dashboard"><AdminOnlyRoute><AiInsightsPage /></AdminOnlyRoute></PlanModuleRoute>} />
         <Route path="customers" element={<PlanModuleRoute module="customers"><AdminOnlyRoute><CustomersPage /></AdminOnlyRoute></PlanModuleRoute>} />
-        <Route path="knowledge" element={<PlanModuleRoute module="knowledge"><AdminOnlyRoute><KnowledgePage /></AdminOnlyRoute></PlanModuleRoute>} />
+        <Route path="knowledge" element={<PlanModuleRoute module="knowledge"><KnowledgePage /></PlanModuleRoute>} />
         <Route path="unknown-questions" element={<PlanModuleRoute module="unknown_questions"><AdminOnlyRoute><UnknownQuestionsPage /></AdminOnlyRoute></PlanModuleRoute>} />
         <Route path="tickets" element={<PlanModuleRoute module="tickets"><TicketsPage /></PlanModuleRoute>} />
         <Route path="calendar" element={<PlanModuleRoute module="calendar"><AdminOnlyRoute><CalendarPage /></AdminOnlyRoute></PlanModuleRoute>} />

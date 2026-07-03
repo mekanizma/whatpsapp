@@ -9,16 +9,17 @@ import { Plus, UserX, Eye, EyeOff, Pencil, Save } from 'lucide-react';
 import { api } from '@/services/api';
 import { getErrorMessage } from '@/lib/errors';
 import { Button, Input, Label, Card, CardContent, CardHeader, CardTitle, Spinner, Badge } from '@/components/ui';
-import type { StaffMember } from '@/types';
+import type { Department, StaffMember } from '@/types';
 
 type StaffForm = {
   name: string;
   email: string;
   phone: string;
   password: string;
+  department_id: string;
 };
 
-const emptyForm: StaffForm = { name: '', email: '', phone: '', password: '' };
+const emptyForm: StaffForm = { name: '', email: '', phone: '', password: '', department_id: '' };
 
 export function StaffPage() {
   const { t } = useTranslation();
@@ -26,10 +27,11 @@ export function StaffPage() {
   const [form, setForm] = useState<StaffForm>(emptyForm);
   const [showPassword, setShowPassword] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<Pick<StaffForm, 'name' | 'email' | 'phone'>>({
+  const [editForm, setEditForm] = useState<Pick<StaffForm, 'name' | 'email' | 'phone' | 'department_id'>>({
     name: '',
     email: '',
     phone: '',
+    department_id: '',
   });
   const queryClient = useQueryClient();
 
@@ -38,6 +40,13 @@ export function StaffPage() {
     queryFn: () => api.get<StaffMember[]>('/staff'),
   });
 
+  const { data: departments = [] } = useQuery({
+    queryKey: ['departments'],
+    queryFn: () => api.get<Department[]>('/departments'),
+  });
+
+  const requiresDepartment = departments.length > 0;
+
   const resetCreateForm = () => {
     setForm(emptyForm);
     setShowPassword(false);
@@ -45,7 +54,7 @@ export function StaffPage() {
   };
 
   const createMutation = useMutation({
-    mutationFn: (data: { name: string; email: string; password: string; phone?: string }) =>
+    mutationFn: (data: { name: string; email: string; password: string; phone?: string; department_id?: string }) =>
       api.post('/staff', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['staff'] });
@@ -55,7 +64,7 @@ export function StaffPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (payload: { id: string; data: { name: string; email: string; phone?: string | null } }) =>
+    mutationFn: (payload: { id: string; data: { name: string; email: string; phone?: string | null; department_id?: string } }) =>
       api.put<StaffMember>(`/staff/${payload.id}`, payload.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['staff'] });
@@ -72,8 +81,15 @@ export function StaffPage() {
     },
   });
 
-  const canSubmit = form.name.trim() && form.email.trim() && form.password.length >= 6;
-  const canSaveEdit = editForm.name.trim() && editForm.email.trim();
+  const canSubmit =
+    form.name.trim() &&
+    form.email.trim() &&
+    form.password.length >= 6 &&
+    (!requiresDepartment || form.department_id);
+  const canSaveEdit =
+    editForm.name.trim() &&
+    editForm.email.trim() &&
+    (!requiresDepartment || editForm.department_id);
 
   const handleCreate = () => {
     if (!canSubmit) return;
@@ -82,6 +98,7 @@ export function StaffPage() {
       email: form.email.trim(),
       password: form.password,
       phone: form.phone.trim() || undefined,
+      department_id: form.department_id || undefined,
     });
   };
 
@@ -91,6 +108,7 @@ export function StaffPage() {
       name: member.name,
       email: member.email,
       phone: member.phone || '',
+      department_id: member.department_id || member.department?.id || '',
     });
   };
 
@@ -102,6 +120,7 @@ export function StaffPage() {
         name: editForm.name.trim(),
         email: editForm.email.trim(),
         phone: editForm.phone.trim() || null,
+        department_id: editForm.department_id || undefined,
       },
     });
   };
@@ -176,6 +195,21 @@ export function StaffPage() {
                 </div>
                 <p className="text-xs text-slate-500">{t('staff.passwordHint')}</p>
               </div>
+              {requiresDepartment && (
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>{t('staff.department')}</Label>
+                  <select
+                    value={form.department_id}
+                    onChange={(e) => setForm((prev) => ({ ...prev, department_id: e.target.value }))}
+                    className="flex h-10 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary/40"
+                  >
+                    <option value="">{t('staff.selectDepartment')}</option>
+                    {departments.map((dept) => (
+                      <option key={dept.id} value={dept.id}>{dept.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
             <div className="flex flex-wrap gap-2">
               <Button onClick={handleCreate} disabled={!canSubmit || createMutation.isPending}>
@@ -224,6 +258,21 @@ export function StaffPage() {
                         placeholder={t('staff.phonePlaceholder')}
                       />
                     </div>
+                    {requiresDepartment && (
+                      <div className="space-y-2">
+                        <Label>{t('staff.department')}</Label>
+                        <select
+                          value={editForm.department_id}
+                          onChange={(e) => setEditForm((prev) => ({ ...prev, department_id: e.target.value }))}
+                          className="flex h-10 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary/40"
+                        >
+                          <option value="">{t('staff.selectDepartment')}</option>
+                          {departments.map((dept) => (
+                            <option key={dept.id} value={dept.id}>{dept.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                     {updateMutation.isError && (
                       <p className="text-sm text-rose-600">{getErrorMessage(updateMutation.error)}</p>
                     )}
@@ -247,6 +296,11 @@ export function StaffPage() {
                       <Badge variant="info" className="mt-1">
                         {t(`common.roles.${member.role}`, { defaultValue: member.role })}
                       </Badge>
+                      {member.department?.name && (
+                        <Badge variant="default" className="mt-1 ml-1">
+                          {member.department.name}
+                        </Badge>
+                      )}
                     </div>
                     <div className="flex shrink-0 gap-1">
                       <button

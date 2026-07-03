@@ -101,6 +101,9 @@ export function TicketsPage() {
                       {ticket.staff && (
                         <p className="text-xs text-slate-400">{t('tickets.assigned', { name: ticket.staff.name })}</p>
                       )}
+                      {ticket.department?.name && (
+                        <p className="text-xs text-slate-500">{t('tickets.department', { name: ticket.department.name })}</p>
+                      )}
                       <div className="flex items-center gap-1 text-xs text-slate-400">
                         <Clock className="h-3 w-3" />
                         {new Date(ticket.created_at).toLocaleString(locale)}

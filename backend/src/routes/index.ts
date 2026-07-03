@@ -99,7 +99,7 @@ router.get('/knowledge', authenticate, requireCompany, knowledgeCtrl.getKnowledg
 router.post(
   '/knowledge/parse-file',
   authenticate,
-  requireRole('company_admin'),
+  requireRole('company_admin', 'staff'),
   requireCompany,
   (req, res, next) => {
     knowledgeFileUpload.single('file')(req, res, (err) => {
@@ -109,13 +109,13 @@ router.post(
   },
   knowledgeCtrl.parseKnowledgeFile
 );
-router.post('/knowledge', authenticate, requireRole('company_admin'), requireCompany, knowledgeCtrl.createKnowledgeItem);
-router.put('/knowledge/:id', authenticate, requireRole('company_admin'), requireCompany, knowledgeCtrl.updateKnowledgeItem);
-router.delete('/knowledge/:id', authenticate, requireRole('company_admin'), requireCompany, knowledgeCtrl.deleteKnowledgeItem);
+router.post('/knowledge', authenticate, requireRole('company_admin', 'staff'), requireCompany, knowledgeCtrl.createKnowledgeItem);
+router.put('/knowledge/:id', authenticate, requireRole('company_admin', 'staff'), requireCompany, knowledgeCtrl.updateKnowledgeItem);
+router.delete('/knowledge/:id', authenticate, requireRole('company_admin', 'staff'), requireCompany, knowledgeCtrl.deleteKnowledgeItem);
 router.get('/knowledge/:id/index-status', authenticate, requireCompany, knowledgeCtrl.getKnowledgeIndexStatus);
-router.get('/knowledge/:id/chunks', authenticate, requireRole('company_admin'), requireCompany, knowledgeCtrl.getKnowledgeChunks);
-router.post('/knowledge/:id/reindex', authenticate, requireRole('company_admin'), requireCompany, knowledgeCtrl.reindexKnowledgeItem);
-router.post('/knowledge/:id/index-now', authenticate, requireRole('company_admin'), requireCompany, knowledgeCtrl.indexKnowledgeNow);
+router.get('/knowledge/:id/chunks', authenticate, requireRole('company_admin', 'staff'), requireCompany, knowledgeCtrl.getKnowledgeChunks);
+router.post('/knowledge/:id/reindex', authenticate, requireRole('company_admin', 'staff'), requireCompany, knowledgeCtrl.reindexKnowledgeItem);
+router.post('/knowledge/:id/index-now', authenticate, requireRole('company_admin', 'staff'), requireCompany, knowledgeCtrl.indexKnowledgeNow);
 
 // Messages
 router.get('/messages', authenticate, requireCompany, messagesCtrl.getConversations);

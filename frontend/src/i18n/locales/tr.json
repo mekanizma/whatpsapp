@@ -252,6 +252,7 @@
     "empty": "Açık destek talebi yok",
     "emptyDesc": "Müşteriler insan temsilcisi istediğinde talepler burada listelenir",
     "assigned": "Atanan: {{name}}",
+    "department": "Departman: {{name}}",
     "claim": "Bana Ata",
     "goToChat": "Sohbete Git",
     "markResolved": "Çözüldü"
@@ -336,7 +337,9 @@
     "edit": "Düzenle",
     "editStaff": "Personeli Düzenle",
     "saved": "Personel bilgileri güncellendi.",
-    "save": "Kaydet"
+    "save": "Kaydet",
+    "department": "Departman",
+    "selectDepartment": "Departman seçin"
   },
   "knowledge": {
     "title": "Bilgi Bankası",
@@ -355,6 +358,8 @@
     "titlePlaceholder": "Fiyat Bilgileri",
     "category": "Kategori",
     "categoryPlaceholder": "Fiyatlar",
+    "department": "Departman",
+    "selectDepartment": "Departman seçin",
     "content": "İçerik",
     "contentPlaceholder": "Metin yazın veya yukarıdan dosya yükleyin...",
     "contentHint": "Kaydettikten sonra içerik otomatik olarak parçalara bölünür ve vektör indeksine eklenir. Markdown dosyalarında ## başlıkları chunk sınırı olarak kullanılır.",
@@ -395,7 +400,7 @@
     "planLimitHint": "Paketiniz en fazla {{limit}} WhatsApp hattına izin veriyor",
     "unlimited": "Sınırsız",
     "departments": "Departmanlar",
-    "departmentsDesc": "WhatsApp hatlarını departmanlarla ilişkilendirin",
+    "departmentsDesc": "Departmanları oluşturun; personel, bilgi bankası ve destek talepleriyle ilişkilendirin",
     "addDepartment": "Departman Ekle",
     "deptNamePlaceholder": "Departman adı (ör. Satış, Destek)",
     "noDepartments": "Henüz departman eklenmemiş",

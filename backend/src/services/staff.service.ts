@@ -179,7 +179,8 @@ export async function createStaffUser(
   password: string,
   fullName: string,
   staffRole = 'agent',
-  phone?: string | null
+  phone?: string | null,
+  departmentId?: string | null
 ) {
   if (!password || password.length < 6) {
     throw new Error('Şifre en az 6 karakter olmalıdır');
@@ -242,6 +243,7 @@ export async function createStaffUser(
           phone: normalizedPhone,
           role: staffRole,
           is_active: true,
+          ...(departmentId !== undefined ? { department_id: departmentId } : {}),
         })
         .eq('id', existingStaff.id)
         .eq('company_id', companyId)
@@ -261,6 +263,7 @@ export async function createStaffUser(
         email: normalizedEmail,
         phone: normalizedPhone,
         role: staffRole,
+        department_id: departmentId || null,
       })
       .select()
       .single();
@@ -284,6 +287,7 @@ export async function updateStaffMember(
     phone?: string | null;
     role?: string;
     is_active?: boolean;
+    department_id?: string | null;
   }
 ) {
   const { data: existing, error: fetchError } = await adminClient
@@ -301,6 +305,7 @@ export async function updateStaffMember(
   if (input.phone !== undefined) updates.phone = normalizeStaffPhone(input.phone);
   if (input.role !== undefined) updates.role = input.role;
   if (input.is_active !== undefined) updates.is_active = input.is_active;
+  if (input.department_id !== undefined) updates.department_id = input.department_id;
 
   if (Object.keys(updates).length === 0) {
     const { data, error } = await adminClient

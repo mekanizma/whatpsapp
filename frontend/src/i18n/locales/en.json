@@ -252,6 +252,7 @@
     "empty": "No open support tickets",
     "emptyDesc": "Tickets appear here when customers request a human agent",
     "assigned": "Assigned: {{name}}",
+    "department": "Department: {{name}}",
     "claim": "Assign to Me",
     "goToChat": "Go to Chat",
     "markResolved": "Resolved"
@@ -336,7 +337,9 @@
     "edit": "Edit",
     "editStaff": "Edit Staff Member",
     "saved": "Staff member updated.",
-    "save": "Save"
+    "save": "Save",
+    "department": "Department",
+    "selectDepartment": "Select department"
   },
   "knowledge": {
     "title": "Knowledge Base",
@@ -355,6 +358,8 @@
     "titlePlaceholder": "Pricing Information",
     "category": "Category",
     "categoryPlaceholder": "Pricing",
+    "department": "Department",
+    "selectDepartment": "Select department",
     "content": "Content",
     "contentPlaceholder": "Type text or upload a file above...",
     "contentHint": "After saving, content is automatically chunked and added to the vector index. In Markdown files, ## headings define chunk boundaries.",
@@ -395,7 +400,7 @@
     "planLimitHint": "Your plan allows up to {{limit}} WhatsApp lines",
     "unlimited": "Unlimited",
     "departments": "Departments",
-    "departmentsDesc": "Associate WhatsApp lines with departments",
+    "departmentsDesc": "Create departments and link them to staff, knowledge base, and support tickets",
     "addDepartment": "Add Department",
     "deptNamePlaceholder": "Department name (e.g. Sales, Support)",
     "noDepartments": "No departments added yet",

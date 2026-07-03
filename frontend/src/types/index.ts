@@ -191,6 +191,8 @@ export interface KnowledgeItem {
   title: string;
   content: string;
   category: string | null;
+  department_id?: string | null;
+  department?: { id: string; name: string } | null;
   is_active: boolean;
   index_status?: 'pending' | 'indexing' | 'ready' | 'failed';
   chunk_count?: number;
@@ -237,8 +239,17 @@ export interface Ticket {
   priority: string;
   status: string;
   assigned_staff: string | null;
+  department_id?: string | null;
+  department?: { id: string; name: string } | null;
   staff?: { name: string; email: string };
   created_at: string;
+}
+
+export interface Department {
+  id: string;
+  name: string;
+  description?: string | null;
+  is_active?: boolean;
 }
 
 export type AppointmentStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
@@ -266,6 +277,8 @@ export interface StaffMember {
   email: string;
   phone: string | null;
   role: string;
+  department_id?: string | null;
+  department?: { id: string; name: string } | null;
   is_active: boolean;
 }
 

@@ -14,9 +14,69 @@ import {
 } from '../services/knowledge-index.service';
 import { getKnowledgeChunkPreviews } from '../services/knowledge-retrieval.service';
 import { clearCompanyCache } from '../ai/ai-cache.service';
+import {
+  companyHasActiveDepartments,
+  getStaffDepartmentId,
+  validateDepartmentBelongsToCompany,
+} from '../services/department-access.service';
 
 function paramId(value: string | string[]): string {
   return Array.isArray(value) ? value[0] : value;
+}
+
+async function resolveKnowledgeDepartmentId(
+  req: AuthRequest,
+  requestedDepartmentId?: string | null
+): Promise<{ departmentId: string | null; error?: string }> {
+  const hasDepartments = await companyHasActiveDepartments(req.companyId!);
+
+  if (req.role === 'staff') {
+    const staffDeptId = await getStaffDepartmentId(req.companyId!, req.profile?.id);
+    if (!staffDeptId) {
+      return { departmentId: null, error: 'Personel departmanı tanımlı değil' };
+    }
+    return { departmentId: staffDeptId };
+  }
+
+  if (hasDepartments && !requestedDepartmentId) {
+    return { departmentId: null, error: 'Departman seçimi zorunludur' };
+  }
+
+  if (requestedDepartmentId) {
+    const valid = await validateDepartmentBelongsToCompany(req.companyId!, requestedDepartmentId);
+    if (!valid) {
+      return { departmentId: null, error: 'Geçersiz departman' };
+    }
+    return { departmentId: requestedDepartmentId };
+  }
+
+  return { departmentId: null };
+}
+
+async function assertStaffCanAccessKnowledge(
+  req: AuthRequest,
+  knowledgeId: string
+): Promise<{ ok: boolean; error?: string }> {
+  if (req.role !== 'staff') return { ok: true };
+
+  const staffDeptId = await getStaffDepartmentId(req.companyId!, req.profile?.id);
+  if (!staffDeptId) {
+    return { ok: false, error: 'Personel departmanı tanımlı değil' };
+  }
+
+  const { data } = await adminClient
+    .from('knowledge_base')
+    .select('department_id')
+    .eq('id', knowledgeId)
+    .eq('company_id', req.companyId)
+    .maybeSingle();
+
+  if (!data) return { ok: false, error: 'Kayıt bulunamadı' };
+  if (data.department_id && data.department_id !== staffDeptId) {
+    return { ok: false, error: 'Bu kayıt için yetkiniz yok' };
+  }
+
+  return { ok: true };
 }
 
 export async function getKnowledgeItems(req: AuthRequest, res: Response): Promise<void> {
@@ -25,11 +85,22 @@ export async function getKnowledgeItems(req: AuthRequest, res: Response): Promis
     return;
   }
 
-  const { data, error } = await adminClient
+  let query = adminClient
     .from('knowledge_base')
-    .select('*')
+    .select('*, department:department_id(id, name)')
     .eq('company_id', req.companyId)
     .order('created_at', { ascending: false });
+
+  if (req.role === 'staff') {
+    const staffDeptId = await getStaffDepartmentId(req.companyId!, req.profile?.id);
+    if (!staffDeptId) {
+      res.json({ success: true, data: [] });
+      return;
+    }
+    query = query.eq('department_id', staffDeptId);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     res.status(400).json({ success: false, error: error.message });
@@ -40,8 +111,14 @@ export async function getKnowledgeItems(req: AuthRequest, res: Response): Promis
 }
 
 export async function createKnowledgeItem(req: AuthRequest, res: Response): Promise<void> {
-  const { title, content, category, source_filename } = req.body;
+  const { title, content, category, source_filename, department_id } = req.body;
   const charCount = typeof content === 'string' ? content.length : 0;
+
+  const dept = await resolveKnowledgeDepartmentId(req, department_id);
+  if (dept.error) {
+    res.status(400).json({ success: false, error: dept.error });
+    return;
+  }
 
   const { data, error } = await adminClient
     .from('knowledge_base')
@@ -50,6 +127,7 @@ export async function createKnowledgeItem(req: AuthRequest, res: Response): Prom
       title,
       content,
       category,
+      department_id: dept.departmentId,
       source_filename: source_filename || null,
       char_count: charCount,
       index_status: 'pending',
@@ -73,7 +151,7 @@ export async function createKnowledgeItem(req: AuthRequest, res: Response): Prom
     action: 'knowledge_created',
     entityType: 'knowledge_base',
     entityId: data.id,
-    metadata: { char_count: charCount },
+    metadata: { char_count: charCount, department_id: dept.departmentId },
   });
 
   res.status(201).json({ success: true, data });
@@ -81,21 +159,40 @@ export async function createKnowledgeItem(req: AuthRequest, res: Response): Prom
 
 export async function updateKnowledgeItem(req: AuthRequest, res: Response): Promise<void> {
   const id = paramId(req.params.id);
-  const { title, content, category, is_active, source_filename } = req.body;
+  const { title, content, category, is_active, source_filename, department_id } = req.body;
+
+  const access = await assertStaffCanAccessKnowledge(req, id);
+  if (!access.ok) {
+    res.status(403).json({ success: false, error: access.error });
+    return;
+  }
+
   const charCount = typeof content === 'string' ? content.length : undefined;
+  const updates: Record<string, unknown> = {
+    title,
+    content,
+    category,
+    is_active,
+    index_status: 'pending',
+    index_error: null,
+    ...(source_filename !== undefined ? { source_filename } : {}),
+    ...(charCount !== undefined ? { char_count: charCount } : {}),
+  };
+
+  if (req.role === 'company_admin' && department_id !== undefined) {
+    if (department_id) {
+      const valid = await validateDepartmentBelongsToCompany(req.companyId!, department_id);
+      if (!valid) {
+        res.status(400).json({ success: false, error: 'Geçersiz departman' });
+        return;
+      }
+    }
+    updates.department_id = department_id || null;
+  }
 
   const { data, error } = await adminClient
     .from('knowledge_base')
-    .update({
-      title,
-      content,
-      category,
-      is_active,
-      ...(source_filename !== undefined ? { source_filename } : {}),
-      ...(charCount !== undefined ? { char_count: charCount } : {}),
-      index_status: 'pending',
-      index_error: null,
-    })
+    .update(updates)
     .eq('id', id)
     .eq('company_id', req.companyId)
     .select()
@@ -114,6 +211,13 @@ export async function updateKnowledgeItem(req: AuthRequest, res: Response): Prom
 
 export async function deleteKnowledgeItem(req: AuthRequest, res: Response): Promise<void> {
   const id = paramId(req.params.id);
+
+  const access = await assertStaffCanAccessKnowledge(req, id);
+  if (!access.ok) {
+    res.status(403).json({ success: false, error: access.error });
+    return;
+  }
+
   const { error } = await adminClient
     .from('knowledge_base')
     .delete()
@@ -164,6 +268,12 @@ export async function parseKnowledgeFile(req: AuthRequest, res: Response): Promi
 export async function reindexKnowledgeItem(req: AuthRequest, res: Response): Promise<void> {
   const id = paramId(req.params.id);
 
+  const access = await assertStaffCanAccessKnowledge(req, id);
+  if (!access.ok) {
+    res.status(403).json({ success: false, error: access.error });
+    return;
+  }
+
   const { data: kb, error } = await adminClient
     .from('knowledge_base')
     .select('id')
@@ -182,6 +292,12 @@ export async function reindexKnowledgeItem(req: AuthRequest, res: Response): Pro
 
 export async function getKnowledgeIndexStatus(req: AuthRequest, res: Response): Promise<void> {
   const id = paramId(req.params.id);
+
+  const access = await assertStaffCanAccessKnowledge(req, id);
+  if (!access.ok) {
+    res.status(403).json({ success: false, error: access.error });
+    return;
+  }
 
   const { data, error } = await adminClient
     .from('knowledge_base')
@@ -202,6 +318,12 @@ export async function getKnowledgeChunks(req: AuthRequest, res: Response): Promi
   const id = paramId(req.params.id);
   const limit = Math.min(parseInt(String(req.query.limit || '5'), 10) || 5, 20);
 
+  const access = await assertStaffCanAccessKnowledge(req, id);
+  if (!access.ok) {
+    res.status(403).json({ success: false, error: access.error });
+    return;
+  }
+
   const { data: kb } = await adminClient
     .from('knowledge_base')
     .select('id')
@@ -221,6 +343,12 @@ export async function getKnowledgeChunks(req: AuthRequest, res: Response): Promi
 /** Immediate indexing (admin debug / manual trigger) */
 export async function indexKnowledgeNow(req: AuthRequest, res: Response): Promise<void> {
   const id = paramId(req.params.id);
+
+  const access = await assertStaffCanAccessKnowledge(req, id);
+  if (!access.ok) {
+    res.status(403).json({ success: false, error: access.error });
+    return;
+  }
 
   const { data: kb } = await adminClient
     .from('knowledge_base')

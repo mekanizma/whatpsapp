@@ -8,6 +8,7 @@ import { AuthRequest, isDemoSession } from '../middleware/auth.middleware';
 import { logActivity } from '../services/log.service';
 import { clearTransferState, normalizePhoneNumber } from '../whatsapp/message.handler';
 import { createTicketAndNotify } from '../services/ticket-notification.service';
+import { getStaffDepartmentId } from '../services/department-access.service';
 
 async function getStaffIdForProfile(
   companyId: string,
@@ -32,15 +33,24 @@ export async function getTickets(req: AuthRequest, res: Response): Promise<void>
   const status = req.query.status as string;
   let query = adminClient
     .from('tickets')
-    .select('*, staff:assigned_staff(name, email)')
+    .select('*, staff:assigned_staff(name, email), department:department_id(id, name)')
     .eq('company_id', req.companyId)
     .order('created_at', { ascending: false });
 
   if (status) query = query.eq('status', status);
 
   if (req.role === 'staff') {
+    const staffDeptId = await getStaffDepartmentId(req.companyId!, req.profile?.id);
     const staffId = await getStaffIdForProfile(req.companyId!, req.profile?.id);
-    if (staffId) {
+
+    if (staffDeptId) {
+      query = query.eq('department_id', staffDeptId);
+      if (staffId) {
+        query = query.or(`status.eq.open,and(assigned_staff.eq.${staffId},status.eq.in_progress)`);
+      } else {
+        query = query.eq('status', 'open');
+      }
+    } else if (staffId) {
       query = query.or(`status.eq.open,and(assigned_staff.eq.${staffId},status.eq.in_progress)`);
     } else {
       query = query.eq('status', 'open');
@@ -63,7 +73,7 @@ export async function getActiveTicketByPhone(req: AuthRequest, res: Response): P
 
   const { data, error } = await adminClient
     .from('tickets')
-    .select('*, staff:assigned_staff(name, email)')
+    .select('*, staff:assigned_staff(name, email), department:department_id(id, name)')
     .eq('company_id', req.companyId)
     .eq('customer_phone', phone)
     .in('status', ['open', 'in_progress'])
@@ -80,7 +90,7 @@ export async function getActiveTicketByPhone(req: AuthRequest, res: Response): P
 }
 
 export async function createTicket(req: AuthRequest, res: Response): Promise<void> {
-  const { customer_phone, customer_name, subject, priority } = req.body;
+  const { customer_phone, customer_name, subject, priority, department_id } = req.body;
 
   try {
     const { created, ticket } = await createTicketAndNotify(req.companyId!, {
@@ -88,6 +98,7 @@ export async function createTicket(req: AuthRequest, res: Response): Promise<voi
       customer_name,
       subject,
       priority: priority || 'medium',
+      department_id: department_id || null,
     });
 
     if (!created) {
@@ -153,8 +164,9 @@ export async function updateTicket(req: AuthRequest, res: Response): Promise<voi
 /** Ticket'ı mevcut kullanıcıya ata ve işleme al */
 export async function claimTicket(req: AuthRequest, res: Response): Promise<void> {
   const staffId = await getStaffIdForProfile(req.companyId!, req.profile?.id);
+  const staffDeptId = await getStaffDepartmentId(req.companyId!, req.profile?.id);
 
-  const { data, error } = await adminClient
+  let claimQuery = adminClient
     .from('tickets')
     .update({
       status: 'in_progress',
@@ -162,8 +174,14 @@ export async function claimTicket(req: AuthRequest, res: Response): Promise<void
     })
     .eq('id', req.params.id)
     .eq('company_id', req.companyId)
-    .in('status', ['open', 'in_progress'])
-    .select('*, staff:assigned_staff(name, email)')
+    .in('status', ['open', 'in_progress']);
+
+  if (req.role === 'staff' && staffDeptId) {
+    claimQuery = claimQuery.eq('department_id', staffDeptId);
+  }
+
+  const { data, error } = await claimQuery
+    .select('*, staff:assigned_staff(name, email), department:department_id(id, name)')
     .single();
 
   if (error) {

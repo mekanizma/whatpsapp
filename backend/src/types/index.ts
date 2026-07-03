@@ -84,6 +84,7 @@ export interface KnowledgeItem {
   title: string;
   content: string;
   category: string | null;
+  department_id?: string | null;
   is_active: boolean;
   index_status?: KnowledgeIndexStatus;
   chunk_count?: number;
@@ -129,6 +130,7 @@ export interface Ticket {
   subject: string;
   priority: TicketPriority;
   assigned_staff: string | null;
+  department_id?: string | null;
   status: TicketStatus;
   created_at: string;
   updated_at: string;
@@ -159,6 +161,7 @@ export interface StaffMember {
   email: string;
   phone: string | null;
   role: string;
+  department_id?: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;

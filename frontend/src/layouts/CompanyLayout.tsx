@@ -41,7 +41,7 @@ const allNav: { to: string; icon: typeof LayoutDashboard; labelKey: string; role
 
   { to: '/panel/customers', icon: UserRound, labelKey: 'layout.nav.customers', roles: ['company_admin'], module: 'customers' },
 
-  { to: '/panel/knowledge', icon: BookOpen, labelKey: 'layout.nav.knowledge', roles: ['company_admin'], module: 'knowledge' },
+  { to: '/panel/knowledge', icon: BookOpen, labelKey: 'layout.nav.knowledge', roles: ['company_admin', 'staff'], module: 'knowledge' },
 
   { to: '/panel/unknown-questions', icon: HelpCircle, labelKey: 'layout.nav.unknownQuestions', roles: ['company_admin'], module: 'unknown_questions' },
 

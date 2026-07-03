@@ -11,6 +11,16 @@ import { logActivity } from '../services/log.service';
 import { createTicketAndNotify } from '../services/ticket-notification.service';
 import { recordUnknownQuestion } from '../services/unknown-questions.service';
 import { shouldIncrementConversationUsage } from '../services/conversation-count.service';
+import { getDepartmentsForWhatsAppAccount } from '../services/department-access.service';
+import {
+  resolveTransferDepartment,
+  getPendingDepartmentSelection,
+  setPendingDepartmentSelection,
+  clearPendingDepartmentSelection,
+  matchDepartmentFromReply,
+  buildDepartmentSelectionPrompt,
+} from '../ai/department-routing.service';
+import { detectConversationLanguage } from '../ai/language.service';
 
 const DEBOUNCE_MS = 3000;
 const TRANSFER_REPLY_COOLDOWN_MS = 60_000;
@@ -99,7 +109,8 @@ async function ensureOpenTransferTicket(
   companyId: string,
   customerPhone: string,
   customerName: string | null,
-  subject: string
+  subject: string,
+  departmentId?: string | null
 ): Promise<void> {
   try {
     const { created } = await createTicketAndNotify(companyId, {
@@ -108,12 +119,66 @@ async function ensureOpenTransferTicket(
       subject,
       priority: 'medium',
       status: 'open',
+      department_id: departmentId || null,
     });
 
     if (!created) return;
   } catch (err) {
     console.error('Ticket oluşturma hatası:', err instanceof Error ? err.message : err);
   }
+}
+
+async function fetchRecentHistory(
+  companyId: string,
+  phone: string,
+  limit = 10
+): Promise<{ sender_type: string; message: string }[]> {
+  const { data } = await adminClient
+    .from('messages')
+    .select('sender_type, message')
+    .eq('company_id', companyId)
+    .eq('customer_phone', phone)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  return (data || []).reverse();
+}
+
+async function handleTransferWithDepartment(
+  companyId: string,
+  phone: string,
+  customerName: string | null,
+  messageText: string,
+  subject: string,
+  whatsappAccountId?: string | null
+): Promise<{ reply: string; ticketCreated: boolean }> {
+  const departments = await getDepartmentsForWhatsAppAccount(companyId, whatsappAccountId);
+
+  if (!departments.length) {
+    await ensureOpenTransferTicket(companyId, phone, customerName, subject);
+    return { reply: '', ticketCreated: true };
+  }
+
+  const history = await fetchRecentHistory(companyId, phone);
+  const routing = await resolveTransferDepartment(
+    companyId,
+    messageText,
+    history,
+    departments,
+    phone
+  );
+
+  if (routing.awaitingSelection && routing.promptMessage) {
+    setPendingDepartmentSelection(companyId, phone, {
+      departments,
+      subject,
+      customerName,
+    });
+    return { reply: routing.promptMessage, ticketCreated: false };
+  }
+
+  await ensureOpenTransferTicket(companyId, phone, customerName, subject, routing.departmentId);
+  return { reply: '', ticketCreated: true };
 }
 
 function shouldSkipTransferReply(companyId: string, phone: string): boolean {
@@ -129,6 +194,7 @@ export function clearTransferState(companyId: string, customerPhone: string): vo
   const phone = resolveCustomerPhone(customerPhone);
   recentTransferReplies.delete(`${companyId}:${phone}`);
   recentMessages.delete(`${companyId}:${phone}`);
+  clearPendingDepartmentSelection(companyId, phone);
 }
 
 export async function processInboundMessage(
@@ -200,6 +266,61 @@ export async function processInboundMessage(
       return '';
     }
 
+    const pendingDept = getPendingDepartmentSelection(companyId, phone);
+    if (pendingDept) {
+      const matched = matchDepartmentFromReply(trimmed, pendingDept.departments);
+      if (matched) {
+        clearPendingDepartmentSelection(companyId, phone);
+        await ensureOpenTransferTicket(
+          companyId,
+          phone,
+          customerName,
+          pendingDept.subject,
+          matched.id
+        );
+
+        await adminClient
+          .from('messages')
+          .update({ status: 'transferred' })
+          .eq('company_id', companyId)
+          .eq('customer_phone', phone)
+          .eq('status', 'open');
+
+        markTransferReply(companyId, phone);
+
+        const lang = detectConversationLanguage(trimmed);
+        const confirmMsg =
+          lang === 'en'
+            ? `Your request has been forwarded to the ${matched.name} team. A representative will assist you shortly.`
+            : `Talebiniz ${matched.name} ekibine iletildi. Bir temsilcimiz kısa süre içinde size yardımcı olacak.`;
+
+        await adminClient.from('messages').insert({
+          company_id: companyId,
+          customer_phone: phone,
+          customer_name: customerName,
+          message: confirmMsg,
+          sender_type: 'ai',
+          status: 'transferred',
+        });
+
+        return confirmMsg;
+      }
+
+      const retryPrompt = buildDepartmentSelectionPrompt(
+        pendingDept.departments,
+        detectConversationLanguage(trimmed)
+      );
+      await adminClient.from('messages').insert({
+        company_id: companyId,
+        customer_phone: phone,
+        customer_name: customerName,
+        message: retryPrompt,
+        sender_type: 'ai',
+        status: 'open',
+      });
+      return retryPrompt;
+    }
+
     let aiResponse;
     try {
       aiResponse = await generateAIResponse(companyId, trimmed, phone, customerName);
@@ -212,7 +333,7 @@ export async function processInboundMessage(
     let replyMessage = aiResponse.message;
     if (!replyMessage) return '';
 
-    const messageStatus = aiResponse.shouldTransfer ? 'transferred' : 'open';
+    let messageStatus: 'open' | 'transferred' = 'open';
 
     if (aiResponse.shouldTransfer) {
       const hasTicket = await hasActiveTransferTicket(companyId, phone);
@@ -220,34 +341,44 @@ export async function processInboundMessage(
         return '';
       }
 
-      await ensureOpenTransferTicket(
+      const transferResult = await handleTransferWithDepartment(
         companyId,
         phone,
         customerName,
-        buildTransferTicketSubject(trimmed, aiResponse.skipReason)
+        trimmed,
+        buildTransferTicketSubject(trimmed, aiResponse.skipReason),
+        whatsappAccountId
       );
 
-      await adminClient
-        .from('messages')
-        .update({ status: 'transferred' })
-        .eq('company_id', companyId)
-        .eq('customer_phone', phone)
-        .eq('status', 'open');
+      if (transferResult.reply) {
+        replyMessage = transferResult.reply;
+      }
 
-      markTransferReply(companyId, phone);
+      if (transferResult.ticketCreated) {
+        messageStatus = 'transferred';
 
-      await logActivity({
-        companyId,
-        action: 'conversation_transferred',
-        entityType: 'ticket',
-        metadata: {
-          customer_phone: phone,
-          skip_reason: aiResponse.skipReason,
-          skipped_ai: aiResponse.skippedAI,
-        },
-      });
+        await adminClient
+          .from('messages')
+          .update({ status: 'transferred' })
+          .eq('company_id', companyId)
+          .eq('customer_phone', phone)
+          .eq('status', 'open');
 
-      console.log(`[WhatsApp] Temsilciye aktarıldı → ${phone}`);
+        markTransferReply(companyId, phone);
+
+        await logActivity({
+          companyId,
+          action: 'conversation_transferred',
+          entityType: 'ticket',
+          metadata: {
+            customer_phone: phone,
+            skip_reason: aiResponse.skipReason,
+            skipped_ai: aiResponse.skippedAI,
+          },
+        });
+
+        console.log(`[WhatsApp] Temsilciye aktarıldı → ${phone}`);
+      }
     }
 
     await adminClient.from('messages').insert({

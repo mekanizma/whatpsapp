@@ -27,7 +27,8 @@ import {
   Badge,
 } from '@/components/ui';
 import { cn } from '@/lib/utils';
-import type { KnowledgeItem, ParsedKnowledgeFile } from '@/types';
+import { useAuthStore } from '@/store/authStore';
+import type { Department, KnowledgeItem, ParsedKnowledgeFile } from '@/types';
 
 type ContentView = 'edit' | 'preview';
 
@@ -47,12 +48,15 @@ function indexStatusVariant(status?: KnowledgeItem['index_status']) {
 
 export function KnowledgePage() {
   const { t, i18n } = useTranslation();
+  const user = useAuthStore((s) => s.user);
+  const isAdmin = user?.role === 'company_admin';
   const locale = i18n.language?.startsWith('en') ? 'en-US' : 'tr-TR';
   const [showForm, setShowForm] = useState(false);
   const [editItem, setEditItem] = useState<KnowledgeItem | null>(null);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [category, setCategory] = useState('');
+  const [departmentId, setDepartmentId] = useState('');
   const [uploadInfo, setUploadInfo] = useState<ParsedKnowledgeFile | null>(null);
   const [uploadError, setUploadError] = useState('');
   const [contentView, setContentView] = useState<ContentView>('edit');
@@ -71,12 +75,21 @@ export function KnowledgePage() {
     },
   });
 
+  const { data: departments = [] } = useQuery({
+    queryKey: ['departments'],
+    queryFn: () => api.get<Department[]>('/departments'),
+    enabled: isAdmin,
+  });
+
+  const requiresDepartment = departments.length > 0;
+
   const saveMutation = useMutation({
     mutationFn: (data: {
       title: string;
       content: string;
       category: string;
       source_filename?: string;
+      department_id?: string;
     }) =>
       editItem
         ? api.put(`/knowledge/${editItem.id}`, data)
@@ -120,6 +133,7 @@ export function KnowledgePage() {
     setTitle('');
     setContent('');
     setCategory('');
+    setDepartmentId('');
     setUploadInfo(null);
     setUploadError('');
     setContentView('edit');
@@ -131,6 +145,7 @@ export function KnowledgePage() {
     setTitle(item.title);
     setContent(item.content);
     setCategory(item.category || '');
+    setDepartmentId(item.department_id || item.department?.id || '');
     setUploadInfo(null);
     setUploadError('');
     setContentView('edit');
@@ -261,6 +276,21 @@ export function KnowledgePage() {
                 <Label>{t('knowledge.category')}</Label>
                 <Input value={category} onChange={(e) => setCategory(e.target.value)} placeholder={t('knowledge.categoryPlaceholder')} />
               </div>
+              {isAdmin && requiresDepartment && (
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>{t('knowledge.department')}</Label>
+                  <select
+                    value={departmentId}
+                    onChange={(e) => setDepartmentId(e.target.value)}
+                    className="flex h-10 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary/40"
+                  >
+                    <option value="">{t('knowledge.selectDepartment')}</option>
+                    {departments.map((dept) => (
+                      <option key={dept.id} value={dept.id}>{dept.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -316,9 +346,15 @@ export function KnowledgePage() {
                     content,
                     category,
                     source_filename: uploadInfo?.source_filename,
+                    ...(isAdmin && departmentId ? { department_id: departmentId } : {}),
                   })
                 }
-                disabled={saveMutation.isPending || !title.trim() || !content.trim()}
+                disabled={
+                  saveMutation.isPending ||
+                  !title.trim() ||
+                  !content.trim() ||
+                  (isAdmin && requiresDepartment && !departmentId)
+                }
                 className="w-full sm:w-auto"
               >
                 {saveMutation.isPending ? <Spinner /> : t('common.save')}
@@ -357,6 +393,7 @@ export function KnowledgePage() {
                 </div>
                 <div className="mb-2 flex flex-wrap gap-1.5">
                   {item.category && <Badge variant="info">{item.category}</Badge>}
+                  {item.department?.name && <Badge variant="default">{item.department.name}</Badge>}
                   {item.index_status && (
                     <Badge variant={indexStatusVariant(item.index_status)}>
                       {t(`knowledge.indexStatus.${item.index_status}`)}
