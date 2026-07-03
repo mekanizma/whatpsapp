@@ -28,6 +28,7 @@ import {
 } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/authStore';
+import { authQueryKey } from '@/lib/query-keys';
 import type { Department, KnowledgeItem, ParsedKnowledgeFile } from '@/types';
 
 type ContentView = 'edit' | 'preview';
@@ -63,9 +64,10 @@ export function KnowledgePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
-  const { data: items, isLoading } = useQuery({
-    queryKey: ['knowledge'],
+  const { data: items, isPending } = useQuery({
+    queryKey: authQueryKey(['knowledge'], user?.id, user?.role),
     queryFn: () => api.get<KnowledgeItem[]>('/knowledge'),
+    enabled: !!user?.id,
     refetchInterval: (query) => {
       const list = query.state.data;
       const hasPending = list?.some((item) =>
@@ -76,9 +78,9 @@ export function KnowledgePage() {
   });
 
   const { data: departments = [] } = useQuery({
-    queryKey: ['departments'],
+    queryKey: authQueryKey(['departments'], user?.id, user?.role),
     queryFn: () => api.get<Department[]>('/departments'),
-    enabled: isAdmin,
+    enabled: isAdmin && !!user?.id,
   });
 
   const requiresDepartment = departments.length > 0;
@@ -364,7 +366,7 @@ export function KnowledgePage() {
         </Card>
       )}
 
-      {isLoading ? (
+      {isPending ? (
         <div className="flex justify-center p-8"><Spinner className="h-8 w-8" /></div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

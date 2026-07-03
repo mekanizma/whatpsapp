@@ -7,6 +7,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Ticket, Clock, UserCheck, MessageSquare, CheckCircle2 } from 'lucide-react';
 import { api } from '@/services/api';
+import { authQueryKey } from '@/lib/query-keys';
+import { useAuthStore } from '@/store/authStore';
 import { PageHeader } from '@/components/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
 import { Card, CardContent, Badge, Spinner, Button } from '@/components/ui';
@@ -29,12 +31,14 @@ const statusBadge: Record<string, 'info' | 'warning' | 'success' | 'default'> = 
 export function TicketsPage() {
   const { t, i18n } = useTranslation();
   const locale = i18n.language?.startsWith('en') ? 'en-US' : 'tr-TR';
+  const user = useAuthStore((s) => s.user);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
-  const { data: tickets, isLoading } = useQuery({
-    queryKey: ['tickets'],
+  const { data: tickets, isPending } = useQuery({
+    queryKey: authQueryKey(['tickets'], user?.id, user?.role),
     queryFn: () => api.get<TicketType[]>('/tickets'),
+    enabled: !!user?.id,
     refetchInterval: 15000,
   });
 
@@ -65,7 +69,7 @@ export function TicketsPage() {
         action={openCount > 0 ? <Badge variant="warning">{t('tickets.pending', { count: openCount })}</Badge> : undefined}
       />
 
-      {isLoading ? (
+      {isPending ? (
         <div className="flex justify-center p-12"><Spinner className="h-8 w-8" /></div>
       ) : tickets?.length === 0 ? (
         <EmptyState

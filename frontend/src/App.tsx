@@ -7,6 +7,7 @@ import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/authStore';
+import { AuthQuerySync } from '@/components/AuthQuerySync';
 import { RoleRoute } from '@/components/RoleRoute';
 import { AdminOnlyRoute, PanelIndexRedirect } from '@/components/AdminOnlyRoute';
 import { PlanModuleRoute } from '@/components/PlanModuleRoute';
@@ -113,6 +114,7 @@ function AppRoutes() {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <AuthQuerySync />
       <BrowserRouter>
         <AppRoutes />
       </BrowserRouter>
