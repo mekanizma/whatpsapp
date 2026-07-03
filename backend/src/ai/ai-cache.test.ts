@@ -1,27 +1,55 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { createHash } from 'crypto';
+import { config } from '../config';
+import { normalizeForCache } from './ai-gate.service';
 import {
+  getCacheKey,
   hashNormalizedMessage,
   shouldCacheResponse,
   responseContainsPhoneNumber,
   responseContainsPersonName,
   extractConversationPersonNames,
+  isDeflectionResponse,
+  setCachedResponse,
+  getCachedResponse,
+  clearCompanyCache,
 } from './ai-cache.service';
 import { isKnowledgeMissAiResponse } from './knowledge-miss.service';
 
+const STRONG_RAG = { usedRag: true, hasStrongMatch: true, kbHasNoMatch: false };
+
 describe('ai-cache.service', () => {
-  it('hashNormalizedMessage is stable and does not embed raw text in key format', () => {
-    const a = hashNormalizedMessage('Çalışma saatleriniz nedir?');
-    const b = hashNormalizedMessage('Çalışma saatleriniz nedir?');
-    const c = hashNormalizedMessage('Fiyatlarınız nedir?');
+  it('getCacheKey is stable and includes CACHE_VERSION in hash input', () => {
+    const message = 'Çalışma saatleriniz nedir?';
+    const a = getCacheKey(message);
+    const b = getCacheKey(message);
+    const c = getCacheKey('Fiyatlarınız nedir?');
+    const expected = createHash('sha256')
+      .update(`${config.ai.cacheVersion}:${normalizeForCache(message)}`)
+      .digest('hex');
+
     assert.equal(a, b);
+    assert.equal(a, expected);
     assert.notEqual(a, c);
     assert.match(a, /^[a-f0-9]{64}$/);
+    assert.equal(hashNormalizedMessage(message), a);
+  });
+
+  it('bumping CACHE_VERSION changes the cache key for the same message', () => {
+    const message = 'prices for dorms';
+    const v1 = createHash('sha256')
+      .update(`1:${normalizeForCache(message)}`)
+      .digest('hex');
+    const v2 = createHash('sha256')
+      .update(`2:${normalizeForCache(message)}`)
+      .digest('hex');
+    assert.notEqual(v1, v2);
   });
 
   it('different tenants with same message produce same hash but isolated cache keys via companyId', () => {
-    const hash = hashNormalizedMessage('Merhaba çalışma saatleri');
-    assert.equal(hash, hashNormalizedMessage('Merhaba çalışma saatleri'));
+    const hash = getCacheKey('Merhaba çalışma saatleri');
+    assert.equal(hash, getCacheKey('Merhaba çalışma saatleri'));
     assert.notEqual(`tenant-a:${hash}`, `tenant-b:${hash}`);
   });
 
@@ -34,6 +62,7 @@ describe('ai-cache.service', () => {
         response: 'Randevunuz alındı',
         history,
         latestMessage: 'randevu almak istiyorum',
+        ...STRONG_RAG,
       }),
       false
     );
@@ -44,6 +73,7 @@ describe('ai-cache.service', () => {
         response: 'Aktarıyorum',
         history,
         latestMessage: 'çalışma saatleri nedir',
+        ...STRONG_RAG,
       }),
       false
     );
@@ -66,21 +96,85 @@ describe('ai-cache.service', () => {
         response: 'Teşekkürler Ayşe Demir',
         history,
         latestMessage: 'çalışma saatleri',
+        ...STRONG_RAG,
       }),
       false
     );
   });
 
-  it('shouldCacheResponse allows generic KB answers', () => {
+  it('shouldCacheResponse allows long factual KB answers with strong RAG match', () => {
     assert.equal(
       shouldCacheResponse({
         appointmentMode: false,
         shouldTransfer: false,
-        response: 'Pazartesi-Cuma 09:00-18:00 arası hizmet veriyoruz.',
+        response:
+          'Yurt ücretlerimiz oda tipine göre değişir: Standart oda aylık 12.500 TL, suit oda 15.800 TL, kahvaltı dahildir.',
         history: [],
-        latestMessage: 'çalışma saatleriniz nedir',
+        latestMessage: 'yurt fiyatları nedir',
+        ...STRONG_RAG,
       }),
       true
+    );
+  });
+
+  it('shouldCacheResponse rejects deflection counter-questions', () => {
+    const deflection =
+      'I can help with questions about our company. What would you like to know?';
+    assert.equal(isDeflectionResponse(deflection), true);
+    assert.equal(
+      shouldCacheResponse({
+        appointmentMode: false,
+        shouldTransfer: false,
+        response: deflection,
+        history: [],
+        latestMessage: 'prices for dorms',
+        ...STRONG_RAG,
+      }),
+      false
+    );
+  });
+
+  it('shouldCacheResponse rejects short generic responses under 80 chars', () => {
+    assert.equal(
+      shouldCacheResponse({
+        appointmentMode: false,
+        shouldTransfer: false,
+        response: 'Kampüs adresimiz Kadıköy bölgesinde yer almaktadır.',
+        history: [],
+        latestMessage: 'üniversite nerede',
+        ...STRONG_RAG,
+      }),
+      false
+    );
+  });
+
+  it('shouldCacheResponse rejects without usedRag or hasStrongMatch', () => {
+    const factual =
+      'Yurt ücretlerimiz oda tipine göre değişir: Standart oda aylık 12.500 TL, suit oda 15.800 TL, kahvaltı dahildir.';
+    assert.equal(
+      shouldCacheResponse({
+        appointmentMode: false,
+        shouldTransfer: false,
+        response: factual,
+        history: [],
+        latestMessage: 'yurt fiyatları nedir',
+        usedRag: false,
+        hasStrongMatch: false,
+      }),
+      false
+    );
+    assert.equal(
+      shouldCacheResponse({
+        appointmentMode: false,
+        shouldTransfer: false,
+        response: factual,
+        history: [],
+        latestMessage: 'yurt fiyatları nedir',
+        usedRag: true,
+        hasStrongMatch: false,
+        kbHasNoMatch: true,
+      }),
+      false
     );
   });
 
@@ -95,6 +189,7 @@ describe('ai-cache.service', () => {
         response: missResponse,
         history: [],
         latestMessage: 'yurt ücreti ne kadar',
+        ...STRONG_RAG,
       }),
       false
     );
@@ -102,9 +197,12 @@ describe('ai-cache.service', () => {
       shouldCacheResponse({
         appointmentMode: false,
         shouldTransfer: false,
-        response: 'Kampüs adresimiz Kadıköy.',
+        response:
+          'Yurt ücretlerimiz oda tipine göre değişir: Standart oda aylık 12.500 TL, suit oda 15.800 TL, kahvaltı dahildir.',
         history: [],
         latestMessage: 'üniversite nerede',
+        usedRag: true,
+        hasStrongMatch: false,
         kbHasNoMatch: true,
       }),
       false
@@ -118,5 +216,22 @@ describe('ai-cache.service', () => {
     ];
     const names = extractConversationPersonNames(history, 'çalışma saatleri');
     assert.ok(names.includes('mehmet kaya'));
+  });
+
+  it('clearCompanyCache purges only the target tenant memory entries', async () => {
+    const message = 'yurt fiyatları hakkında bilgi';
+    const response =
+      'Yurt ücretlerimiz oda tipine göre değişir: Standart oda aylık 12.500 TL, suit oda 15.800 TL, kahvaltı dahildir.';
+
+    await setCachedResponse('tenant-a', message, response, false);
+    await setCachedResponse('tenant-b', message, response, false);
+
+    assert.ok(await getCachedResponse('tenant-a', message));
+    assert.ok(await getCachedResponse('tenant-b', message));
+
+    await clearCompanyCache('tenant-a');
+
+    assert.equal(await getCachedResponse('tenant-a', message), null);
+    assert.ok(await getCachedResponse('tenant-b', message));
   });
 });

@@ -286,6 +286,8 @@ export async function generateAIResponse(
       history,
       latestMessage: trimmed,
       kbHasNoMatch: retrieval.kbHasNoMatch,
+      usedRag: retrieval.usedRag,
+      hasStrongMatch: retrieval.usedRag && !retrieval.kbHasNoMatch,
     })
   ) {
     void setCachedResponse(companyId, trimmed, message, shouldTransfer);

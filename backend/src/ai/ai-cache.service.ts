@@ -14,16 +14,35 @@ interface CacheEntry {
   response: string;
   shouldTransfer: boolean;
   expiresAt: number;
+  createdAt: number;
 }
+
+const MIN_CACHEABLE_RESPONSE_CHARS = 80;
+const DEFLECTION_MAX_CHARS = 200;
 
 const memoryCache = new Map<string, CacheEntry>();
 
 const PHONE_IN_TEXT_RE =
   /(?:\+?90|0)?[\s-]?5\d{2}[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}|\b\d{10,15}\b/;
 
-export function hashNormalizedMessage(message: string): string {
+export function getCacheKey(message: string): string {
   const normalized = normalizeForCache(message);
-  return createHash('sha256').update(normalized).digest('hex');
+  return createHash('sha256')
+    .update(`${config.ai.cacheVersion}:${normalized}`)
+    .digest('hex');
+}
+
+/** @deprecated Use getCacheKey — kept for callers that name the hash step explicitly */
+export function hashNormalizedMessage(message: string): string {
+  return getCacheKey(message);
+}
+
+/** Counter-question / deflection — ends with ?, no digits, short */
+export function isDeflectionResponse(response: string): boolean {
+  const trimmed = response.trim();
+  if (trimmed.length >= DEFLECTION_MAX_CHARS) return false;
+  if (!trimmed.endsWith('?')) return false;
+  return !/\d/.test(trimmed);
 }
 
 function memoryKey(companyId: string, messageHash: string): string {
@@ -32,6 +51,10 @@ function memoryKey(companyId: string, messageHash: string): string {
 
 function isExpired(entry: CacheEntry): boolean {
   return Date.now() > entry.expiresAt;
+}
+
+function isMemoryEntryStale(entry: CacheEntry): boolean {
+  return Date.now() > entry.createdAt + config.ai.cacheMaxAgeMs;
 }
 
 export function extractConversationPersonNames(
@@ -75,13 +98,20 @@ export function shouldCacheResponse(options: {
   history: HistoryMsg[];
   latestMessage: string;
   kbHasNoMatch?: boolean;
+  usedRag?: boolean;
+  hasStrongMatch?: boolean;
 }): boolean {
   if (!config.ai.cacheEnabled) return false;
   if (options.appointmentMode) return false;
   if (options.shouldTransfer) return false;
   if (options.kbHasNoMatch) return false;
+  if (!options.usedRag || !options.hasStrongMatch) return false;
   if (isKnowledgeMissAiResponse(options.response)) return false;
   if (!options.response.trim()) return false;
+
+  const response = options.response.trim();
+  if (response.length < MIN_CACHEABLE_RESPONSE_CHARS) return false;
+  if (isDeflectionResponse(response)) return false;
 
   const names = extractConversationPersonNames(options.history, options.latestMessage);
   if (responseContainsPhoneNumber(options.response)) return false;
@@ -98,15 +128,25 @@ async function readPersistedResponse(
 
   const { data, error } = await adminClient
     .from('ai_response_cache')
-    .select('response, should_transfer, expires_at')
+    .select('response, should_transfer, expires_at, created_at')
     .eq('company_id', companyId)
     .eq('normalized_message_hash', messageHash)
     .maybeSingle();
 
   if (error || !data) return null;
 
+  const now = Date.now();
   const expiresAt = new Date(String(data.expires_at)).getTime();
-  if (Number.isNaN(expiresAt) || Date.now() > expiresAt) {
+  const createdAt = new Date(String(data.created_at)).getTime();
+  const maxAgeDeadline = Number.isNaN(createdAt)
+    ? now
+    : createdAt + config.ai.cacheMaxAgeMs;
+  const isStale =
+    Number.isNaN(expiresAt) ||
+    now > expiresAt ||
+    now > maxAgeDeadline;
+
+  if (isStale) {
     void adminClient
       .from('ai_response_cache')
       .delete()
@@ -119,6 +159,7 @@ async function readPersistedResponse(
     response: String(data.response),
     shouldTransfer: data.should_transfer === true,
     expiresAt,
+    createdAt: Number.isNaN(createdAt) ? now : createdAt,
   };
 }
 
@@ -153,11 +194,11 @@ export async function getCachedResponse(
 ): Promise<{ message: string; shouldTransfer: boolean } | null> {
   if (!config.ai.cacheEnabled) return null;
 
-  const messageHash = hashNormalizedMessage(message);
+  const messageHash = getCacheKey(message);
   const key = memoryKey(companyId, messageHash);
 
   const mem = memoryCache.get(key);
-  if (mem && !isExpired(mem)) {
+  if (mem && !isExpired(mem) && !isMemoryEntryStale(mem)) {
     return { message: mem.response, shouldTransfer: mem.shouldTransfer };
   }
   if (mem) memoryCache.delete(key);
@@ -179,11 +220,15 @@ export async function setCachedResponse(
   if (!config.ai.cacheEnabled) return;
   if (normalizeForCache(message).length < 10) return;
 
-  const messageHash = hashNormalizedMessage(message);
+  const messageHash = getCacheKey(message);
   const key = memoryKey(companyId, messageHash);
-  const expiresAt = Date.now() + config.ai.cacheTtlMs;
+  const createdAt = Date.now();
+  const expiresAt = Math.min(
+    createdAt + config.ai.cacheTtlMs,
+    createdAt + config.ai.cacheMaxAgeMs
+  );
 
-  const entry: CacheEntry = { response, shouldTransfer, expiresAt };
+  const entry: CacheEntry = { response, shouldTransfer, expiresAt, createdAt };
   memoryCache.set(key, entry);
   trimMemoryCache();
 

@@ -119,6 +119,11 @@ export const config = {
     temperature: parseFloat(process.env.AI_TEMPERATURE || '0.2'),
     cacheEnabled: process.env.AI_CACHE_ENABLED !== 'false',
     cacheTtlMs: parseInt(process.env.AI_CACHE_TTL_MS || '3600000', 10), // 1 saat
+    /** Bumped on deploy to invalidate all cached AI responses (memory + DB) */
+    cacheVersion: process.env.CACHE_VERSION || '1',
+    /** Max age for persistent cache rows — enforced at read time */
+    cacheMaxAgeMs:
+      (parseInt(process.env.AI_CACHE_TTL_HOURS || '168', 10) || 168) * 60 * 60 * 1000,
     appointmentProviderLabel: process.env.APPOINTMENT_PROVIDER_LABEL || '',
   },
 

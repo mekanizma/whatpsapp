@@ -122,10 +122,6 @@ export function invalidatePromptCache(key?: string): void {
   void import('../ai/admin-prompt-builder')
     .then((m) => m.invalidateStaticSystemPromptCache())
     .catch(() => {});
-
-  void import('../ai/ai-cache.service')
-    .then((m) => m.clearAllResponseCache())
-    .catch(() => {});
 }
 
 /** Statik system prompt önbelleği için aktif prompt sürüm imzası */
