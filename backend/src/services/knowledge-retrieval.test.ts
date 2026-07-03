@@ -5,6 +5,8 @@ import {
   buildRetrievalTexts,
   finalizeRetrievalChunks,
   hasStrongRetrievalMatch,
+  collectFulfilledVariantResults,
+  allVariantRetrievalsFailed,
   mergeRetrievalChunksByMax,
 } from './knowledge-retrieval.service';
 import type { RetrievedKnowledgeChunk } from '../types';
@@ -89,10 +91,10 @@ describe('knowledge-retrieval', () => {
     const texts = buildRetrievalTexts(
       'Universite nerede',
       ['universite nerede', 'üniversite konumu', 'kampüs adresi', 'okul yeri', 'harita'],
-      'adres yerleşke kampüs'
+      'adres konum'
     );
     assert.equal(texts[0], 'Universite nerede');
-    assert.equal(texts[1], 'adres yerleşke kampüs');
+    assert.equal(texts[1], 'adres konum');
     assert.ok(!texts.some((t) => t.toLocaleLowerCase('tr') === 'universite nerede' && t !== texts[0]));
     assert.equal(texts.length, 5);
   });
@@ -101,11 +103,11 @@ describe('knowledge-retrieval', () => {
     const texts = buildRetrievalTexts(
       'üniversite nerede',
       ['üniversite nerede', 'üniversite adresi', 'kampüs konumu', 'okul yeri', 'fazla varyant'],
-      'adres yerleşke kampüs'
+      'adres konum'
     );
     assert.equal(texts.length, 5);
     assert.equal(texts[0], 'üniversite nerede');
-    assert.equal(texts[1], 'adres yerleşke kampüs');
+    assert.equal(texts[1], 'adres konum');
     assert.ok(texts.includes('üniversite adresi'));
     assert.ok(!texts.includes('fazla varyant'));
   });
@@ -114,11 +116,11 @@ describe('knowledge-retrieval', () => {
     const texts = buildRetrievalTexts(
       'üniversite nerede',
       ['üniversite konumu', 'kampüs adresi', 'okul yeri', 'harita'],
-      'adres yerleşke kampüs'
+      'adres konum'
     );
     assert.equal(texts[0], 'üniversite nerede');
-    assert.ok(texts.includes('adres yerleşke kampüs'));
-    assert.equal(texts[1], 'adres yerleşke kampüs');
+    assert.ok(texts.includes('adres konum'));
+    assert.equal(texts[1], 'adres konum');
     assert.equal(texts.length, 5);
   });
 
@@ -276,10 +278,54 @@ describe('knowledge-retrieval', () => {
     const texts = buildRetrievalTexts(
       'üniversite nerede',
       ['üniversite konumu', 'kampüs adresi', 'okul yeri'],
-      'adres yerleşke kampüs'
+      'adres konum'
     );
-    assert.ok(texts.includes('adres yerleşke kampüs'));
+    assert.ok(texts.includes('adres konum'));
     assert.equal(texts[0], 'üniversite nerede');
-    assert.equal(texts[1], 'adres yerleşke kampüs');
+    assert.equal(texts[1], 'adres konum');
+  });
+
+  it('collectFulfilledVariantResults keeps fulfilled RPC sets and skips rejected', () => {
+    const addressHit: RetrievedKnowledgeChunk = {
+      id: 'chunk-address',
+      document_id: 'doc-addr',
+      knowledge_base_id: 'kb-addr',
+      chunk_index: 0,
+      heading: 'Adres',
+      content: 'Kampüs adresi',
+      similarity: 0.4,
+      text_rank: 0.3,
+      combined_score: 0.37,
+    };
+    const settled: PromiseSettledResult<RetrievedKnowledgeChunk[]>[] = [
+      { status: 'fulfilled', value: [addressHit] },
+      { status: 'rejected', reason: new Error('syntax error in tsquery') },
+      { status: 'fulfilled', value: [] },
+    ];
+
+    const resultSets = collectFulfilledVariantResults(
+      ['üniversite nerede', 'ne', 'adres konum'],
+      settled
+    );
+
+    assert.equal(resultSets.length, 2);
+    assert.equal(resultSets[0][0].heading, 'Adres');
+    assert.deepEqual(resultSets[1], []);
+    assert.equal(allVariantRetrievalsFailed(settled), false);
+  });
+
+  it('allVariantRetrievalsFailed is true only when every variant RPC rejected', () => {
+    const rejected: PromiseSettledResult<unknown>[] = [
+      { status: 'rejected', reason: new Error('rpc down') },
+      { status: 'rejected', reason: new Error('timeout') },
+    ];
+    assert.equal(allVariantRetrievalsFailed(rejected), true);
+    assert.equal(
+      allVariantRetrievalsFailed([
+        { status: 'fulfilled', value: [] },
+        { status: 'rejected', reason: new Error('one failed') },
+      ]),
+      false
+    );
   });
 });

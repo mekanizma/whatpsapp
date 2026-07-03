@@ -11,13 +11,14 @@ import {
 } from '../ai/ai-cache.service';
 
 const REWRITE_MODEL = 'gpt-4o-mini';
+const REWRITE_MAX_TOKENS = 150;
 
 /** Universal intents → canonical Turkish KB keywords (multi-tenant safe) */
 const UNIVERSAL_INTENT_RULES: { pattern: RegExp; canonical: string }[] = [
   {
     pattern:
       /\b(nerede|neredesiniz|konum|where|located|address|adres)\b/i,
-    canonical: 'adres yerleşke kampüs',
+    canonical: 'adres konum',
   },
   {
     pattern: /\b(fiyat|ücret|kaç para|price|cost|fee|tuition)\b/i,
@@ -148,7 +149,7 @@ export async function expandQueryForRetrieval(
       ],
       {
         model: REWRITE_MODEL,
-        maxTokens: 60,
+        maxTokens: REWRITE_MAX_TOKENS,
         temperature: 0,
         usageLog: {
           companyId,

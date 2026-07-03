@@ -21,3 +21,6 @@ export function sanitizeFtsQueryTokens(text: string): string[] {
 export function buildOrTsQueryString(text: string): string {
   return sanitizeFtsQueryTokens(text).join(' | ');
 }
+
+/** Postgres kb_or_tsquery empty-input note: sanitized queries with no tokens >=3 chars
+ *  (e.g. "ne") must use plainto_tsquery('simple','') — to_tsquery('simple','') raises. */

@@ -4,13 +4,32 @@
 
 import { config } from '../config';
 import { adminClient } from '../database/supabase';
-import { createEmbeddings } from './embedding.service';
+import { createEmbeddings as createEmbeddingsImpl } from './embedding.service';
 import { expandQueryForRetrieval } from './query-expansion.service';
 import {
   buildKnowledgeContextForAI,
   filterRelevantKnowledge,
 } from '../ai/knowledge-filter.service';
 import type { KnowledgeItem, RetrievedKnowledgeChunk } from '../types';
+
+/** Test / override hooks for embedding + RPC (see webhookDeps pattern) */
+export const knowledgeRetrievalDeps = {
+  createEmbeddings: createEmbeddingsImpl,
+  matchKnowledgeChunksRpc: (
+    companyId: string,
+    queryText: string,
+    embedding: number[]
+  ) =>
+    adminClient.rpc('match_knowledge_chunks', {
+      p_company_id: companyId,
+      query_embedding: embedding,
+      query_text: queryText,
+      match_count: config.rag.topK,
+      match_threshold: config.rag.matchThreshold,
+      vector_weight: config.rag.vectorWeight,
+      text_weight: config.rag.textWeight,
+    }),
+};
 
 export interface KnowledgeRetrievalResult {
   context: string;
@@ -173,21 +192,63 @@ async function queryKnowledgeChunksRaw(
   queryText: string,
   embedding: number[]
 ): Promise<RetrievedKnowledgeChunk[]> {
-  const { data, error } = await adminClient.rpc('match_knowledge_chunks', {
-    p_company_id: companyId,
-    query_embedding: embedding,
-    query_text: queryText,
-    match_count: config.rag.topK,
-    match_threshold: config.rag.matchThreshold,
-    vector_weight: config.rag.vectorWeight,
-    text_weight: config.rag.textWeight,
-  });
+  const { data, error } = await knowledgeRetrievalDeps.matchKnowledgeChunksRpc(
+    companyId,
+    queryText,
+    embedding
+  );
 
   if (error) {
     throw new Error(error.message);
   }
 
   return (data || []) as RetrievedKnowledgeChunk[];
+}
+
+/** Collect fulfilled variant RPC results; log rejected variants */
+export function collectFulfilledVariantResults(
+  texts: string[],
+  settled: PromiseSettledResult<RetrievedKnowledgeChunk[]>[]
+): RetrievedKnowledgeChunk[][] {
+  const resultSets: RetrievedKnowledgeChunk[][] = [];
+
+  for (let i = 0; i < settled.length; i++) {
+    const outcome = settled[i];
+    if (outcome.status === 'fulfilled') {
+      resultSets.push(outcome.value);
+      continue;
+    }
+    const variant = texts[i]?.slice(0, 40) ?? '?';
+    const reason =
+      outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason);
+    console.warn(`[RAG] Variant RPC failed for "${variant}": ${reason}`);
+  }
+
+  return resultSets;
+}
+
+export function allVariantRetrievalsFailed(
+  settled: PromiseSettledResult<unknown>[]
+): boolean {
+  return settled.length > 0 && settled.every((outcome) => outcome.status === 'rejected');
+}
+
+async function queryAllVariantChunks(
+  companyId: string,
+  texts: string[],
+  embeddings: number[][]
+): Promise<RetrievedKnowledgeChunk[][]> {
+  const settled = await Promise.allSettled(
+    texts.map((text, index) =>
+      queryKnowledgeChunksRaw(companyId, text, embeddings[index] || [])
+    )
+  );
+
+  if (allVariantRetrievalsFailed(settled)) {
+    throw new Error('All variant RPC calls failed');
+  }
+
+  return collectFulfilledVariantResults(texts, settled);
 }
 
 export async function retrieveKnowledgeContext(
@@ -223,12 +284,8 @@ export async function retrieveKnowledgeContext(
   const texts = buildRetrievalTexts(trimmed, rewrite.variants, rewrite.intentVariant);
 
   try {
-    const embeddings = await createEmbeddings(texts);
-    const resultSets = await Promise.all(
-      texts.map((text, index) =>
-        queryKnowledgeChunksRaw(companyId, text, embeddings[index] || [])
-      )
-    );
+    const embeddings = await knowledgeRetrievalDeps.createEmbeddings(texts);
+    const resultSets = await queryAllVariantChunks(companyId, texts, embeddings);
     const merged = mergeRetrievalChunksByMax(resultSets);
     const chunks = finalizeRetrievalChunks(merged);
     logRetrievalDiagnostics(trimmed, texts, rewrite.intentVariant, chunks);
