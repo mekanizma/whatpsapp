@@ -774,14 +774,32 @@ export async function restoreBaileysSessions(): Promise<void> {
   const restored = new Set<string>();
 
   if (!config.demoMode) {
-    const { data: configs } = await adminClient
+    let configs: Array<{
+      id: string;
+      company_id: string;
+      phone_number: string | null;
+      is_active?: boolean;
+    }> | null = null;
+
+    const primary = await adminClient
       .from('whatsapp_configs')
       .select('id, company_id, phone_number, business_account_id, status, is_active')
-      .like('business_account_id', 'baileys:%')
-      .eq('is_active', true);
+      .like('business_account_id', 'baileys:%');
+
+    if (primary.error) {
+      console.warn('[Baileys] is_active sütunu yok veya sorgu hatası, legacy sorgu deneniyor:', primary.error.message);
+      const legacy = await adminClient
+        .from('whatsapp_configs')
+        .select('id, company_id, phone_number, business_account_id, status')
+        .like('business_account_id', 'baileys:%');
+      configs = legacy.data;
+    } else {
+      configs = primary.data;
+    }
 
     for (const row of configs || []) {
       if (!row.id || !row.company_id) continue;
+      if (row.is_active === false) continue;
       restored.add(row.id);
       try {
         await restoreAccountSession(row.id, row.company_id, row.phone_number);

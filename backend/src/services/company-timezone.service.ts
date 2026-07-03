@@ -4,14 +4,21 @@
 
 export const DEFAULT_COMPANY_TIMEZONE = 'Europe/Istanbul';
 
-const SUPPORTED_TIMEZONES = new Set(Intl.supportedValuesOf('timeZone'));
+function isValidIanaTimezone(tz: string): boolean {
+  try {
+    Intl.DateTimeFormat('en-US', { timeZone: tz }).format(new Date());
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export function parseCompanyTimezone(raw: unknown): string {
   if (typeof raw !== 'string' || !raw.trim()) {
     return DEFAULT_COMPANY_TIMEZONE;
   }
   const tz = raw.trim();
-  return SUPPORTED_TIMEZONES.has(tz) ? tz : DEFAULT_COMPANY_TIMEZONE;
+  return isValidIanaTimezone(tz) ? tz : DEFAULT_COMPANY_TIMEZONE;
 }
 
 export function validateCompanyTimezoneForWrite(
@@ -24,7 +31,7 @@ export function validateCompanyTimezoneForWrite(
     return { ok: false, error: 'timezone must be a non-empty IANA timezone string' };
   }
   const tz = raw.trim();
-  if (!SUPPORTED_TIMEZONES.has(tz)) {
+  if (!isValidIanaTimezone(tz)) {
     return { ok: false, error: `Invalid timezone: ${tz}` };
   }
   return { ok: true, timezone: tz };

@@ -51,10 +51,28 @@ function getPublicUrl(): string | null {
 function requireEnv(key: string): string {
   const value = process.env[key];
   if (!value) {
+    console.error(`[FATAL] Missing required environment variable: ${key}`);
     throw new Error(`Missing required environment variable: ${key}`);
   }
   return value;
 }
+
+function requireEnvOnBoot(): void {
+  const required = [
+    'SUPABASE_URL',
+    'SUPABASE_ANON_KEY',
+    'SUPABASE_SERVICE_ROLE_KEY',
+    'OPENAI_API_KEY',
+    'WHATSAPP_VERIFY_TOKEN',
+  ];
+  const missing = required.filter((k) => !process.env[k]);
+  if (missing.length) {
+    console.error('[FATAL] Missing environment variables:', missing.join(', '));
+    throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
+  }
+}
+
+requireEnvOnBoot();
 
 export const config = {
   port: parseInt(process.env.PORT || '3001', 10),

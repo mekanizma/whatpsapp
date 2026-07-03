@@ -45,6 +45,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV PORT=3001
 ENV SESSIONS_DIR=/data/sessions
+ENV NODE_OPTIONS=--max-old-space-size=768
 
 # Baileys: HTTPS (versiyon kontrolü) ve WhatsApp WebSocket için gerekli
 # gosu: volume mount sonrası /data/sessions izinlerini node kullanıcısına vermek için
@@ -64,7 +65,7 @@ COPY --from=builder /app/frontend/dist ./frontend/dist
 
 EXPOSE 3001
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=5 \
   CMD node -e "fetch('http://127.0.0.1:'+(process.env.PORT||3001)+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
 ENTRYPOINT ["docker-entrypoint.sh"]

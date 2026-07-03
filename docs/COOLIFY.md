@@ -159,6 +159,9 @@ ADMIN_EMAIL=admin@example.com ADMIN_PASSWORD=xxx npx tsx src/scripts/setup-supab
 | API 404 | Build loglarında frontend dist üretildi mi |
 | WhatsApp kopuyor | Volume + `SESSIONS_DIR` eşleşmeli |
 | Her restart'ta QR | Persistent Storage bağlı değil |
+| Container hemen Exited | **Start Command** `node backend/dist/index.js` olmalı (`npm start --prefix backend` kullanmayın — prestart build çöker) |
+| Log boş / entrypoint hatası | Storages → `/data/sessions` mount; entrypoint chown uyarısı normal olabilir |
+| Migration sonrası restart | `035`, `036`, `037` migration'larını Supabase'de çalıştırın |
 | Build'de VITE hatası | `VITE_*` Build Variable olarak işaretli mi |
 | Build OOM / exit 255 | Sunucuda en az 2 GB RAM; Dockerfile `NODE_OPTIONS` kullanır |
 | Frontend build düşüyor | Logda `heap out of memory` — Coolify build kaynaklarını artırın |

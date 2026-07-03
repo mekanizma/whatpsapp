@@ -9,19 +9,43 @@ import { restoreBaileysSessions, verifySessionsDirWritable } from './whatsapp/qr
 import { recoverPendingKnowledgeIndexing } from './services/knowledge-index.service';
 import { startResponseCacheCleanupSchedule } from './ai/ai-cache.service';
 
-app.listen(config.port, '0.0.0.0', async () => {
+process.on('unhandledRejection', (reason) => {
+  console.error('[FATAL] Unhandled rejection:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('[FATAL] Uncaught exception:', err);
+  process.exit(1);
+});
+
+const server = app.listen(config.port, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${config.port}`);
   console.log(`📱 WhatsApp webhook: ${config.publicUrl || `http://localhost:${config.port}`}/webhook/whatsapp`);
   console.log(`🔧 Environment: ${config.nodeEnv}`);
   if (config.isCoolify) console.log('☁️  Platform: Coolify');
 
+  startResponseCacheCleanupSchedule();
+
+  // Ağır işleri health check sonrasına ertele (OOM / restart döngüsünü önler)
+  setTimeout(() => {
+    void runDeferredStartup();
+  }, 3000);
+});
+
+server.on('error', (err: NodeJS.ErrnoException) => {
+  console.error('[FATAL] Server listen error:', err.message);
+  if (err.code === 'EADDRINUSE') {
+    console.error(`Port ${config.port} kullanımda. Coolify Port Exposes ayarını kontrol edin.`);
+  }
+  process.exit(1);
+});
+
+async function runDeferredStartup(): Promise<void> {
   try {
     await recoverPendingKnowledgeIndexing();
   } catch (err) {
     console.error('RAG indeks kurtarma hatası:', err);
   }
-
-  startResponseCacheCleanupSchedule();
 
   if (!config.isVercel) {
     const sessionsCheck = verifySessionsDirWritable();
@@ -41,4 +65,4 @@ app.listen(config.port, '0.0.0.0', async () => {
       console.error('Baileys oturum yükleme hatası:', err);
     }
   }
-});
+}
