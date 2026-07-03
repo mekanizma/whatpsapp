@@ -129,6 +129,7 @@ export const config = {
 
   whatsapp: {
     verifyToken: requireEnv('WHATSAPP_VERIFY_TOKEN'),
+    appSecret: process.env.WHATSAPP_APP_SECRET?.trim() || '',
     apiVersion: process.env.WHATSAPP_API_VERSION || 'v21.0',
     baseUrl: `https://graph.facebook.com/${process.env.WHATSAPP_API_VERSION || 'v21.0'}`,
     embeddedSignupUrl: process.env.WHATSAPP_EMBEDDED_SIGNUP_URL || '',
@@ -147,5 +148,11 @@ export const config = {
 if (config.nodeEnv === 'production' && config.demoMode) {
   console.warn(
     '[UYARI] DEMO_MODE=true — canlı ortamda müşteri özellikleri kısıtlanır. Coolify env: DEMO_MODE=false ve VITE_DEMO_MODE=false yapın.'
+  );
+}
+
+if (!config.whatsapp.appSecret) {
+  console.warn(
+    '[UYARI] WHATSAPP_APP_SECRET tanımlı değil — Meta Cloud API webhook POST istekleri 401 ile reddedilecek.'
   );
 }
