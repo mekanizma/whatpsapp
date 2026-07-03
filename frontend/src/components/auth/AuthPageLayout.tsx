@@ -12,7 +12,7 @@ interface AuthPageLayoutProps {
 
 export function AuthPageLayout({ variant, children }: AuthPageLayoutProps) {
   return (
-    <div className="auth-page flex min-h-[100dvh] w-full max-w-[100vw] flex-col overflow-x-hidden lg:h-[100dvh] lg:flex-row lg:overflow-hidden">
+    <div className="auth-page app-shell flex min-h-[100dvh] w-full max-w-full flex-col overflow-x-hidden lg:h-[100dvh] lg:flex-row lg:overflow-hidden">
       <AuthMobileBanner variant={variant} />
 
       <div className="hidden h-[100dvh] w-1/2 shrink-0 lg:block">

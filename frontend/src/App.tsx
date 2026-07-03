@@ -116,7 +116,9 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <AuthQuerySync />
       <BrowserRouter>
-        <AppRoutes />
+        <div className="app-shell min-h-[100dvh]">
+          <AppRoutes />
+        </div>
       </BrowserRouter>
     </QueryClientProvider>
   );

@@ -147,7 +147,7 @@ export function AdminCompanyDetailPage() {
         </CardContent>
       </Card>
 
-      <div className="flex gap-1 overflow-x-auto rounded-xl border border-slate-200 bg-white p-1">
+      <div className="flex max-w-full gap-1 overflow-x-auto overscroll-x-contain rounded-xl border border-slate-200 bg-white p-1">
         {tabs.map((tabItem) => (
           <button
             key={tabItem.id}

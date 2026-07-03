@@ -87,7 +87,7 @@ export function UnknownQuestionsPage() {
         }
       />
 
-      <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
+      <div className="flex max-w-full gap-2 overflow-x-auto overscroll-x-contain pb-1 scrollbar-thin">
         {filters.map((item) => (
           <button
             key={item.key}

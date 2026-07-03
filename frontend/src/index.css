@@ -25,12 +25,23 @@
   }
   html {
     overflow-x: hidden;
+    overscroll-behavior-x: none;
+    width: 100%;
   }
   body {
     @apply bg-slate-50 text-slate-900 antialiased;
     font-family: var(--font-sans);
     overflow-x: hidden;
-    max-width: 100vw;
+    overscroll-behavior-x: none;
+    max-width: 100%;
+    width: 100%;
+    position: relative;
+  }
+  #root {
+    overflow-x: hidden;
+    max-width: 100%;
+    width: 100%;
+    min-height: 100dvh;
   }
   h1, h2, h3 {
     @apply tracking-tight text-slate-900;
@@ -47,8 +58,11 @@
     scrollbar-width: thin;
     scrollbar-color: #cbd5e1 transparent;
   }
+  .app-shell {
+    @apply w-full max-w-full min-w-0 overflow-x-hidden overscroll-x-none;
+  }
   .page-shell {
-    @apply mx-auto max-w-7xl space-y-6;
+    @apply mx-auto w-full min-w-0 max-w-7xl space-y-6;
   }
   .glass-card {
     @apply rounded-2xl border border-slate-200/80 bg-white shadow-[var(--shadow-card)];

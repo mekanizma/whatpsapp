@@ -137,7 +137,7 @@ export function CompanyLayout() {
 
   return (
 
-    <div className="flex h-screen bg-slate-50">
+    <div className="app-shell flex h-[100dvh] w-full max-w-full overflow-hidden bg-slate-50">
 
       {sidebarOpen && (
 
@@ -283,13 +283,13 @@ export function CompanyLayout() {
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
 
-        <header className="flex h-14 shrink-0 items-center justify-between border-b border-slate-200/80 bg-white/80 px-4 backdrop-blur-md sm:px-6">
+        <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-slate-200/80 bg-white/80 px-4 backdrop-blur-md sm:px-6 min-w-0">
 
-          <div className="flex items-center gap-3">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
 
             <button
 
-              className="rounded-lg p-2 hover:bg-slate-100 lg:hidden"
+              className="shrink-0 rounded-lg p-2 hover:bg-slate-100 lg:hidden"
 
               onClick={() => setSidebarOpen(true)}
 
@@ -299,11 +299,11 @@ export function CompanyLayout() {
 
             </button>
 
-            <h2 className="text-sm font-semibold text-slate-800 sm:text-base">{pageTitle}</h2>
+            <h2 className="truncate text-sm font-semibold text-slate-800 sm:text-base">{pageTitle}</h2>
 
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
 
             <LanguageSwitcher variant="light" className="hidden sm:flex" />
 
@@ -330,7 +330,7 @@ export function CompanyLayout() {
 
 
 
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+        <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 sm:p-6 lg:p-8">
 
           <div className="page-shell">
 
