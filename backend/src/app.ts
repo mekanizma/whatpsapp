@@ -59,7 +59,13 @@ app.use('/api', (_req, res, next) => {
 app.use('/api', applyApiRateLimit);
 
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    ragMaxVariants: config.rag.maxVariants,
+    rewriteCacheVersion: config.ai.rewriteCacheVersion,
+    cacheVersion: config.ai.cacheVersion,
+  });
 });
 
 app.get('/webhook/whatsapp', verifyWebhook);

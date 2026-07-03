@@ -5,6 +5,7 @@ import {
   parseQueryRewriteResponse,
   detectUniversalIntentVariant,
   appendUniversalIntentVariant,
+  stripIntentFromVariants,
 } from './query-expansion.service';
 
 describe('query-expansion.service', () => {
@@ -57,6 +58,14 @@ describe('query-expansion.service', () => {
       'üniversite nerede'
     );
     assert.deepEqual(already, ['adres konum ulaşım']);
+  });
+
+  it('stripIntentFromVariants removes canonical intent from LLM variants', () => {
+    const stripped = stripIntentFromVariants(
+      ['üniversite konumu', 'adres konum ulaşım', 'kampüs adresi'],
+      'adres konum ulaşım'
+    );
+    assert.deepEqual(stripped, ['üniversite konumu', 'kampüs adresi']);
   });
 
   it('detectUniversalIntentVariant maps price, hours, and contact intents', () => {

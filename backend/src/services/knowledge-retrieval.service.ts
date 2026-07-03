@@ -23,16 +23,45 @@ export interface KnowledgeRetrievalResult {
   kbHasNoMatch: boolean;
 }
 
+export function resolveRetrievalVariantCap(): number {
+  const cap = config.rag.maxVariants;
+  return Number.isFinite(cap) && cap > 0 ? cap : 5;
+}
+
 export function buildRetrievalTexts(
   rawMessage: string,
   variants: string[],
   intentVariant: string | null = null
 ): string[] {
-  const parts = [rawMessage, intentVariant, ...variants]
-    .filter((p): p is string => typeof p === 'string')
-    .map((p) => p.trim())
-    .filter(Boolean);
-  return [...new Set(parts)].slice(0, config.rag.maxVariants);
+  const cap = resolveRetrievalVariantCap();
+  const raw = rawMessage.trim();
+  const intent = intentVariant?.trim() || null;
+  const intentKey = intent?.toLocaleLowerCase('tr') ?? null;
+  const rawKey = raw.toLocaleLowerCase('tr');
+
+  const deduped: string[] = [];
+  const seen = new Set<string>();
+
+  const push = (value: string | null | undefined) => {
+    const trimmed = value?.trim();
+    if (!trimmed) return;
+    const key = trimmed.toLocaleLowerCase('tr');
+    if (seen.has(key)) return;
+    seen.add(key);
+    deduped.push(trimmed);
+  };
+
+  push(raw);
+  push(intent);
+  for (const variant of variants) {
+    const trimmed = variant.trim();
+    if (!trimmed) continue;
+    const key = trimmed.toLocaleLowerCase('tr');
+    if (key === rawKey || (intentKey && key === intentKey)) continue;
+    push(trimmed);
+  }
+
+  return deduped.slice(0, cap);
 }
 
 export function mergeRetrievalChunksByMax(
@@ -95,15 +124,20 @@ export function finalizeRetrievalChunks(
 
 export function logRetrievalDiagnostics(
   query: string,
+  texts: string[],
+  intentVariant: string | null,
   chunks: RetrievedKnowledgeChunk[]
 ): void {
   const q = query.slice(0, 40);
+  const textPreview = texts.map((t) => t.slice(0, 28)).join(' | ');
   const top = chunks
     .slice(0, 3)
     .map((c) => `${c.heading ?? '—'}:${c.combined_score.toFixed(3)}`)
     .join(', ');
   const strong = hasStrongRetrievalMatch(chunks);
-  console.log(`[RAG] q="${q}" top=[${top}] strong=${strong}`);
+  console.log(
+    `[RAG] q="${q}" texts=${texts.length} intent=${intentVariant ? `"${intentVariant.slice(0, 24)}"` : 'none'} [${textPreview}] top=[${top}] strong=${strong}`
+  );
 }
 
 function buildLexicalFallbackResult(
@@ -197,7 +231,7 @@ export async function retrieveKnowledgeContext(
     );
     const merged = mergeRetrievalChunksByMax(resultSets);
     const chunks = finalizeRetrievalChunks(merged);
-    logRetrievalDiagnostics(trimmed, chunks);
+    logRetrievalDiagnostics(trimmed, texts, rewrite.intentVariant, chunks);
 
     if (!chunks.length) {
       return {

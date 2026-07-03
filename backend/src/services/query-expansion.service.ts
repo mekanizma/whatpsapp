@@ -2,6 +2,7 @@
  * LLM-based query rewrite for embedding retrieval — tenant-agnostic
  */
 
+import { config } from '../config';
 import { createChatCompletion } from '../ai/openai-client';
 import {
   getCachedQueryRewrite,
@@ -52,6 +53,23 @@ export function appendUniversalIntentVariant(
   return [...variants, intent];
 }
 
+/** Remove canonical intent phrase from LLM variants — intent is passed separately to retrieval */
+export function stripIntentFromVariants(
+  variants: string[],
+  intentVariant: string | null
+): string[] {
+  if (!intentVariant) return variants;
+  const intentKey = intentVariant.trim().toLocaleLowerCase('tr');
+  return variants.filter((v) => v.trim().toLocaleLowerCase('tr') !== intentKey);
+}
+
+function maxLlmVariants(): number {
+  const cap = Number.isFinite(config.rag.maxVariants) && config.rag.maxVariants > 0
+    ? config.rag.maxVariants
+    : 5;
+  return Math.max(1, cap - 2);
+}
+
 const REWRITE_SYSTEM_PROMPT = `Rewrite the customer message for knowledge-base semantic search.
 Output ONLY valid JSON with this shape:
 {"variants":["phrase1","phrase2","phrase3"],"is_broad":false}
@@ -75,7 +93,7 @@ export function parseQueryRewriteResponse(text: string): { variants: string[]; i
       ? obj.variants
           .filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
           .map((v) => v.trim())
-          .slice(0, 4)
+          .slice(0, maxLlmVariants())
       : [];
     return {
       variants,
@@ -86,12 +104,20 @@ export function parseQueryRewriteResponse(text: string): { variants: string[]; i
   }
 }
 
+function finalizeRewriteVariants(message: string, llmVariants: string[]): string[] {
+  const trimmed = message.trim();
+  const intentVariant = detectUniversalIntentVariant(trimmed);
+  const base = llmVariants.length > 0 ? llmVariants : trimmed ? [trimmed] : [];
+  return stripIntentFromVariants(base, intentVariant);
+}
+
 function fallbackRewrite(message: string): QueryRewriteResult {
   const trimmed = message.trim();
+  const intentVariant = detectUniversalIntentVariant(trimmed);
   return {
     rawMessage: trimmed,
-    variants: trimmed ? [trimmed] : [],
-    intentVariant: detectUniversalIntentVariant(trimmed),
+    variants: finalizeRewriteVariants(trimmed, trimmed ? [trimmed] : []),
+    intentVariant,
     isBroad: false,
   };
 }
@@ -105,10 +131,12 @@ export async function expandQueryForRetrieval(
 
   const cached = getCachedQueryRewrite(companyId, trimmed);
   if (cached) {
+    const intentVariant = detectUniversalIntentVariant(trimmed);
     return {
-      ...cached,
       rawMessage: trimmed,
-      intentVariant: detectUniversalIntentVariant(trimmed),
+      variants: stripIntentFromVariants(cached.variants, intentVariant),
+      intentVariant,
+      isBroad: cached.isBroad,
     };
   }
 
@@ -131,13 +159,12 @@ export async function expandQueryForRetrieval(
 
     const content = completion.choices[0]?.message?.content?.trim() || '';
     const parsed = parseQueryRewriteResponse(content);
-    const variants =
-      parsed.variants.length > 0 ? parsed.variants : [trimmed];
+    const intentVariant = detectUniversalIntentVariant(trimmed);
 
     const result: QueryRewriteResult = {
       rawMessage: trimmed,
-      variants,
-      intentVariant: detectUniversalIntentVariant(trimmed),
+      variants: finalizeRewriteVariants(trimmed, parsed.variants),
+      intentVariant,
       isBroad: parsed.isBroad,
     };
 

@@ -85,6 +85,18 @@ describe('knowledge-retrieval', () => {
     assert.equal(chunks.length, 2);
   });
 
+  it('buildRetrievalTexts dedupes case-insensitively and keeps intent prioritized', () => {
+    const texts = buildRetrievalTexts(
+      'Universite nerede',
+      ['universite nerede', 'üniversite konumu', 'kampüs adresi', 'okul yeri', 'harita'],
+      'adres konum ulaşım'
+    );
+    assert.equal(texts[0], 'Universite nerede');
+    assert.equal(texts[1], 'adres konum ulaşım');
+    assert.ok(!texts.some((t) => t.toLocaleLowerCase('tr') === 'universite nerede' && t !== texts[0]));
+    assert.equal(texts.length, 5);
+  });
+
   it('buildRetrievalTexts dedupes and caps at maxVariants (default 5)', () => {
     const texts = buildRetrievalTexts(
       'üniversite nerede',
