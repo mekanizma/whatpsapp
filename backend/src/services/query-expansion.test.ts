@@ -39,31 +39,31 @@ describe('query-expansion.service', () => {
     assert.equal(parsed.isBroad, false);
   });
 
-  it('detectUniversalIntentVariant maps location queries to adres konum ulaşım', () => {
-    assert.equal(detectUniversalIntentVariant('üniversite nerede'), 'adres konum ulaşım');
+  it('detectUniversalIntentVariant maps location queries to adres yerleşke kampüs', () => {
+    assert.equal(detectUniversalIntentVariant('üniversite nerede'), 'adres yerleşke kampüs');
     assert.equal(
       detectUniversalIntentVariant('where is the university'),
-      'adres konum ulaşım'
+      'adres yerleşke kampüs'
     );
-    assert.equal(detectUniversalIntentVariant('adres ne'), 'adres konum ulaşım');
+    assert.equal(detectUniversalIntentVariant('adres ne'), 'adres yerleşke kampüs');
   });
 
   it('appendUniversalIntentVariant adds canonical phrase without duplicating', () => {
     const withIntent = appendUniversalIntentVariant(['üniversite adresi'], 'üniversite nerede');
-    assert.ok(withIntent.includes('adres konum ulaşım'));
+    assert.ok(withIntent.includes('adres yerleşke kampüs'));
     assert.equal(withIntent.length, 2);
 
     const already = appendUniversalIntentVariant(
-      ['adres konum ulaşım'],
+      ['adres yerleşke kampüs'],
       'üniversite nerede'
     );
-    assert.deepEqual(already, ['adres konum ulaşım']);
+    assert.deepEqual(already, ['adres yerleşke kampüs']);
   });
 
   it('stripIntentFromVariants removes canonical intent from LLM variants', () => {
     const stripped = stripIntentFromVariants(
-      ['üniversite konumu', 'adres konum ulaşım', 'kampüs adresi'],
-      'adres konum ulaşım'
+      ['üniversite konumu', 'adres yerleşke kampüs', 'kampüs adresi'],
+      'adres yerleşke kampüs'
     );
     assert.deepEqual(stripped, ['üniversite konumu', 'kampüs adresi']);
   });

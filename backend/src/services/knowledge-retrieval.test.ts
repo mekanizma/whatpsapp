@@ -89,10 +89,10 @@ describe('knowledge-retrieval', () => {
     const texts = buildRetrievalTexts(
       'Universite nerede',
       ['universite nerede', 'üniversite konumu', 'kampüs adresi', 'okul yeri', 'harita'],
-      'adres konum ulaşım'
+      'adres yerleşke kampüs'
     );
     assert.equal(texts[0], 'Universite nerede');
-    assert.equal(texts[1], 'adres konum ulaşım');
+    assert.equal(texts[1], 'adres yerleşke kampüs');
     assert.ok(!texts.some((t) => t.toLocaleLowerCase('tr') === 'universite nerede' && t !== texts[0]));
     assert.equal(texts.length, 5);
   });
@@ -101,11 +101,11 @@ describe('knowledge-retrieval', () => {
     const texts = buildRetrievalTexts(
       'üniversite nerede',
       ['üniversite nerede', 'üniversite adresi', 'kampüs konumu', 'okul yeri', 'fazla varyant'],
-      'adres konum ulaşım'
+      'adres yerleşke kampüs'
     );
     assert.equal(texts.length, 5);
     assert.equal(texts[0], 'üniversite nerede');
-    assert.equal(texts[1], 'adres konum ulaşım');
+    assert.equal(texts[1], 'adres yerleşke kampüs');
     assert.ok(texts.includes('üniversite adresi'));
     assert.ok(!texts.includes('fazla varyant'));
   });
@@ -114,11 +114,11 @@ describe('knowledge-retrieval', () => {
     const texts = buildRetrievalTexts(
       'üniversite nerede',
       ['üniversite konumu', 'kampüs adresi', 'okul yeri', 'harita'],
-      'adres konum ulaşım'
+      'adres yerleşke kampüs'
     );
     assert.equal(texts[0], 'üniversite nerede');
-    assert.ok(texts.includes('adres konum ulaşım'));
-    assert.equal(texts[1], 'adres konum ulaşım');
+    assert.ok(texts.includes('adres yerleşke kampüs'));
+    assert.equal(texts[1], 'adres yerleşke kampüs');
     assert.equal(texts.length, 5);
   });
 
@@ -276,10 +276,10 @@ describe('knowledge-retrieval', () => {
     const texts = buildRetrievalTexts(
       'üniversite nerede',
       ['üniversite konumu', 'kampüs adresi', 'okul yeri'],
-      'adres konum ulaşım'
+      'adres yerleşke kampüs'
     );
-    assert.ok(texts.includes('adres konum ulaşım'));
+    assert.ok(texts.includes('adres yerleşke kampüs'));
     assert.equal(texts[0], 'üniversite nerede');
-    assert.equal(texts[1], 'adres konum ulaşım');
+    assert.equal(texts[1], 'adres yerleşke kampüs');
   });
 });

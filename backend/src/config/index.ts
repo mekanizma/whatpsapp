@@ -123,7 +123,7 @@ export const config = {
     /** Bumped on deploy to invalidate all cached AI responses (memory + DB) */
     cacheVersion: process.env.CACHE_VERSION || '2',
     /** Bumped when query-rewrite / intent-variant logic changes */
-    rewriteCacheVersion: process.env.REWRITE_CACHE_VERSION || '3',
+    rewriteCacheVersion: process.env.REWRITE_CACHE_VERSION || '4',
     /** Max age for persistent cache rows — enforced at read time */
     cacheMaxAgeMs:
       (parseInt(process.env.AI_CACHE_TTL_HOURS || '168', 10) || 168) * 60 * 60 * 1000,

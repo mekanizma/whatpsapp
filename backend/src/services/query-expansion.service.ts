@@ -17,7 +17,7 @@ const UNIVERSAL_INTENT_RULES: { pattern: RegExp; canonical: string }[] = [
   {
     pattern:
       /\b(nerede|neredesiniz|konum|where|located|address|adres)\b/i,
-    canonical: 'adres konum ulaşım',
+    canonical: 'adres yerleşke kampüs',
   },
   {
     pattern: /\b(fiyat|ücret|kaç para|price|cost|fee|tuition)\b/i,
