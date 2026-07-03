@@ -56,6 +56,16 @@ function normalizeFeatures(features: unknown): string[] {
     .filter(Boolean);
 }
 
+export const WHATSAPP_LINE_LIMITS = {
+  starter: 1,
+  business: 3,
+  enterprise: 999,
+} as const;
+
+export function getWhatsAppLineLimit(planType: string): number {
+  return WHATSAPP_LINE_LIMITS[planType as keyof typeof WHATSAPP_LINE_LIMITS] ?? WHATSAPP_LINE_LIMITS.starter;
+}
+
 export function getPlanModules(planType: string): PlanModuleKey[] {
   return PLAN_MODULES[planType] || PLAN_MODULES.starter;
 }

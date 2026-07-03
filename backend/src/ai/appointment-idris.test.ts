@@ -8,6 +8,7 @@ import {
   validateSlotWorkingHours,
 } from './appointment-slot.service';
 import { reconcileAppointmentAiResponse } from './appointment-response.service';
+import { buildAppointmentCompanyContext } from './appointment-company-context';
 
 // 1 Temmuz 2026 Çarşamba 18:50 TR ≈ 15:50 UTC
 const REF = new Date('2026-07-01T15:50:00.000Z');
@@ -57,13 +58,16 @@ describe('idris senaryosu', () => {
   });
 
   it('AI hatalı red yerine doğru onay özeti üretir', () => {
-    const slot = parseSlotFromTurkishText('yarın saat 3 de')!;
+    const slot = parseSlotFromTurkishText('yarın saat 3 de', REF)!;
     const dateLabel = formatSlotTurkish(slot.starts_at, slot.ends_at).split('-')[0].trim();
+    const ctx = buildAppointmentCompanyContext({}, 'Europe/Istanbul');
+    ctx.parseRef = REF;
     const fixed = reconcileAppointmentAiResponse(
       "Üzgünüm, yarın saat 15:00'te randevu alamazsınız.",
       history.slice(0, 7),
       'yarın saat 3 de',
-      'tr'
+      'tr',
+      ctx
     );
     assert.match(fixed, new RegExp(dateLabel.replace(/\./g, '\\.')));
     assert.match(fixed, /onaylıyor musunuz/i);

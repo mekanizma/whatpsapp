@@ -70,6 +70,7 @@ export const demoCompany: Company = {
   email: 'info@demoklinik.com',
   address: 'Lefkoşa, KKTC',
   working_hours: {},
+  timezone: 'Europe/Istanbul',
   logo: null,
   subscription_plan: 'business',
   status: 'active',

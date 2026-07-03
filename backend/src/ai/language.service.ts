@@ -141,7 +141,22 @@ type MessageKey =
   | 'appointment_confirmed'
   | 'appointment_confirmed_doctor'
   | 'appointment_processing'
-  | 'kb_topic_intro';
+  | 'kb_topic_intro'
+  | 'weekday_sun'
+  | 'weekday_mon'
+  | 'weekday_tue'
+  | 'weekday_wed'
+  | 'weekday_thu'
+  | 'weekday_fri'
+  | 'weekday_sat'
+  | 'appointment_day_closed'
+  | 'appointment_hours_outside'
+  | 'appointment_break_unavailable'
+  | 'appointment_pick_another_time'
+  | 'appointment_schedule_line'
+  | 'appointment_schedule_break'
+  | 'appointment_schedule_closed'
+  | 'appointment_no_open_days';
 
 const MESSAGES: Record<MessageKey, Record<TemplateLang, string>> = {
   greeting: {
@@ -350,6 +365,99 @@ const MESSAGES: Record<MessageKey, Record<TemplateLang, string>> = {
     ru: 'О чём вы хотите узнать? Напишите одну из тем:',
     fr: 'Sur quel sujet souhaitez-vous des informations ? Choisissez un thème ci-dessous :',
     es: '¿Sobre qué tema desea información? Puede escribir uno de estos temas:',
+  },
+  weekday_sun: {
+    tr: 'Pazar', en: 'Sunday', de: 'Sonntag', ar: 'الأحد', ru: 'воскресенье', fr: 'dimanche', es: 'domingo',
+  },
+  weekday_mon: {
+    tr: 'Pazartesi', en: 'Monday', de: 'Montag', ar: 'الاثنين', ru: 'понедельник', fr: 'lundi', es: 'lunes',
+  },
+  weekday_tue: {
+    tr: 'Salı', en: 'Tuesday', de: 'Dienstag', ar: 'الثلاثاء', ru: 'вторник', fr: 'mardi', es: 'martes',
+  },
+  weekday_wed: {
+    tr: 'Çarşamba', en: 'Wednesday', de: 'Mittwoch', ar: 'الأربعاء', ru: 'среда', fr: 'mercredi', es: 'miércoles',
+  },
+  weekday_thu: {
+    tr: 'Perşembe', en: 'Thursday', de: 'Donnerstag', ar: 'الخميس', ru: 'четверг', fr: 'jeudi', es: 'jueves',
+  },
+  weekday_fri: {
+    tr: 'Cuma', en: 'Friday', de: 'Freitag', ar: 'الجمعة', ru: 'пятница', fr: 'vendredi', es: 'viernes',
+  },
+  weekday_sat: {
+    tr: 'Cumartesi', en: 'Saturday', de: 'Samstag', ar: 'السبت', ru: 'суббота', fr: 'samedi', es: 'sábado',
+  },
+  appointment_day_closed: {
+    tr: '{day} günleri randevu alınamaz.',
+    en: 'Appointments are not available on {day}.',
+    de: 'Am {day} sind keine Termine möglich.',
+    ar: 'لا يمكن حجز مواعيد يوم {day}.',
+    ru: 'В {day} запись недоступна.',
+    fr: 'Pas de rendez-vous le {day}.',
+    es: 'No hay citas los {day}.',
+  },
+  appointment_hours_outside: {
+    tr: '{day} randevuları {open}–{close} arasındadır.',
+    en: '{day} appointments are between {open} and {close}.',
+    de: 'Termine am {day} sind von {open} bis {close}.',
+    ar: 'مواعيد {day} بين {open} و{close}.',
+    ru: 'Запись в {day}: с {open} до {close}.',
+    fr: 'Les rendez-vous le {day} sont de {open} à {close}.',
+    es: 'Las citas los {day} son de {open} a {close}.',
+  },
+  appointment_break_unavailable: {
+    tr: '{breakStart}–{breakEnd} arası randevu verilmemektedir.',
+    en: 'Appointments are unavailable between {breakStart} and {breakEnd}.',
+    de: 'Zwischen {breakStart} und {breakEnd} sind keine Termine möglich.',
+    ar: 'لا توجد مواعيد بين {breakStart} و{breakEnd}.',
+    ru: 'Запись недоступна с {breakStart} до {breakEnd}.',
+    fr: 'Pas de rendez-vous entre {breakStart} et {breakEnd}.',
+    es: 'No hay citas entre {breakStart} y {breakEnd}.',
+  },
+  appointment_pick_another_time: {
+    tr: 'Lütfen çalışma saatleri içinde başka bir saat yazın ({scheduleSummary}).',
+    en: 'Please choose another time within working hours ({scheduleSummary}).',
+    de: 'Bitte wählen Sie eine andere Uhrzeit innerhalb der Öffnungszeiten ({scheduleSummary}).',
+    ar: 'يرجى اختيار وقت آخر ضمن ساعات العمل ({scheduleSummary}).',
+    ru: 'Выберите другое время в рабочие часы ({scheduleSummary}).',
+    fr: 'Choisissez un autre horaire dans les heures d’ouverture ({scheduleSummary}).',
+    es: 'Elija otra hora dentro del horario laboral ({scheduleSummary}).',
+  },
+  appointment_schedule_line: {
+    tr: '{day}: {open}–{close}',
+    en: '{day}: {open}–{close}',
+    de: '{day}: {open}–{close}',
+    ar: '{day}: {open}–{close}',
+    ru: '{day}: {open}–{close}',
+    fr: '{day} : {open}–{close}',
+    es: '{day}: {open}–{close}',
+  },
+  appointment_schedule_break: {
+    tr: '(öğle {breakStart}–{breakEnd} kapalı)',
+    en: '(lunch break {breakStart}–{breakEnd})',
+    de: '(Pause {breakStart}–{breakEnd})',
+    ar: '(استراحة {breakStart}–{breakEnd})',
+    ru: '(перерыв {breakStart}–{breakEnd})',
+    fr: '(pause {breakStart}–{breakEnd})',
+    es: '(descanso {breakStart}–{breakEnd})',
+  },
+  appointment_schedule_closed: {
+    tr: '{days} kapalı',
+    en: '{days} closed',
+    de: '{days} geschlossen',
+    ar: '{days} مغلق',
+    ru: '{days} закрыто',
+    fr: '{days} fermé',
+    es: '{days} cerrado',
+  },
+  appointment_no_open_days: {
+    tr: 'Çalışma günü tanımlı değil',
+    en: 'No working days configured',
+    de: 'Keine Arbeitstage konfiguriert',
+    ar: 'لا توجد أيام عمل محددة',
+    ru: 'Рабочие дни не настроены',
+    fr: 'Aucun jour ouvré configuré',
+    es: 'No hay días laborables configurados',
   },
 };
 

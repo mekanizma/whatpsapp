@@ -5,7 +5,15 @@
 import { adminClient } from '../database/supabase';
 import { Appointment, AppointmentSource, AppointmentStatus } from '../types';
 
-import { preferHistorySlot, formatSlotLocalized, turkeyLocalToUtc, turkeyDateParts, turkeyTimeParts, CLINIC_TZ } from '../ai/appointment-slot.service';
+import {
+  preferHistorySlot,
+  formatSlotLocalized,
+  turkeyLocalToUtc,
+  turkeyDateParts,
+  turkeyTimeParts,
+} from '../ai/appointment-slot.service';
+import type { AppointmentCompanyContext } from '../ai/appointment-company-context';
+import { DEFAULT_APPOINTMENT_CONTEXT } from '../ai/appointment-company-context';
 import type { HistoryMsg } from '../ai/appointment-collect.service';
 import { isValidFullName, isValidProcedureTitle } from '../ai/appointment-collect.service';
 import { ConversationLang, t, getAppointmentProviderLabel } from '../ai/language.service';
@@ -39,20 +47,20 @@ export interface ParsedAppointmentAction {
   preferred_doctor?: string;
 }
 
-function formatSlot(start: Date, end: Date, locale = 'tr-TR'): string {
+function formatSlot(start: Date, end: Date, locale = 'tr-TR', timeZone = DEFAULT_APPOINTMENT_CONTEXT.timezone): string {
   const day = start.toLocaleDateString(locale, {
-    timeZone: CLINIC_TZ,
+    timeZone,
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
   });
   const t1 = start.toLocaleTimeString(locale, {
-    timeZone: CLINIC_TZ,
+    timeZone,
     hour: '2-digit',
     minute: '2-digit',
   });
   const t2 = end.toLocaleTimeString(locale, {
-    timeZone: CLINIC_TZ,
+    timeZone,
     hour: '2-digit',
     minute: '2-digit',
   });
@@ -463,7 +471,8 @@ export async function processAIAppointmentBooking(
   history: HistoryMsg[] = [],
   lang: ConversationLang = 'tr',
   latestMessage = '',
-  userConfirmed = false
+  userConfirmed = false,
+  ctx: AppointmentCompanyContext = DEFAULT_APPOINTMENT_CONTEXT
 ): Promise<{ message: string; appointment: Appointment | null }> {
   const hadMarker = rawResponse.includes(APPOINTMENT_MARKER);
   const action = parseAppointmentAction(rawResponse);
@@ -477,7 +486,7 @@ export async function processAIAppointmentBooking(
     return { message, appointment: null };
   }
 
-  const slot = preferHistorySlot(history, action, latestMessage);
+  const slot = preferHistorySlot(history, action, latestMessage, { timezone: ctx.timezone });
   const actionWithSlot = slot ? { ...action, ...slot } : action;
 
   const mergedAction: ParsedAppointmentAction = {
@@ -495,7 +504,7 @@ export async function processAIAppointmentBooking(
   }
 
   if (!userConfirmed) {
-    const slotLabel = formatSlotLocalized(mergedAction.starts_at, mergedAction.ends_at, lang);
+    const slotLabel = formatSlotLocalized(mergedAction.starts_at, mergedAction.ends_at, lang, ctx.timezone);
     const confirmMsg =
       lang === 'tr'
         ? `Randevunuzu ${slotLabel} için kaydetmemi onaylıyor musunuz? Lütfen "evet" veya "onaylıyorum" yazın.`

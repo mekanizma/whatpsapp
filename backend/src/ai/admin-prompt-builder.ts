@@ -21,10 +21,27 @@ export interface AdminPromptContext {
 
 export interface DynamicPromptContext {
   knowledge?: string;
+  knowledgeTitles?: string[];
   appointmentContext?: string;
   collectedContext?: string;
   lang?: ConversationLang;
   languageBlock?: string;
+}
+
+const TOPIC_RECALL_INSTRUCTION =
+  'Eğer müşterinin sorusu aşağıdaki konu başlıklarından birine açıkça uyuyorsa ama yukarıdaki alıntılarda cevap yoksa, konunun mevcut olduğunu belirt ve detay iste veya temsilciye aktarım teklif et; asla bilgi uydurma.';
+
+function formatTopicTitlesList(titles: string[]): string {
+  const unique = [...new Set(titles.map((t) => t.trim()).filter(Boolean))];
+  if (!unique.length) return '';
+
+  let joined = '';
+  for (const title of unique) {
+    const candidate = joined ? `${joined}, ${title}` : title;
+    if (candidate.length > 400) break;
+    joined = candidate;
+  }
+  return joined;
 }
 
 /** Ana sistem promptuna dahil edilmeyen roller */
@@ -120,8 +137,15 @@ export function buildDynamicUserMessage(
   sections.push(`### Dil\n${langSection}`);
 
   const knowledge = ctx.knowledge?.trim() || '';
-  if (knowledge) {
-    sections.push(`### Bilgi Bankası (bu soruya özel)\n${knowledge}`);
+  const titlesList = formatTopicTitlesList(ctx.knowledgeTitles || []);
+  const kbParts: string[] = [];
+  if (knowledge) kbParts.push(knowledge);
+  if (titlesList) {
+    kbParts.push(`Mevcut konu başlıkları: ${titlesList}`);
+    kbParts.push(TOPIC_RECALL_INSTRUCTION);
+  }
+  if (kbParts.length) {
+    sections.push(`### Bilgi Bankası (bu soruya özel)\n${kbParts.join('\n\n')}`);
   }
 
   const appointmentContext = ctx.appointmentContext?.trim() || '';

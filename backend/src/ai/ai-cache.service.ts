@@ -6,6 +6,7 @@ import { createHash } from 'crypto';
 import { config } from '../config';
 import { adminClient } from '../database/supabase';
 import { normalizeForCache } from './ai-gate.service';
+import { isKnowledgeMissAiResponse } from './knowledge-miss.service';
 import type { HistoryMsg } from './appointment-collect.service';
 import { parseCollectedFields } from './appointment-collect.service';
 
@@ -73,10 +74,13 @@ export function shouldCacheResponse(options: {
   response: string;
   history: HistoryMsg[];
   latestMessage: string;
+  kbHasNoMatch?: boolean;
 }): boolean {
   if (!config.ai.cacheEnabled) return false;
   if (options.appointmentMode) return false;
   if (options.shouldTransfer) return false;
+  if (options.kbHasNoMatch) return false;
+  if (isKnowledgeMissAiResponse(options.response)) return false;
   if (!options.response.trim()) return false;
 
   const names = extractConversationPersonNames(options.history, options.latestMessage);
@@ -266,7 +270,6 @@ export function startResponseCacheCleanupSchedule(): void {
 export interface QueryRewriteCacheEntry {
   variants: string[];
   isBroad: boolean;
-  embeddingText: string;
 }
 
 const rewriteCache = new Map<string, QueryRewriteCacheEntry & { expiresAt: number }>();
@@ -288,7 +291,6 @@ export function getCachedQueryRewrite(
   return {
     variants: entry.variants,
     isBroad: entry.isBroad,
-    embeddingText: entry.embeddingText,
   };
 }
 

@@ -7,6 +7,7 @@ import {
   responseContainsPersonName,
   extractConversationPersonNames,
 } from './ai-cache.service';
+import { isKnowledgeMissAiResponse } from './knowledge-miss.service';
 
 describe('ai-cache.service', () => {
   it('hashNormalizedMessage is stable and does not embed raw text in key format', () => {
@@ -80,6 +81,33 @@ describe('ai-cache.service', () => {
         latestMessage: 'çalışma saatleriniz nedir',
       }),
       true
+    );
+  });
+
+  it('shouldCacheResponse rejects knowledge-miss responses and kbHasNoMatch', () => {
+    const missResponse =
+      'Bu soru için bilgi bankasında eşleşen içerik bulunamadı. Canlı temsilciye aktarmayı teklif edebilirim.';
+    assert.equal(isKnowledgeMissAiResponse(missResponse), true);
+    assert.equal(
+      shouldCacheResponse({
+        appointmentMode: false,
+        shouldTransfer: false,
+        response: missResponse,
+        history: [],
+        latestMessage: 'yurt ücreti ne kadar',
+      }),
+      false
+    );
+    assert.equal(
+      shouldCacheResponse({
+        appointmentMode: false,
+        shouldTransfer: false,
+        response: 'Kampüs adresimiz Kadıköy.',
+        history: [],
+        latestMessage: 'üniversite nerede',
+        kbHasNoMatch: true,
+      }),
+      false
     );
   });
 

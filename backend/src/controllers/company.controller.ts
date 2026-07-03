@@ -9,6 +9,8 @@ import { AuthRequest, isDemoSession } from '../middleware/auth.middleware';
 import { getDashboardStats } from '../services/dashboard.service';
 import { getAICostReport } from '../services/ai-cost.service';
 import { logActivity } from '../services/log.service';
+import { validateWorkingHoursForWrite } from '../services/working-hours.service';
+import { validateCompanyTimezoneForWrite } from '../services/company-timezone.service';
 
 export async function getCompany(req: AuthRequest, res: Response): Promise<void> {
   const companyId = req.params.id || req.companyId;
@@ -29,7 +31,27 @@ export async function getCompany(req: AuthRequest, res: Response): Promise<void>
 
 export async function updateCompany(req: AuthRequest, res: Response): Promise<void> {
   const companyId = req.params.id || req.companyId;
-  const { company_name, category, phone, email, address, working_hours, logo } = req.body;
+  const { company_name, category, phone, email, address, working_hours, timezone, logo } = req.body;
+
+  let validatedWorkingHours: Record<string, unknown> | undefined;
+  if (working_hours !== undefined) {
+    const wh = validateWorkingHoursForWrite(working_hours);
+    if (!wh.ok) {
+      res.status(400).json({ success: false, error: wh.error });
+      return;
+    }
+    validatedWorkingHours = wh.data;
+  }
+
+  let validatedTimezone: string | undefined;
+  if (timezone !== undefined) {
+    const tz = validateCompanyTimezoneForWrite(timezone);
+    if (!tz.ok) {
+      res.status(400).json({ success: false, error: tz.error });
+      return;
+    }
+    validatedTimezone = tz.timezone;
+  }
 
   if (isDemoSession(req)) {
     if (company_name !== undefined) demoCompany.company_name = company_name;
@@ -37,15 +59,27 @@ export async function updateCompany(req: AuthRequest, res: Response): Promise<vo
     if (phone !== undefined) demoCompany.phone = phone;
     if (email !== undefined) demoCompany.email = email;
     if (address !== undefined) demoCompany.address = address;
-    if (working_hours !== undefined) demoCompany.working_hours = working_hours;
+    if (validatedWorkingHours !== undefined) demoCompany.working_hours = validatedWorkingHours;
+    if (validatedTimezone !== undefined) demoCompany.timezone = validatedTimezone;
     if (logo !== undefined) demoCompany.logo = logo;
     res.json({ success: true, data: demoCompany });
     return;
   }
 
+  const updatePayload: Record<string, unknown> = {
+    company_name,
+    category,
+    phone,
+    email,
+    address,
+    logo,
+  };
+  if (validatedWorkingHours !== undefined) updatePayload.working_hours = validatedWorkingHours;
+  if (validatedTimezone !== undefined) updatePayload.timezone = validatedTimezone;
+
   const { data, error } = await adminClient
     .from('companies')
-    .update({ company_name, category, phone, email, address, working_hours, logo })
+    .update(updatePayload)
     .eq('id', companyId)
     .select()
     .single();

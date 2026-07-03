@@ -1,65 +1,48 @@
 /**
- * Konuşmadan teklif edilen randevu saatini çıkarır (TR, Europe/Istanbul)
+ * Konuşmadan teklif edilen randevu saatini çıkarır (çok dilli, tenant timezone)
  */
 
 import { HistoryMsg } from './appointment-collect.service';
-import { ConversationLang, localeForLang } from './language.service';
+import { ConversationLang, localeForLang, t } from './language.service';
+import {
+  buildScheduleSummary,
+  formatWeekdayName,
+  parseHm,
+  weekdayToDayKey,
+  type WorkingHoursSchedule,
+} from '../services/working-hours.service';
+import { DEFAULT_COMPANY_TIMEZONE } from '../services/company-timezone.service';
+import {
+  type AppointmentCompanyContext,
+  DEFAULT_APPOINTMENT_CONTEXT,
+} from './appointment-company-context';
+import {
+  AM_TOKENS,
+  MONTH_NAME_PATTERN,
+  MONTH_TOKENS,
+  NEXT_WEEKDAY_RE,
+  PM_TOKENS,
+  RELATIVE_DATE_TOKENS,
+  WEEKDAY_TOKENS,
+  weekdayInText,
+} from './appointment-datetime-tokens';
 
-export const CLINIC_TZ = 'Europe/Istanbul';
-export const TR_OFFSET_MS = 3 * 60 * 60 * 1000;
+export const DEFAULT_COMPANY_TIMEZONE_EXPORT = DEFAULT_COMPANY_TIMEZONE;
+/** @deprecated Use DEFAULT_COMPANY_TIMEZONE or company.timezone */
+export const CLINIC_TZ = DEFAULT_COMPANY_TIMEZONE;
 
 export interface ParsedSlot {
   starts_at: string;
   ends_at: string;
 }
 
-const TR_MONTHS: Record<string, number> = {
-  ocak: 1,
-  şubat: 2,
-  subat: 2,
-  mart: 3,
-  nisan: 4,
-  mayıs: 5,
-  mayis: 5,
-  haziran: 6,
-  temmuz: 7,
-  ağustos: 8,
-  agustos: 8,
-  eylül: 9,
-  eylul: 9,
-  ekim: 10,
-  kasım: 11,
-  kasim: 11,
-  aralık: 12,
-  aralik: 12,
-};
-
-const TR_WEEKDAYS: Record<string, number> = {
-  pazartesi: 1,
-  salı: 2,
-  sali: 2,
-  çarşamba: 3,
-  carsamba: 3,
-  perşembe: 4,
-  persembe: 4,
-  cuma: 5,
-  cumartesi: 6,
-  pazar: 0,
-};
-
-const TR_WEEKDAY_NAMES = ['pazar', 'pazartesi', 'salı', 'çarşamba', 'perşembe', 'cuma', 'cumartesi'];
-
-export function weekdayInText(text: string): number | null {
-  const lower = text.toLocaleLowerCase('tr');
-  for (const [name, wd] of Object.entries(TR_WEEKDAYS)) {
-    if (new RegExp(`\\b${name}\\b`, 'i').test(lower)) return wd;
-  }
-  return null;
+export interface SlotParseOptions {
+  ref?: Date;
+  timezone?: string;
 }
 
-export function slotWeekday(startsAt: string): number {
-  const parts = turkeyDateParts(new Date(startsAt));
-  return turkeyLocalToUtc(parts.year, parts.month, parts.day, 12, 0).getUTCDay();
+function normalizeSlotOptions(refOrOptions: Date | SlotParseOptions = {}): SlotParseOptions {
+  return refOrOptions instanceof Date ? { ref: refOrOptions } : refOrOptions;
 }
 
 export interface WorkingHoursResult {
@@ -67,54 +50,66 @@ export interface WorkingHoursResult {
   reason?: string;
 }
 
-/** Klinik çalışma saatleri: Pzt–Cum 09–18, Cmt 09–14, Paz kapalı, öğle 12:30–13:30 kapalı */
-export function validateSlotWorkingHours(slot: ParsedSlot): WorkingHoursResult {
-  const start = new Date(slot.starts_at);
-  const end = new Date(slot.ends_at);
-  const wd = slotWeekday(slot.starts_at);
-  const { hour: sh, minute: sm } = turkeyTimeParts(start);
-  const { hour: eh } = turkeyTimeParts(end);
-  const startMin = sh * 60 + sm;
-  const endMin = eh * 60 + turkeyTimeParts(end).minute;
-
-  if (wd === 0) {
-    return { valid: false, reason: 'Pazar günleri randevu alınamaz.' };
-  }
-
-  const dayEnd = wd === 6 ? 14 * 60 : 18 * 60;
-  const dayStart = 9 * 60;
-  if (startMin < dayStart || endMin > dayEnd) {
-    return {
-      valid: false,
-      reason:
-        wd === 6
-          ? 'Cumartesi randevuları 09:00–14:00 arasındadır.'
-          : 'Hafta içi randevular 09:00–18:00 arasındadır.',
-    };
-  }
-
-  const lunchStart = 12 * 60 + 30;
-  const lunchEnd = 13 * 60 + 30;
-  if (startMin < lunchEnd && endMin > lunchStart) {
-    return { valid: false, reason: '12:30–13:30 öğle arası randevu verilmemektedir.' };
-  }
-
-  return { valid: true };
+function getTimezone(ctx?: AppointmentCompanyContext, options?: SlotParseOptions): string {
+  return options?.timezone || ctx?.timezone || DEFAULT_COMPANY_TIMEZONE;
 }
 
-const CONFIRM_ONLY_RE =
-  /^(evet|onayl?[iıİI]yorum|onaylıyorum|onayliyorum|onay|tamam|uygun|olur|kabul|ok|yes|[123])\s*$/iu;
-
-function isConfirmationOnlyMessage(message: string): boolean {
-  return CONFIRM_ONLY_RE.test(message.trim());
+function getTimezoneOffsetMs(date: Date, timeZone: string): number {
+  const dtf = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  });
+  const parts: Record<string, string> = {};
+  for (const p of dtf.formatToParts(date)) {
+    if (p.type !== 'literal') parts[p.type] = p.value;
+  }
+  const asUtc = Date.UTC(
+    Number(parts.year),
+    Number(parts.month) - 1,
+    Number(parts.day),
+    Number(parts.hour),
+    Number(parts.minute),
+    Number(parts.second)
+  );
+  return asUtc - date.getTime();
 }
 
-const MONTH_NAME_RE =
-  /(ocak|şubat|subat|mart|nisan|mayıs|mayis|haziran|temmuz|ağustos|agustos|eylül|eylul|ekim|kasım|kasim|aralık|aralik)/i;
+export function localToUtcInTimezone(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+  timeZone: string = DEFAULT_COMPANY_TIMEZONE
+): Date {
+  const utcGuess = Date.UTC(year, month - 1, day, hour, minute, 0);
+  const offset = getTimezoneOffsetMs(new Date(utcGuess), timeZone);
+  return new Date(utcGuess - offset);
+}
 
-export function turkeyDateParts(ref: Date): { year: number; month: number; day: number } {
+/** @deprecated Use localToUtcInTimezone with company timezone */
+export function turkeyLocalToUtc(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number
+): Date {
+  return localToUtcInTimezone(year, month, day, hour, minute, DEFAULT_COMPANY_TIMEZONE);
+}
+
+export function companyDateParts(
+  ref: Date,
+  timeZone: string = DEFAULT_COMPANY_TIMEZONE
+): { year: number; month: number; day: number } {
   const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: CLINIC_TZ,
+    timeZone,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
@@ -123,9 +118,17 @@ export function turkeyDateParts(ref: Date): { year: number; month: number; day: 
   return { year, month, day };
 }
 
-export function turkeyTimeParts(ref: Date): { hour: number; minute: number } {
+/** @deprecated Use companyDateParts */
+export function turkeyDateParts(ref: Date): { year: number; month: number; day: number } {
+  return companyDateParts(ref, DEFAULT_COMPANY_TIMEZONE);
+}
+
+export function companyTimeParts(
+  ref: Date,
+  timeZone: string = DEFAULT_COMPANY_TIMEZONE
+): { hour: number; minute: number } {
   const fmt = new Intl.DateTimeFormat('en-GB', {
-    timeZone: CLINIC_TZ,
+    timeZone,
     hour: '2-digit',
     minute: '2-digit',
     hour12: false,
@@ -134,27 +137,120 @@ export function turkeyTimeParts(ref: Date): { hour: number; minute: number } {
   return { hour, minute };
 }
 
-export function turkeyLocalToUtc(
-  year: number,
-  month: number,
-  day: number,
-  hour: number,
-  minute: number
-): Date {
-  return new Date(Date.UTC(year, month - 1, day, hour, minute, 0) - TR_OFFSET_MS);
+/** @deprecated Use companyTimeParts */
+export function turkeyTimeParts(ref: Date): { hour: number; minute: number } {
+  return companyTimeParts(ref, DEFAULT_COMPANY_TIMEZONE);
 }
 
-function addDays(parts: { year: number; month: number; day: number }, days: number) {
-  const d = turkeyLocalToUtc(parts.year, parts.month, parts.day, 12, 0);
+export function slotWeekday(startsAt: string, timeZone: string = DEFAULT_COMPANY_TIMEZONE): number {
+  const parts = companyDateParts(new Date(startsAt), timeZone);
+  return localToUtcInTimezone(parts.year, parts.month, parts.day, 12, 0, timeZone).getUTCDay();
+}
+
+export function validateSlotWorkingHours(
+  slot: ParsedSlot,
+  ctx: AppointmentCompanyContext = DEFAULT_APPOINTMENT_CONTEXT,
+  lang: ConversationLang = 'tr'
+): WorkingHoursResult {
+  const timeZone = ctx.timezone;
+  const schedule = ctx.schedule;
+  const wd = slotWeekday(slot.starts_at, timeZone);
+  const dayKey = weekdayToDayKey(wd);
+  const daySchedule = schedule[dayKey];
+  const dayName = formatWeekdayName(lang, wd);
+
+  const start = new Date(slot.starts_at);
+  const end = new Date(slot.ends_at);
+  const { hour: sh, minute: sm } = companyTimeParts(start, timeZone);
+  const { hour: eh, minute: em } = companyTimeParts(end, timeZone);
+  const startMin = sh * 60 + sm;
+  const endMin = eh * 60 + em;
+
+  if (!daySchedule) {
+    return {
+      valid: false,
+      reason: t(lang, 'appointment_day_closed', { day: dayName }),
+    };
+  }
+
+  const openMin = parseHm(daySchedule.open);
+  const closeMin = parseHm(daySchedule.close);
+
+  if (startMin < openMin || endMin > closeMin) {
+    return {
+      valid: false,
+      reason: t(lang, 'appointment_hours_outside', {
+        day: dayName,
+        open: daySchedule.open,
+        close: daySchedule.close,
+      }),
+    };
+  }
+
+  for (const br of daySchedule.breaks || []) {
+    const breakStart = parseHm(br.start);
+    const breakEnd = parseHm(br.end);
+    if (startMin < breakEnd && endMin > breakStart) {
+      return {
+        valid: false,
+        reason: t(lang, 'appointment_break_unavailable', {
+          breakStart: br.start,
+          breakEnd: br.end,
+        }),
+      };
+    }
+  }
+
+  return { valid: true };
+}
+
+export function buildWorkingHoursRejectionMessage(
+  result: WorkingHoursResult,
+  ctx: AppointmentCompanyContext,
+  lang: ConversationLang
+): string {
+  const summary = buildScheduleSummary(ctx.schedule, lang);
+  const hint = t(lang, 'appointment_pick_another_time', { scheduleSummary: summary });
+  return `${result.reason || ''} ${hint}`.trim();
+}
+
+export { weekdayInText };
+
+const CONFIRM_ONLY_RE =
+  /^(evet|onayl?[iıİI]yorum|onaylıyorum|onayliyorum|onay|tamam|uygun|olur|kabul|ok|yes|[123])\s*$/iu;
+
+function isConfirmationOnlyMessage(message: string): boolean {
+  return CONFIRM_ONLY_RE.test(message.trim());
+}
+
+const MONTH_NAME_RE = new RegExp(MONTH_NAME_PATTERN, 'i');
+
+const OFFER_CONTEXT_RE =
+  /onaylıyor|onayliyor|uygun|müsait|musait|alabilirsiniz|öneriyorum|oneriyorum|randevu.*saat|saat.*randevu|teyit|onaylıyor musunuz|onayliyor musunuz|do you confirm|available at|book.*appointment/i;
+
+export function isWorkingHoursInfoMessage(text: string): boolean {
+  return (
+    /çalışma saat|calisma saat|working hours|randevuları .* arasındadır|appointments are .* between|appointments are not available|randevu verilmemektedir|lunch break|öğle.*kapalı|ogle.*kapali|choose another time within working hours|çalışma saatleri içinde başka bir saat/i.test(
+      text
+    ) || /\d{2}:\d{2}[–-]\d{2}:\d{2}/.test(text)
+  );
+}
+
+function addDays(
+  parts: { year: number; month: number; day: number },
+  days: number,
+  timeZone: string
+) {
+  const d = localToUtcInTimezone(parts.year, parts.month, parts.day, 12, 0, timeZone);
   d.setUTCDate(d.getUTCDate() + days);
-  return turkeyDateParts(d);
+  return companyDateParts(d, timeZone);
 }
 
 function daysInMonth(year: number, month: number): number {
   return new Date(Date.UTC(year, month, 0)).getUTCDate();
 }
 
-function normalizeYear(year: number, refYear: number): number {
+function normalizeYear(year: number): number {
   if (year < 100) return 2000 + year;
   return year;
 }
@@ -165,17 +261,18 @@ function rolloverPastDate(
   day: number,
   hour: number,
   minute: number,
-  ref: Date
+  ref: Date,
+  timeZone: string
 ): { year: number; month: number; day: number } {
   let y = year;
-  let m = month;
-  let d = day;
-  const start = turkeyLocalToUtc(y, m, d, hour, minute);
+  const m = month;
+  const d = day;
+  const start = localToUtcInTimezone(y, m, d, hour, minute, timeZone);
   if (start.getTime() >= ref.getTime() - 60_000) {
     return { year: y, month: m, day: d };
   }
-  // Aynı yıl içinde geçmişse bir sonraki yıla al (ör. aralıkta "5 ocak")
-  if (m < turkeyDateParts(ref).month || (m === turkeyDateParts(ref).month && d < turkeyDateParts(ref).day)) {
+  const refParts = companyDateParts(ref, timeZone);
+  if (m < refParts.month || (m === refParts.month && d < refParts.day)) {
     y += 1;
   } else {
     y += 1;
@@ -183,15 +280,12 @@ function rolloverPastDate(
   return { year: y, month: m, day: d };
 }
 
-const OFFER_CONTEXT_RE =
-  /onaylıyor|onayliyor|uygun|müsait|musait|alabilirsiniz|öneriyorum|oneriyorum|randevu.*saat|saat.*randevu|teyit|onaylıyor musunuz|onayliyor musunuz/i;
-
 function normalizeSpokenHour(hour: number, text: string): number {
   const lower = text.toLocaleLowerCase('tr');
-  if (/\b(sabah|gece|öğleden önce|ogleden once|am)\b/.test(lower)) return hour;
+  if (AM_TOKENS.test(lower)) return hour === 12 ? 0 : hour;
+  if (PM_TOKENS.test(lower)) return hour < 12 ? hour + 12 : hour;
   if (hour >= 13) return hour;
   if (hour >= 8 && hour <= 12) return hour;
-  // Konuşma dili: "saat 3" → 15:00
   if (hour >= 1 && hour <= 7) return hour + 12;
   return hour;
 }
@@ -200,12 +294,33 @@ function extractTimeFromText(text: string): { hour: number; minute: number } | n
   let hour: number | null = null;
   let minute = 0;
 
-  const saatFull = text.match(/saat\s*(\d{1,2})[:.](\d{2})/i);
+  const ampmMatch = text.match(/\b(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)\b/i);
+  if (ampmMatch) {
+    hour = parseInt(ampmMatch[1], 10);
+    minute = ampmMatch[2] ? parseInt(ampmMatch[2], 10) : 0;
+    const ampm = ampmMatch[3].toLowerCase();
+    if (ampm === 'pm' && hour < 12) hour += 12;
+    if (ampm === 'am' && hour === 12) hour = 0;
+    if (hour <= 23 && minute <= 59) return { hour, minute };
+  }
+
+  const atTime = text.match(/\bat\s+(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)?\b/i);
+  if (atTime) {
+    hour = parseInt(atTime[1], 10);
+    minute = atTime[2] ? parseInt(atTime[2], 10) : 0;
+    const ampm = atTime[3]?.toLowerCase();
+    if (ampm === 'pm' && hour < 12) hour += 12;
+    if (ampm === 'am' && hour === 12) hour = 0;
+    else if (!ampm) hour = normalizeSpokenHour(hour, text);
+    if (hour <= 23 && minute <= 59) return { hour, minute };
+  }
+
+  const saatFull = text.match(/(?:saat|at)\s*(\d{1,2})[:.](\d{2})/i);
   if (saatFull) {
     hour = parseInt(saatFull[1], 10);
     minute = parseInt(saatFull[2], 10);
   } else {
-    const saatBare = text.match(/\bsaat\s*(\d{1,2})\b/i);
+    const saatBare = text.match(/\b(?:saat|at)\s*(\d{1,2})\b/i);
     if (saatBare) {
       hour = parseInt(saatBare[1], 10);
       minute = 0;
@@ -250,50 +365,73 @@ function extractTimeFromText(text: string): { hour: number; minute: number } | n
 function stripTimeFromText(text: string): string {
   return text
     .replace(/\d{1,2}[:.]\d{2}(?:\s*[-–]\s*\d{1,2}[:.]\d{2})?/g, ' ')
-    .replace(/\bsaat\s*\d{1,2}(?:[:.]\d{2})?\b/gi, ' ')
-    .replace(/\b\d{1,2}\s*['']?(de|da|te|ta)\b/gi, ' ');
+    .replace(/\b(?:saat|at)\s*\d{1,2}(?:[:.]\d{2})?\s*(?:am|pm)?\b/gi, ' ')
+    .replace(/\b\d{1,2}\s*['']?(de|da|te|ta)\b/gi, ' ')
+    .replace(/\b\d{1,2}(?:[:.]\d{2})?\s*(am|pm)\b/gi, ' ');
+}
+
+function resolveNextWeekday(
+  weekday: number,
+  refParts: { year: number; month: number; day: number },
+  timeZone: string,
+  forceNext = false
+) {
+  const refUtc = localToUtcInTimezone(refParts.year, refParts.month, refParts.day, 12, 0, timeZone);
+  const currentWd = refUtc.getUTCDay();
+  let delta = (weekday - currentWd + 7) % 7;
+  if (delta === 0 && forceNext) delta = 7;
+  if (delta === 0 && !forceNext) delta = 7;
+  return addDays(refParts, delta, timeZone);
 }
 
 function extractDateParts(
   text: string,
-  ref: Date
+  ref: Date,
+  timeZone: string
 ): { year: number; month: number; day: number } | null {
   const dateText = stripTimeFromText(text);
   const lower = dateText.toLocaleLowerCase('tr');
-  const trNow = turkeyDateParts(ref);
-  let { year, month, day } = trNow;
+  const localNow = companyDateParts(ref, timeZone);
+  let { year, month, day } = localNow;
 
-  if (/\bgelecek\s+hafta\b/.test(lower)) {
-    ({ year, month, day } = addDays(trNow, 7));
-  }
-
-  if (/\byarın\b|\byarin\b/.test(lower)) {
-    return addDays(trNow, 1);
-  }
-  if (/\böbür gün\b|\bobur\s+gün\b|\bobur\s+gun\b/.test(lower)) {
-    return addDays(trNow, 2);
-  }
-  if (/\bbugün\b|\bbugun\b/.test(lower)) {
-    return trNow;
+  const nextWd = text.match(NEXT_WEEKDAY_RE);
+  if (nextWd) {
+    const token = nextWd[1].toLocaleLowerCase('tr');
+    const weekday = WEEKDAY_TOKENS[token];
+    if (weekday !== undefined) {
+      return resolveNextWeekday(weekday, localNow, timeZone, true);
+    }
   }
 
-  for (const [name, weekday] of Object.entries(TR_WEEKDAYS)) {
+  if (RELATIVE_DATE_TOKENS.nextWeek.some((re) => re.test(lower))) {
+    return addDays(localNow, 7, timeZone);
+  }
+  if (RELATIVE_DATE_TOKENS.tomorrow.some((re) => re.test(lower))) {
+    return addDays(localNow, 1, timeZone);
+  }
+  if (RELATIVE_DATE_TOKENS.dayAfterTomorrow.some((re) => re.test(lower))) {
+    return addDays(localNow, 2, timeZone);
+  }
+  if (RELATIVE_DATE_TOKENS.today.some((re) => re.test(lower))) {
+    return localNow;
+  }
+
+  for (const [name, weekday] of Object.entries(WEEKDAY_TOKENS)) {
     if (new RegExp(`\\b${name}\\b`, 'i').test(lower)) {
-      const refUtc = turkeyLocalToUtc(trNow.year, trNow.month, trNow.day, 12, 0);
-      const currentWd = refUtc.getUTCDay();
-      let delta = (weekday - currentWd + 7) % 7;
-      if (delta === 0) delta = 7;
-      return addDays(trNow, delta);
+      return resolveNextWeekday(weekday, localNow, timeZone, /\bnext\b/i.test(lower));
     }
   }
 
   const monthDayMatch = dateText.match(
-    /(\d{1,2})\s*[,.\s/-]*\s*(ocak|şubat|subat|mart|nisan|mayıs|mayis|haziran|temmuz|ağustos|agustos|eylül|eylul|ekim|kasım|kasim|aralık|aralik)(?:\s*[,.\s/-]*\s*(\d{2,4}))?/i
+    new RegExp(
+      `(\\d{1,2})\\s*[,.\s/-]*\\s*(${MONTH_NAME_PATTERN})(?:\\s*[,.\s/-]*\\s*(\\d{2,4}))?`,
+      'i'
+    )
   );
   if (monthDayMatch) {
     day = parseInt(monthDayMatch[1], 10);
-    month = TR_MONTHS[monthDayMatch[2].toLocaleLowerCase('tr')];
-    if (monthDayMatch[3]) year = normalizeYear(parseInt(monthDayMatch[3], 10), trNow.year);
+    month = MONTH_TOKENS[monthDayMatch[2].toLocaleLowerCase('tr')];
+    if (monthDayMatch[3]) year = normalizeYear(parseInt(monthDayMatch[3], 10));
     if (day >= 1 && day <= daysInMonth(year, month)) {
       return { year, month, day };
     }
@@ -301,12 +439,15 @@ function extractDateParts(
   }
 
   const dayMonthMatch = dateText.match(
-    /(ocak|şubat|subat|mart|nisan|mayıs|mayis|haziran|temmuz|ağustos|agustos|eylül|eylul|ekim|kasım|kasim|aralık|aralik)\s*[,.\s/-]*\s*(\d{1,2})(?:\s*[,.\s/-]*\s*(\d{2,4}))?/i
+    new RegExp(
+      `(${MONTH_NAME_PATTERN})\\s*[,.\s/-]*\\s*(\\d{1,2})(?:\\s*[,.\s/-]*\\s*(\\d{2,4}))?`,
+      'i'
+    )
   );
   if (dayMonthMatch) {
-    month = TR_MONTHS[dayMonthMatch[1].toLocaleLowerCase('tr')];
+    month = MONTH_TOKENS[dayMonthMatch[1].toLocaleLowerCase('tr')];
     day = parseInt(dayMonthMatch[2], 10);
-    if (dayMonthMatch[3]) year = normalizeYear(parseInt(dayMonthMatch[3], 10), trNow.year);
+    if (dayMonthMatch[3]) year = normalizeYear(parseInt(dayMonthMatch[3], 10));
     if (day >= 1 && day <= daysInMonth(year, month)) {
       return { year, month, day };
     }
@@ -330,7 +471,7 @@ function extractDateParts(
     month = parseInt(dateMatch[2], 10);
     if (month < 1 || month > 12) return null;
     const y = dateMatch[3];
-    if (y) year = normalizeYear(parseInt(y, 10), trNow.year);
+    if (y) year = normalizeYear(parseInt(y, 10));
     if (day < 1 || day > daysInMonth(year, month)) return null;
     return { year, month, day };
   }
@@ -340,31 +481,37 @@ function extractDateParts(
   return null;
 }
 
-/** Tek bir metinden tarih/saat çıkar */
-export function parseSlotFromTurkishText(text: string, ref = new Date()): ParsedSlot | null {
+/** Tek bir metinden tarih/saat çıkar (TR + EN) */
+export function parseSlotFromText(
+  text: string,
+  options: SlotParseOptions = {}
+): ParsedSlot | null {
+  const ref = options.ref ?? new Date();
+  const timeZone = options.timezone ?? DEFAULT_COMPANY_TIMEZONE;
+
   const time = extractTimeFromText(text);
   if (!time) return null;
   const { hour, minute } = time;
 
-  const trNow = turkeyDateParts(ref);
-  let dateParts = extractDateParts(text, ref);
+  const localNow = companyDateParts(ref, timeZone);
+  let dateParts = extractDateParts(text, ref, timeZone);
 
   if (!dateParts) {
-    dateParts = { ...trNow };
-    const startToday = turkeyLocalToUtc(trNow.year, trNow.month, trNow.day, hour, minute);
+    dateParts = { ...localNow };
+    const startToday = localToUtcInTimezone(localNow.year, localNow.month, localNow.day, hour, minute, timeZone);
     if (startToday.getTime() <= ref.getTime()) {
-      dateParts = addDays(trNow, 1);
+      dateParts = addDays(localNow, 1, timeZone);
     }
   }
 
   let { year, month, day } = dateParts;
-  ({ year, month, day } = rolloverPastDate(year, month, day, hour, minute, ref));
+  ({ year, month, day } = rolloverPastDate(year, month, day, hour, minute, ref, timeZone));
 
   if (month < 1 || month > 12 || day < 1 || day > daysInMonth(year, month)) {
     return null;
   }
 
-  const start = turkeyLocalToUtc(year, month, day, hour, minute);
+  const start = localToUtcInTimezone(year, month, day, hour, minute, timeZone);
   let end = new Date(start.getTime() + 30 * 60 * 1000);
 
   const rangeMatch = text.match(/(\d{1,2})[:.](\d{2})\s*[-–]\s*(\d{1,2})[:.](\d{2})/);
@@ -372,7 +519,7 @@ export function parseSlotFromTurkishText(text: string, ref = new Date()): Parsed
     const eh = parseInt(rangeMatch[3], 10);
     const em = parseInt(rangeMatch[4], 10);
     if (eh <= 23 && em <= 59) {
-      end = turkeyLocalToUtc(year, month, day, eh, em);
+      end = localToUtcInTimezone(year, month, day, eh, em, timeZone);
     }
   }
 
@@ -382,11 +529,17 @@ export function parseSlotFromTurkishText(text: string, ref = new Date()): Parsed
   return { starts_at: start.toISOString(), ends_at: end.toISOString() };
 }
 
+/** @deprecated Use parseSlotFromText */
+export function parseSlotFromTurkishText(text: string, ref = new Date()): ParsedSlot | null {
+  return parseSlotFromText(text, { ref });
+}
+
 export function extractNumberedAlternative(
   history: HistoryMsg[],
   latestMessage: string,
-  ref = new Date()
+  refOrOptions: Date | SlotParseOptions = {}
 ): ParsedSlot | null {
+  const options = normalizeSlotOptions(refOrOptions);
   const numMatch = latestMessage.trim().match(/^([123])\s*$/);
   if (!numMatch) return null;
   const n = parseInt(numMatch[1], 10);
@@ -396,7 +549,7 @@ export function extractNumberedAlternative(
     for (const line of history[i].message.split('\n')) {
       const m = line.match(new RegExp(`^${n}\\)\\s*(.+)$`));
       if (m) {
-        const slot = parseSlotFromTurkishText(m[1].trim(), ref);
+        const slot = parseSlotFromText(m[1].trim(), options);
         if (slot) return slot;
       }
     }
@@ -404,55 +557,52 @@ export function extractNumberedAlternative(
   return null;
 }
 
-const WORKING_HOURS_INFO_RE =
-  /çalışma saat|calisma saat|hafta içi|hafta ici|pazartesi.*cuma|pzt.*cum|öğle.*kapalı|ogle.*kapali|09:00.*18:00/i;
-
-/** Konuşmadan (müşteri + AI) en güncel tarih/saat teklifini bul */
 export function extractSlotFromConversation(
   history: HistoryMsg[],
   latestMessage: string,
-  ref = new Date()
+  refOrOptions: Date | SlotParseOptions = {}
 ): ParsedSlot | null {
-  const fromNumber = extractNumberedAlternative(history, latestMessage, ref);
+  const options = normalizeSlotOptions(refOrOptions);
+  const fromNumber = extractNumberedAlternative(history, latestMessage, options);
   if (fromNumber) return fromNumber;
 
-  const fromLatest = parseSlotFromTurkishText(latestMessage, ref);
+  const fromLatest = parseSlotFromText(latestMessage, options);
   if (fromLatest) return fromLatest;
 
   for (let i = history.length - 1; i >= 0; i--) {
     const m = history[i];
     if (m.sender_type !== 'customer') continue;
-    const slot = parseSlotFromTurkishText(m.message, ref);
+    const slot = parseSlotFromText(m.message, options);
     if (slot) return slot;
   }
 
-  return extractOfferedSlotFromHistory(history, ref);
+  return extractOfferedSlotFromHistory(history, options);
 }
 
-/** Onay öncesi son AI teklifindeki saati bul */
 export function extractOfferedSlotFromHistory(
   history: HistoryMsg[],
-  ref = new Date()
+  refOrOptions: Date | SlotParseOptions = {}
 ): ParsedSlot | null {
+  const options = normalizeSlotOptions(refOrOptions);
   for (let i = history.length - 1; i >= 0; i--) {
     const m = history[i];
     if (m.sender_type !== 'ai') continue;
     const text = m.message;
-    if (WORKING_HOURS_INFO_RE.test(text) && !OFFER_CONTEXT_RE.test(text)) continue;
+    if (isWorkingHoursInfoMessage(text) && !OFFER_CONTEXT_RE.test(text)) continue;
     if (!OFFER_CONTEXT_RE.test(text)) continue;
-    const slot = parseSlotFromTurkishText(text, ref);
+    const slot = parseSlotFromText(text, options);
     if (slot) return slot;
   }
   return null;
 }
 
-/** Onay anında — müşterinin gün adı/tarih ifadesi AI halüsinasyonundan önceliklidir */
 export function extractSlotForConfirmation(
   history: HistoryMsg[],
   latestMessage: string,
-  ref = new Date()
+  refOrOptions: Date | SlotParseOptions = {}
 ): ParsedSlot | null {
-  const fromNumber = extractNumberedAlternative(history, latestMessage, ref);
+  const options = normalizeSlotOptions(refOrOptions);
+  const fromNumber = extractNumberedAlternative(history, latestMessage, options);
   if (fromNumber) return fromNumber;
 
   let customerSlot: ParsedSlot | null = null;
@@ -462,7 +612,7 @@ export function extractSlotForConfirmation(
     if (m.sender_type !== 'customer') continue;
     const msg = m.message.trim();
     if (isConfirmationOnlyMessage(msg)) continue;
-    const slot = parseSlotFromTurkishText(msg, ref);
+    const slot = parseSlotFromText(msg, options);
     if (slot) {
       customerSlot = slot;
       customerText = msg;
@@ -470,12 +620,13 @@ export function extractSlotForConfirmation(
     }
   }
 
-  const aiSlot = extractOfferedSlotFromHistory(history, ref);
+  const aiSlot = extractOfferedSlotFromHistory(history, options);
+  const timeZone = options.timezone ?? DEFAULT_COMPANY_TIMEZONE;
 
   if (customerSlot && aiSlot) {
     const requestedWd = weekdayInText(customerText);
     if (requestedWd !== null) {
-      const parsedWd = slotWeekday(customerSlot.starts_at);
+      const parsedWd = slotWeekday(customerSlot.starts_at, timeZone);
       if (parsedWd === requestedWd) return customerSlot;
     }
     if (!slotsRoughlyMatch(customerSlot.starts_at, aiSlot.starts_at, 12 * 60)) {
@@ -484,12 +635,21 @@ export function extractSlotForConfirmation(
     return customerSlot;
   }
 
-  return customerSlot || aiSlot || parseSlotFromTurkishText(latestMessage, ref);
+  return customerSlot || aiSlot || parseSlotFromText(latestMessage, options);
 }
 
+export function formatWeekdayLocalized(
+  startsAt: string,
+  lang: ConversationLang,
+  timeZone: string = DEFAULT_COMPANY_TIMEZONE
+): string {
+  const wd = slotWeekday(startsAt, timeZone);
+  return formatWeekdayName(lang, wd);
+}
+
+/** @deprecated Use formatWeekdayLocalized */
 export function formatWeekdayTurkish(startsAt: string): string {
-  const wd = slotWeekday(startsAt);
-  return TR_WEEKDAY_NAMES[wd] || '';
+  return formatWeekdayLocalized(startsAt, 'tr');
 }
 
 export function buildAppointmentConfirmationPrompt(
@@ -499,10 +659,11 @@ export function buildAppointmentConfirmationPrompt(
     title: string | null;
   },
   slot: ParsedSlot,
-  lang: ConversationLang = 'tr'
+  lang: ConversationLang = 'tr',
+  timeZone: string = DEFAULT_COMPANY_TIMEZONE
 ): string {
-  const slotLabel = formatSlotLocalized(slot.starts_at, slot.ends_at, lang);
-  const weekday = formatWeekdayTurkish(slot.starts_at);
+  const slotLabel = formatSlotLocalized(slot.starts_at, slot.ends_at, lang, timeZone);
+  const weekday = formatWeekdayLocalized(slot.starts_at, lang, timeZone);
   const weekdayLine = weekday ? ` (${weekday.charAt(0).toUpperCase()}${weekday.slice(1)})` : '';
   const phone = fields.customer_phone || '—';
   let displayPhone = phone;
@@ -528,7 +689,7 @@ export function buildAppointmentConfirmationPrompt(
 
   return [
     'Appointment summary:',
-    `- Date/Time: ${slotLabel}`,
+    `- Date/Time: ${slotLabel}${weekdayLine}`,
     `- Name: ${fields.customer_name || '—'}`,
     `- Service: ${fields.title || '—'}`,
     `- Phone: ${displayPhone}`,
@@ -549,38 +710,39 @@ export function formatSlotTurkish(startsAt: string, endsAt: string): string {
 export function formatSlotLocalized(
   startsAt: string,
   endsAt: string,
-  lang: ConversationLang = 'tr'
+  lang: ConversationLang = 'tr',
+  timeZone: string = DEFAULT_COMPANY_TIMEZONE
 ): string {
   const locale = localeForLang(lang);
   const start = new Date(startsAt);
   const end = new Date(endsAt);
   const day = start.toLocaleDateString(locale, {
-    timeZone: CLINIC_TZ,
+    timeZone,
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
   });
   const t1 = start.toLocaleTimeString(locale, {
-    timeZone: CLINIC_TZ,
+    timeZone,
     hour: '2-digit',
     minute: '2-digit',
   });
   const t2 = end.toLocaleTimeString(locale, {
-    timeZone: CLINIC_TZ,
+    timeZone,
     hour: '2-digit',
     minute: '2-digit',
   });
   return `${day} ${t1}-${t2}`;
 }
 
-/** Konuşmadaki teklif, action/LLM saatinden önceliklidir */
 export function preferHistorySlot(
   history: HistoryMsg[],
   action: { starts_at?: string; ends_at?: string },
   latestMessage = '',
-  ref = new Date()
+  refOrOptions: Date | SlotParseOptions = {}
 ): { starts_at: string; ends_at: string } | null {
-  const offered = extractSlotFromConversation(history, latestMessage, ref);
+  const options = normalizeSlotOptions(refOrOptions);
+  const offered = extractSlotFromConversation(history, latestMessage, options);
   if (!offered) {
     if (action.starts_at && action.ends_at) {
       return { starts_at: action.starts_at, ends_at: action.ends_at };

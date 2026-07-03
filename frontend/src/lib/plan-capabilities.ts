@@ -64,3 +64,14 @@ export function routeAllowedForPlan(path: string, planType?: string | null): boo
   if (!module) return true;
   return planHasModule(planType, module);
 }
+
+export const WHATSAPP_LINE_LIMITS = {
+  starter: 1,
+  business: 3,
+  enterprise: 999,
+} as const;
+
+export function getWhatsAppLineLimit(planType?: string | null): number {
+  if (!planType) return WHATSAPP_LINE_LIMITS.starter;
+  return WHATSAPP_LINE_LIMITS[planType as keyof typeof WHATSAPP_LINE_LIMITS] ?? WHATSAPP_LINE_LIMITS.starter;
+}

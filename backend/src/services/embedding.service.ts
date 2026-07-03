@@ -28,7 +28,13 @@ export async function createEmbeddings(texts: string[]): Promise<number[][]> {
     dimensions: config.rag.embeddingDimensions,
   });
 
-  return response.data
+  const vectors = response.data
     .sort((a, b) => a.index - b.index)
     .map((item) => item.embedding);
+
+  if (vectors.some((v) => !v?.length)) {
+    throw new Error('Embedding oluşturulamadı');
+  }
+
+  return vectors;
 }

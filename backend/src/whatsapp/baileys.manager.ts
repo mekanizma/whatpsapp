@@ -1,6 +1,6 @@
 /**
  * Baileys WhatsApp Web session manager
- * Generates real scannable QR codes for device pairing
+ * Supports multiple accounts per company — sessions keyed by account ID
  */
 
 import path from 'path';
@@ -32,6 +32,7 @@ export type QrSessionStatus = 'pending' | 'scanned' | 'connected' | 'expired' | 
 export interface BaileysSession {
   id: string;
   company_id: string;
+  whatsapp_account_id: string;
   session_token: string;
   qr_data_url: string | null;
   status: QrSessionStatus;
@@ -43,7 +44,7 @@ export interface BaileysSession {
   failure_reason?: string | null;
 }
 
-interface CompanyConnection {
+interface AccountConnection {
   socket: WASocket | null;
   session: BaileysSession;
   isConnecting: boolean;
@@ -55,22 +56,34 @@ const RECONNECT_MAX_MS = 60_000;
 const MAX_RECONNECT_ATTEMPTS = 8;
 const QR_WAIT_MS = 30_000;
 const DEFAULT_BAILEYS_VERSION: [number, number, number] = [6, 7, 22];
+
 const sessions = new Map<string, BaileysSession>();
-const connections = new Map<string, CompanyConnection>();
-const tokenToCompany = new Map<string, string>();
+const connections = new Map<string, AccountConnection>();
+const tokenToAccount = new Map<string, string>();
 const reconnectAttempts = new Map<string, number>();
 const reconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
-/** Sunucu restart sonrası kayıtlı oturumdan otomatik bağlanma */
 const autoRestoreActive = new Set<string>();
 
 const logger = pino({ level: 'silent' });
 
-function getSessionDir(companyId: string): string {
-  const dir = path.join(config.sessionsDir, companyId);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
+function resolveSessionDir(accountId: string, companyId: string): string {
+  const accountDir = path.join(config.sessionsDir, accountId);
+  if (fs.existsSync(path.join(accountDir, 'creds.json'))) {
+    return accountDir;
   }
-  return dir;
+  const legacyDir = path.join(config.sessionsDir, companyId);
+  if (fs.existsSync(path.join(legacyDir, 'creds.json'))) {
+    return legacyDir;
+  }
+  if (!fs.existsSync(accountDir)) {
+    fs.mkdirSync(accountDir, { recursive: true });
+  }
+  return accountDir;
+}
+
+function hasStoredCredentials(accountId: string, companyId: string): boolean {
+  const dir = resolveSessionDir(accountId, companyId);
+  return fs.existsSync(path.join(dir, 'creds.json'));
 }
 
 export function verifySessionsDirWritable(): { ok: boolean; path: string; error?: string } {
@@ -115,31 +128,32 @@ async function qrToDataUrl(qr: string): Promise<string> {
   });
 }
 
-function clearReconnectState(companyId: string): void {
-  reconnectAttempts.delete(companyId);
-  autoRestoreActive.delete(companyId);
-  const timer = reconnectTimers.get(companyId);
+function clearReconnectState(accountId: string): void {
+  reconnectAttempts.delete(accountId);
+  autoRestoreActive.delete(accountId);
+  const timer = reconnectTimers.get(accountId);
   if (timer) {
     clearTimeout(timer);
-    reconnectTimers.delete(companyId);
+    reconnectTimers.delete(accountId);
   }
 }
 
-export function isBaileysReconnecting(companyId: string): boolean {
-  if (!hasStoredCredentials(companyId)) return false;
-  if (autoRestoreActive.has(companyId)) return true;
-  const attempts = reconnectAttempts.get(companyId);
+export function isBaileysReconnecting(accountId: string): boolean {
+  if (!connections.has(accountId) && !autoRestoreActive.has(accountId)) {
+    return false;
+  }
+  if (autoRestoreActive.has(accountId)) return true;
+  const attempts = reconnectAttempts.get(accountId);
   if (!attempts) return false;
   return attempts <= MAX_RECONNECT_ATTEMPTS;
 }
 
-export function getBaileysConnectionStatus(companyId: string) {
-  const conn = connections.get(companyId);
+export function getBaileysConnectionStatus(accountId: string) {
+  const conn = connections.get(accountId);
 
-  // Yalnızca aktif socket bağlantısı "bağlı" sayılır
   if (conn?.socket?.user) {
     const session = [...sessions.values()].find(
-      (s) => s.company_id === companyId && s.status === 'connected'
+      (s) => s.whatsapp_account_id === accountId && s.status === 'connected'
     );
     const phone = session?.phone_number || `+${jidToPhone(conn.socket.user.id)}`;
     return {
@@ -162,6 +176,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promi
 }
 
 export async function startBaileysQrSession(
+  accountId: string,
   companyId: string,
   userId?: string
 ): Promise<BaileysSession> {
@@ -172,10 +187,8 @@ export async function startBaileysQrSession(
     );
   }
 
-  clearReconnectState(companyId);
-
-  // Mevcut bağlantıyı kapat ve oturum dosyalarını temizle (yeni QR)
-  await disconnectBaileys(companyId, { logout: false });
+  clearReconnectState(accountId);
+  await disconnectBaileys(accountId, companyId, { logout: false });
 
   const sessionToken = generateToken();
   const sessionId = crypto.randomUUID();
@@ -184,6 +197,7 @@ export async function startBaileysQrSession(
   const session: BaileysSession = {
     id: sessionId,
     company_id: companyId,
+    whatsapp_account_id: accountId,
     session_token: sessionToken,
     qr_data_url: null,
     status: 'pending',
@@ -195,11 +209,12 @@ export async function startBaileysQrSession(
   };
 
   sessions.set(sessionToken, session);
-  tokenToCompany.set(sessionToken, companyId);
+  tokenToAccount.set(sessionToken, accountId);
 
   if (!config.demoMode) {
     await adminClient.from('whatsapp_qr_sessions').insert({
       company_id: companyId,
+      whatsapp_account_id: accountId,
       session_token: sessionToken,
       qr_payload: 'baileys',
       expires_at: expiresAt,
@@ -209,20 +224,18 @@ export async function startBaileysQrSession(
       companyId,
       userId,
       action: 'whatsapp_qr_started',
-      entityType: 'whatsapp_qr_session',
-      entityId: sessionId,
+      entityType: 'whatsapp_account',
+      entityId: accountId,
     });
   }
 
-  // Baileys socket başlat (arka planda QR üretir)
-  connectBaileysSocket(companyId, session).catch((err) => {
+  connectBaileysSocket(accountId, companyId, session).catch((err) => {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`[Baileys] Bağlantı hatası (${companyId}):`, err);
+    console.error(`[Baileys] Bağlantı hatası (${accountId}):`, err);
     session.status = 'failed';
     session.failure_reason = message;
   });
 
-  // İlk QR'ın gelmesini bekle
   const qrDataUrl = await waitForQr(sessionToken, QR_WAIT_MS);
   session.qr_data_url = qrDataUrl;
 
@@ -254,55 +267,62 @@ function waitForQr(sessionToken: string, timeoutMs: number): Promise<string> {
   });
 }
 
-function getReconnectDelay(companyId: string): number {
-  const attempt = reconnectAttempts.get(companyId) ?? 0;
+function getReconnectDelay(accountId: string): number {
+  const attempt = reconnectAttempts.get(accountId) ?? 0;
   return Math.min(RECONNECT_BASE_MS * 2 ** attempt, RECONNECT_MAX_MS);
 }
 
-async function markWhatsAppDisconnected(companyId: string): Promise<void> {
+async function markWhatsAppDisconnected(accountId: string): Promise<void> {
   if (config.demoMode) return;
 
   await adminClient
     .from('whatsapp_configs')
     .update({ status: 'disconnected' })
-    .eq('company_id', companyId)
-    .like('business_account_id', 'baileys:%');
+    .eq('id', accountId);
 }
 
-async function scheduleReconnect(companyId: string, session: BaileysSession): Promise<void> {
-  if (!hasStoredCredentials(companyId)) {
-    clearReconnectState(companyId);
+async function scheduleReconnect(
+  accountId: string,
+  companyId: string,
+  session: BaileysSession
+): Promise<void> {
+  if (!hasStoredCredentials(accountId, companyId)) {
+    clearReconnectState(accountId);
     return;
   }
 
-  const attempt = (reconnectAttempts.get(companyId) ?? 0) + 1;
+  const attempt = (reconnectAttempts.get(accountId) ?? 0) + 1;
   if (attempt > MAX_RECONNECT_ATTEMPTS) {
-    console.log(`[Baileys] Yeniden bağlanma limiti aşıldı: ${companyId}`);
-    clearReconnectState(companyId);
-    await markWhatsAppDisconnected(companyId);
+    console.log(`[Baileys] Yeniden bağlanma limiti aşıldı: ${accountId}`);
+    clearReconnectState(accountId);
+    await markWhatsAppDisconnected(accountId);
     return;
   }
 
-  reconnectAttempts.set(companyId, attempt);
-  const delay = getReconnectDelay(companyId);
+  reconnectAttempts.set(accountId, attempt);
+  const delay = getReconnectDelay(accountId);
 
-  console.log(`[Baileys] Yeniden bağlanma planlandı: ${companyId} (${attempt}. deneme, ${delay}ms)`);
+  console.log(`[Baileys] Yeniden bağlanma planlandı: ${accountId} (${attempt}. deneme, ${delay}ms)`);
 
-  const existingTimer = reconnectTimers.get(companyId);
+  const existingTimer = reconnectTimers.get(accountId);
   if (existingTimer) clearTimeout(existingTimer);
 
   const timer = setTimeout(() => {
-    reconnectTimers.delete(companyId);
-    connectBaileysSocket(companyId, session).catch((err) => {
-      console.error(`[Baileys] Yeniden bağlanma hatası (${companyId}):`, err);
+    reconnectTimers.delete(accountId);
+    connectBaileysSocket(accountId, companyId, session).catch((err) => {
+      console.error(`[Baileys] Yeniden bağlanma hatası (${accountId}):`, err);
     });
   }, delay);
-  reconnectTimers.set(companyId, timer);
+  reconnectTimers.set(accountId, timer);
 }
 
-async function connectBaileysSocket(companyId: string, session: BaileysSession): Promise<void> {
+async function connectBaileysSocket(
+  accountId: string,
+  companyId: string,
+  session: BaileysSession
+): Promise<void> {
   try {
-    const existing = connections.get(companyId);
+    const existing = connections.get(accountId);
     if (existing?.socket) {
       try {
         existing.socket.end(undefined);
@@ -311,7 +331,7 @@ async function connectBaileysSocket(companyId: string, session: BaileysSession):
       }
     }
 
-    const sessionDir = getSessionDir(companyId);
+    const sessionDir = resolveSessionDir(accountId, companyId);
     const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
     const version = await resolveBaileysVersion();
 
@@ -328,225 +348,248 @@ async function connectBaileysSocket(companyId: string, session: BaileysSession):
       defaultQueryTimeoutMs: 30_000,
     });
 
-    connections.set(companyId, { socket, session, isConnecting: true });
+    connections.set(accountId, { socket, session, isConnecting: true });
 
     socket.ev.on('creds.update', saveCreds);
 
     socket.ev.on('connection.update', async (update) => {
-    const { connection, lastDisconnect, qr, receivedPendingNotifications } = update;
+      const { connection, lastDisconnect, qr, receivedPendingNotifications } = update;
 
-    if (qr) {
-      try {
-        const qrDataUrl = await qrToDataUrl(qr);
-        session.qr_data_url = qrDataUrl;
-        session.status = 'pending';
-        console.log(`[Baileys] QR oluşturuldu: ${companyId}`);
-      } catch (err) {
-        console.error('QR dönüştürme hatası:', err);
-      }
-    }
-
-    if (connection === 'connecting') {
-      session.status = 'scanned';
-    }
-
-    if (connection === 'open') {
-      session.status = 'connected';
-      session.connected_at = new Date().toISOString();
-      clearReconnectState(companyId);
-      connections.set(companyId, { socket, session, isConnecting: false });
-
-      const user = socket.user;
-      if (user) {
-        const phone = jidToPhone(user.id);
-        session.phone_number = `+${phone}`;
-        session.display_name = user.name || user.verifiedName || 'WhatsApp Hattı';
-      }
-
-      console.log(`[Baileys] Bağlandı: ${session.phone_number} (${companyId})`);
-
-      if (!config.demoMode) {
-        await adminClient
-          .from('whatsapp_configs')
-          .update({
-            phone_number: session.phone_number,
-            status: 'connected',
-            business_account_id: `baileys:${companyId}`,
-          })
-          .eq('company_id', companyId);
-
-        await adminClient
-          .from('whatsapp_qr_sessions')
-          .update({
-            status: 'connected',
-            phone_number: session.phone_number,
-            display_name: session.display_name,
-            connected_at: session.connected_at,
-          })
-          .eq('session_token', session.session_token);
-      }
-    }
-
-    if (connection === 'close') {
-      const statusCode = (lastDisconnect?.error as { output?: { statusCode?: number } })?.output?.statusCode;
-      const wasConnected = session.status === 'connected';
-      const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-      const isQrPairing = session.status === 'pending' || session.status === 'scanned';
-      const hasCreds = hasStoredCredentials(companyId);
-      const isRestartRequired = statusCode === DisconnectReason.restartRequired;
-
-      console.log(
-        `[Baileys] Bağlantı kapandı: ${companyId}, kod: ${statusCode}, bağlıydı: ${wasConnected}, qr: ${isQrPairing}, creds: ${hasCreds}`
-      );
-
-      connections.delete(companyId);
-
-      if (statusCode === DisconnectReason.loggedOut) {
-        session.status = 'expired';
-        clearReconnectState(companyId);
-
-        const sessionDir = path.join(config.sessionsDir, companyId);
-        if (fs.existsSync(sessionDir)) {
-          fs.rmSync(sessionDir, { recursive: true, force: true });
+      if (qr) {
+        try {
+          const qrDataUrl = await qrToDataUrl(qr);
+          session.qr_data_url = qrDataUrl;
+          session.status = 'pending';
+          console.log(`[Baileys] QR oluşturuldu: ${accountId}`);
+        } catch (err) {
+          console.error('QR dönüştürme hatası:', err);
         }
+      }
+
+      if (connection === 'connecting') {
+        session.status = 'scanned';
+      }
+
+      if (connection === 'open') {
+        session.status = 'connected';
+        session.connected_at = new Date().toISOString();
+        clearReconnectState(accountId);
+        connections.set(accountId, { socket, session, isConnecting: false });
+
+        const user = socket.user;
+        if (user) {
+          const phone = jidToPhone(user.id);
+          session.phone_number = `+${phone}`;
+          session.display_name = user.name || user.verifiedName || 'WhatsApp Hattı';
+        }
+
+        const syncedAt = new Date().toISOString();
+        console.log(`[Baileys] Bağlandı: ${session.phone_number} (${accountId})`);
 
         if (!config.demoMode) {
           await adminClient
             .from('whatsapp_configs')
             .update({
-              status: 'disconnected',
-              phone_number: null,
-              business_account_id: null,
+              phone_number: session.phone_number,
+              profile_name: session.display_name,
+              status: 'connected',
+              business_account_id: `baileys:${accountId}`,
+              last_synced_at: syncedAt,
             })
-            .eq('company_id', companyId);
+            .eq('id', accountId);
+
+          await adminClient
+            .from('whatsapp_qr_sessions')
+            .update({
+              status: 'connected',
+              phone_number: session.phone_number,
+              display_name: session.display_name,
+              connected_at: session.connected_at,
+            })
+            .eq('session_token', session.session_token);
         }
-        return;
       }
 
-      if (!shouldReconnect) return;
+      if (connection === 'close') {
+        const statusCode = (lastDisconnect?.error as { output?: { statusCode?: number } })?.output?.statusCode;
+        const wasConnected = session.status === 'connected';
+        const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+        const isQrPairing = session.status === 'pending' || session.status === 'scanned';
+        const hasCreds = hasStoredCredentials(accountId, companyId);
+        const isRestartRequired = statusCode === DisconnectReason.restartRequired;
 
-      // QR henüz taranmadıysa ve süre dolduysa sonlandır (taranmış oturumda devam et)
-      if (!wasConnected && session.status === 'pending' && new Date(session.expires_at) <= new Date()) {
-        session.status = 'expired';
-        return;
-      }
-
-      // QR tarandıktan sonra creds kaydedilir; Baileys genelde restartRequired ile kapanır
-      const canAutoReconnect =
-        wasConnected ||
-        autoRestoreActive.has(companyId) ||
-        (isQrPairing && hasCreds);
-
-      if (!canAutoReconnect) {
-        if (session.status !== 'connected') {
-          session.status = 'failed';
-          session.failure_reason =
-            session.failure_reason ||
-            (statusCode != null ? `WhatsApp bağlantısı kapandı (kod: ${statusCode})` : 'WhatsApp bağlantısı kurulamadı');
-        }
-        return;
-      }
-
-      if (wasConnected) {
-        await markWhatsAppDisconnected(companyId);
-      }
-
-      if (isQrPairing && hasCreds) {
-        if (session.status !== 'connected') {
-          session.status = 'scanned';
-        }
-        reconnectAttempts.set(companyId, 0);
-        const existingTimer = reconnectTimers.get(companyId);
-        if (existingTimer) clearTimeout(existingTimer);
-        reconnectTimers.delete(companyId);
-
-        const delay = isRestartRequired ? 0 : getReconnectDelay(companyId);
-        const reconnect = () => {
-          connectBaileysSocket(companyId, session).catch((err) => {
-            console.error(`[Baileys] QR sonrası yeniden bağlanma hatası (${companyId}):`, err);
-          });
-        };
-
-        if (delay === 0) {
-          console.log(`[Baileys] QR sonrası hemen yeniden bağlanılıyor: ${companyId}`);
-          reconnect();
-        } else {
-          const timer = setTimeout(reconnect, delay);
-          reconnectTimers.set(companyId, timer);
-        }
-        return;
-      }
-
-      await scheduleReconnect(companyId, session);
-    }
-
-    if (receivedPendingNotifications) {
-      console.log(`[Baileys] Bekleyen bildirimler alındı: ${companyId}`);
-    }
-  });
-
-  socket.ev.on('messages.upsert', async ({ messages, type }) => {
-    if (type !== 'notify') return;
-
-    for (const msg of messages) {
-      if (msg.key.fromMe) continue;
-      if (!msg.message) continue;
-
-      const text =
-        msg.message.conversation ||
-        msg.message.extendedTextMessage?.text ||
-        msg.message.imageMessage?.caption;
-
-      if (!text) continue;
-
-      const customerPhone = extractPhoneFromMessage(msg.key);
-      if (!customerPhone || msg.key.remoteJid?.endsWith('@g.us')) continue;
-
-      const customerName = msg.pushName || null;
-      const replyJid = msg.key.remoteJid;
-
-      if (replyJid) {
-        cacheCustomerJid(companyId, customerPhone, replyJid);
-      }
-
-      try {
-        console.log(`[Baileys] Gelen mesaj: ${customerPhone} — "${text.slice(0, 40)}..."`);
-
-        const reply = await processInboundMessage(
-          companyId,
-          customerPhone,
-          customerName,
-          text,
-          msg.key.id || undefined
+        console.log(
+          `[Baileys] Bağlantı kapandı: ${accountId}, kod: ${statusCode}, bağlıydı: ${wasConnected}, qr: ${isQrPairing}, creds: ${hasCreds}`
         );
 
-        if (reply && socket.user && replyJid) {
-          await socket.sendMessage(replyJid, { text: reply });
-          console.log(`[Baileys] WhatsApp yanıtı iletildi: ${customerPhone}`);
-        } else if (!reply) {
-          console.log(`[Baileys] Yanıt üretilmedi: ${customerPhone}`);
+        connections.delete(accountId);
+
+        if (statusCode === DisconnectReason.loggedOut) {
+          session.status = 'expired';
+          clearReconnectState(accountId);
+
+          const accountDir = path.join(config.sessionsDir, accountId);
+          const legacyDir = path.join(config.sessionsDir, companyId);
+          for (const dir of [accountDir, legacyDir]) {
+            if (fs.existsSync(dir)) {
+              fs.rmSync(dir, { recursive: true, force: true });
+            }
+          }
+
+          if (!config.demoMode) {
+            await adminClient
+              .from('whatsapp_configs')
+              .update({
+                status: 'disconnected',
+                phone_number: null,
+                profile_name: null,
+                business_account_id: null,
+              })
+              .eq('id', accountId);
+          }
+          return;
         }
-      } catch (err) {
-        console.error('Mesaj işleme hatası:', err);
+
+        if (!shouldReconnect) return;
+
+        if (!wasConnected && session.status === 'pending' && new Date(session.expires_at) <= new Date()) {
+          session.status = 'expired';
+          return;
+        }
+
+        const canAutoReconnect =
+          wasConnected ||
+          autoRestoreActive.has(accountId) ||
+          (isQrPairing && hasCreds);
+
+        if (!canAutoReconnect) {
+          if (session.status !== 'connected') {
+            session.status = 'failed';
+            session.failure_reason =
+              session.failure_reason ||
+              (statusCode != null ? `WhatsApp bağlantısı kapandı (kod: ${statusCode})` : 'WhatsApp bağlantısı kurulamadı');
+          }
+          return;
+        }
+
+        if (wasConnected) {
+          await markWhatsAppDisconnected(accountId);
+        }
+
+        if (isQrPairing && hasCreds) {
+          if (session.status !== 'connected') {
+            session.status = 'scanned';
+          }
+          reconnectAttempts.set(accountId, 0);
+          const existingTimer = reconnectTimers.get(accountId);
+          if (existingTimer) clearTimeout(existingTimer);
+          reconnectTimers.delete(accountId);
+
+          const delay = isRestartRequired ? 0 : getReconnectDelay(accountId);
+          const reconnect = () => {
+            connectBaileysSocket(accountId, companyId, session).catch((err) => {
+              console.error(`[Baileys] QR sonrası yeniden bağlanma hatası (${accountId}):`, err);
+            });
+          };
+
+          if (delay === 0) {
+            console.log(`[Baileys] QR sonrası hemen yeniden bağlanılıyor: ${accountId}`);
+            reconnect();
+          } else {
+            const timer = setTimeout(reconnect, delay);
+            reconnectTimers.set(accountId, timer);
+          }
+          return;
+        }
+
+        await scheduleReconnect(accountId, companyId, session);
       }
-    }
-  });
+
+      if (receivedPendingNotifications) {
+        console.log(`[Baileys] Bekleyen bildirimler alındı: ${accountId}`);
+        if (!config.demoMode) {
+          await adminClient
+            .from('whatsapp_configs')
+            .update({ last_synced_at: new Date().toISOString() })
+            .eq('id', accountId);
+        }
+      }
+    });
+
+    socket.ev.on('messages.upsert', async ({ messages, type }) => {
+      if (type !== 'notify') return;
+
+      const { data: accountRow } = await adminClient
+        .from('whatsapp_configs')
+        .select('is_active')
+        .eq('id', accountId)
+        .maybeSingle();
+
+      if (accountRow && accountRow.is_active === false) return;
+
+      for (const msg of messages) {
+        if (msg.key.fromMe) continue;
+        if (!msg.message) continue;
+
+        const text =
+          msg.message.conversation ||
+          msg.message.extendedTextMessage?.text ||
+          msg.message.imageMessage?.caption;
+
+        if (!text) continue;
+
+        const customerPhone = extractPhoneFromMessage(msg.key);
+        if (!customerPhone || msg.key.remoteJid?.endsWith('@g.us')) continue;
+
+        const customerName = msg.pushName || null;
+        const replyJid = msg.key.remoteJid;
+
+        if (replyJid) {
+          cacheCustomerJid(accountId, customerPhone, replyJid);
+        }
+
+        try {
+          console.log(`[Baileys] Gelen mesaj (${accountId}): ${customerPhone} — "${text.slice(0, 40)}..."`);
+
+          const reply = await processInboundMessage(
+            companyId,
+            customerPhone,
+            customerName,
+            text,
+            msg.key.id || undefined,
+            accountId
+          );
+
+          if (reply && socket.user && replyJid) {
+            await socket.sendMessage(replyJid, { text: reply });
+            console.log(`[Baileys] WhatsApp yanıtı iletildi: ${customerPhone}`);
+          } else if (!reply) {
+            console.log(`[Baileys] Yanıt üretilmedi: ${customerPhone}`);
+          }
+        } catch (err) {
+          console.error('Mesaj işleme hatası:', err);
+        }
+      }
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`[Baileys] Socket başlatma hatası (${companyId}):`, err);
+    console.error(`[Baileys] Socket başlatma hatası (${accountId}):`, err);
     session.status = 'failed';
     session.failure_reason = message;
-    connections.delete(companyId);
+    connections.delete(accountId);
     throw err;
   }
 }
 
 export function getBaileysSession(
   companyId: string,
+  accountId: string,
   sessionToken: string
 ): BaileysSession | null {
   const session = sessions.get(sessionToken);
-  if (!session || session.company_id !== companyId) return null;
+  if (!session || session.company_id !== companyId || session.whatsapp_account_id !== accountId) {
+    return null;
+  }
 
   if (new Date(session.expires_at) < new Date() && session.status === 'pending') {
     session.status = 'expired';
@@ -555,23 +598,28 @@ export function getBaileysSession(
   return session;
 }
 
-export async function cancelBaileysSession(companyId: string, sessionToken: string): Promise<void> {
+export async function cancelBaileysSession(
+  accountId: string,
+  companyId: string,
+  sessionToken: string
+): Promise<void> {
   const session = sessions.get(sessionToken);
   if (session) {
     session.status = 'expired';
     sessions.delete(sessionToken);
   }
-  await disconnectBaileys(companyId);
+  await disconnectBaileys(accountId, companyId);
 }
 
 export async function disconnectBaileys(
+  accountId: string,
   companyId: string,
   options: { logout?: boolean } = {}
 ): Promise<void> {
   const shouldLogout = options.logout ?? true;
-  clearReconnectState(companyId);
+  clearReconnectState(accountId);
 
-  const conn = connections.get(companyId);
+  const conn = connections.get(accountId);
   if (conn?.socket) {
     try {
       if (shouldLogout) {
@@ -583,16 +631,17 @@ export async function disconnectBaileys(
       conn.socket.end(undefined);
     }
   }
-  connections.delete(companyId);
+  connections.delete(accountId);
 
-  // Oturum dosyalarını temizle
-  const sessionDir = path.join(config.sessionsDir, companyId);
-  if (fs.existsSync(sessionDir)) {
-    fs.rmSync(sessionDir, { recursive: true, force: true });
+  for (const dirName of [accountId, companyId]) {
+    const sessionDir = path.join(config.sessionsDir, dirName);
+    if (fs.existsSync(sessionDir)) {
+      fs.rmSync(sessionDir, { recursive: true, force: true });
+    }
   }
 
   for (const [token, session] of sessions.entries()) {
-    if (session.company_id === companyId) {
+    if (session.whatsapp_account_id === accountId) {
       sessions.delete(token);
     }
   }
@@ -600,17 +649,23 @@ export async function disconnectBaileys(
   if (!config.demoMode) {
     await adminClient
       .from('whatsapp_configs')
-      .update({ status: 'disconnected', phone_number: null, business_account_id: null })
-      .eq('company_id', companyId);
+      .update({
+        status: 'disconnected',
+        phone_number: null,
+        profile_name: null,
+        business_account_id: null,
+      })
+      .eq('id', accountId);
   }
 }
 
 export async function sendBaileysMessage(
+  accountId: string,
   companyId: string,
   toPhone: string,
   message: string
 ): Promise<{ success: boolean; error?: string }> {
-  const conn = connections.get(companyId);
+  const conn = connections.get(accountId);
   if (!conn?.socket?.user) {
     return { success: false, error: 'WhatsApp bağlantısı aktif değil. QR ile yeniden bağlanın.' };
   }
@@ -623,14 +678,14 @@ export async function sendBaileysMessage(
   const socket = conn.socket;
 
   try {
-    const cachedJid = getCachedCustomerJid(companyId, normalized);
+    const cachedJid = getCachedCustomerJid(accountId, normalized);
     if (cachedJid) {
       await withTimeout(
         socket.sendMessage(cachedJid, { text: message }),
         20_000,
         'Mesaj gönderme zaman aşımı'
       );
-      console.log(`[Baileys] Mesaj gönderildi (önbellek JID): ${companyId} → ${normalized}`);
+      console.log(`[Baileys] Mesaj gönderildi (önbellek JID): ${accountId} → ${normalized}`);
       return { success: true };
     }
 
@@ -646,17 +701,17 @@ export async function sendBaileysMessage(
     }
 
     const jid = waCheck.jid;
-    cacheCustomerJid(companyId, normalized, jid);
+    cacheCustomerJid(accountId, normalized, jid);
     await withTimeout(
       socket.sendMessage(jid, { text: message }),
       20_000,
       'Mesaj gönderme zaman aşımı. Numarayı 905XXXXXXXXX formatında deneyin.'
     );
 
-    console.log(`[Baileys] Mesaj gönderildi: ${companyId} → ${normalized}`);
+    console.log(`[Baileys] Mesaj gönderildi: ${accountId} → ${normalized}`);
     return { success: true };
   } catch (err) {
-    console.error(`[Baileys] Mesaj gönderme hatası (${companyId}):`, err);
+    console.error(`[Baileys] Mesaj gönderme hatası (${accountId}):`, err);
     return {
       success: false,
       error: err instanceof Error ? err.message : 'Mesaj gönderilemedi',
@@ -664,14 +719,15 @@ export async function sendBaileysMessage(
   }
 }
 
-function hasStoredCredentials(companyId: string): boolean {
-  return fs.existsSync(path.join(config.sessionsDir, companyId, 'creds.json'));
-}
-
-function createRestoredSession(companyId: string, phoneNumber?: string | null): BaileysSession {
+function createRestoredSession(
+  accountId: string,
+  companyId: string,
+  phoneNumber?: string | null
+): BaileysSession {
   const session: BaileysSession = {
     id: crypto.randomUUID(),
     company_id: companyId,
+    whatsapp_account_id: accountId,
     session_token: generateToken(),
     qr_data_url: null,
     status: 'connected',
@@ -682,31 +738,31 @@ function createRestoredSession(companyId: string, phoneNumber?: string | null): 
     created_at: new Date().toISOString(),
   };
   sessions.set(session.session_token, session);
-  tokenToCompany.set(session.session_token, companyId);
+  tokenToAccount.set(session.session_token, accountId);
   return session;
 }
 
-async function restoreCompanySession(
+async function restoreAccountSession(
+  accountId: string,
   companyId: string,
   phoneNumber?: string | null
 ): Promise<void> {
-  if (!hasStoredCredentials(companyId)) {
-    console.warn(`[Baileys] Oturum dosyası yok, atlanıyor: ${companyId}`);
+  if (!hasStoredCredentials(accountId, companyId)) {
+    console.warn(`[Baileys] Oturum dosyası yok, atlanıyor: ${accountId}`);
     return;
   }
 
-  console.log(`[Baileys] Oturum geri yükleniyor: ${companyId}`);
-  autoRestoreActive.add(companyId);
-  const session = createRestoredSession(companyId, phoneNumber);
+  console.log(`[Baileys] Oturum geri yükleniyor: ${accountId}`);
+  autoRestoreActive.add(accountId);
+  const session = createRestoredSession(accountId, companyId, phoneNumber);
   try {
-    await connectBaileysSocket(companyId, session);
+    await connectBaileysSocket(accountId, companyId, session);
   } catch (err) {
-    autoRestoreActive.delete(companyId);
+    autoRestoreActive.delete(accountId);
     throw err;
   }
 }
 
-// Sunucu başladığında mevcut oturumları yükle (Coolify restart / redeploy sonrası)
 export async function restoreBaileysSessions(): Promise<void> {
   const sessionsDir = config.sessionsDir;
   console.log(`[Baileys] Oturum dizini: ${sessionsDir} (kalıcı volume: ${config.isCoolify})`);
@@ -720,16 +776,17 @@ export async function restoreBaileysSessions(): Promise<void> {
   if (!config.demoMode) {
     const { data: configs } = await adminClient
       .from('whatsapp_configs')
-      .select('company_id, phone_number, business_account_id, status')
-      .like('business_account_id', 'baileys:%');
+      .select('id, company_id, phone_number, business_account_id, status, is_active')
+      .like('business_account_id', 'baileys:%')
+      .eq('is_active', true);
 
     for (const row of configs || []) {
-      if (!row.company_id) continue;
-      restored.add(row.company_id);
+      if (!row.id || !row.company_id) continue;
+      restored.add(row.id);
       try {
-        await restoreCompanySession(row.company_id, row.phone_number);
+        await restoreAccountSession(row.id, row.company_id, row.phone_number);
       } catch (err) {
-        console.error(`[Baileys] DB oturum kurtarma hatası (${row.company_id}):`, err);
+        console.error(`[Baileys] DB oturum kurtarma hatası (${row.id}):`, err);
       }
     }
   }
@@ -738,9 +795,11 @@ export async function restoreBaileysSessions(): Promise<void> {
   for (const entry of companyDirs) {
     if (!entry.isDirectory() || restored.has(entry.name)) continue;
     try {
-      await restoreCompanySession(entry.name);
+      await restoreAccountSession(entry.name, entry.name);
     } catch (err) {
       console.error(`[Baileys] Disk oturum kurtarma hatası (${entry.name}):`, err);
     }
   }
 }
+
+export { jidToPhone, normalizePhoneNumber };

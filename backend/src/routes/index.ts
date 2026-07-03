@@ -64,7 +64,27 @@ router.get('/dashboard', authenticate, requireCompany, companyCtrl.getDashboard)
 router.get('/companies/:id/ai-cost-report', authenticate, requireCompany, companyCtrl.getAICostReportHandler);
 router.get('/ai-cost-report', authenticate, requireCompany, companyCtrl.getAICostReportHandler);
 
-// WhatsApp
+// WhatsApp — multi-account
+router.get('/whatsapp/accounts', authenticate, requireCompany, whatsappCtrl.listAccounts);
+router.post('/whatsapp/accounts', authenticate, requireRole('company_admin'), requireCompany, whatsappCtrl.createAccount);
+router.patch('/whatsapp/accounts/:accountId', authenticate, requireRole('company_admin'), requireCompany, whatsappCtrl.updateAccount);
+router.delete('/whatsapp/accounts/:accountId', authenticate, requireRole('company_admin'), requireCompany, whatsappCtrl.removeAccount);
+router.get('/whatsapp/accounts/:accountId/status', authenticate, requireCompany, whatsappCtrl.getAccountStatus);
+router.post('/whatsapp/accounts/:accountId/qr/start', authenticate, requireRole('company_admin'), requireCompany, whatsappCtrl.startAccountQr);
+router.get('/whatsapp/accounts/:accountId/qr/:sessionToken/status', authenticate, requireRole('company_admin'), requireCompany, whatsappCtrl.getAccountQrStatus);
+router.delete('/whatsapp/accounts/:accountId/qr/:sessionToken', authenticate, requireRole('company_admin'), requireCompany, whatsappCtrl.cancelAccountQr);
+router.post('/whatsapp/accounts/:accountId/disconnect', authenticate, requireRole('company_admin'), requireCompany, whatsappCtrl.disconnectAccountHandler);
+router.put('/whatsapp/accounts/:accountId/config', authenticate, requireRole('company_admin'), requireCompany, whatsappCtrl.updateAccountCloudConfig);
+router.post('/whatsapp/accounts/:accountId/test', authenticate, requireRole('company_admin'), requireCompany, whatsappCtrl.sendAccountTest);
+router.get('/whatsapp/limits', authenticate, requireCompany, whatsappCtrl.getWhatsAppLimits);
+
+// Departments
+router.get('/departments', authenticate, requireCompany, whatsappCtrl.getDepartments);
+router.post('/departments', authenticate, requireRole('company_admin'), requireCompany, whatsappCtrl.postDepartment);
+router.patch('/departments/:id', authenticate, requireRole('company_admin'), requireCompany, whatsappCtrl.patchDepartment);
+router.delete('/departments/:id', authenticate, requireRole('company_admin'), requireCompany, whatsappCtrl.removeDepartment);
+
+// WhatsApp — legacy single-account (backward compatible)
 router.get('/whatsapp/config', authenticate, requireRole('super_admin', 'company_admin'), requireCompany, whatsappCtrl.getWhatsAppConfig);
 router.put('/whatsapp/config', authenticate, requireRole('company_admin'), requireCompany, whatsappCtrl.updateWhatsAppConfig);
 router.post('/whatsapp/test', authenticate, requireRole('company_admin'), requireCompany, whatsappCtrl.sendTest);

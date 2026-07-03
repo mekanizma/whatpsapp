@@ -26,6 +26,7 @@ import { buildCollectedFieldsContext, parseCollectedFields } from './appointment
 import { buildParsedSlotHint, reconcileAppointmentAiResponse } from './appointment-response.service';
 import { handleAppointmentBooking } from './appointment-extract.service';
 import { shouldRecordUnknownQuestion, isKnowledgeMissAiResponse } from './knowledge-miss.service';
+import { buildAppointmentCompanyContext } from './appointment-company-context';
 import {
   getCachedResponse,
   setCachedResponse,
@@ -50,7 +51,7 @@ async function getCompany(companyId: string): Promise<Company> {
 
   const { data } = await adminClient
     .from('companies')
-    .select('id, company_name, category, phone, email, address')
+    .select('id, company_name, category, phone, email, address, working_hours, timezone')
     .eq('id', companyId)
     .single();
 
@@ -93,6 +94,7 @@ export async function generateAIResponse(
   const chatHistory = prepareConversationHistoryForChat(history, trimmed);
 
   const conversationLang = detectConversationLanguage(trimmed, history);
+  const appointmentCtx = buildAppointmentCompanyContext(company.working_hours, company.timezone);
   const allKnowledge = (knowledgeResult.data || []) as KnowledgeItem[];
 
   const retrieval = await retrieveKnowledgeContext(companyId, trimmed, allKnowledge);
@@ -173,7 +175,7 @@ export async function generateAIResponse(
   const collectedContext = appointmentMode
     ? (() => {
         const collected = parseCollectedFields(history, trimmed);
-        const slotHint = buildParsedSlotHint(history, trimmed, collected);
+        const slotHint = buildParsedSlotHint(history, trimmed, collected, appointmentCtx);
         return buildCollectedFieldsContext(history, trimmed, conversationLang) + slotHint;
       })()
     : '';
@@ -187,6 +189,7 @@ export async function generateAIResponse(
 
   const dynamicUserContent = buildDynamicUserMessage(trimmed.slice(0, 1000), {
     knowledge,
+    knowledgeTitles: allKnowledge.map((k) => k.title),
     appointmentContext,
     collectedContext,
     lang: conversationLang,
@@ -234,7 +237,7 @@ export async function generateAIResponse(
   let raw = completion.choices[0]?.message?.content?.trim() || '';
 
   if (appointmentMode) {
-    raw = reconcileAppointmentAiResponse(raw, history, trimmed, conversationLang);
+    raw = reconcileAppointmentAiResponse(raw, history, trimmed, conversationLang, appointmentCtx);
   }
 
   const booking = await handleAppointmentBooking(
@@ -244,7 +247,8 @@ export async function generateAIResponse(
     raw,
     history,
     trimmed,
-    conversationLang
+    conversationLang,
+    appointmentCtx
   );
 
   const { message, shouldTransfer } = stripTransferMarker(
@@ -281,6 +285,7 @@ export async function generateAIResponse(
       response: message,
       history,
       latestMessage: trimmed,
+      kbHasNoMatch: retrieval.kbHasNoMatch,
     })
   ) {
     void setCachedResponse(companyId, trimmed, message, shouldTransfer);

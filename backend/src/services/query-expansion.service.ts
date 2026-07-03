@@ -43,18 +43,12 @@ export function parseQueryRewriteResponse(text: string): { variants: string[]; i
   }
 }
 
-function buildEmbeddingText(rawMessage: string, variants: string[]): string {
-  const parts = [rawMessage, ...variants].map((p) => p.trim()).filter(Boolean);
-  return [...new Set(parts)].join(' | ');
-}
-
 function fallbackRewrite(message: string): QueryRewriteResult {
   const trimmed = message.trim();
   return {
     rawMessage: trimmed,
     variants: [trimmed],
     isBroad: false,
-    embeddingText: trimmed,
   };
 }
 
@@ -96,13 +90,11 @@ export async function expandQueryForRetrieval(
       rawMessage: trimmed,
       variants,
       isBroad: parsed.isBroad,
-      embeddingText: buildEmbeddingText(trimmed, variants),
     };
 
     setCachedQueryRewrite(companyId, trimmed, {
       variants: result.variants,
       isBroad: result.isBroad,
-      embeddingText: result.embeddingText,
     });
 
     return result;

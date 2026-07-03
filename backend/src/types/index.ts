@@ -38,6 +38,7 @@ export interface Company {
   email: string | null;
   address: string | null;
   working_hours: Record<string, unknown>;
+  timezone?: string | null;
   logo: string | null;
   subscription_plan: SubscriptionPlanType;
   status: CompanyStatus;
@@ -48,11 +49,29 @@ export interface Company {
 export interface WhatsAppConfig {
   id: string;
   company_id: string;
+  label?: string | null;
   phone_number: string | null;
+  profile_name?: string | null;
   business_account_id: string | null;
   access_token: string | null;
   webhook_verify_token: string | null;
   status: WhatsAppStatus;
+  is_active?: boolean;
+  is_default?: boolean;
+  last_synced_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Alias — whatsapp_configs row represents one WhatsApp line */
+export type WhatsAppAccount = WhatsAppConfig;
+
+export interface Department {
+  id: string;
+  company_id: string;
+  name: string;
+  description: string | null;
+  is_active: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -98,6 +117,7 @@ export interface Message {
   ticket_id: string | null;
   staff_id: string | null;
   whatsapp_message_id: string | null;
+  whatsapp_account_id?: string | null;
   created_at: string;
 }
 

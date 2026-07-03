@@ -21,18 +21,18 @@ const recentTransferReplies = new Map<string, number>();
 const customerLocks = new Map<string, Promise<void>>();
 const customerJidCache = new Map<string, string>();
 
-function customerJidKey(companyId: string, phone: string): string {
-  return `${companyId}:${resolveCustomerPhone(phone)}`;
+function customerJidKey(accountId: string, phone: string): string {
+  return `${accountId}:${resolveCustomerPhone(phone)}`;
 }
 
 /** Gelen mesajdaki WhatsApp JID'ini sakla — temsilci yanıtlarında doğru alıcıya iletmek için */
-export function cacheCustomerJid(companyId: string, phone: string, jid: string): void {
+export function cacheCustomerJid(accountId: string, phone: string, jid: string): void {
   if (!jid || jid.endsWith('@g.us')) return;
-  customerJidCache.set(customerJidKey(companyId, phone), jid);
+  customerJidCache.set(customerJidKey(accountId, phone), jid);
 }
 
-export function getCachedCustomerJid(companyId: string, phone: string): string | null {
-  return customerJidCache.get(customerJidKey(companyId, phone)) || null;
+export function getCachedCustomerJid(accountId: string, phone: string): string | null {
+  return customerJidCache.get(customerJidKey(accountId, phone)) || null;
 }
 
 export function normalizePhoneNumber(phone: string): string | null {
@@ -129,7 +129,6 @@ export function clearTransferState(companyId: string, customerPhone: string): vo
   const phone = resolveCustomerPhone(customerPhone);
   recentTransferReplies.delete(`${companyId}:${phone}`);
   recentMessages.delete(`${companyId}:${phone}`);
-  customerJidCache.delete(customerJidKey(companyId, phone));
 }
 
 export async function processInboundMessage(
@@ -137,7 +136,8 @@ export async function processInboundMessage(
   customerPhone: string,
   customerName: string | null,
   messageText: string,
-  whatsappMessageId?: string
+  whatsappMessageId?: string,
+  whatsappAccountId?: string
 ): Promise<string> {
   const trimmed = messageText.trim();
   const phone = resolveCustomerPhone(customerPhone);
@@ -176,6 +176,7 @@ export async function processInboundMessage(
       sender_type: 'customer',
       status: 'open',
       whatsapp_message_id: whatsappMessageId || null,
+      whatsapp_account_id: whatsappAccountId || null,
     });
 
     if (insertError?.code === '23505') {

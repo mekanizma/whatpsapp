@@ -21,15 +21,21 @@ import {
   parseCollectedFields,
   HistoryMsg,
 } from './appointment-collect.service';
-import { extractSlotForConfirmation, preferHistorySlot, extractNumberedAlternative, parseSlotFromTurkishText, validateSlotWorkingHours } from './appointment-slot.service';
+import { extractSlotForConfirmation, preferHistorySlot, extractNumberedAlternative, parseSlotFromText, validateSlotWorkingHours, buildWorkingHoursRejectionMessage } from './appointment-slot.service';
 import { ConversationLang, detectConversationLanguage } from './language.service';
+import { hasDateTimeIntent } from './appointment-datetime-tokens';
+import {
+  type AppointmentCompanyContext,
+  DEFAULT_APPOINTMENT_CONTEXT,
+} from './appointment-company-context';
 
-function customerProvidedTimeInHistory(history: HistoryMsg[]): boolean {
+function customerProvidedTimeInHistory(history: HistoryMsg[], ctx: AppointmentCompanyContext): boolean {
+  const options = { timezone: ctx.timezone };
   return history.some(
     (m) =>
       m.sender_type === 'customer' &&
-      /yarın|yarin|saat\s*\d|cuma|perşembe|pazartesi|\d{1,2}[:.]\d{2}/i.test(m.message) &&
-      !!parseSlotFromTurkishText(m.message)
+      hasDateTimeIntent(m.message) &&
+      !!parseSlotFromText(m.message, options)
   );
 }
 
@@ -54,8 +60,15 @@ export function isAppointmentConfirmation(message: string, history: HistoryMsg[]
   return false;
 }
 
-function isAlternativeSlotSelection(history: HistoryMsg[], latestMessage: string): boolean {
-  return /^\s*[123]\s*$/.test(latestMessage.trim()) && !!extractNumberedAlternative(history, latestMessage);
+function isAlternativeSlotSelection(
+  history: HistoryMsg[],
+  latestMessage: string,
+  ctx: AppointmentCompanyContext = DEFAULT_APPOINTMENT_CONTEXT
+): boolean {
+  return (
+    /^\s*[123]\s*$/.test(latestMessage.trim()) &&
+    !!extractNumberedAlternative(history, latestMessage, { timezone: ctx.timezone })
+  );
 }
 
 export async function extractAppointmentFromConversation(
@@ -184,7 +197,8 @@ export async function bookFromConfirmation(
   companyId: string,
   customerPhone: string,
   history: HistoryMsg[],
-  latestMessage: string
+  latestMessage: string,
+  ctx: AppointmentCompanyContext = DEFAULT_APPOINTMENT_CONTEXT
 ): Promise<{ message: string; appointment: Appointment | null } | null> {
   if (!isAppointmentConfirmation(latestMessage, history) && !isAlternativeSlotSelection(history, latestMessage)) {
     return null;
@@ -199,9 +213,9 @@ export async function bookFromConfirmation(
 
   if (
     !hasPendingAppointmentConfirmation(history) &&
-    !customerProvidedTimeInHistory(history) &&
-    !parseSlotFromTurkishText(latestMessage) &&
-    !extractNumberedAlternative(history, latestMessage)
+    !customerProvidedTimeInHistory(history, ctx) &&
+    !parseSlotFromText(latestMessage, { timezone: ctx.timezone }) &&
+    !extractNumberedAlternative(history, latestMessage, { timezone: ctx.timezone })
   ) {
     return {
       message:
@@ -212,7 +226,7 @@ export async function bookFromConfirmation(
     };
   }
 
-  const offered = extractSlotForConfirmation(history, latestMessage);
+  const offered = extractSlotForConfirmation(history, latestMessage, { timezone: ctx.timezone });
   if (!offered) {
     return {
       message:
@@ -231,13 +245,17 @@ export async function bookFromConfirmation(
   const err = validateAppointmentAction(merged, customerPhone);
   if (err) return { message: err, appointment: null };
 
-  const hours = validateSlotWorkingHours({
-    starts_at: merged.starts_at,
-    ends_at: merged.ends_at,
-  });
+  const hours = validateSlotWorkingHours(
+    {
+      starts_at: merged.starts_at,
+      ends_at: merged.ends_at,
+    },
+    ctx,
+    lang
+  );
   if (!hours.valid) {
     return {
-      message: `${hours.reason} Lütfen çalışma saatleri içinde başka bir saat yazın.`,
+      message: buildWorkingHoursRejectionMessage(hours, ctx, lang),
       appointment: null,
     };
   }
@@ -253,12 +271,13 @@ export async function tryStructuredAppointmentBooking(
   companyId: string,
   customerPhone: string,
   history: HistoryMsg[],
-  latestMessage: string
+  latestMessage: string,
+  ctx: AppointmentCompanyContext = DEFAULT_APPOINTMENT_CONTEXT
 ): Promise<{ message: string; appointment: Appointment | null } | null> {
   if (!isAppointmentConfirmation(latestMessage, history)) return null;
 
   const lang = detectConversationLanguage(latestMessage, history);
-  const fromHistory = await bookFromConfirmation(companyId, customerPhone, history, latestMessage);
+  const fromHistory = await bookFromConfirmation(companyId, customerPhone, history, latestMessage, ctx);
   if (fromHistory?.appointment) return fromHistory;
 
   const extracted = await extractAppointmentFromConversation(history, latestMessage, companyId, customerPhone);
@@ -269,7 +288,7 @@ export async function tryStructuredAppointmentBooking(
     return { message: gate.message!, appointment: null };
   }
 
-  const slot = preferHistorySlot(history, extracted, latestMessage);
+  const slot = preferHistorySlot(history, extracted, latestMessage, { timezone: ctx.timezone });
   if (!slot) return fromHistory;
 
   const merged = mergeCollectedWithAction(gate.collected, { ...extracted, ...slot });
@@ -312,14 +331,16 @@ export async function handleAppointmentBooking(
   rawResponse: string,
   history: HistoryMsg[],
   latestMessage: string,
-  lang?: ConversationLang
+  lang?: ConversationLang,
+  ctx: AppointmentCompanyContext = DEFAULT_APPOINTMENT_CONTEXT
 ): Promise<{ message: string; appointment: Appointment | null }> {
   const conversationLang = lang ?? detectConversationLanguage(latestMessage, history);
   const confirmed =
-    isAppointmentConfirmation(latestMessage, history) || isAlternativeSlotSelection(history, latestMessage);
+    isAppointmentConfirmation(latestMessage, history) ||
+    isAlternativeSlotSelection(history, latestMessage, ctx);
 
   if (confirmed) {
-    const booking = await bookFromConfirmation(companyId, customerPhone, history, latestMessage);
+    const booking = await bookFromConfirmation(companyId, customerPhone, history, latestMessage, ctx);
     if (booking) return wrapBookingReply(booking, rawResponse, conversationLang);
   }
 
@@ -354,7 +375,8 @@ export async function handleAppointmentBooking(
     history,
     conversationLang,
     latestMessage,
-    confirmed
+    confirmed,
+    ctx
   );
   if (fromMarker.appointment) return wrapBookingReply(fromMarker, rawResponse, conversationLang);
 
@@ -363,7 +385,8 @@ export async function handleAppointmentBooking(
       companyId,
       customerPhone,
       history,
-      latestMessage
+      latestMessage,
+      ctx
     );
     if (structured) return wrapBookingReply(structured, rawResponse, conversationLang);
   }

@@ -16,7 +16,9 @@ export function isLightPollingRequest(req: Request): boolean {
   return (
     /^\/v1\/auth\/me$/.test(path) ||
     /^\/v1\/whatsapp\/qr\/[^/]+\/status$/.test(path) ||
+    /^\/v1\/whatsapp\/accounts\/[^/]+\/qr\/[^/]+\/status$/.test(path) ||
     /^\/v1\/whatsapp\/status$/.test(path) ||
+    /^\/v1\/whatsapp\/accounts$/.test(path) ||
     /^\/v1\/notifications/.test(path)
   );
 }

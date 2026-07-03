@@ -50,6 +50,7 @@ describe('admin-prompt-builder prompt cache layout', () => {
   it('dynamic user message injects KB and raw customer text last', () => {
     const wrapped = buildDynamicUserMessage('Fiyat nedir?', {
       knowledge: 'Paket A: 1500 TL',
+      knowledgeTitles: ['Ücretler', 'Adres', 'Çalışma Saatleri'],
       appointmentContext: 'Pzt-Cum 09-18',
       collectedContext: 'Ad: Ali Veli',
       lang: 'tr',
@@ -58,12 +59,23 @@ describe('admin-prompt-builder prompt cache layout', () => {
 
     assert.match(wrapped, /^### Dil\nReply in Turkish only\./);
     assert.match(wrapped, /### Bilgi Bankası \(bu soruya özel\)\nPaket A: 1500 TL/);
+    assert.match(wrapped, /Mevcut konu başlıkları: Ücretler, Adres, Çalışma Saatleri/);
+    assert.match(wrapped, /asla bilgi uydurma/);
     assert.match(wrapped, /### Randevu Bağlamı\nPzt-Cum 09-18/);
     assert.match(wrapped, /### Toplanan Randevu Bilgileri\nAd: Ali Veli/);
     assert.match(wrapped, /### Müşteri Mesajı\nFiyat nedir\?$/);
     const customerIdx = wrapped.indexOf('### Müşteri Mesajı');
     const kbIdx = wrapped.indexOf('### Bilgi Bankası');
     assert.ok(kbIdx < customerIdx);
+  });
+
+  it('includes topic titles even when retrieved knowledge is empty', () => {
+    const wrapped = buildDynamicUserMessage('üniversite nerede', {
+      knowledgeTitles: ['Adres', 'Ücretler'],
+      lang: 'tr',
+    });
+    assert.match(wrapped, /Mevcut konu başlıkları: Adres, Ücretler/);
+    assert.match(wrapped, /### Müşteri Mesajı\nüniversite nerede/);
   });
 
   it('omits empty dynamic sections', () => {

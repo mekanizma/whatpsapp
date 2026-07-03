@@ -4,7 +4,7 @@
 
 import { config } from '../config';
 import { adminClient } from '../database/supabase';
-import { createEmbedding } from './embedding.service';
+import { createEmbeddings } from './embedding.service';
 import { expandQueryForRetrieval } from './query-expansion.service';
 import {
   buildKnowledgeContextForAI,
@@ -21,6 +21,42 @@ export interface KnowledgeRetrievalResult {
   fallbackItems: KnowledgeItem[];
   /** İndeks hazır ama sorguya uygun chunk bulunamadı */
   kbHasNoMatch: boolean;
+}
+
+export function buildRetrievalTexts(rawMessage: string, variants: string[]): string[] {
+  const parts = [rawMessage, ...variants].map((p) => p.trim()).filter(Boolean);
+  return [...new Set(parts)].slice(0, 4);
+}
+
+export function mergeRetrievalChunksByMax(
+  resultSets: RetrievedKnowledgeChunk[][]
+): RetrievedKnowledgeChunk[] {
+  const byId = new Map<string, RetrievedKnowledgeChunk>();
+
+  for (const chunks of resultSets) {
+    for (const chunk of chunks) {
+      const prev = byId.get(chunk.id);
+      if (!prev) {
+        byId.set(chunk.id, { ...chunk });
+        continue;
+      }
+      byId.set(chunk.id, {
+        ...prev,
+        similarity: Math.max(prev.similarity, chunk.similarity),
+        text_rank: Math.max(prev.text_rank, chunk.text_rank),
+        combined_score: Math.max(prev.combined_score, chunk.combined_score),
+      });
+    }
+  }
+
+  return Array.from(byId.values());
+}
+
+export function hasStrongRetrievalMatch(chunks: RetrievedKnowledgeChunk[]): boolean {
+  if (!chunks.length) return false;
+  const maxSimilarity = Math.max(...chunks.map((c) => c.similarity));
+  const maxTextRank = Math.max(...chunks.map((c) => c.text_rank));
+  return maxSimilarity >= config.rag.matchThreshold || maxTextRank > 0;
 }
 
 export function buildContextFromChunks(chunks: RetrievedKnowledgeChunk[]): string {
@@ -78,15 +114,15 @@ async function countReadyDocuments(companyId: string): Promise<number> {
   return count ?? 0;
 }
 
-async function queryKnowledgeChunks(
+async function queryKnowledgeChunksRaw(
   companyId: string,
-  query: string,
+  queryText: string,
   embedding: number[]
 ): Promise<RetrievedKnowledgeChunk[]> {
   const { data, error } = await adminClient.rpc('match_knowledge_chunks', {
     p_company_id: companyId,
     query_embedding: embedding,
-    query_text: query,
+    query_text: queryText,
     match_count: config.rag.topK,
     match_threshold: config.rag.matchThreshold,
     vector_weight: config.rag.vectorWeight,
@@ -97,7 +133,7 @@ async function queryKnowledgeChunks(
     throw new Error(error.message);
   }
 
-  return finalizeRetrievalChunks((data || []) as RetrievedKnowledgeChunk[]);
+  return (data || []) as RetrievedKnowledgeChunk[];
 }
 
 export async function retrieveKnowledgeContext(
@@ -130,10 +166,17 @@ export async function retrieveKnowledgeContext(
   }
 
   const rewrite = await expandQueryForRetrieval(companyId, trimmed);
+  const texts = buildRetrievalTexts(trimmed, rewrite.variants);
 
   try {
-    const embedding = await createEmbedding(rewrite.embeddingText);
-    const chunks = await queryKnowledgeChunks(companyId, rewrite.embeddingText, embedding);
+    const embeddings = await createEmbeddings(texts);
+    const resultSets = await Promise.all(
+      texts.map((text, index) =>
+        queryKnowledgeChunksRaw(companyId, text, embeddings[index] || [])
+      )
+    );
+    const merged = mergeRetrievalChunksByMax(resultSets);
+    const chunks = finalizeRetrievalChunks(merged);
 
     if (!chunks.length) {
       return {
@@ -146,9 +189,7 @@ export async function retrieveKnowledgeContext(
       };
     }
 
-    const hasStrongMatch = chunks.some(
-      (chunk) => chunk.combined_score >= config.rag.matchThreshold
-    );
+    const hasStrongMatch = hasStrongRetrievalMatch(chunks);
 
     return {
       context: buildContextFromChunks(chunks),
