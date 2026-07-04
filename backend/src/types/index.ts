@@ -39,6 +39,7 @@ export interface Company {
   address: string | null;
   working_hours: Record<string, unknown>;
   timezone?: string | null;
+  custom_instructions?: string | null;
   logo: string | null;
   subscription_plan: SubscriptionPlanType;
   status: CompanyStatus;

@@ -22,6 +22,7 @@ export interface Company {
   phone: string | null;
   email: string | null;
   address: string | null;
+  custom_instructions?: string | null;
   logo: string | null;
   subscription_plan: string;
   status: string;

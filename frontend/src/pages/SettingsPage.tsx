@@ -11,6 +11,7 @@ import {
   Button,
   Input,
   Label,
+  Textarea,
   Card,
   CardContent,
   CardHeader,
@@ -24,6 +25,8 @@ import { supabase, supabaseConfigured } from '@/services/supabase';
 import { api } from '@/services/api';
 import { isDemoMode } from '@/lib/env';
 import type { Company, NotificationUser } from '@/types';
+
+const CUSTOM_INSTRUCTIONS_MAX_LENGTH = 1500;
 
 const CATEGORY_VALUES = [
   'universite', 'klinik', 'dis_hekimi', 'guzellik_merkezi', 'emlak',
@@ -43,6 +46,10 @@ export function SettingsPage() {
   const [companyEmail, setCompanyEmail] = useState(company?.email || '');
   const [companyAddress, setCompanyAddress] = useState(company?.address || '');
   const [companyCategory, setCompanyCategory] = useState(company?.category || 'diger');
+  const [customInstructions, setCustomInstructions] = useState(company?.custom_instructions || '');
+
+  const customInstructionsTrimmed = customInstructions.trim();
+  const customInstructionsOverLimit = customInstructionsTrimmed.length > CUSTOM_INSTRUCTIONS_MAX_LENGTH;
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -69,6 +76,7 @@ export function SettingsPage() {
     setCompanyEmail(company?.email || '');
     setCompanyAddress(company?.address || '');
     setCompanyCategory(company?.category || 'diger');
+    setCustomInstructions(company?.custom_instructions || '');
   }, [company]);
 
   useEffect(() => {
@@ -109,6 +117,7 @@ export function SettingsPage() {
         email: companyEmail.trim() || null,
         address: companyAddress.trim() || null,
         category: companyCategory,
+        custom_instructions: customInstructionsTrimmed || null,
       } as Partial<Company>),
     onSuccess: () => {
       setCompanyMsg({ type: 'ok', text: t('settings.companySaved') });
@@ -375,6 +384,27 @@ export function SettingsPage() {
                   onChange={(e) => setCompanyAddress(e.target.value)}
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="customInstructions">{t('settings.customInstructions')}</Label>
+                <Textarea
+                  id="customInstructions"
+                  value={customInstructions}
+                  onChange={(e) => setCustomInstructions(e.target.value)}
+                  rows={5}
+                  placeholder={t('settings.customInstructionsPlaceholder')}
+                  className="min-h-[120px] resize-y"
+                />
+                <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="text-xs text-slate-500">{t('settings.customInstructionsHint')}</p>
+                  <p
+                    className={`text-xs tabular-nums ${
+                      customInstructionsOverLimit ? 'text-red-600' : 'text-slate-500'
+                    }`}
+                  >
+                    {customInstructionsTrimmed.length}/{CUSTOM_INSTRUCTIONS_MAX_LENGTH}
+                  </p>
+                </div>
+              </div>
               {companyMsg && (
                 <p className={companyMsg.type === 'ok' ? 'text-sm text-emerald-600' : 'text-sm text-red-600'}>
                   {companyMsg.text}
@@ -385,7 +415,7 @@ export function SettingsPage() {
                   setCompanyMsg(null);
                   companyMutation.mutate();
                 }}
-                disabled={companyMutation.isPending || !companyName.trim()}
+                disabled={companyMutation.isPending || !companyName.trim() || customInstructionsOverLimit}
                 className="w-full"
               >
                 <Save className="h-4 w-4" />

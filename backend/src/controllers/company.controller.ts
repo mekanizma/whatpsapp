@@ -11,6 +11,9 @@ import { getAICostReport } from '../services/ai-cost.service';
 import { logActivity } from '../services/log.service';
 import { validateWorkingHoursForWrite } from '../services/working-hours.service';
 import { validateCompanyTimezoneForWrite } from '../services/company-timezone.service';
+import { validateCustomInstructionsForWrite } from '../services/custom-instructions.service';
+import { invalidateStaticSystemPromptCache } from '../ai/admin-prompt-builder';
+import { clearCompanyCache } from '../ai/ai-cache.service';
 
 export async function getCompany(req: AuthRequest, res: Response): Promise<void> {
   const companyId = req.params.id || req.companyId;
@@ -31,7 +34,7 @@ export async function getCompany(req: AuthRequest, res: Response): Promise<void>
 
 export async function updateCompany(req: AuthRequest, res: Response): Promise<void> {
   const companyId = req.params.id || req.companyId;
-  const { company_name, category, phone, email, address, working_hours, timezone, logo } = req.body;
+  const { company_name, category, phone, email, address, working_hours, timezone, logo, custom_instructions } = req.body;
 
   let validatedWorkingHours: Record<string, unknown> | undefined;
   if (working_hours !== undefined) {
@@ -53,6 +56,20 @@ export async function updateCompany(req: AuthRequest, res: Response): Promise<vo
     validatedTimezone = tz.timezone;
   }
 
+  let validatedCustomInstructions: string | null | undefined;
+  let customInstructionsProvided = false;
+  if (custom_instructions !== undefined) {
+    const ci = validateCustomInstructionsForWrite(custom_instructions);
+    if (!ci.ok) {
+      res.status(400).json({ success: false, error: ci.error });
+      return;
+    }
+    if (ci.provided) {
+      customInstructionsProvided = true;
+      validatedCustomInstructions = ci.value;
+    }
+  }
+
   if (isDemoSession(req)) {
     if (company_name !== undefined) demoCompany.company_name = company_name;
     if (category !== undefined) demoCompany.category = category;
@@ -62,6 +79,7 @@ export async function updateCompany(req: AuthRequest, res: Response): Promise<vo
     if (validatedWorkingHours !== undefined) demoCompany.working_hours = validatedWorkingHours;
     if (validatedTimezone !== undefined) demoCompany.timezone = validatedTimezone;
     if (logo !== undefined) demoCompany.logo = logo;
+    if (customInstructionsProvided) demoCompany.custom_instructions = validatedCustomInstructions ?? null;
     res.json({ success: true, data: demoCompany });
     return;
   }
@@ -76,6 +94,7 @@ export async function updateCompany(req: AuthRequest, res: Response): Promise<vo
   };
   if (validatedWorkingHours !== undefined) updatePayload.working_hours = validatedWorkingHours;
   if (validatedTimezone !== undefined) updatePayload.timezone = validatedTimezone;
+  if (customInstructionsProvided) updatePayload.custom_instructions = validatedCustomInstructions;
 
   const { data, error } = await adminClient
     .from('companies')
@@ -87,6 +106,11 @@ export async function updateCompany(req: AuthRequest, res: Response): Promise<vo
   if (error) {
     res.status(400).json({ success: false, error: error.message });
     return;
+  }
+
+  if (customInstructionsProvided) {
+    invalidateStaticSystemPromptCache(companyId as string);
+    await clearCompanyCache(companyId as string);
   }
 
   await logActivity({
