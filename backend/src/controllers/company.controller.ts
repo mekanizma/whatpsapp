@@ -14,6 +14,7 @@ import { validateCompanyTimezoneForWrite } from '../services/company-timezone.se
 import { validateCustomInstructionsForWrite } from '../services/custom-instructions.service';
 import { invalidateStaticSystemPromptCache } from '../ai/admin-prompt-builder';
 import { clearCompanyCache } from '../ai/ai-cache.service';
+import { invalidateCompanyCache } from '../ai/openai.service';
 
 export async function getCompany(req: AuthRequest, res: Response): Promise<void> {
   const companyId = req.params.id || req.companyId;
@@ -110,6 +111,7 @@ export async function updateCompany(req: AuthRequest, res: Response): Promise<vo
 
   if (customInstructionsProvided) {
     invalidateStaticSystemPromptCache(companyId as string);
+    invalidateCompanyCache(companyId as string);
     await clearCompanyCache(companyId as string);
   }
 

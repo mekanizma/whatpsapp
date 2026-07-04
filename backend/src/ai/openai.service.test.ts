@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import {
   generateAIResponse,
   generateAIResponseDeps,
+  COMPANY_AI_SELECT,
   type GenerateAIContext,
 } from './openai.service';
 import { knowledgeRetrievalDeps } from '../services/knowledge-retrieval.service';
@@ -114,5 +115,11 @@ describe('generateAIResponse cost gates', () => {
     assert.equal(counters.matchKnowledgeRpc, 0);
 
     await clearCompanyCache(COMPANY_ID);
+  });
+});
+
+describe('openai.service company fetch', () => {
+  it('loads custom_instructions for prompt assembly', () => {
+    assert.match(COMPANY_AI_SELECT, /custom_instructions/);
   });
 });

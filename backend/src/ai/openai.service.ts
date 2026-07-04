@@ -94,13 +94,24 @@ export interface AIResponse {
 
 const companyCache = new Map<string, { data: Company; expires: number }>();
 
+export const COMPANY_AI_SELECT =
+  'id, company_name, category, phone, email, address, working_hours, timezone, custom_instructions';
+
+export function invalidateCompanyCache(companyId?: string): void {
+  if (!companyId) {
+    companyCache.clear();
+    return;
+  }
+  companyCache.delete(companyId);
+}
+
 async function getCompany(companyId: string): Promise<Company> {
   const cached = companyCache.get(companyId);
   if (cached && Date.now() < cached.expires) return cached.data;
 
   const { data } = await adminClient
     .from('companies')
-    .select('id, company_name, category, phone, email, address, working_hours, timezone')
+    .select(COMPANY_AI_SELECT)
     .eq('id', companyId)
     .single();
 
