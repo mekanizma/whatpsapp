@@ -23,6 +23,10 @@ const KNOWLEDGE_MISS_PATTERNS = [
   /bu konu hakkinda bilgim( yok| bulunmuyor)/,
   /bilgim(iz)? (yok|bulunmuyor|mevcut degil)/,
   /bu konuda (net )?bilgi(m)? (yok|bulunmuyor|mevcut degil)/,
+  /bu konuda elimde bilgi yok/,
+  /elimde (bu konuda )?bilgi yok/,
+  /bu konuda.{0,40}bilgi yok/,
+  /bu konu hakkinda.{0,40}bilgi yok/,
   /maalesef bu konuda/,
   /malesef bu konuda/,
   /bu bilgi(ye)? (sahip degilim|ulasamadim|bulamadim)/,
@@ -45,7 +49,8 @@ const KNOWLEDGE_MISS_PATTERNS = [
 const KB_MISS_TRANSFER_OFFER_PATTERNS = [
   /baska bir konuda yardimci olabilir.*temsilci/,
   /basinda bir konuda yardimci olabilir.*temsilci/,
-  /temsilci(ye| ile)? (bagla|aktar|baglayayim)/,
+  /temsilci(ye|yi)? (bagla|aktar|baglayayim|baglamam)/,
+  /baglamam.i ister misiniz/,
   /canli (destek|temsilci).*(bagla|aktar|ister)/,
   /would you like.*(representative|live agent|human)/,
   /souhaitez.*representant/,
@@ -60,7 +65,9 @@ export function isKnowledgeMissAiResponse(response: string): boolean {
   }
 
   const hasMissSignal =
-    /bilgiye sahip degilim|bilgim( yok| bulunmuyor)|bilgimiz (yok|bulunmuyor)/.test(normalized);
+    /bilgiye sahip degilim|bilgim( yok| bulunmuyor)|bilgimiz (yok|bulunmuyor)|elimde bilgi yok|bu konuda.{0,40}bilgi yok/.test(
+      normalized
+    );
   const hasTransferOffer = KB_MISS_TRANSFER_OFFER_PATTERNS.some((p) => p.test(normalized));
 
   return hasMissSignal && hasTransferOffer;

@@ -57,4 +57,20 @@ describe('shouldRecordUnknownQuestion', () => {
       true
     );
   });
+
+  it('detects common paraphrased Turkish miss + transfer offer', () => {
+    const response =
+      'Bu konuda elimde bilgi yok. Başka bir konuda yardımcı olabilir miyim, yoksa sizi bir temsilciye bağlamamı ister misiniz?';
+    assert.equal(
+      shouldRecordUnknownQuestion({
+        customerMessage: 'Yaz okulu var mı?',
+        aiResponse: response,
+        shouldTransfer: false,
+        skippedAI: false,
+        appointmentMode: false,
+        kbHasNoMatch: false,
+      }),
+      true
+    );
+  });
 });
