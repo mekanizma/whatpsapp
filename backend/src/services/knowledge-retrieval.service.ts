@@ -109,9 +109,14 @@ export function mergeRetrievalChunksByMax(
 
 export function hasStrongRetrievalMatch(chunks: RetrievedKnowledgeChunk[]): boolean {
   if (!chunks.length) return false;
-  const maxSimilarity = Math.max(...chunks.map((c) => c.similarity));
-  const maxTextRank = Math.max(...chunks.map((c) => c.text_rank));
-  return maxSimilarity >= config.rag.matchThreshold || maxTextRank > 0;
+  const threshold = config.rag.matchThreshold;
+  const minLexical = config.rag.minLexicalRank;
+  return chunks.some(
+    (c) =>
+      c.combined_score >= threshold ||
+      c.similarity >= threshold ||
+      c.text_rank >= minLexical
+  );
 }
 
 export function buildContextFromChunks(chunks: RetrievedKnowledgeChunk[]): string {

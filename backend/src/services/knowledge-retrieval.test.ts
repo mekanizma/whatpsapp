@@ -215,6 +215,16 @@ describe('knowledge-retrieval', () => {
     assert.equal(hasStrongRetrievalMatch([weak]), false);
   });
 
+  it('hasStrongRetrievalMatch rejects FTS noise with tiny text_rank', () => {
+    const noise: RetrievedKnowledgeChunk = {
+      ...OTHER_CHUNK,
+      similarity: 0.05,
+      text_rank: 0.02,
+      combined_score: 0.041,
+    };
+    assert.equal(hasStrongRetrievalMatch([noise]), false);
+  });
+
   it('"üniversite nerede" mock RPC: Turkish FTS stem hit ranks address chunk first', () => {
     const addressChunk: RetrievedKnowledgeChunk = {
       id: 'chunk-address',

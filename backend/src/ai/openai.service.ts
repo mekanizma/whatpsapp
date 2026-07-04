@@ -194,7 +194,7 @@ export async function generateAIResponse(
     allKnowledge
   );
   let knowledge = retrieval.context;
-  if (!knowledge.trim() && retrieval.kbHasNoMatch && allKnowledge.length > 0) {
+  if (retrieval.kbHasNoMatch && allKnowledge.length > 0) {
     knowledge = buildKnowledgeNoMatchHint(allKnowledge, conversationLang);
   }
 

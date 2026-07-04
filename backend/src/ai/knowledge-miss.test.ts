@@ -43,4 +43,18 @@ describe('shouldRecordUnknownQuestion', () => {
       true
     );
   });
+
+  it('records when RAG returns only weak chunk matches (kbHasNoMatch)', () => {
+    assert.equal(
+      shouldRecordUnknownQuestion({
+        customerMessage: 'Kampanya var mı?',
+        aiResponse: 'Şu an bu kampanya hakkında net bilgim yok, temsilciye bağlayabilirim.',
+        shouldTransfer: false,
+        skippedAI: false,
+        appointmentMode: false,
+        kbHasNoMatch: true,
+      }),
+      true
+    );
+  });
 });

@@ -104,6 +104,8 @@ export const config = {
     chunkOverlap: parseInt(process.env.RAG_CHUNK_OVERLAP || '150', 10),
     topK: parseInt(process.env.RAG_TOP_K || '6', 10),
     matchThreshold: parseFloat(process.env.RAG_MATCH_THRESHOLD || '0.25'),
+    /** FTS text_rank bu değerin altındaysa zayıf gürültü sayılır (bilinmeyen soru kaydı için) */
+    minLexicalRank: parseFloat(process.env.RAG_MIN_LEXICAL_RANK || '0.08'),
     vectorWeight: parseFloat(process.env.RAG_VECTOR_WEIGHT || '0.7'),
     textWeight: parseFloat(process.env.RAG_TEXT_WEIGHT || '0.3'),
     maxContextChars: parseInt(process.env.RAG_MAX_CONTEXT_CHARS || '3500', 10),
