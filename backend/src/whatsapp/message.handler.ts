@@ -24,6 +24,8 @@ import {
   buildDepartmentSelectionPrompt,
 } from '../ai/department-routing.service';
 import { detectConversationLanguage } from '../ai/language.service';
+import { uploadMessageMedia } from '../services/message-media.service';
+import crypto from 'crypto';
 
 const DEBOUNCE_MS = 3000;
 const TRANSFER_REPLY_COOLDOWN_MS = 60_000;
@@ -134,17 +136,28 @@ async function ensureOpenTransferTicket(
 async function fetchRecentHistory(
   companyId: string,
   phone: string,
-  limit = 10
+  limit = 12
 ): Promise<{ sender_type: string; message: string }[]> {
   const { data } = await adminClient
     .from('messages')
-    .select('sender_type, message')
+    .select('sender_type, message, media_type')
     .eq('company_id', companyId)
     .eq('customer_phone', phone)
     .order('created_at', { ascending: false })
     .limit(limit);
 
-  return (data || []).reverse();
+  return (data || []).reverse().map((row) => ({
+    sender_type: row.sender_type,
+    message: formatHistoryLine(row.message, row.media_type),
+  }));
+}
+
+function formatHistoryLine(message: string | null, mediaType?: string | null): string {
+  if (mediaType?.startsWith('image/')) {
+    const caption = message?.trim();
+    return caption ? `[Fotoğraf] ${caption}` : '[Fotoğraf]';
+  }
+  return message?.trim() || '';
 }
 
 async function handleTransferWithDepartment(
@@ -153,7 +166,8 @@ async function handleTransferWithDepartment(
   customerName: string | null,
   messageText: string,
   subject: string,
-  whatsappAccountId?: string | null
+  whatsappAccountId?: string | null,
+  options?: { forceCustomerPrompt?: boolean }
 ): Promise<{ reply: string; ticketCreated: boolean }> {
   let departments = await getDepartmentsForWhatsAppAccount(companyId, whatsappAccountId);
   if (!departments.length) {
@@ -171,7 +185,8 @@ async function handleTransferWithDepartment(
     messageText,
     history,
     departments,
-    phone
+    phone,
+    options?.forceCustomerPrompt ? { forceCustomerPrompt: true } : undefined
   );
 
   if (routing.awaitingSelection && routing.promptMessage) {
@@ -201,6 +216,213 @@ export function clearTransferState(companyId: string, customerPhone: string): vo
   recentTransferReplies.delete(`${companyId}:${phone}`);
   recentMessages.delete(`${companyId}:${phone}`);
   clearPendingDepartmentSelection(companyId, phone);
+}
+
+export interface InboundImagePayload {
+  buffer: Buffer;
+  mimeType: string;
+  filename?: string;
+  caption?: string;
+}
+
+function buildImageTransferSubject(caption?: string): string {
+  const trimmed = caption?.trim() || '';
+  if (trimmed) {
+    return `Müşteri fotoğraf gönderdi: ${trimmed.slice(0, 60)}`;
+  }
+  return 'Müşteri fotoğraf gönderdi';
+}
+
+/** Gelen resim mesajı — canlı desteğe aktar, departman seçimi sor */
+export async function processInboundImage(
+  companyId: string,
+  customerPhone: string,
+  customerName: string | null,
+  image: InboundImagePayload,
+  whatsappMessageId?: string,
+  whatsappAccountId?: string
+): Promise<string> {
+  const phone = resolveCustomerPhone(customerPhone);
+  const caption = image.caption?.trim() || '';
+
+  if (config.demoMode) {
+    return caption
+      ? 'Fotoğrafınızı aldık. Bir temsilcimiz kısa süre içinde size yardımcı olacak.'
+      : 'Fotoğrafınızı aldık. Bir temsilcimiz kısa süre içinde size yardımcı olacak.';
+  }
+
+  return withCustomerLock(`${companyId}:${phone}`, async () => {
+    if (whatsappMessageId && (await isMessageAlreadyStored(companyId, whatsappMessageId))) {
+      return '';
+    }
+
+    const messageId = crypto.randomUUID();
+    let mediaPath: string | null = null;
+    let mediaFilename: string | null = null;
+
+    try {
+      const uploaded = await uploadMessageMedia(
+        companyId,
+        messageId,
+        image.buffer,
+        image.mimeType,
+        image.filename
+      );
+      mediaPath = uploaded.path;
+      mediaFilename = uploaded.filename;
+    } catch (err) {
+      console.error('[WhatsApp] Resim yükleme hatası:', err instanceof Error ? err.message : err);
+      return 'Üzgünüz, fotoğrafınız işlenemedi. Lütfen tekrar deneyin.';
+    }
+
+    const { error: insertError } = await adminClient.from('messages').insert({
+      id: messageId,
+      company_id: companyId,
+      customer_phone: phone,
+      customer_name: customerName,
+      message: caption,
+      sender_type: 'customer',
+      status: 'open',
+      whatsapp_message_id: whatsappMessageId || null,
+      whatsapp_account_id: whatsappAccountId || null,
+      media_path: mediaPath,
+      media_type: image.mimeType,
+      media_filename: mediaFilename,
+    });
+
+    if (insertError?.code === '23505') {
+      if (whatsappMessageId) markProcessedWaId(companyId, whatsappMessageId);
+      return '';
+    }
+
+    if (insertError) {
+      console.error('[WhatsApp] Resim mesajı kayıt hatası:', insertError.message);
+      return '';
+    }
+
+    if (whatsappMessageId) markProcessedWaId(companyId, whatsappMessageId);
+
+    if (await shouldIncrementConversationUsage(companyId, phone)) {
+      await incrementConversationUsage(companyId);
+    }
+
+    if (await hasActiveTransferTicket(companyId, phone)) {
+      console.log(`[WhatsApp] Aktif ticket — resim kaydedildi, yanıt yok → ${phone}`);
+      return '';
+    }
+
+    const pendingDept = getPendingDepartmentSelection(companyId, phone);
+    if (pendingDept) {
+      const matched = matchDepartmentFromReply(caption, pendingDept.departments);
+      if (matched) {
+        clearPendingDepartmentSelection(companyId, phone);
+        await ensureOpenTransferTicket(
+          companyId,
+          phone,
+          customerName,
+          pendingDept.subject,
+          matched.id
+        );
+
+        await adminClient
+          .from('messages')
+          .update({ status: 'transferred' })
+          .eq('company_id', companyId)
+          .eq('customer_phone', phone)
+          .eq('status', 'open');
+
+        markTransferReply(companyId, phone);
+
+        const lang = detectConversationLanguage(caption);
+        const confirmMsg =
+          lang === 'en'
+            ? `Your request has been forwarded to the ${matched.name} team. A representative will assist you shortly.`
+            : `Talebiniz ${matched.name} ekibine iletildi. Bir temsilcimiz kısa süre içinde size yardımcı olacak.`;
+
+        await adminClient.from('messages').insert({
+          company_id: companyId,
+          customer_phone: phone,
+          customer_name: customerName,
+          message: confirmMsg,
+          sender_type: 'ai',
+          status: 'transferred',
+        });
+
+        return confirmMsg;
+      }
+
+      const retryPrompt = buildDepartmentSelectionPrompt(
+        pendingDept.departments,
+        detectConversationLanguage(caption)
+      );
+      await adminClient.from('messages').insert({
+        company_id: companyId,
+        customer_phone: phone,
+        customer_name: customerName,
+        message: retryPrompt,
+        sender_type: 'ai',
+        status: 'open',
+      });
+      return retryPrompt;
+    }
+
+    const subject = buildImageTransferSubject(caption);
+    const transferResult = await handleTransferWithDepartment(
+      companyId,
+      phone,
+      customerName,
+      caption || subject,
+      subject,
+      whatsappAccountId,
+      { forceCustomerPrompt: true }
+    );
+
+    let replyMessage = transferResult.reply;
+    if (!replyMessage && transferResult.ticketCreated) {
+      const lang = detectConversationLanguage(caption);
+      replyMessage =
+        lang === 'en'
+          ? 'Your photo has been received. A representative will assist you shortly.'
+          : 'Fotoğrafınız alındı. Bir temsilcimiz kısa süre içinde size yardımcı olacak.';
+    }
+
+    if (!replyMessage) return '';
+
+    if (transferResult.ticketCreated) {
+      await adminClient
+        .from('messages')
+        .update({ status: 'transferred' })
+        .eq('company_id', companyId)
+        .eq('customer_phone', phone)
+        .eq('status', 'open');
+
+      markTransferReply(companyId, phone);
+
+      await logActivity({
+        companyId,
+        action: 'conversation_transferred',
+        entityType: 'ticket',
+        metadata: {
+          customer_phone: phone,
+          skip_reason: 'customer_image',
+          media: true,
+        },
+      });
+
+      console.log(`[WhatsApp] Resim ile temsilciye aktarıldı → ${phone}`);
+    }
+
+    await adminClient.from('messages').insert({
+      company_id: companyId,
+      customer_phone: phone,
+      customer_name: customerName,
+      message: replyMessage,
+      sender_type: 'ai',
+      status: transferResult.ticketCreated ? 'transferred' : 'open',
+    });
+
+    return replyMessage;
+  });
 }
 
 export async function processInboundMessage(

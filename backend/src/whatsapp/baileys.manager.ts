@@ -14,11 +14,14 @@ import {
   fetchLatestBaileysVersion,
   DisconnectReason,
   WASocket,
+  downloadMediaMessage,
+  type WAMessage,
 } from '@whiskeysockets/baileys';
 import { config } from '../config';
 import { adminClient } from '../database/supabase';
 import {
   processInboundMessage,
+  processInboundImage,
   extractPhoneFromMessage,
   jidToPhone,
   normalizePhoneNumber,
@@ -629,13 +632,6 @@ async function connectBaileysSocket(
         if (msg.key.fromMe) continue;
         if (!msg.message) continue;
 
-        const text =
-          msg.message.conversation ||
-          msg.message.extendedTextMessage?.text ||
-          msg.message.imageMessage?.caption;
-
-        if (!text) continue;
-
         const customerPhone = extractPhoneFromMessage(msg.key);
         if (!customerPhone || msg.key.remoteJid?.endsWith('@g.us')) continue;
 
@@ -645,6 +641,51 @@ async function connectBaileysSocket(
         if (replyJid) {
           cacheCustomerJid(accountId, customerPhone, replyJid);
         }
+
+        const imageMessage = msg.message.imageMessage;
+        if (imageMessage) {
+          try {
+            const buffer = (await downloadMediaMessage(
+              msg as WAMessage,
+              'buffer',
+              {},
+              {
+                logger,
+                reuploadRequest: socket.updateMediaMessage,
+              }
+            )) as Buffer;
+
+            const mimeType = imageMessage.mimetype || 'image/jpeg';
+            console.log(`[Baileys] Gelen resim (${accountId}): ${customerPhone}`);
+
+            const reply = await processInboundImage(
+              companyId,
+              customerPhone,
+              customerName,
+              {
+                buffer,
+                mimeType,
+                caption: imageMessage.caption || undefined,
+              },
+              msg.key.id || undefined,
+              accountId
+            );
+
+            if (reply && socket.user && replyJid) {
+              await socket.sendMessage(replyJid, { text: reply });
+              console.log(`[Baileys] Resim yanıtı iletildi: ${customerPhone}`);
+            }
+          } catch (err) {
+            console.error('Resim işleme hatası:', err);
+          }
+          continue;
+        }
+
+        const text =
+          msg.message.conversation ||
+          msg.message.extendedTextMessage?.text;
+
+        if (!text) continue;
 
         try {
           console.log(`[Baileys] Gelen mesaj (${accountId}): ${customerPhone} — "${text.slice(0, 40)}..."`);
@@ -811,6 +852,64 @@ export async function sendBaileysMessage(
     return {
       success: false,
       error: err instanceof Error ? err.message : 'Mesaj gönderilemedi',
+    };
+  }
+}
+
+export async function sendBaileysImage(
+  accountId: string,
+  companyId: string,
+  toPhone: string,
+  imageBuffer: Buffer,
+  mimeType: string,
+  caption?: string
+): Promise<{ success: boolean; error?: string }> {
+  const conn = connections.get(accountId);
+  if (!conn?.socket?.user) {
+    return { success: false, error: 'WhatsApp bağlantısı aktif değil. QR ile yeniden bağlanın.' };
+  }
+
+  const normalized = normalizePhoneNumber(toPhone);
+  if (!normalized) {
+    return { success: false, error: 'Geçersiz telefon. Örnek: 905551234567' };
+  }
+
+  const socket = conn.socket;
+
+  try {
+    let jid = getCachedCustomerJid(accountId, normalized);
+
+    if (!jid) {
+      const waResults = await withTimeout(
+        socket.onWhatsApp(normalized),
+        12_000,
+        'Numara kontrolü zaman aşımı'
+      );
+      const waCheck = waResults?.[0];
+      if (!waCheck?.exists) {
+        return { success: false, error: 'Bu numara WhatsApp\'ta kayıtlı değil' };
+      }
+      jid = waCheck.jid;
+      cacheCustomerJid(accountId, normalized, jid);
+    }
+
+    await withTimeout(
+      socket.sendMessage(jid, {
+        image: imageBuffer,
+        mimetype: mimeType,
+        caption: caption?.trim() || undefined,
+      }),
+      30_000,
+      'Resim gönderme zaman aşımı'
+    );
+
+    console.log(`[Baileys] Resim gönderildi: ${accountId} → ${normalized}`);
+    return { success: true };
+  } catch (err) {
+    console.error(`[Baileys] Resim gönderme hatası (${accountId}):`, err);
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Resim gönderilemedi',
     };
   }
 }

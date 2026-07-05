@@ -3,15 +3,29 @@
  */
 
 import { Response } from 'express';
+import crypto from 'crypto';
 import { adminClient } from '../database/supabase';
 import { AuthRequest, isDemoSession } from '../middleware/auth.middleware';
-import { sendMessageToCustomer } from '../whatsapp/whatsapp.service';
+import { sendMessageToCustomer, sendImageToCustomer } from '../whatsapp/whatsapp.service';
 import { logActivity } from '../services/log.service';
 import { normalizePhoneNumber } from '../whatsapp/message.handler';
 import { mapMessageRow } from '../utils/supabase-join';
+import {
+  attachSignedMediaUrls,
+  downloadMessageMedia,
+  uploadMessageMedia,
+} from '../services/message-media.service';
+import { buildContentDisposition } from '../utils/content-disposition';
 
 function resolvePhoneParam(phone: string): string {
   return normalizePhoneNumber(phone) || phone.replace(/\D/g, '');
+}
+
+function formatLastMessagePreview(message: string, mediaType?: string | null): string {
+  if (mediaType?.startsWith('image/')) {
+    return message.trim() ? `📷 ${message.trim()}` : '📷 Fotoğraf';
+  }
+  return message;
 }
 
 export async function getConversations(req: AuthRequest, res: Response): Promise<void> {
@@ -47,7 +61,7 @@ export async function getConversations(req: AuthRequest, res: Response): Promise
       conversationMap.set(msg.customer_phone, {
         customer_phone: msg.customer_phone,
         customer_name: msg.customer_name,
-        last_message: msg.message,
+        last_message: formatLastMessagePreview(msg.message, msg.media_type),
         last_message_at: msg.created_at,
         unread_count: msg.sender_type === 'customer' && msg.status === 'open' ? 1 : 0,
         status: msg.status,
@@ -78,7 +92,42 @@ export async function getConversationMessages(req: AuthRequest, res: Response): 
     return;
   }
 
-  res.json({ success: true, data: (data || []).map(mapMessageRow) });
+  const mapped = (data || []).map(mapMessageRow);
+  const withMedia = await attachSignedMediaUrls(mapped);
+
+  res.json({ success: true, data: withMedia });
+}
+
+export async function getMessageMedia(req: AuthRequest, res: Response): Promise<void> {
+  const messageId = req.params.messageId as string;
+  const download = req.query.download === '1' || req.query.download === 'true';
+
+  const { data: msg, error } = await adminClient
+    .from('messages')
+    .select('id, company_id, media_path, media_type, media_filename')
+    .eq('id', messageId)
+    .eq('company_id', req.companyId)
+    .maybeSingle();
+
+  if (error || !msg?.media_path) {
+    res.status(404).json({ success: false, error: 'Medya bulunamadı' });
+    return;
+  }
+
+  try {
+    const { buffer, mimeType, filename } = await downloadMessageMedia(msg.media_path);
+    const resolvedName = msg.media_filename || filename;
+
+    res.setHeader('Content-Type', msg.media_type || mimeType);
+    res.setHeader('Content-Disposition', buildContentDisposition(resolvedName, !download));
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+    res.send(buffer);
+  } catch (err) {
+    res.status(404).json({
+      success: false,
+      error: err instanceof Error ? err.message : 'Medya indirilemedi',
+    });
+  }
 }
 
 export async function updateCustomerName(req: AuthRequest, res: Response): Promise<void> {
@@ -191,4 +240,103 @@ export async function replyToConversation(req: AuthRequest, res: Response): Prom
   });
 
   res.status(201).json({ success: true, data: mapMessageRow(msg) });
+}
+
+export async function replyWithImage(req: AuthRequest, res: Response): Promise<void> {
+  const phone = resolvePhoneParam(req.params.phone as string);
+  const file = req.file;
+  const caption = typeof req.body.caption === 'string' ? req.body.caption.trim() : '';
+
+  if (!file?.buffer?.length) {
+    res.status(400).json({ success: false, error: 'Resim dosyası gerekli' });
+    return;
+  }
+
+  if (!req.companyId) {
+    res.status(403).json({ success: false, error: 'Şirket bilgisi bulunamadı' });
+    return;
+  }
+
+  const { data: staffRecord } = await adminClient
+    .from('staff')
+    .select('id, name')
+    .eq('profile_id', req.profile?.id)
+    .eq('company_id', req.companyId)
+    .maybeSingle();
+
+  const senderName = staffRecord?.name?.trim() || req.profile?.full_name?.trim() || null;
+  const messageId = crypto.randomUUID();
+
+  let mediaPath: string | null = null;
+  let mediaFilename: string | null = null;
+
+  try {
+    const uploaded = await uploadMessageMedia(
+      req.companyId,
+      messageId,
+      file.buffer,
+      file.mimetype,
+      file.originalname
+    );
+    mediaPath = uploaded.path;
+    mediaFilename = uploaded.filename;
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: err instanceof Error ? err.message : 'Resim yüklenemedi',
+    });
+    return;
+  }
+
+  const sendResult = await sendImageToCustomer(
+    req.companyId,
+    phone,
+    file.buffer,
+    file.mimetype,
+    caption || undefined,
+    file.originalname
+  );
+
+  if (!sendResult.success) {
+    res.status(502).json({
+      success: false,
+      error: sendResult.error || 'WhatsApp resmi müşteriye iletilemedi',
+    });
+    return;
+  }
+
+  const { data: msg, error } = await adminClient
+    .from('messages')
+    .insert({
+      id: messageId,
+      company_id: req.companyId,
+      customer_phone: phone,
+      message: caption,
+      sender_type: 'staff',
+      status: 'open',
+      staff_id: staffRecord?.id || null,
+      sender_name: senderName,
+      media_path: mediaPath,
+      media_type: file.mimetype,
+      media_filename: mediaFilename,
+    })
+    .select('*, staff:staff_id(name)')
+    .single();
+
+  if (error) {
+    res.status(400).json({ success: false, error: error.message });
+    return;
+  }
+
+  await logActivity({
+    userId: req.userId,
+    companyId: req.companyId,
+    action: 'staff_image_sent',
+    entityType: 'message',
+    entityId: msg.id,
+    metadata: { customer_phone: phone, sender_name: senderName },
+  });
+
+  const [withMedia] = await attachSignedMediaUrls([mapMessageRow(msg)]);
+  res.status(201).json({ success: true, data: withMedia });
 }

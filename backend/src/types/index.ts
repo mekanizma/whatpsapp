@@ -120,6 +120,9 @@ export interface Message {
   staff_id: string | null;
   whatsapp_message_id: string | null;
   whatsapp_account_id?: string | null;
+  media_path?: string | null;
+  media_type?: string | null;
+  media_filename?: string | null;
   created_at: string;
 }
 

@@ -10,6 +10,7 @@ import {
   getBaileysConnectionStatus as getLocalBaileysStatus,
   isBaileysReconnecting,
   sendBaileysMessage,
+  sendBaileysImage,
   restoreBaileysSessions,
   verifySessionsDirWritable,
   isSessionsDirVolumeMounted,
@@ -92,6 +93,7 @@ export async function disconnectDemoWhatsApp() {
 export {
   disconnectBaileys,
   sendBaileysMessage,
+  sendBaileysImage,
   restoreBaileysSessions,
   isBaileysReconnecting,
   verifySessionsDirWritable,

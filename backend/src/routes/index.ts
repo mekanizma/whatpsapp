@@ -19,7 +19,7 @@ import * as subscriptionCtrl from '../controllers/subscription.controller';
 import * as appointmentsCtrl from '../controllers/appointments.controller';
 import * as notificationsCtrl from '../controllers/notifications.controller';
 import * as unknownQuestionsCtrl from '../controllers/unknown-questions.controller';
-import { knowledgeFileUpload } from '../middleware/upload.middleware';
+import { knowledgeFileUpload, messageImageUpload } from '../middleware/upload.middleware';
 
 const router = Router();
 
@@ -121,9 +121,17 @@ router.post('/knowledge/:id/index-now', authenticate, requireRole('company_admin
 
 // Messages
 router.get('/messages', authenticate, requireCompany, messagesCtrl.getConversations);
+router.get('/messages/media/:messageId', authenticate, requireCompany, messagesCtrl.getMessageMedia);
 router.get('/messages/:phone', authenticate, requireCompany, messagesCtrl.getConversationMessages);
 router.patch('/messages/:phone/customer-name', authenticate, requireRole('company_admin'), requireCompany, messagesCtrl.updateCustomerName);
 router.post('/messages/:phone/reply', authenticate, requireCompany, messagesCtrl.replyToConversation);
+router.post(
+  '/messages/:phone/reply-image',
+  authenticate,
+  requireCompany,
+  messageImageUpload.single('file'),
+  asyncHandler(messagesCtrl.replyWithImage)
+);
 
 // Unknown questions (Business / Enterprise)
 router.get('/unknown-questions', authenticate, requireCompany, asyncHandler(unknownQuestionsCtrl.getUnknownQuestions));

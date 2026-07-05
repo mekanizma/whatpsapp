@@ -160,9 +160,14 @@ export const api = {
     URL.revokeObjectURL(url);
   },
 
-  upload: async <T>(endpoint: string, file: File): Promise<T> => {
+  upload: async <T>(endpoint: string, file: File, fields?: Record<string, string>): Promise<T> => {
     const formData = new FormData();
     formData.append('file', file);
+    if (fields) {
+      for (const [key, value] of Object.entries(fields)) {
+        formData.append(key, value);
+      }
+    }
 
     const authHeaders = await getAuthHeaders();
     const { 'Content-Type': _ct, ...headers } = authHeaders as Record<string, string>;

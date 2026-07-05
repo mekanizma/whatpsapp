@@ -22,3 +22,18 @@ export const knowledgeFileUpload = multer({
     cb(new Error(KNOWLEDGE_FILE_FORMATS_MESSAGE));
   },
 });
+
+const MESSAGE_IMAGE_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+const MESSAGE_IMAGE_MAX_SIZE = 5 * 1024 * 1024;
+
+export const messageImageUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MESSAGE_IMAGE_MAX_SIZE, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    if (MESSAGE_IMAGE_MIMES.has(file.mimetype)) {
+      cb(null, true);
+      return;
+    }
+    cb(new Error('Yalnızca JPEG, PNG, WebP veya GIF resimleri desteklenir'));
+  },
+});

@@ -2,17 +2,23 @@
  * Messages page — professional chat interface
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Send, Search, Phone, Bot, User, CheckCircle2, Headphones, MessageSquare, ChevronLeft } from 'lucide-react';
+import { Send, Search, Phone, Bot, User, CheckCircle2, Headphones, MessageSquare, ChevronLeft, ImagePlus } from 'lucide-react';
 import { api } from '@/services/api';
+import { supabase, supabaseConfigured } from '@/services/supabase';
+import { useAuthStore } from '@/store/authStore';
 import { Button, Input, Spinner, Badge } from '@/components/ui';
 import { EmptyState } from '@/components/EmptyState';
 import { TransferTicketControl } from '@/components/TransferTicketControl';
+import { MessageImage } from '@/components/MessageImage';
 import { cn } from '@/lib/utils';
 import type { Conversation, Message, Ticket } from '@/types';
+
+const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif';
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 
 export function MessagesPage() {
   const { t, i18n } = useTranslation();
@@ -20,6 +26,7 @@ export function MessagesPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const phoneParam = searchParams.get('phone');
   const ticketParam = searchParams.get('ticket');
+  const companyId = useAuthStore((s) => s.company?.id);
 
   const [selectedPhone, setSelectedPhone] = useState<string | null>(phoneParam);
   const [replyText, setReplyText] = useState('');
@@ -27,15 +34,65 @@ export function MessagesPage() {
   const [search, setSearch] = useState('');
   const queryClient = useQueryClient();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (phoneParam) setSelectedPhone(phoneParam);
   }, [phoneParam]);
 
+  const invalidateMessageQueries = useCallback(
+    (phone?: string | null) => {
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      if (phone) {
+        queryClient.invalidateQueries({ queryKey: ['messages', phone] });
+        queryClient.invalidateQueries({ queryKey: ['active-ticket', phone] });
+      }
+    },
+    [queryClient]
+  );
+
+  useEffect(() => {
+    if (!supabaseConfigured || !companyId) return;
+
+    const channel = supabase
+      .channel(`messages-${companyId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'messages',
+          filter: `company_id=eq.${companyId}`,
+        },
+        (payload) => {
+          const row = payload.new as { customer_phone?: string };
+          invalidateMessageQueries(row.customer_phone || selectedPhone);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'messages',
+          filter: `company_id=eq.${companyId}`,
+        },
+        (payload) => {
+          const row = payload.new as { customer_phone?: string };
+          invalidateMessageQueries(row.customer_phone || selectedPhone);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [companyId, selectedPhone, invalidateMessageQueries]);
+
   const { data: conversations, isLoading } = useQuery({
     queryKey: ['conversations'],
     queryFn: () => api.get<Conversation[]>('/messages'),
-    refetchInterval: 10000,
+    refetchInterval: supabaseConfigured ? false : 10000,
   });
 
   const encodedPhone = selectedPhone ? encodeURIComponent(selectedPhone) : '';
@@ -44,7 +101,7 @@ export function MessagesPage() {
     queryKey: ['messages', selectedPhone],
     queryFn: () => api.get<Message[]>(`/messages/${encodedPhone}`),
     enabled: !!selectedPhone,
-    refetchInterval: 5000,
+    refetchInterval: supabaseConfigured ? false : 5000,
   });
 
   useEffect(() => {
@@ -56,7 +113,7 @@ export function MessagesPage() {
     queryKey: ['active-ticket', selectedPhone],
     queryFn: () => api.get<Ticket | null>(`/tickets/active/${encodedPhone}`),
     enabled: !!selectedPhone,
-    refetchInterval: 5000,
+    refetchInterval: supabaseConfigured ? false : 5000,
   });
 
   const replyMutation = useMutation({
@@ -64,11 +121,25 @@ export function MessagesPage() {
     onSuccess: () => {
       setReplyText('');
       setReplyError(null);
-      queryClient.invalidateQueries({ queryKey: ['messages', selectedPhone] });
-      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      invalidateMessageQueries(selectedPhone);
     },
     onError: (err: Error) => {
       setReplyError(err.message || t('messages.sendFailed'));
+    },
+  });
+
+  const imageMutation = useMutation({
+    mutationFn: (file: File) =>
+      api.upload<Message>(`/messages/${encodedPhone}/reply-image`, file, {
+        caption: replyText.trim(),
+      }),
+    onSuccess: () => {
+      setReplyText('');
+      setReplyError(null);
+      invalidateMessageQueries(selectedPhone);
+    },
+    onError: (err: Error) => {
+      setReplyError(err.message || t('messages.imageSendFailed'));
     },
   });
 
@@ -81,6 +152,24 @@ export function MessagesPage() {
     },
   });
 
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    if (!IMAGE_ACCEPT.split(',').includes(file.type)) {
+      setReplyError(t('messages.imageTypeError'));
+      return;
+    }
+    if (file.size > MAX_IMAGE_SIZE) {
+      setReplyError(t('messages.imageSizeError'));
+      return;
+    }
+
+    setReplyError(null);
+    imageMutation.mutate(file);
+  };
+
   const filtered = conversations?.filter((c) =>
     c.customer_name?.toLowerCase().includes(search.toLowerCase()) ||
     c.customer_phone.includes(search)
@@ -89,6 +178,7 @@ export function MessagesPage() {
   const selectedConv = conversations?.find((c) => c.customer_phone === selectedPhone);
   const ticketId = activeTicket?.id || ticketParam;
   const hasActiveTicket = !!activeTicket;
+  const isSending = replyMutation.isPending || imageMutation.isPending;
 
   const selectConversation = (phone: string) => {
     setSelectedPhone(phone);
@@ -106,6 +196,9 @@ export function MessagesPage() {
     if (msg.sender_type === 'ai') return t('messages.ai');
     return msg.sender_display_name || msg.staff?.name || msg.sender_name || t('messages.agent');
   };
+
+  const hasImage = (msg: Message) =>
+    !!msg.media_url && (msg.media_type?.startsWith('image/') ?? true);
 
   return (
     <div className="flex h-[calc(100dvh-11rem)] min-h-[420px] w-full max-w-full overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[var(--shadow-card)]">
@@ -229,7 +322,19 @@ export function MessagesPage() {
                         {senderLabel(msg)}
                       </span>
                     </div>
-                    <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.message}</p>
+
+                    {hasImage(msg) && msg.media_url ? (
+                      <MessageImage
+                        messageId={msg.id}
+                        mediaUrl={msg.media_url}
+                        filename={msg.media_filename}
+                        caption={msg.message || undefined}
+                        isStaffBubble={msg.sender_type === 'staff'}
+                      />
+                    ) : (
+                      <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.message}</p>
+                    )}
+
                     <p className={cn('mt-1.5 text-[10px] text-right', msg.sender_type === 'staff' ? 'text-white/60' : 'text-slate-400')}>
                       {new Date(msg.created_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
                     </p>
@@ -246,6 +351,24 @@ export function MessagesPage() {
                 </p>
               )}
               <div className="flex gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept={IMAGE_ACCEPT}
+                  className="hidden"
+                  onChange={handleImageSelect}
+                />
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="outline"
+                  className="shrink-0 rounded-xl"
+                  disabled={isSending}
+                  onClick={() => fileInputRef.current?.click()}
+                  aria-label={t('messages.sendImage')}
+                >
+                  <ImagePlus className="h-4 w-4" />
+                </Button>
                 <Input
                   className="flex-1"
                   placeholder={hasActiveTicket ? t('messages.replyPlaceholder') : t('messages.messagePlaceholder')}
@@ -254,9 +377,14 @@ export function MessagesPage() {
                     setReplyText(e.target.value);
                     if (replyError) setReplyError(null);
                   }}
-                  onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && replyText.trim() && replyMutation.mutate(replyText)}
+                  onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && replyText.trim() && !isSending && replyMutation.mutate(replyText)}
                 />
-                <Button size="icon" className="shrink-0 rounded-xl" disabled={!replyText.trim() || replyMutation.isPending} onClick={() => replyMutation.mutate(replyText)}>
+                <Button
+                  size="icon"
+                  className="shrink-0 rounded-xl"
+                  disabled={!replyText.trim() || isSending}
+                  onClick={() => replyMutation.mutate(replyText)}
+                >
                   <Send className="h-4 w-4" />
                 </Button>
               </div>

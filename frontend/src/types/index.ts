@@ -200,6 +200,9 @@ export interface Message {
   sender_name?: string | null;
   sender_display_name?: string | null;
   staff?: { name: string } | null;
+  media_url?: string | null;
+  media_type?: string | null;
+  media_filename?: string | null;
 }
 
 export interface KnowledgeItem {

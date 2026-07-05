@@ -136,7 +136,7 @@ export async function resolveTransferDepartment(
   history: { sender_type: string; message: string }[],
   departments: Department[],
   customerPhone?: string,
-  options?: { skipCustomerPrompt?: boolean }
+  options?: { skipCustomerPrompt?: boolean; forceCustomerPrompt?: boolean }
 ): Promise<DepartmentRoutingResult> {
   if (!departments.length) {
     return { departmentId: null, awaitingSelection: false };
@@ -147,27 +147,45 @@ export async function resolveTransferDepartment(
   }
 
   const lang = detectConversationLanguage(customerMessage, history);
+
+  if (options?.forceCustomerPrompt) {
+    return {
+      departmentId: null,
+      awaitingSelection: true,
+      promptMessage: buildDepartmentSelectionPrompt(departments, lang),
+    };
+  }
+
   const deptList = departments
     .map((d) => `- ${d.id}: ${d.name}${d.description ? ` (${d.description})` : ''}`)
     .join('\n');
 
   const transcript = history
-    .slice(-8)
+    .slice(-10)
     .map((m) => `${m.sender_type === 'customer' ? 'Müşteri' : 'Asistan'}: ${m.message}`)
     .join('\n');
+
+  const contextBlock = transcript
+    ? `Son mesajlar:\n${transcript}\n\nEn son müşteri mesajı: ${customerMessage}`
+    : `Müşteri mesajı: ${customerMessage}`;
 
   try {
     const completion = await createChatCompletion(
       [
         {
           role: 'system',
-          content: `Müşteri destek talebini doğru departmana yönlendir. JSON yanıt:
-{"department_id":"uuid veya null","confidence":"high|low"}
-Yalnızca confidence:high ise department_id doldur. Belirsizse null ve confidence:low.`,
+          content: `Müşteri canlı desteğe aktarılıyor. Görevin: konuşma geçmişine bakarak doğru departmanı seçmek.
+
+Kurallar:
+- Son mesajların tamamını ve bağlamı kullan; yalnızca son cümleye bakma.
+- Talep açıkça tek bir departmana uyuyorsa confidence:high ve o departmanın department_id değerini ver.
+- Belirsiz, genel, eksik bilgi veya birden fazla departmana uyabilirse confidence:low ve department_id:null ver.
+
+JSON yanıt: {"department_id":"uuid veya null","confidence":"high|low"}`,
         },
         {
           role: 'user',
-          content: `Departmanlar:\n${deptList}\n\nKonuşma:\n${transcript}\nMüşteri: ${customerMessage}`,
+          content: `Departmanlar:\n${deptList}\n\n${contextBlock}`,
         },
       ],
       {

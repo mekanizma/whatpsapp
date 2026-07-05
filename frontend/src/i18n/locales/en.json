@@ -15,6 +15,7 @@
     "edit": "Edit",
     "delete": "Delete",
     "copy": "Copy",
+    "close": "Close",
     "copied": "Copied",
     "yes": "Yes",
     "no": "No",
@@ -248,7 +249,15 @@
     "selectChat": "Select a conversation",
     "selectChatDesc": "Open a customer chat from the list on the left",
     "sendFailed": "Failed to send message",
-    "ai": "AI"
+    "ai": "AI",
+    "sendImage": "Send image",
+    "image": "Photo",
+    "openImage": "Open photo",
+    "downloadImage": "Download",
+    "imagePreview": "Photo preview",
+    "imageSendFailed": "Failed to send image",
+    "imageTypeError": "Only JPEG, PNG, WebP or GIF images are allowed",
+    "imageSizeError": "Image must be 5 MB or smaller"
   },
   "tickets": {
     "title": "Support Tickets",

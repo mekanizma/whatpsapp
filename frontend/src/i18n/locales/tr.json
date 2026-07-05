@@ -15,6 +15,7 @@
     "edit": "Düzenle",
     "delete": "Sil",
     "copy": "Kopyala",
+    "close": "Kapat",
     "copied": "Kopyalandı",
     "yes": "Evet",
     "no": "Hayır",
@@ -248,7 +249,15 @@
     "selectChat": "Bir konuşma seçin",
     "selectChatDesc": "Sol listeden müşteri sohbetini açın",
     "sendFailed": "Mesaj gönderilemedi",
-    "ai": "AI"
+    "ai": "AI",
+    "sendImage": "Resim gönder",
+    "image": "Fotoğraf",
+    "openImage": "Fotoğrafı aç",
+    "downloadImage": "İndir",
+    "imagePreview": "Fotoğraf önizleme",
+    "imageSendFailed": "Resim gönderilemedi",
+    "imageTypeError": "Yalnızca JPEG, PNG, WebP veya GIF yükleyebilirsiniz",
+    "imageSizeError": "Resim en fazla 5 MB olabilir"
   },
   "tickets": {
     "title": "Destek Talepleri",
