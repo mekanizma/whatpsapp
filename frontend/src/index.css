@@ -199,9 +199,8 @@
     @apply absolute left-0 top-1/2 h-6 w-1 -translate-y-1/2 rounded-r-full bg-accent;
   }
 
-  /* Müşteri paneli — premium 2026 sidebar */
+  /* Müşteri paneli — premium 2026 sidebar (position: fixed/relative Tailwind sınıflarından gelir) */
   .sidebar-premium {
-    position: relative;
     isolation: isolate;
     background: rgb(2 6 23 / 0.72);
     backdrop-filter: blur(24px) saturate(1.4);

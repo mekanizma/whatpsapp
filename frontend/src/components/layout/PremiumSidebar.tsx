@@ -52,8 +52,8 @@ export function PremiumSidebar({
     <aside
       data-sidebar-theme={theme}
       className={cn(
-        'sidebar-premium fixed inset-y-0 left-0 z-50 flex w-[min(18.5rem,100vw)] max-w-full flex-col overflow-hidden text-white transition-transform duration-300 ease-out',
-        'lg:relative lg:my-3 lg:ml-3 lg:h-[calc(100dvh-1.5rem)] lg:w-[18.5rem] lg:rounded-2xl lg:translate-x-0',
+        'sidebar-premium fixed inset-y-0 left-0 z-50 flex w-[min(18.5rem,100vw)] max-w-full flex-col overflow-hidden text-white transition-transform duration-300 ease-out max-lg:fixed',
+        'lg:relative lg:z-auto lg:my-3 lg:ml-3 lg:h-[calc(100dvh-1.5rem)] lg:w-[18.5rem] lg:shrink-0 lg:rounded-2xl lg:translate-x-0',
         open ? 'translate-x-0' : '-translate-x-full pointer-events-none lg:pointer-events-auto',
       )}
     >
@@ -164,7 +164,7 @@ export function PremiumPanelFrame({
   }, [sidebarOpen]);
 
   return (
-    <div className="app-shell fixed inset-0 flex h-[100dvh] w-full max-w-[100dvw] overflow-hidden bg-[#f0f4f8]">
+    <div className="app-shell fixed inset-0 flex flex-col overflow-hidden bg-[#f0f4f8] lg:flex-row">
       {sidebarOpen && (
         <div
           className="fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-md lg:hidden"
@@ -174,7 +174,7 @@ export function PremiumPanelFrame({
 
       {sidebar}
 
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden lg:mr-3">
+      <div className="flex min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden lg:mr-3">
         <header className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-slate-200/60 bg-white/70 px-4 backdrop-blur-xl sm:px-6 min-w-0 lg:mt-3 lg:rounded-t-2xl lg:border lg:border-b-0 lg:border-slate-200/60">
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <button
