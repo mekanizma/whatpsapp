@@ -103,3 +103,25 @@ export function requireCompany(req: AuthRequest, res: Response, next: NextFuncti
   }
   next();
 }
+
+/** Super admin hariç yalnızca kendi şirketine erişim */
+export function resolveAuthorizedCompanyId(
+  req: AuthRequest,
+  paramId?: string
+): string | null {
+  const targetId = paramId || req.companyId;
+  if (!targetId) return null;
+  if (req.role === 'super_admin') return targetId;
+  if (req.companyId && req.companyId === targetId) return targetId;
+  return null;
+}
+
+export function denyUnlessCompanyAccess(
+  req: AuthRequest,
+  res: Response,
+  companyId: string | null
+): companyId is string {
+  if (companyId) return true;
+  res.status(403).json({ success: false, error: 'Bu şirket verisine erişim yetkiniz yok' });
+  return false;
+}

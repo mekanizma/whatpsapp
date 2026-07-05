@@ -3,6 +3,8 @@
  */
 
 import { adminClient } from '../database/supabase';
+import { resolveDepartmentForSubject } from '../ai/department-routing.service';
+import { listActiveDepartments } from './department-access.service';
 import { sendMessageToCustomer } from '../whatsapp/whatsapp.service';
 import { normalizePhoneNumber } from '../whatsapp/message.handler';
 
@@ -155,62 +157,50 @@ export async function notifyTicketRecipients(
   companyId: string,
   ticket: TicketNotificationPayload
 ): Promise<void> {
+  if (!ticket.department_id) {
+    console.log('[TicketNotify] Departman atanmamış talep — bildirim gönderilmedi');
+    return;
+  }
+
   let departmentName: string | undefined;
   const phonesToNotify = new Set<string>();
 
-  if (ticket.department_id) {
-    const { data: dept } = await adminClient
-      .from('departments')
-      .select('name')
-      .eq('id', ticket.department_id)
-      .maybeSingle();
-    departmentName = dept?.name;
+  const { data: dept } = await adminClient
+    .from('departments')
+    .select('name')
+    .eq('id', ticket.department_id)
+    .maybeSingle();
+  departmentName = dept?.name;
 
-    const { data: deptStaff, error: staffError } = await adminClient
-      .from('staff')
-      .select('profile_id, phone, profiles:profile_id(id, phone, full_name, is_active)')
-      .eq('company_id', companyId)
-      .eq('department_id', ticket.department_id)
-      .eq('is_active', true);
+  const { data: deptStaff, error: staffError } = await adminClient
+    .from('staff')
+    .select('profile_id, phone, profiles:profile_id(id, phone, full_name, is_active)')
+    .eq('company_id', companyId)
+    .eq('department_id', ticket.department_id)
+    .eq('is_active', true);
 
-    if (staffError) {
-      console.error('[TicketNotify] Departman personeli alınamadı:', staffError.message);
-    } else {
-      for (const member of deptStaff || []) {
-        const profile = member.profiles as
-          | { id: string; phone: string | null; full_name: string; is_active: boolean }
-          | { id: string; phone: string | null; full_name: string; is_active: boolean }[]
-          | null;
-        const profileData = Array.isArray(profile) ? profile[0] : profile;
-        const rawPhone = profileData?.phone?.trim() || member.phone?.trim();
-        if (!profileData?.is_active || !rawPhone) continue;
-        const phone = normalizePhoneNumber(rawPhone);
-        if (phone) phonesToNotify.add(phone);
-      }
-    }
+  if (staffError) {
+    console.error('[TicketNotify] Departman personeli alınamadı:', staffError.message);
+    return;
+  }
+
+  for (const member of deptStaff || []) {
+    const profile = member.profiles as
+      | { id: string; phone: string | null; full_name: string; is_active: boolean }
+      | { id: string; phone: string | null; full_name: string; is_active: boolean }[]
+      | null;
+    const profileData = Array.isArray(profile) ? profile[0] : profile;
+    const rawPhone = profileData?.phone?.trim() || member.phone?.trim();
+    if (!profileData?.is_active || !rawPhone) continue;
+    const phone = normalizePhoneNumber(rawPhone);
+    if (phone) phonesToNotify.add(phone);
   }
 
   if (!phonesToNotify.size) {
-    const { data: recipients, error: recipientsError } = await adminClient
-      .from('ticket_notification_recipients')
-      .select('profile_id, profiles:profile_id(id, phone, full_name, is_active)')
-      .eq('company_id', companyId);
-
-    if (recipientsError) {
-      console.error('[TicketNotify] Alıcı listesi alınamadı:', recipientsError.message);
-      return;
-    }
-
-    for (const row of recipients || []) {
-      const profile = row.profiles as
-        | { id: string; phone: string | null; full_name: string; is_active: boolean }
-        | { id: string; phone: string | null; full_name: string; is_active: boolean }[]
-        | null;
-      const profileData = Array.isArray(profile) ? profile[0] : profile;
-      if (!profileData?.is_active || !profileData.phone?.trim()) continue;
-      const phone = normalizePhoneNumber(profileData.phone.trim());
-      if (phone) phonesToNotify.add(phone);
-    }
+    console.log(
+      `[TicketNotify] ${departmentName || ticket.department_id} departmanında bildirilecek personel bulunamadı`
+    );
+    return;
   }
 
   const message = buildTicketNotificationMessage(ticket, departmentName);
@@ -240,6 +230,18 @@ export async function createTicketAndNotify(
     department_id?: string | null;
   }
 ): Promise<{ created: boolean; ticket?: TicketNotificationPayload }> {
+  let departmentId = input.department_id || null;
+
+  if (!departmentId) {
+    const departments = await listActiveDepartments(companyId);
+    departmentId = await resolveDepartmentForSubject(
+      companyId,
+      input.subject,
+      departments,
+      input.customer_phone
+    );
+  }
+
   const { data, error } = await adminClient
     .from('tickets')
     .insert({
@@ -249,7 +251,7 @@ export async function createTicketAndNotify(
       subject: input.subject,
       priority: input.priority || 'medium',
       status: input.status || 'open',
-      department_id: input.department_id || null,
+      department_id: departmentId,
     })
     .select('id, customer_phone, customer_name, subject, priority, department_id')
     .single();

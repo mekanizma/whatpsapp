@@ -107,19 +107,21 @@ export async function listAccounts(req: AuthRequest, res: Response): Promise<voi
       account.connection_type === 'api' ? account.business_account_id : null,
   }));
 
-  res.json({
-    success: true,
-    data: {
-      accounts: safeAccounts,
-      limit: getWhatsAppLineLimit(planType),
-      used: accounts.length,
-      plan_type: planType,
-      supports_qr: !config.isVercel,
-      supports_cloud_api: true,
-      webhook_url: config.publicUrl ? `${config.publicUrl}/webhook/whatsapp` : null,
-      webhook_verify_token: config.whatsapp.verifyToken,
-    },
-  });
+  const listPayload: Record<string, unknown> = {
+    accounts: safeAccounts,
+    limit: getWhatsAppLineLimit(planType),
+    used: accounts.length,
+    plan_type: planType,
+    supports_qr: !config.isVercel,
+    supports_cloud_api: true,
+    webhook_url: config.publicUrl ? `${config.publicUrl}/webhook/whatsapp` : null,
+  };
+
+  if (req.role === 'company_admin' || req.role === 'super_admin') {
+    listPayload.webhook_verify_token = config.whatsapp.verifyToken;
+  }
+
+  res.json({ success: true, data: listPayload });
 }
 
 export async function createAccount(req: AuthRequest, res: Response): Promise<void> {

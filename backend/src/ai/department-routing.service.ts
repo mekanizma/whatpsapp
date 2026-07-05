@@ -109,12 +109,34 @@ export interface DepartmentRoutingResult {
   promptMessage?: string;
 }
 
+/** Talep konusuna göre departman ata — belirsizse null (müşteriden seçim istenmez) */
+export async function resolveDepartmentForSubject(
+  companyId: string,
+  subject: string,
+  departments: Department[],
+  customerPhone?: string
+): Promise<string | null> {
+  if (!departments.length) return null;
+  if (departments.length === 1) return departments[0].id;
+
+  const result = await resolveTransferDepartment(
+    companyId,
+    subject,
+    [],
+    departments,
+    customerPhone,
+    { skipCustomerPrompt: true }
+  );
+  return result.departmentId;
+}
+
 export async function resolveTransferDepartment(
   companyId: string,
   customerMessage: string,
   history: { sender_type: string; message: string }[],
   departments: Department[],
-  customerPhone?: string
+  customerPhone?: string,
+  options?: { skipCustomerPrompt?: boolean }
 ): Promise<DepartmentRoutingResult> {
   if (!departments.length) {
     return { departmentId: null, awaitingSelection: false };
@@ -179,6 +201,10 @@ Yalnızca confidence:high ise department_id doldur. Belirsizse null ve confidenc
       '[DeptRouting] AI sınıflandırma hatası:',
       err instanceof Error ? err.message : err
     );
+  }
+
+  if (options?.skipCustomerPrompt) {
+    return { departmentId: null, awaitingSelection: false };
   }
 
   return {

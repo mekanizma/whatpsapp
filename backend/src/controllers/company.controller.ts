@@ -5,7 +5,12 @@
 import { Response } from 'express';
 import { adminClient } from '../database/supabase';
 import { demoCompany } from '../demo/mockData';
-import { AuthRequest, isDemoSession } from '../middleware/auth.middleware';
+import {
+  AuthRequest,
+  denyUnlessCompanyAccess,
+  isDemoSession,
+  resolveAuthorizedCompanyId,
+} from '../middleware/auth.middleware';
 import { getDashboardStats } from '../services/dashboard.service';
 import { getAICostReport } from '../services/ai-cost.service';
 import { logActivity } from '../services/log.service';
@@ -17,7 +22,8 @@ import { clearCompanyCache } from '../ai/ai-cache.service';
 import { invalidateCompanyCache } from '../ai/openai.service';
 
 export async function getCompany(req: AuthRequest, res: Response): Promise<void> {
-  const companyId = req.params.id || req.companyId;
+  const companyId = resolveAuthorizedCompanyId(req, req.params.id as string | undefined);
+  if (!denyUnlessCompanyAccess(req, res, companyId)) return;
 
   const { data, error } = await adminClient
     .from('companies')
@@ -34,7 +40,8 @@ export async function getCompany(req: AuthRequest, res: Response): Promise<void>
 }
 
 export async function updateCompany(req: AuthRequest, res: Response): Promise<void> {
-  const companyId = req.params.id || req.companyId;
+  const companyId = resolveAuthorizedCompanyId(req, req.params.id as string | undefined);
+  if (!denyUnlessCompanyAccess(req, res, companyId)) return;
   const { company_name, category, phone, email, address, working_hours, timezone, logo, custom_instructions } = req.body;
 
   let validatedWorkingHours: Record<string, unknown> | undefined;
@@ -127,22 +134,16 @@ export async function updateCompany(req: AuthRequest, res: Response): Promise<vo
 }
 
 export async function getDashboard(req: AuthRequest, res: Response): Promise<void> {
-  const companyId = req.params.id || req.companyId;
-  if (!companyId) {
-    res.status(400).json({ success: false, error: 'Şirket ID gerekli' });
-    return;
-  }
+  const companyId = resolveAuthorizedCompanyId(req, req.params.id as string | undefined);
+  if (!denyUnlessCompanyAccess(req, res, companyId)) return;
 
   const stats = await getDashboardStats(companyId as string, isDemoSession(req));
   res.json({ success: true, data: stats });
 }
 
 export async function getAICostReportHandler(req: AuthRequest, res: Response): Promise<void> {
-  const companyId = (req.params.id || req.companyId) as string;
-  if (!companyId) {
-    res.status(400).json({ success: false, error: 'Şirket ID gerekli' });
-    return;
-  }
+  const companyId = resolveAuthorizedCompanyId(req, req.params.id as string | undefined);
+  if (!denyUnlessCompanyAccess(req, res, companyId)) return;
 
   const days = Math.min(parseInt(String(req.query.days || '30'), 10) || 30, 90);
 

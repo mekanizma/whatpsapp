@@ -11,7 +11,10 @@ import { logActivity } from '../services/log.service';
 import { createTicketAndNotify } from '../services/ticket-notification.service';
 import { recordUnknownQuestion } from '../services/unknown-questions.service';
 import { shouldIncrementConversationUsage } from '../services/conversation-count.service';
-import { getDepartmentsForWhatsAppAccount } from '../services/department-access.service';
+import {
+  getDepartmentsForWhatsAppAccount,
+  listActiveDepartments,
+} from '../services/department-access.service';
 import {
   resolveTransferDepartment,
   getPendingDepartmentSelection,
@@ -152,7 +155,10 @@ async function handleTransferWithDepartment(
   subject: string,
   whatsappAccountId?: string | null
 ): Promise<{ reply: string; ticketCreated: boolean }> {
-  const departments = await getDepartmentsForWhatsAppAccount(companyId, whatsappAccountId);
+  let departments = await getDepartmentsForWhatsAppAccount(companyId, whatsappAccountId);
+  if (!departments.length) {
+    departments = await listActiveDepartments(companyId);
+  }
 
   if (!departments.length) {
     await ensureOpenTransferTicket(companyId, phone, customerName, subject);

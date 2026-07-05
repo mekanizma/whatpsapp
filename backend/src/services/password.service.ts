@@ -6,6 +6,10 @@ import { adminClient } from '../database/supabase';
 
 const MIN_PASSWORD_LENGTH = 6;
 
+function sanitizeSearchTerm(value: string): string {
+  return value.replace(/[%_\\,().]/g, '').trim().slice(0, 80);
+}
+
 export function validatePassword(password: string): void {
   if (!password || password.length < MIN_PASSWORD_LENGTH) {
     throw new Error('Şifre en az 6 karakter olmalıdır');
@@ -64,7 +68,7 @@ export async function listPlatformUsers(
   pagination: { page: number; limit: number; total: number; totalPages: number };
 }> {
   const offset = (page - 1) * limit;
-  const term = search.trim().toLowerCase();
+  const term = sanitizeSearchTerm(search).toLowerCase();
 
   let query = adminClient
     .from('profiles')
@@ -74,7 +78,7 @@ export async function listPlatformUsers(
     .order('created_at', { ascending: false });
 
   if (term) {
-    query = query.or(`full_name.ilike.%${term}%`);
+    query = query.ilike('full_name', `%${term}%`);
   }
 
   const { data, error, count } = await query.range(offset, offset + limit - 1);
