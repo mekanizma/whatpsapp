@@ -6,8 +6,8 @@ import { create } from 'zustand';
 import { supabase, supabaseConfigured } from '@/services/supabase';
 import { isDemoMode } from '@/lib/env';
 import { api, setDemoToken, clearDemoToken } from '@/services/api';
+import i18n from '@/i18n';
 import type { Profile, Company, UserRole, CompanyPlan } from '@/types';
-
 export type LoginPanel = 'admin' | 'customer';
 
 const DEMO_USERS: Record<string, { password: string; token: string; role: UserRole }> = {
@@ -28,6 +28,8 @@ interface AuthState {
   fetchProfile: () => Promise<void>;
   updateProfile: (data: { full_name?: string; phone?: string | null }) => Promise<Profile>;
   updateCompany: (data: Partial<Company>) => Promise<Company>;
+  uploadCompanyLogo: (file: File) => Promise<Company>;
+  removeCompanyLogo: () => Promise<Company>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   initialize: () => Promise<void>;
 }
@@ -49,13 +51,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     if (isDemoMode) {
       const demoUser = DEMO_USERS[email.toLowerCase()];
       if (!demoUser || demoUser.password !== password) {
-        throw new Error('Demo: admin@demo.com, firma@demo.com veya personel@demo.com / demo123');
+        throw new Error(i18n.t('auth.errors.demoInvalidCredentials'));
       }
       if (panel === 'admin' && demoUser.role !== 'super_admin') {
-        throw new Error('Bu hesap admin paneline erişemez. Müşteri girişini kullanın.');
+        throw new Error(i18n.t('auth.errors.adminPanelCustomerOnly'));
       }
       if (panel === 'customer' && demoUser.role === 'super_admin') {
-        throw new Error('Admin hesabı müşteri paneline giremez. Admin girişini kullanın.');
+        throw new Error(i18n.t('auth.errors.customerPanelAdminOnly'));
       }
       setDemoToken(demoUser.token);
       const data = await api.get<{ profile: Profile; company: Company | null; companyPlan: CompanyPlan | null }>('/auth/me');
@@ -64,7 +66,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
 
     if (!supabaseConfigured) {
-      throw new Error('Supabase yapılandırılmamış. frontend/.env dosyasını düzenleyin veya VITE_DEMO_MODE=true kullanın.');
+      throw new Error(i18n.t('auth.errors.supabaseNotConfiguredHint'));
     }
 
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -74,11 +76,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
     if (panel === 'admin' && data.profile.role !== 'super_admin') {
       await supabase.auth.signOut();
-      throw new Error('Bu hesap admin paneline erişemez.');
+      throw new Error(i18n.t('auth.errors.adminPanelDenied'));
     }
     if (panel === 'customer' && data.profile.role === 'super_admin') {
       await supabase.auth.signOut();
-      throw new Error('Admin hesabı müşteri paneline giremez.');
+      throw new Error(i18n.t('auth.errors.customerPanelDenied'));
     }
 
     set({
@@ -90,8 +92,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   register: async (email, password, fullName) => {
-    if (isDemoMode) throw new Error('Demo modda kayıt kapalı.');
-    if (!supabaseConfigured) throw new Error('Supabase yapılandırılmamış.');
+    if (isDemoMode) throw new Error(i18n.t('auth.errors.demoRegisterDisabled'));
+    if (!supabaseConfigured) throw new Error(i18n.t('auth.errors.supabaseNotConfigured'));
 
     const { error } = await supabase.auth.signUp({
       email,
@@ -122,7 +124,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : '';
-      if (message.includes('429') || message.includes('Çok fazla istek')) {
+      if (message.includes('429') || message.includes('Çok fazla istek') || message.includes('Too many requests')) {
         set({ isLoading: false });
         return;
       }
@@ -140,29 +142,45 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   updateCompany: async (data) => {
     const company = get().company;
-    if (!company?.id) throw new Error('Şirket bilgisi bulunamadı');
+    if (!company?.id) throw new Error(i18n.t('auth.errors.companyNotFound'));
     const updated = await api.put<Company>(`/companies/${company.id}`, data);
+    set({ company: { ...company, ...updated } });
+    return updated;
+  },
+
+  uploadCompanyLogo: async (file) => {
+    const company = get().company;
+    if (!company?.id) throw new Error(i18n.t('auth.errors.companyNotFound'));
+    const updated = await api.upload<Company>(`/companies/${company.id}/logo`, file);
+    set({ company: { ...company, ...updated } });
+    return updated;
+  },
+
+  removeCompanyLogo: async () => {
+    const company = get().company;
+    if (!company?.id) throw new Error(i18n.t('auth.errors.companyNotFound'));
+    const updated = await api.delete<Company>(`/companies/${company.id}/logo`);
     set({ company: { ...company, ...updated } });
     return updated;
   },
 
   changePassword: async (currentPassword, newPassword) => {
     if (isDemoMode) {
-      throw new Error('Demo modda şifre değiştirilemez.');
+      throw new Error(i18n.t('auth.errors.demoPasswordChangeDisabled'));
     }
     if (!supabaseConfigured) {
-      throw new Error('Supabase yapılandırılmamış.');
+      throw new Error(i18n.t('auth.errors.supabaseNotConfigured'));
     }
 
     const { data: { user } } = await supabase.auth.getUser();
     const email = user?.email;
-    if (!email) throw new Error('Oturum bilgisi alınamadı. Lütfen tekrar giriş yapın.');
+    if (!email) throw new Error(i18n.t('auth.errors.sessionNotFound'));
 
     const { error: signInError } = await supabase.auth.signInWithPassword({
       email,
       password: currentPassword,
     });
-    if (signInError) throw new Error('Mevcut şifre hatalı.');
+    if (signInError) throw new Error(i18n.t('auth.errors.wrongPassword'));
 
     const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
     if (updateError) throw new Error(updateError.message);

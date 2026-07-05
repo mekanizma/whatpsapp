@@ -23,12 +23,12 @@ export function staffCanAccessKnowledge(user?: Profile | null): boolean {
 export function canSeeNavItem(
   userRole: UserRole,
   staffRole: StaffSubRole | null | undefined,
-  navKey: 'messages' | 'knowledge' | 'tickets' | 'settings'
+  navKey: 'messages' | 'knowledge' | 'tickets' | 'settings' | 'calendar'
 ): boolean {
   if (userRole === 'company_admin') return true;
   if (userRole !== 'staff') return false;
 
-  if (navKey === 'messages' || navKey === 'settings') return true;
+  if (navKey === 'messages' || navKey === 'settings' || navKey === 'tickets' || navKey === 'calendar') return true;
   if (navKey === 'knowledge') return isSuperStaff(staffRole);
   return false;
 }

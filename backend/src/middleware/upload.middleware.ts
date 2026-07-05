@@ -37,3 +37,17 @@ export const messageImageUpload = multer({
     cb(new Error('Yalnızca JPEG, PNG, WebP veya GIF resimleri desteklenir'));
   },
 });
+
+const COMPANY_LOGO_MAX_SIZE = 5 * 1024 * 1024;
+
+export const companyLogoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: COMPANY_LOGO_MAX_SIZE, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    if (MESSAGE_IMAGE_MIMES.has(file.mimetype)) {
+      cb(null, true);
+      return;
+    }
+    cb(new Error('Yalnızca JPEG, PNG, WebP veya GIF logoları desteklenir'));
+  },
+});

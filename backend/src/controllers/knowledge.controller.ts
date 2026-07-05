@@ -19,6 +19,7 @@ import {
   getStaffDepartmentId,
   validateDepartmentBelongsToCompany,
 } from '../services/department-access.service';
+import { isSuperStaffRole } from '../services/staff-permissions.service';
 
 function paramId(value: string | string[]): string {
   return Array.isArray(value) ? value[0] : value;
@@ -59,6 +60,9 @@ async function assertStaffCanAccessKnowledge(
 ): Promise<{ ok: boolean; error?: string }> {
   if (req.role !== 'staff') return { ok: true };
 
+  // Süper personel (supervisor) şirketin tüm bilgi bankası kayıtlarına erişebilir
+  if (isSuperStaffRole(req.staffRole)) return { ok: true };
+
   const staffDeptId = await getStaffDepartmentId(req.companyId!, req.profile?.id);
   if (!staffDeptId) {
     return { ok: false, error: 'Personel departmanı tanımlı değil' };
@@ -91,13 +95,15 @@ export async function getKnowledgeItems(req: AuthRequest, res: Response): Promis
     .eq('company_id', req.companyId)
     .order('created_at', { ascending: false });
 
-  if (req.role === 'staff') {
+  // Normal personel departman bazlı filtrelenir; supervisor tüm şirket kayıtlarını görür
+  // (yöneticinin department_id=null eklediği genel kayıtlar dahil)
+  if (req.role === 'staff' && !isSuperStaffRole(req.staffRole)) {
     const staffDeptId = await getStaffDepartmentId(req.companyId!, req.profile?.id);
     if (!staffDeptId) {
       res.json({ success: true, data: [] });
       return;
     }
-    query = query.eq('department_id', staffDeptId);
+    query = query.or(`department_id.eq.${staffDeptId},department_id.is.null`);
   }
 
   const { data, error } = await query;

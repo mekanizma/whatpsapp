@@ -20,6 +20,10 @@ import { validateCustomInstructionsForWrite } from '../services/custom-instructi
 import { invalidateStaticSystemPromptCache } from '../ai/admin-prompt-builder';
 import { clearCompanyCache } from '../ai/ai-cache.service';
 import { invalidateCompanyCache } from '../ai/openai.service';
+import {
+  deleteCompanyLogoFiles,
+  uploadCompanyLogoFile,
+} from '../services/company-logo.service';
 
 export async function getCompany(req: AuthRequest, res: Response): Promise<void> {
   const companyId = resolveAuthorizedCompanyId(req, req.params.id as string | undefined);
@@ -126,6 +130,95 @@ export async function updateCompany(req: AuthRequest, res: Response): Promise<vo
     userId: req.userId,
     companyId: companyId as string,
     action: 'company_updated',
+    entityType: 'company',
+    entityId: companyId as string,
+  });
+
+  res.json({ success: true, data });
+}
+
+export async function uploadCompanyLogo(req: AuthRequest, res: Response): Promise<void> {
+  const companyId = resolveAuthorizedCompanyId(req, req.params.id as string | undefined);
+  if (!denyUnlessCompanyAccess(req, res, companyId)) return;
+
+  const file = req.file;
+  if (!file?.buffer?.length) {
+    res.status(400).json({ success: false, error: 'Logo dosyası gerekli' });
+    return;
+  }
+
+  if (isDemoSession(req)) {
+    const logo = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+    demoCompany.logo = logo;
+    res.json({ success: true, data: demoCompany });
+    return;
+  }
+
+  try {
+    const logo = await uploadCompanyLogoFile(
+      companyId as string,
+      file.buffer,
+      file.mimetype,
+      file.originalname
+    );
+
+    const { data, error } = await adminClient
+      .from('companies')
+      .update({ logo })
+      .eq('id', companyId)
+      .select()
+      .single();
+
+    if (error) {
+      res.status(400).json({ success: false, error: error.message });
+      return;
+    }
+
+    await logActivity({
+      userId: req.userId,
+      companyId: companyId as string,
+      action: 'company_logo_updated',
+      entityType: 'company',
+      entityId: companyId as string,
+    });
+
+    res.json({ success: true, data });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      error: err instanceof Error ? err.message : 'Logo yüklenemedi',
+    });
+  }
+}
+
+export async function removeCompanyLogo(req: AuthRequest, res: Response): Promise<void> {
+  const companyId = resolveAuthorizedCompanyId(req, req.params.id as string | undefined);
+  if (!denyUnlessCompanyAccess(req, res, companyId)) return;
+
+  if (isDemoSession(req)) {
+    demoCompany.logo = null;
+    res.json({ success: true, data: demoCompany });
+    return;
+  }
+
+  await deleteCompanyLogoFiles(companyId as string);
+
+  const { data, error } = await adminClient
+    .from('companies')
+    .update({ logo: null })
+    .eq('id', companyId)
+    .select()
+    .single();
+
+  if (error) {
+    res.status(400).json({ success: false, error: error.message });
+    return;
+  }
+
+  await logActivity({
+    userId: req.userId,
+    companyId: companyId as string,
+    action: 'company_logo_removed',
     entityType: 'company',
     entityId: companyId as string,
   });

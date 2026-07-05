@@ -2,11 +2,12 @@
  * Müşteri paneli — hesap ve şirket ayarları
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { User, Building2, Lock, Save, Eye, EyeOff, Bell } from 'lucide-react';
+import { User, Building2, Lock, Save, Eye, EyeOff, Bell, ImagePlus, Trash2 } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
+import { CompanyLogo } from '@/components/CompanyLogo';
 import {
   Button,
   Input,
@@ -35,7 +36,7 @@ const CATEGORY_VALUES = [
 
 export function SettingsPage() {
   const { t } = useTranslation();
-  const { user, company, updateProfile, updateCompany, changePassword } = useAuthStore();
+  const { user, company, updateProfile, updateCompany, uploadCompanyLogo, removeCompanyLogo, changePassword } = useAuthStore();
 
   const [email, setEmail] = useState('');
   const [fullName, setFullName] = useState(user?.full_name || '');
@@ -58,7 +59,9 @@ export function SettingsPage() {
 
   const [profileMsg, setProfileMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const [companyMsg, setCompanyMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [logoMsg, setLogoMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const [passwordMsg, setPasswordMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const logoInputRef = useRef<HTMLInputElement>(null);
   const [notificationMsg, setNotificationMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const [notificationUsers, setNotificationUsers] = useState<NotificationUser[]>([]);
 
@@ -126,6 +129,43 @@ export function SettingsPage() {
       setCompanyMsg({ type: 'err', text: err.message });
     },
   });
+
+  const logoUploadMutation = useMutation({
+    mutationFn: (file: File) => uploadCompanyLogo(file),
+    onSuccess: () => {
+      setLogoMsg({ type: 'ok', text: t('settings.logoSaved') });
+    },
+    onError: (err: Error) => {
+      setLogoMsg({ type: 'err', text: err.message });
+    },
+  });
+
+  const logoRemoveMutation = useMutation({
+    mutationFn: () => removeCompanyLogo(),
+    onSuccess: () => {
+      setLogoMsg({ type: 'ok', text: t('settings.logoRemoved') });
+    },
+    onError: (err: Error) => {
+      setLogoMsg({ type: 'err', text: err.message });
+    },
+  });
+
+  const handleLogoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+
+    setLogoMsg(null);
+    if (!['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) {
+      setLogoMsg({ type: 'err', text: t('settings.logoInvalidType') });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setLogoMsg({ type: 'err', text: t('settings.logoTooLarge') });
+      return;
+    }
+    logoUploadMutation.mutate(file);
+  };
 
   const { data: notificationData, isLoading: notificationsLoading } = useQuery({
     queryKey: ['notification-recipients'],
@@ -333,6 +373,63 @@ export function SettingsPage() {
               <CardDescription>{t('settings.companyDesc')}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4">
+                <Label className="mb-3 block">{t('settings.companyLogo')}</Label>
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                  <CompanyLogo
+                    logo={company.logo}
+                    companyName={companyName}
+                    size="md"
+                    showFallbackIcon={false}
+                    className="!bg-white !shadow-sm ring-1 ring-slate-200"
+                    imageClassName="bg-white"
+                  />
+                  <div className="flex min-w-0 flex-1 flex-col gap-2">
+                    <p className="text-sm text-slate-600">{t('settings.companyLogoDesc')}</p>
+                    <p className="text-xs text-slate-500">{t('settings.companyLogoHint')}</p>
+                    <div className="flex flex-wrap gap-2">
+                      <input
+                        ref={logoInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif"
+                        className="sr-only"
+                        onChange={handleLogoSelect}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-11"
+                        disabled={logoUploadMutation.isPending || logoRemoveMutation.isPending}
+                        onClick={() => logoInputRef.current?.click()}
+                      >
+                        <ImagePlus className="h-4 w-4" />
+                        {logoUploadMutation.isPending ? t('common.saving') : t('settings.uploadLogo')}
+                      </Button>
+                      {company.logo && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="h-11 text-red-600 hover:bg-red-50 hover:text-red-700"
+                          disabled={logoUploadMutation.isPending || logoRemoveMutation.isPending}
+                          onClick={() => {
+                            setLogoMsg(null);
+                            logoRemoveMutation.mutate();
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          {logoRemoveMutation.isPending ? t('common.saving') : t('settings.removeLogo')}
+                        </Button>
+                      )}
+                    </div>
+                    {logoMsg && (
+                      <p className={logoMsg.type === 'ok' ? 'text-sm text-emerald-600' : 'text-sm text-red-600'}>
+                        {logoMsg.text}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="companyName">{t('settings.companyName')}</Label>
                 <Input

@@ -95,7 +95,7 @@ function AppRoutes() {
         <Route path="knowledge" element={<PlanModuleRoute module="knowledge"><StaffKnowledgeRoute><KnowledgePage /></StaffKnowledgeRoute></PlanModuleRoute>} />
         <Route path="unknown-questions" element={<PlanModuleRoute module="unknown_questions"><AdminOnlyRoute><UnknownQuestionsPage /></AdminOnlyRoute></PlanModuleRoute>} />
         <Route path="tickets" element={<PlanModuleRoute module="tickets"><TicketsPage /></PlanModuleRoute>} />
-        <Route path="calendar" element={<PlanModuleRoute module="calendar"><AdminOnlyRoute><CalendarPage /></AdminOnlyRoute></PlanModuleRoute>} />
+        <Route path="calendar" element={<PlanModuleRoute module="calendar"><CalendarPage /></PlanModuleRoute>} />
         <Route path="staff" element={<PlanModuleRoute module="staff"><AdminOnlyRoute><StaffPage /></AdminOnlyRoute></PlanModuleRoute>} />
         <Route path="whatsapp" element={<PlanModuleRoute module="whatsapp"><AdminOnlyRoute><WhatsAppPage /></AdminOnlyRoute></PlanModuleRoute>} />
         <Route path="subscription" element={<PlanModuleRoute module="subscription"><AdminOnlyRoute><SubscriptionPage /></AdminOnlyRoute></PlanModuleRoute>} />

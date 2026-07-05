@@ -19,7 +19,7 @@ import * as subscriptionCtrl from '../controllers/subscription.controller';
 import * as appointmentsCtrl from '../controllers/appointments.controller';
 import * as notificationsCtrl from '../controllers/notifications.controller';
 import * as unknownQuestionsCtrl from '../controllers/unknown-questions.controller';
-import { knowledgeFileUpload, messageImageUpload } from '../middleware/upload.middleware';
+import { companyLogoUpload, knowledgeFileUpload, messageImageUpload } from '../middleware/upload.middleware';
 
 const router = Router();
 
@@ -61,6 +61,21 @@ router.patch('/admin/users/:profileId/password', authenticate, requireRole('supe
 // Company
 router.get('/companies/:id', authenticate, companyCtrl.getCompany);
 router.put('/companies/:id', authenticate, requireRole('super_admin', 'company_admin'), requireCompany, companyCtrl.updateCompany);
+router.post(
+  '/companies/:id/logo',
+  authenticate,
+  requireRole('company_admin'),
+  requireCompany,
+  companyLogoUpload.single('file'),
+  asyncHandler(companyCtrl.uploadCompanyLogo)
+);
+router.delete(
+  '/companies/:id/logo',
+  authenticate,
+  requireRole('company_admin'),
+  requireCompany,
+  asyncHandler(companyCtrl.removeCompanyLogo)
+);
 router.get('/companies/:id/dashboard', authenticate, requireCompany, companyCtrl.getDashboard);
 router.get('/dashboard', authenticate, requireCompany, companyCtrl.getDashboard);
 router.get('/companies/:id/ai-cost-report', authenticate, requireCompany, companyCtrl.getAICostReportHandler);
@@ -168,7 +183,7 @@ router.delete('/staff/:id', authenticate, requireRole('company_admin'), requireC
 router.get('/appointments', authenticate, requireCompany, appointmentsCtrl.getAppointments);
 router.post('/appointments', authenticate, requireCompany, appointmentsCtrl.createAppointmentHandler);
 router.put('/appointments/:id', authenticate, requireCompany, appointmentsCtrl.updateAppointmentHandler);
-router.delete('/appointments/:id', authenticate, requireRole('company_admin'), requireCompany, appointmentsCtrl.deleteAppointmentHandler);
+router.delete('/appointments/:id', authenticate, requireRole('company_admin', 'staff'), requireCompany, appointmentsCtrl.deleteAppointmentHandler);
 
 // Subscriptions
 router.get('/subscriptions/current', authenticate, requireCompany, subscriptionCtrl.getCurrentSubscription);

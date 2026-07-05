@@ -505,10 +505,10 @@ function AccountCard({
           </div>
           <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
             {account.connection_type === 'api' && (
-              <Badge variant="default"><Cloud className="mr-1 h-3 w-3" /> Cloud API</Badge>
+              <Badge variant="default"><Cloud className="mr-1 h-3 w-3" /> {t('whatsapp.badgeCloud')}</Badge>
             )}
             {account.connection_type === 'qr' && isConnected && (
-              <Badge variant="default"><QrCode className="mr-1 h-3 w-3" /> QR</Badge>
+              <Badge variant="default"><QrCode className="mr-1 h-3 w-3" /> {t('whatsapp.badgeQr')}</Badge>
             )}
             {statusBadge}
           </div>

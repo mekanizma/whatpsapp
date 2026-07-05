@@ -4,6 +4,7 @@
 
 import { supabase } from './supabase';
 import { isDemoMode } from '@/lib/env';
+import i18n from '@/i18n';
 import type { ApiResponse } from '@/types';
 
 function extractApiError(data: Record<string, unknown>, status: number): string {
@@ -13,7 +14,7 @@ function extractApiError(data: Record<string, unknown>, status: number): string 
     const nested = (err as { message?: unknown }).message;
     if (typeof nested === 'string' && nested.trim()) return nested;
   }
-  return `İstek başarısız (${status})`;
+  return i18n.t('errors.requestFailed', { status });
 }
 
 const API_BASE = (() => {
@@ -59,16 +60,14 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
       headers: { ...headers, ...options.headers },
     });
   } catch {
-    throw new Error(
-      'Sunucuya bağlanılamadı. Backend çalışıyor mu? (npm run dev) ve .env dosyalarını kontrol edin.'
-    );
+    throw new Error(i18n.t('errors.networkErrorHint'));
   }
 
   let data: ApiResponse<T>;
   try {
     data = await response.json();
   } catch {
-    throw new Error(`Sunucu geçersiz yanıt döndü (${response.status})`);
+    throw new Error(i18n.t('errors.invalidResponse', { status: response.status }));
   }
 
   if (!response.ok || !data.success) {
@@ -97,7 +96,7 @@ async function requestWithMeta<T>(
       headers: { ...headers, ...options.headers },
     });
   } catch {
-    throw new Error('Sunucuya bağlanılamadı. Backend çalışıyor mu?');
+    throw new Error(i18n.t('errors.networkError'));
   }
 
   const body = await response.json();
@@ -128,11 +127,11 @@ export const api = {
     try {
       response = await fetch(`${API_URL}${endpoint}`, { headers });
     } catch {
-      throw new Error('Sunucuya bağlanılamadı. Backend çalışıyor mu?');
+      throw new Error(i18n.t('errors.networkError'));
     }
 
     if (!response.ok) {
-      let message = `İstek başarısız (${response.status})`;
+      let message = i18n.t('errors.requestFailed', { status: response.status });
       try {
         const body = await response.json();
         message = extractApiError(body as Record<string, unknown>, response.status);
@@ -180,14 +179,14 @@ export const api = {
         body: formData,
       });
     } catch {
-      throw new Error('Sunucuya bağlanılamadı. Backend çalışıyor mu?');
+      throw new Error(i18n.t('errors.networkError'));
     }
 
     let data: ApiResponse<T>;
     try {
       data = await response.json();
     } catch {
-      throw new Error(`Sunucu geçersiz yanıt döndü (${response.status})`);
+      throw new Error(i18n.t('errors.invalidResponse', { status: response.status }));
     }
 
     if (!response.ok || !data.success) {

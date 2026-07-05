@@ -257,7 +257,7 @@ export function AdminCompaniesPage() {
                         <span>{t('admin.companies.aiTokens', { count: (company.ai_tokens_month ?? 0).toLocaleString(locale) })}</span>
                         <span className="flex items-center gap-1">
                           <Smartphone className="h-3 w-3" />
-                          WA: {wa?.status === 'connected' ? wa.phone_number || t('common.connected') : t('common.notConnected')}
+                          {t('whatsapp.shortLabel')}: {wa?.status === 'connected' ? wa.phone_number || t('common.connected') : t('common.notConnected')}
                         </span>
                       </div>
                     </div>

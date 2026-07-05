@@ -24,9 +24,6 @@ import {
 } from '@/lib/appointment-category';
 import type { Appointment } from '@/types';
 
-const WEEKDAYS_TR = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
-const WEEKDAYS_EN = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
 function startOfMonth(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), 1);
 }
@@ -119,7 +116,10 @@ function formFromAppointment(a: Appointment): FormState {
 export function CalendarPage() {
   const { t, i18n } = useTranslation();
   const locale = i18n.language?.startsWith('en') ? 'en-US' : 'tr-TR';
-  const weekdays = i18n.language?.startsWith('en') ? WEEKDAYS_EN : WEEKDAYS_TR;
+  const weekdays = useMemo(
+    () => t('calendar.weekdaysShort', { returnObjects: true }) as string[],
+    [t, i18n.language],
+  );
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
   const company = useAuthStore((s) => s.company);
