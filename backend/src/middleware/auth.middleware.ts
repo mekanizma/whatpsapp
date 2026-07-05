@@ -7,13 +7,15 @@ import { Request, Response, NextFunction } from 'express';
 import { config } from '../config';
 import { adminClient } from '../database/supabase';
 import { DEMO_TOKENS, demoProfilesByToken } from '../demo/mockData';
-import { Profile, UserRole } from '../types';
+import { getStaffSubRoleForProfile, staffCanAccessKnowledge } from '../services/staff-permissions.service';
+import { Profile, UserRole, StaffSubRole } from '../types';
 
 export interface AuthRequest extends Request {
   userId?: string;
   profile?: Profile;
   companyId?: string | null;
   role?: UserRole;
+  staffRole?: StaffSubRole | null;
   accessToken?: string;
 }
 
@@ -42,6 +44,7 @@ export async function authenticate(
       req.profile = profile;
       req.companyId = profile.company_id;
       req.role = profile.role;
+      req.staffRole = profile.staff_role ?? null;
       req.accessToken = token;
       next();
       return;
@@ -76,6 +79,10 @@ export async function authenticate(
     req.role = profile.role as UserRole;
     req.accessToken = token;
 
+    if (req.role === 'staff') {
+      req.staffRole = await getStaffSubRoleForProfile(profile.id);
+    }
+
     next();
   } catch {
     res.status(500).json({ success: false, error: 'Kimlik doğrulama hatası' });
@@ -90,6 +97,15 @@ export function requireRole(...roles: UserRole[]) {
     }
     next();
   };
+}
+
+/** Bilgi bankası — yalnızca firma yöneticisi ve süper personel */
+export function requireKnowledgeAccess(req: AuthRequest, res: Response, next: NextFunction): void {
+  if (!req.role || !staffCanAccessKnowledge(req.role, req.staffRole)) {
+    res.status(403).json({ success: false, error: 'Bilgi bankasına erişim yetkiniz yok' });
+    return;
+  }
+  next();
 }
 
 export function requireCompany(req: AuthRequest, res: Response, next: NextFunction): void {

@@ -4,7 +4,7 @@
  */
 
 import { Router } from 'express';
-import { authenticate, requireRole, requireCompany } from '../middleware/auth.middleware';
+import { authenticate, requireRole, requireCompany, requireKnowledgeAccess } from '../middleware/auth.middleware';
 import { asyncHandler } from '../middleware/async.middleware';
 
 import * as authCtrl from '../controllers/auth.controller';
@@ -97,12 +97,13 @@ router.delete('/whatsapp/qr/:sessionToken', authenticate, requireRole('company_a
 router.post('/whatsapp/disconnect', authenticate, requireRole('company_admin'), requireCompany, whatsappCtrl.disconnectWhatsApp);
 
 // Knowledge Base
-router.get('/knowledge', authenticate, requireCompany, knowledgeCtrl.getKnowledgeItems);
+router.get('/knowledge', authenticate, requireCompany, requireKnowledgeAccess, knowledgeCtrl.getKnowledgeItems);
 router.post(
   '/knowledge/parse-file',
   authenticate,
   requireRole('company_admin', 'staff'),
   requireCompany,
+  requireKnowledgeAccess,
   (req, res, next) => {
     knowledgeFileUpload.single('file')(req, res, (err) => {
       if (err) next(err);
@@ -111,13 +112,13 @@ router.post(
   },
   knowledgeCtrl.parseKnowledgeFile
 );
-router.post('/knowledge', authenticate, requireRole('company_admin', 'staff'), requireCompany, knowledgeCtrl.createKnowledgeItem);
-router.put('/knowledge/:id', authenticate, requireRole('company_admin', 'staff'), requireCompany, knowledgeCtrl.updateKnowledgeItem);
-router.delete('/knowledge/:id', authenticate, requireRole('company_admin', 'staff'), requireCompany, knowledgeCtrl.deleteKnowledgeItem);
-router.get('/knowledge/:id/index-status', authenticate, requireCompany, knowledgeCtrl.getKnowledgeIndexStatus);
-router.get('/knowledge/:id/chunks', authenticate, requireRole('company_admin', 'staff'), requireCompany, knowledgeCtrl.getKnowledgeChunks);
-router.post('/knowledge/:id/reindex', authenticate, requireRole('company_admin', 'staff'), requireCompany, knowledgeCtrl.reindexKnowledgeItem);
-router.post('/knowledge/:id/index-now', authenticate, requireRole('company_admin', 'staff'), requireCompany, knowledgeCtrl.indexKnowledgeNow);
+router.post('/knowledge', authenticate, requireRole('company_admin', 'staff'), requireCompany, requireKnowledgeAccess, knowledgeCtrl.createKnowledgeItem);
+router.put('/knowledge/:id', authenticate, requireRole('company_admin', 'staff'), requireCompany, requireKnowledgeAccess, knowledgeCtrl.updateKnowledgeItem);
+router.delete('/knowledge/:id', authenticate, requireRole('company_admin', 'staff'), requireCompany, requireKnowledgeAccess, knowledgeCtrl.deleteKnowledgeItem);
+router.get('/knowledge/:id/index-status', authenticate, requireCompany, requireKnowledgeAccess, knowledgeCtrl.getKnowledgeIndexStatus);
+router.get('/knowledge/:id/chunks', authenticate, requireRole('company_admin', 'staff'), requireCompany, requireKnowledgeAccess, knowledgeCtrl.getKnowledgeChunks);
+router.post('/knowledge/:id/reindex', authenticate, requireRole('company_admin', 'staff'), requireCompany, requireKnowledgeAccess, knowledgeCtrl.reindexKnowledgeItem);
+router.post('/knowledge/:id/index-now', authenticate, requireRole('company_admin', 'staff'), requireCompany, requireKnowledgeAccess, knowledgeCtrl.indexKnowledgeNow);
 
 // Messages
 router.get('/messages', authenticate, requireCompany, messagesCtrl.getConversations);

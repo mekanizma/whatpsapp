@@ -364,7 +364,15 @@
     "hidePasswordReset": "Hide Password Fields",
     "resetPasswordDesc": "Set a new login password for this staff member.",
     "savePassword": "Save Password",
-    "passwordSaved": "Staff password updated."
+    "passwordSaved": "Staff password updated.",
+    "permissionLevel": "Permission Level",
+    "roleHintNormal": "Can access messages and account settings.",
+    "roleHintSuper": "Can access messages, account settings, and knowledge base.",
+    "roles": {
+      "agent": "Staff",
+      "supervisor": "Super Staff",
+      "admin": "Super Staff"
+    }
   },
   "knowledge": {
     "title": "Knowledge Base",

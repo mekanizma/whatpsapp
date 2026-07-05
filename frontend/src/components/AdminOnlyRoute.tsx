@@ -5,6 +5,7 @@
 import { Navigate } from 'react-router-dom';
 import { useAuthStore } from '@/store/authStore';
 import { planHasModule } from '@/lib/plan-capabilities';
+import { staffCanAccessKnowledge } from '@/lib/staff-permissions';
 
 interface AdminOnlyRouteProps {
   children: React.ReactNode;
@@ -15,6 +16,16 @@ export function AdminOnlyRoute({ children, redirectTo = '/panel/messages' }: Adm
   const user = useAuthStore((s) => s.user);
 
   if (user?.role === 'staff') {
+    return <Navigate to={redirectTo} replace />;
+  }
+
+  return <>{children}</>;
+}
+
+export function StaffKnowledgeRoute({ children, redirectTo = '/panel/messages' }: AdminOnlyRouteProps) {
+  const user = useAuthStore((s) => s.user);
+
+  if (!staffCanAccessKnowledge(user)) {
     return <Navigate to={redirectTo} replace />;
   }
 

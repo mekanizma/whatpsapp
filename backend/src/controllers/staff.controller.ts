@@ -11,6 +11,7 @@ import {
   companyHasActiveDepartments,
   validateDepartmentBelongsToCompany,
 } from '../services/department-access.service';
+import { normalizeStaffRoleInput } from '../services/staff-permissions.service';
 
 export async function getStaff(req: AuthRequest, res: Response): Promise<void> {
   res.set('Cache-Control', 'no-store');
@@ -66,7 +67,7 @@ export async function createStaff(req: AuthRequest, res: Response): Promise<void
       email,
       password,
       name.trim(),
-      role || 'agent',
+      normalizeStaffRoleInput(role),
       phone,
       department_id || null
     );
@@ -107,7 +108,7 @@ export async function updateStaff(req: AuthRequest, res: Response): Promise<void
       name,
       email,
       phone,
-      role,
+      role: role !== undefined ? normalizeStaffRoleInput(role) : undefined,
       is_active,
       department_id,
     });

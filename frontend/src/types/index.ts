@@ -3,6 +3,7 @@
  */
 
 export type UserRole = 'super_admin' | 'company_admin' | 'staff';
+export type StaffSubRole = 'agent' | 'supervisor' | 'admin';
 
 export interface Profile {
   id: string;
@@ -10,6 +11,7 @@ export interface Profile {
   company_id: string | null;
   full_name: string;
   role: UserRole;
+  staff_role?: StaffSubRole | null;
   avatar_url: string | null;
   phone: string | null;
   is_active: boolean;
@@ -295,7 +297,7 @@ export interface StaffMember {
   name: string;
   email: string;
   phone: string | null;
-  role: string;
+  role: StaffSubRole;
   department_id?: string | null;
   department?: { id: string; name: string } | null;
   is_active: boolean;

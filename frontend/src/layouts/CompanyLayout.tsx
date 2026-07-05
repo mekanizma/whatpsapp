@@ -24,6 +24,7 @@ import { useAuthStore } from '@/store/authStore';
 
 import { cn } from '@/lib/utils';
 import { planHasModule, type PlanModuleKey } from '@/lib/plan-capabilities';
+import { canSeeNavItem } from '@/lib/staff-permissions';
 
 import { Button } from '@/components/ui';
 
@@ -33,19 +34,19 @@ import type { UserRole } from '@/types';
 
 
 
-const allNav: { to: string; icon: typeof LayoutDashboard; labelKey: string; roles: UserRole[]; module: PlanModuleKey }[] = [
+const allNav: { to: string; icon: typeof LayoutDashboard; labelKey: string; roles: UserRole[]; module: PlanModuleKey; staffNav?: 'messages' | 'knowledge' | 'tickets' | 'settings' }[] = [
 
   { to: '/panel/dashboard', icon: LayoutDashboard, labelKey: 'layout.nav.dashboard', roles: ['company_admin'], module: 'dashboard' },
 
-  { to: '/panel/messages', icon: MessageSquare, labelKey: 'layout.nav.messages', roles: ['company_admin', 'staff'], module: 'messages' },
+  { to: '/panel/messages', icon: MessageSquare, labelKey: 'layout.nav.messages', roles: ['company_admin', 'staff'], module: 'messages', staffNav: 'messages' },
 
   { to: '/panel/customers', icon: UserRound, labelKey: 'layout.nav.customers', roles: ['company_admin'], module: 'customers' },
 
-  { to: '/panel/knowledge', icon: BookOpen, labelKey: 'layout.nav.knowledge', roles: ['company_admin', 'staff'], module: 'knowledge' },
+  { to: '/panel/knowledge', icon: BookOpen, labelKey: 'layout.nav.knowledge', roles: ['company_admin', 'staff'], module: 'knowledge', staffNav: 'knowledge' },
 
   { to: '/panel/unknown-questions', icon: HelpCircle, labelKey: 'layout.nav.unknownQuestions', roles: ['company_admin'], module: 'unknown_questions' },
 
-  { to: '/panel/tickets', icon: Ticket, labelKey: 'layout.nav.tickets', roles: ['company_admin', 'staff'], module: 'tickets' },
+  { to: '/panel/tickets', icon: Ticket, labelKey: 'layout.nav.tickets', roles: ['company_admin'], module: 'tickets' },
 
   { to: '/panel/calendar', icon: CalendarDays, labelKey: 'layout.nav.calendar', roles: ['company_admin'], module: 'calendar' },
 
@@ -55,7 +56,7 @@ const allNav: { to: string; icon: typeof LayoutDashboard; labelKey: string; role
 
   { to: '/panel/subscription', icon: CreditCard, labelKey: 'layout.nav.subscription', roles: ['company_admin'], module: 'subscription' },
 
-  { to: '/panel/settings', icon: Settings, labelKey: 'layout.nav.settings', roles: ['company_admin', 'staff'], module: 'settings' },
+  { to: '/panel/settings', icon: Settings, labelKey: 'layout.nav.settings', roles: ['company_admin', 'staff'], module: 'settings', staffNav: 'settings' },
 
 ];
 
@@ -109,10 +110,14 @@ export function CompanyLayout() {
 
   const planType = companyPlan?.plan_type || company?.subscription_plan;
   const navItems = allNav.filter(
-    (item) =>
-      user?.role &&
-      item.roles.includes(user.role) &&
-      planHasModule(planType, item.module)
+    (item) => {
+      if (!user?.role || !item.roles.includes(user.role)) return false;
+      if (!planHasModule(planType, item.module)) return false;
+      if (user.role === 'staff' && item.staffNav) {
+        return canSeeNavItem(user.role, user.staff_role, item.staffNav);
+      }
+      return true;
+    }
   );
 
   const pageTitleKey = pageTitleKeys[location.pathname] || 'layout.panel';
@@ -131,7 +136,11 @@ export function CompanyLayout() {
 
 
 
-  const roleLabel = user?.role ? t(`common.roles.${user.role}`, { defaultValue: user.role }) : '';
+  const roleLabel = user?.role === 'staff' && user.staff_role
+    ? t(`staff.roles.${user.staff_role}`, { defaultValue: user.staff_role })
+    : user?.role
+      ? t(`common.roles.${user.role}`, { defaultValue: user.role })
+      : '';
 
 
 

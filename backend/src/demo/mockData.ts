@@ -45,6 +45,7 @@ export const demoStaffProfile: Profile = {
   company_id: DEMO_COMPANY_ID,
   full_name: 'Ayşe Demir',
   role: 'staff',
+  staff_role: 'agent',
   avatar_url: null,
   phone: '+905559876543',
   is_active: true,

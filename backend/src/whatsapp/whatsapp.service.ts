@@ -4,7 +4,7 @@
 
 import { config } from '../config';
 import { adminClient } from '../database/supabase';
-import { processInboundMessage, processInboundImage } from './message.handler';
+import { processInboundMessage, processInboundImage, processInboundVoiceMessage } from './message.handler';
 import {
   sendBaileysMessage,
   sendBaileysImage,
@@ -37,7 +37,17 @@ interface WebhookTextMessage {
   text?: { body: string };
 }
 
-type WebhookMessage = WebhookTextMessage | WebhookImageMessage;
+interface WebhookAudioMessage {
+  from: string;
+  id: string;
+  type: 'audio';
+  audio?: {
+    id?: string;
+    mime_type?: string;
+  };
+}
+
+type WebhookMessage = WebhookTextMessage | WebhookImageMessage | WebhookAudioMessage;
 
 interface WebhookPayload {
   object: string;
@@ -207,6 +217,24 @@ export async function processWebhook(payload: WebhookPayload): Promise<void> {
           );
 
           if (reply) {
+            await sendWhatsAppMessage(
+              metadata.phone_number_id,
+              waConfig.access_token,
+              msg.from,
+              reply
+            );
+          }
+          continue;
+        }
+
+        if (msg.type === 'audio') {
+          const reply = await processInboundVoiceMessage(
+            waConfig.company_id,
+            msg.from,
+            msg.id
+          );
+
+          if (reply && waConfig.access_token) {
             await sendWhatsAppMessage(
               metadata.phone_number_id,
               waConfig.access_token,

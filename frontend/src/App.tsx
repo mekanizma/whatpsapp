@@ -9,7 +9,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/authStore';
 import { AuthQuerySync } from '@/components/AuthQuerySync';
 import { RoleRoute } from '@/components/RoleRoute';
-import { AdminOnlyRoute, PanelIndexRedirect } from '@/components/AdminOnlyRoute';
+import { AdminOnlyRoute, PanelIndexRedirect, StaffKnowledgeRoute } from '@/components/AdminOnlyRoute';
 import { PlanModuleRoute } from '@/components/PlanModuleRoute';
 import { AdminLayout } from '@/layouts/AdminLayout';
 import { CompanyLayout } from '@/layouts/CompanyLayout';
@@ -92,7 +92,7 @@ function AppRoutes() {
         <Route path="activity/today" element={<PlanModuleRoute module="dashboard"><AdminOnlyRoute><TodayActivityPage /></AdminOnlyRoute></PlanModuleRoute>} />
         <Route path="ai-insights" element={<PlanModuleRoute module="dashboard"><AdminOnlyRoute><AiInsightsPage /></AdminOnlyRoute></PlanModuleRoute>} />
         <Route path="customers" element={<PlanModuleRoute module="customers"><AdminOnlyRoute><CustomersPage /></AdminOnlyRoute></PlanModuleRoute>} />
-        <Route path="knowledge" element={<PlanModuleRoute module="knowledge"><KnowledgePage /></PlanModuleRoute>} />
+        <Route path="knowledge" element={<PlanModuleRoute module="knowledge"><StaffKnowledgeRoute><KnowledgePage /></StaffKnowledgeRoute></PlanModuleRoute>} />
         <Route path="unknown-questions" element={<PlanModuleRoute module="unknown_questions"><AdminOnlyRoute><UnknownQuestionsPage /></AdminOnlyRoute></PlanModuleRoute>} />
         <Route path="tickets" element={<PlanModuleRoute module="tickets"><TicketsPage /></PlanModuleRoute>} />
         <Route path="calendar" element={<PlanModuleRoute module="calendar"><AdminOnlyRoute><CalendarPage /></AdminOnlyRoute></PlanModuleRoute>} />

@@ -22,6 +22,7 @@ import { adminClient } from '../database/supabase';
 import {
   processInboundMessage,
   processInboundImage,
+  processInboundVoiceMessage,
   extractPhoneFromMessage,
   jidToPhone,
   normalizePhoneNumber,
@@ -677,6 +678,27 @@ async function connectBaileysSocket(
             }
           } catch (err) {
             console.error('Resim işleme hatası:', err);
+          }
+          continue;
+        }
+
+        const audioMessage = msg.message.audioMessage;
+        if (audioMessage) {
+          try {
+            console.log(`[Baileys] Gelen sesli mesaj (${accountId}): ${customerPhone}`);
+
+            const reply = await processInboundVoiceMessage(
+              companyId,
+              customerPhone,
+              msg.key.id || undefined
+            );
+
+            if (reply && socket.user && replyJid) {
+              await socket.sendMessage(replyJid, { text: reply });
+              console.log(`[Baileys] Sesli mesaj uyarısı iletildi: ${customerPhone}`);
+            }
+          } catch (err) {
+            console.error('Sesli mesaj işleme hatası:', err);
           }
           continue;
         }

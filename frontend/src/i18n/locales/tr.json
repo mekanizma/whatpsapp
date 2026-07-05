@@ -364,7 +364,15 @@
     "hidePasswordReset": "Şifre Alanını Gizle",
     "resetPasswordDesc": "Personel için yeni giriş şifresi belirleyin.",
     "savePassword": "Şifreyi Kaydet",
-    "passwordSaved": "Personel şifresi güncellendi."
+    "passwordSaved": "Personel şifresi güncellendi.",
+    "permissionLevel": "Yetki Seviyesi",
+    "roleHintNormal": "Mesajlar ve hesap ayarlarına erişebilir.",
+    "roleHintSuper": "Mesajlar, hesap ayarları ve bilgi bankasına erişebilir.",
+    "roles": {
+      "agent": "Personel",
+      "supervisor": "Süper Personel",
+      "admin": "Süper Personel"
+    }
   },
   "knowledge": {
     "title": "Bilgi Bankası",

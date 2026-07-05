@@ -16,6 +16,7 @@ export type TicketPriority = 'low' | 'medium' | 'high' | 'urgent';
 export type TicketStatus = 'open' | 'in_progress' | 'resolved' | 'closed';
 export type AppointmentStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
 export type AppointmentSource = 'ai' | 'manual' | 'panel';
+export type StaffSubRole = 'agent' | 'supervisor' | 'admin';
 
 export interface Profile {
   id: string;
@@ -23,6 +24,7 @@ export interface Profile {
   company_id: string | null;
   full_name: string;
   role: UserRole;
+  staff_role?: StaffSubRole | null;
   avatar_url: string | null;
   phone: string | null;
   is_active: boolean;

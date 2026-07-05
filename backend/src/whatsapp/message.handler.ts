@@ -23,7 +23,7 @@ import {
   matchDepartmentFromReply,
   buildDepartmentSelectionPrompt,
 } from '../ai/department-routing.service';
-import { detectConversationLanguage } from '../ai/language.service';
+import { detectConversationLanguage, type ConversationLang } from '../ai/language.service';
 import { uploadMessageMedia } from '../services/message-media.service';
 import crypto from 'crypto';
 
@@ -422,6 +422,48 @@ export async function processInboundImage(
     });
 
     return replyMessage;
+  });
+}
+
+const VOICE_MESSAGE_REPLIES: Record<ConversationLang, string> = {
+  tr: 'Ben bir AI destek asistanıyım, sesli mesajlarınıza cevap veremiyorum. Lütfen talebinizi yazılı olarak iletin.',
+  en: 'I am an AI support assistant and cannot respond to voice messages. Please send your request in writing.',
+  de: 'Ich bin ein KI-Support-Assistent und kann auf Sprachnachrichten nicht antworten. Bitte senden Sie Ihre Anfrage schriftlich.',
+  ar: 'أنا مساعد دعم بالذكاء الاصطناعي ولا أستطيع الرد على الرسائل الصوتية. يرجى إرسال طلبك كتابةً.',
+  ru: 'Я AI-ассистент поддержки и не могу отвечать на голосовые сообщения. Пожалуйста, отправьте ваш запрос в письменном виде.',
+  fr: 'Je suis un assistant de support IA et je ne peux pas répondre aux messages vocaux. Veuillez envoyer votre demande par écrit.',
+  es: 'Soy un asistente de soporte con IA y no puedo responder a mensajes de voz. Por favor, envíe su solicitud por escrito.',
+  other: 'I am an AI support assistant and cannot respond to voice messages. Please send your request in writing.',
+};
+
+function buildVoiceMessageReply(lang: ConversationLang): string {
+  return VOICE_MESSAGE_REPLIES[lang] || VOICE_MESSAGE_REPLIES.tr;
+}
+
+/** Gelen sesli mesaj — kaydetme, yazılı talep iste */
+export async function processInboundVoiceMessage(
+  companyId: string,
+  customerPhone: string,
+  whatsappMessageId?: string
+): Promise<string> {
+  const phone = resolveCustomerPhone(customerPhone);
+
+  if (config.demoMode) {
+    return buildVoiceMessageReply('tr');
+  }
+
+  return withCustomerLock(`${companyId}:${phone}`, async () => {
+    if (whatsappMessageId && (await isMessageAlreadyStored(companyId, whatsappMessageId))) {
+      return '';
+    }
+
+    if (whatsappMessageId) markProcessedWaId(companyId, whatsappMessageId);
+
+    const history = await fetchRecentHistory(companyId, phone);
+    const lang = detectConversationLanguage('', history);
+
+    console.log(`[WhatsApp] Sesli mesaj alındı — kaydedilmedi → ${phone}`);
+    return buildVoiceMessageReply(lang);
   });
 }
 

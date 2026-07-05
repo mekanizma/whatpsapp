@@ -8,6 +8,7 @@ import { demoCompany, demoPlans, demoProfilesByToken, DEMO_TOKENS } from '../dem
 import { AuthRequest, isDemoSession } from '../middleware/auth.middleware';
 import { logActivity } from '../services/log.service';
 import { mapSubscriptionToCompanyPlan } from '../services/plan-capabilities.service';
+import { getStaffSubRoleForProfile } from '../services/staff-permissions.service';
 
 const DEMO_EMAILS: Record<string, string> = {
   [DEMO_TOKENS.admin]: 'admin@demo.com',
@@ -51,11 +52,20 @@ export async function getMe(req: AuthRequest, res: Response): Promise<void> {
   let company = null;
   let companyPlan = null;
   let email: string | null = null;
+  let staffRole = req.staffRole ?? profile?.staff_role ?? null;
 
   if (req.accessToken) {
     const { data: { user } } = await adminClient.auth.getUser(req.accessToken);
     email = user?.email || null;
   }
+
+  if (profile?.role === 'staff' && staffRole == null) {
+    staffRole = await getStaffSubRoleForProfile(profile.id);
+  }
+
+  const enrichedProfile = profile
+    ? { ...profile, staff_role: staffRole }
+    : profile;
 
   if (profile?.company_id) {
     const [{ data }, { data: sub }] = await Promise.all([
@@ -74,7 +84,7 @@ export async function getMe(req: AuthRequest, res: Response): Promise<void> {
 
   res.json({
     success: true,
-    data: { profile, company, companyPlan, email },
+    data: { profile: enrichedProfile, company, companyPlan, email },
   });
 }
 

@@ -10,7 +10,8 @@ import { api } from '@/services/api';
 import { getErrorMessage } from '@/lib/errors';
 import { ResetPasswordForm } from '@/components/ResetPasswordForm';
 import { Button, Input, Label, Card, CardContent, CardHeader, CardTitle, Spinner, Badge } from '@/components/ui';
-import type { Department, StaffMember } from '@/types';
+import type { Department, StaffMember, StaffSubRole } from '@/types';
+import { STAFF_ROLE_OPTIONS } from '@/lib/staff-permissions';
 
 type StaffForm = {
   name: string;
@@ -18,9 +19,10 @@ type StaffForm = {
   phone: string;
   password: string;
   department_id: string;
+  role: StaffSubRole;
 };
 
-const emptyForm: StaffForm = { name: '', email: '', phone: '', password: '', department_id: '' };
+const emptyForm: StaffForm = { name: '', email: '', phone: '', password: '', department_id: '', role: 'agent' };
 
 export function StaffPage() {
   const { t } = useTranslation();
@@ -30,11 +32,12 @@ export function StaffPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showPasswordReset, setShowPasswordReset] = useState(false);
   const [passwordMsg, setPasswordMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
-  const [editForm, setEditForm] = useState<Pick<StaffForm, 'name' | 'email' | 'phone' | 'department_id'>>({
+  const [editForm, setEditForm] = useState<Pick<StaffForm, 'name' | 'email' | 'phone' | 'department_id' | 'role'>>({
     name: '',
     email: '',
     phone: '',
     department_id: '',
+    role: 'agent',
   });
   const queryClient = useQueryClient();
 
@@ -57,7 +60,7 @@ export function StaffPage() {
   };
 
   const createMutation = useMutation({
-    mutationFn: (data: { name: string; email: string; password: string; phone?: string; department_id?: string }) =>
+    mutationFn: (data: { name: string; email: string; password: string; phone?: string; department_id?: string; role: StaffSubRole }) =>
       api.post('/staff', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['staff'] });
@@ -67,7 +70,7 @@ export function StaffPage() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (payload: { id: string; data: { name: string; email: string; phone?: string | null; department_id?: string } }) =>
+    mutationFn: (payload: { id: string; data: { name: string; email: string; phone?: string | null; department_id?: string; role: StaffSubRole } }) =>
       api.put<StaffMember>(`/staff/${payload.id}`, payload.data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['staff'] });
@@ -114,6 +117,7 @@ export function StaffPage() {
       password: form.password,
       phone: form.phone.trim() || undefined,
       department_id: form.department_id || undefined,
+      role: form.role,
     });
   };
 
@@ -126,6 +130,7 @@ export function StaffPage() {
       email: member.email,
       phone: member.phone || '',
       department_id: member.department_id || member.department?.id || '',
+      role: member.role === 'supervisor' || member.role === 'admin' ? 'supervisor' : 'agent',
     });
   };
 
@@ -138,6 +143,7 @@ export function StaffPage() {
         email: editForm.email.trim(),
         phone: editForm.phone.trim() || null,
         department_id: editForm.department_id || undefined,
+        role: editForm.role,
       },
     });
   };
@@ -227,6 +233,21 @@ export function StaffPage() {
                   </select>
                 </div>
               )}
+              <div className="space-y-2 sm:col-span-2">
+                <Label>{t('staff.permissionLevel')}</Label>
+                <select
+                  value={form.role}
+                  onChange={(e) => setForm((prev) => ({ ...prev, role: e.target.value as StaffSubRole }))}
+                  className="flex h-10 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary/40"
+                >
+                  {STAFF_ROLE_OPTIONS.map((role) => (
+                    <option key={role} value={role}>{t(`staff.roles.${role}`)}</option>
+                  ))}
+                </select>
+                <p className="text-xs text-slate-500">
+                  {form.role === 'supervisor' ? t('staff.roleHintSuper') : t('staff.roleHintNormal')}
+                </p>
+              </div>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button onClick={handleCreate} disabled={!canSubmit || createMutation.isPending}>
@@ -290,6 +311,21 @@ export function StaffPage() {
                         </select>
                       </div>
                     )}
+                    <div className="space-y-2">
+                      <Label>{t('staff.permissionLevel')}</Label>
+                      <select
+                        value={editForm.role}
+                        onChange={(e) => setEditForm((prev) => ({ ...prev, role: e.target.value as StaffSubRole }))}
+                        className="flex h-10 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/25 focus:border-primary/40"
+                      >
+                        {STAFF_ROLE_OPTIONS.map((role) => (
+                          <option key={role} value={role}>{t(`staff.roles.${role}`)}</option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-slate-500">
+                        {editForm.role === 'supervisor' ? t('staff.roleHintSuper') : t('staff.roleHintNormal')}
+                      </p>
+                    </div>
                     {updateMutation.isError && (
                       <p className="text-sm text-rose-600">{getErrorMessage(updateMutation.error)}</p>
                     )}
@@ -344,7 +380,7 @@ export function StaffPage() {
                         <p className="text-sm text-slate-600">{member.phone}</p>
                       )}
                       <Badge variant="info" className="mt-1">
-                        {t(`common.roles.${member.role}`, { defaultValue: member.role })}
+                        {t(`staff.roles.${member.role === 'admin' ? 'supervisor' : member.role}`, { defaultValue: member.role })}
                       </Badge>
                       {member.department?.name && (
                         <Badge variant="default" className="mt-1 ml-1">
