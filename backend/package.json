@@ -19,7 +19,8 @@
     "db:apply-invoice": "tsx src/scripts/apply-invoice-migration.ts",
     "prompts:reset": "tsx src/scripts/reset-prompts.ts",
     "prompts:cleanup": "tsx src/scripts/cleanup-prompts.ts",
-    "reindex:embeddings": "tsx src/scripts/reindex-embeddings.ts"
+    "reindex:embeddings": "tsx src/scripts/reindex-embeddings.ts",
+    "reindex:embeddings:prod": "node dist/scripts/reindex-embeddings.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",

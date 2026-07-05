@@ -1,9 +1,12 @@
 /**
  * Re-embed all active knowledge_base rows per company after an embedding model upgrade.
  *
- * Usage:
- *   npx tsx src/scripts/reindex-embeddings.ts --confirm
- *   npx tsx src/scripts/reindex-embeddings.ts --confirm --company <uuid>
+ * Usage (local dev):
+ *   npm run reindex:embeddings -- --confirm
+ *   npm run reindex:embeddings -- --confirm --company <uuid>
+ *
+ * Usage (Coolify / Docker — only dist/ is in the image):
+ *   cd /app/backend && npm run reindex:embeddings:prod -- --confirm
  */
 
 import 'dotenv/config';
@@ -96,7 +99,8 @@ async function main(): Promise<void> {
 
   if (!confirm) {
     console.error('Refusing to run without --confirm (re-embeds all companies and clears AI cache).');
-    console.error('  npx tsx src/scripts/reindex-embeddings.ts --confirm [--company <uuid>]');
+    console.error('  npm run reindex:embeddings -- --confirm [--company <uuid>]');
+    console.error('  cd /app/backend && npm run reindex:embeddings:prod -- --confirm [--company <uuid>]');
     process.exit(1);
   }
 
