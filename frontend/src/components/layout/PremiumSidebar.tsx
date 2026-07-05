@@ -2,7 +2,7 @@
  * Premium 2026 panel sidebar — firma, personel ve admin panellerinde ortak
  */
 
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
 import { LogOut, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -52,9 +52,9 @@ export function PremiumSidebar({
     <aside
       data-sidebar-theme={theme}
       className={cn(
-        'sidebar-premium fixed inset-y-0 left-0 z-50 flex w-[18.5rem] flex-col overflow-hidden text-white transition-transform duration-300 ease-out',
-        'lg:relative lg:my-3 lg:ml-3 lg:h-[calc(100dvh-1.5rem)] lg:rounded-2xl lg:translate-x-0',
-        open ? 'translate-x-0' : '-translate-x-full',
+        'sidebar-premium fixed inset-y-0 left-0 z-50 flex w-[min(18.5rem,100vw)] max-w-full flex-col overflow-hidden text-white transition-transform duration-300 ease-out',
+        'lg:relative lg:my-3 lg:ml-3 lg:h-[calc(100dvh-1.5rem)] lg:w-[18.5rem] lg:rounded-2xl lg:translate-x-0',
+        open ? 'translate-x-0' : '-translate-x-full pointer-events-none lg:pointer-events-auto',
       )}
     >
       <div className="sidebar-premium-bg" aria-hidden>
@@ -151,8 +151,20 @@ export function PremiumPanelFrame({
 }: PremiumPanelFrameProps) {
   const { t } = useTranslation();
 
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    const prevOverflow = document.body.style.overflow;
+    const prevTouchAction = document.body.style.touchAction;
+    document.body.style.overflow = 'hidden';
+    document.body.style.touchAction = 'none';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      document.body.style.touchAction = prevTouchAction;
+    };
+  }, [sidebarOpen]);
+
   return (
-    <div className="app-shell flex h-[100dvh] w-full max-w-full overflow-hidden bg-[#f0f4f8]">
+    <div className="app-shell fixed inset-0 flex h-[100dvh] w-full max-w-[100dvw] overflow-hidden bg-[#f0f4f8]">
       {sidebarOpen && (
         <div
           className="fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-md lg:hidden"
@@ -179,7 +191,7 @@ export function PremiumPanelFrame({
           {headerExtra && <div className="flex shrink-0 items-center gap-2">{headerExtra}</div>}
         </header>
 
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-white/50 p-4 backdrop-blur-sm sm:p-6 lg:rounded-b-2xl lg:border lg:border-t-0 lg:border-slate-200/60 lg:p-8">
+        <main className="flex-1 overflow-x-clip overflow-y-auto overscroll-y-contain bg-white/50 p-4 backdrop-blur-sm sm:p-6 lg:rounded-b-2xl lg:border lg:border-t-0 lg:border-slate-200/60 lg:p-8">
           <div className="page-shell">{children}</div>
         </main>
       </div>

@@ -201,7 +201,7 @@ export function MessagesPage() {
     !!msg.media_url && (msg.media_type?.startsWith('image/') ?? true);
 
   return (
-    <div className="flex h-[calc(100dvh-11rem)] min-h-[420px] w-full max-w-full overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[var(--shadow-card)]">
+    <div className="flex h-[calc(100dvh-11rem)] min-h-[420px] w-full max-w-full min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[var(--shadow-card)]">
       <div className={cn('flex w-full min-w-0 flex-col border-r border-slate-100 bg-slate-50/50 md:w-80 lg:w-[22rem]', selectedPhone && 'hidden md:flex')}>
         <div className="border-b border-slate-100 bg-white p-4">
           <h2 className="mb-3 text-sm font-semibold text-slate-900">{t('messages.title')}</h2>
