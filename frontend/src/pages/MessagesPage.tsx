@@ -101,10 +101,10 @@ export function MessagesPage() {
     staff: 'bg-primary text-white rounded-tr-sm shadow-md shadow-primary/20',
   };
 
-  const senderLabel = (type: string) => {
-    if (type === 'customer') return t('messages.customer');
-    if (type === 'ai') return t('messages.ai');
-    return t('messages.agent');
+  const senderLabel = (msg: Message) => {
+    if (msg.sender_type === 'customer') return t('messages.customer');
+    if (msg.sender_type === 'ai') return t('messages.ai');
+    return msg.sender_display_name || msg.staff?.name || msg.sender_name || t('messages.agent');
   };
 
   return (
@@ -183,12 +183,18 @@ export function MessagesPage() {
               </div>
               {hasActiveTicket && activeTicket && (
                 <div className="border-t border-amber-100 bg-amber-50/80 px-4 py-3 space-y-3">
-                  <div className="flex items-center gap-2 text-xs text-amber-900">
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-amber-900">
                     <Headphones className="h-4 w-4 shrink-0 text-amber-600" />
                     <span className="truncate font-medium">{activeTicket.subject}</span>
                     {activeTicket.department?.name && (
                       <span className="hidden truncate text-amber-700/80 sm:inline">
                         · {activeTicket.department.name}
+                      </span>
+                    )}
+                    {activeTicket.staff?.name && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-900">
+                        <User className="h-3 w-3" />
+                        {t('tickets.assigned', { name: activeTicket.staff.name })}
                       </span>
                     )}
                     <Badge variant="warning" className="ml-auto shrink-0">{t('messages.liveSupport')}</Badge>
@@ -212,8 +218,15 @@ export function MessagesPage() {
                     <div className="mb-1 flex items-center gap-1.5">
                       {msg.sender_type === 'ai' && <Bot className="h-3 w-3 text-violet-500" />}
                       {msg.sender_type === 'staff' && <User className="h-3 w-3 text-white/80" />}
-                      <span className={cn('text-[10px] font-semibold uppercase tracking-wide', msg.sender_type === 'staff' ? 'text-white/70' : 'text-slate-400')}>
-                        {senderLabel(msg.sender_type)}
+                      <span
+                        className={cn(
+                          'text-[10px] font-semibold',
+                          msg.sender_type === 'staff'
+                            ? 'text-white/90'
+                            : 'uppercase tracking-wide text-slate-400'
+                        )}
+                      >
+                        {senderLabel(msg)}
                       </span>
                     </div>
                     <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.message}</p>

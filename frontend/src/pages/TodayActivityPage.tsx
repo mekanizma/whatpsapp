@@ -66,7 +66,7 @@ export function TodayActivityPage() {
             </p>
             <p className="mt-1 text-emerald-100">{t('dashboard.todayConversations')}</p>
             <p className="mt-3 text-sm text-emerald-200">
-              {t('todayActivity.activeChats', { count: todayConversations.length })}
+              {t('dashboard.conversationCountHint')}
             </p>
           </div>
         </div>

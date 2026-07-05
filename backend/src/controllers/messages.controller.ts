@@ -8,6 +8,7 @@ import { AuthRequest, isDemoSession } from '../middleware/auth.middleware';
 import { sendMessageToCustomer } from '../whatsapp/whatsapp.service';
 import { logActivity } from '../services/log.service';
 import { normalizePhoneNumber } from '../whatsapp/message.handler';
+import { mapMessageRow } from '../utils/supabase-join';
 
 function resolvePhoneParam(phone: string): string {
   return normalizePhoneNumber(phone) || phone.replace(/\D/g, '');
@@ -67,7 +68,7 @@ export async function getConversationMessages(req: AuthRequest, res: Response): 
 
   const { data, error } = await adminClient
     .from('messages')
-    .select('*')
+    .select('*, staff:staff_id(name)')
     .eq('company_id', req.companyId)
     .eq('customer_phone', phone)
     .order('created_at', { ascending: true });
@@ -77,7 +78,7 @@ export async function getConversationMessages(req: AuthRequest, res: Response): 
     return;
   }
 
-  res.json({ success: true, data });
+  res.json({ success: true, data: (data || []).map(mapMessageRow) });
 }
 
 export async function updateCustomerName(req: AuthRequest, res: Response): Promise<void> {
@@ -145,10 +146,12 @@ export async function replyToConversation(req: AuthRequest, res: Response): Prom
 
   const { data: staffRecord } = await adminClient
     .from('staff')
-    .select('id')
+    .select('id, name')
     .eq('profile_id', req.profile?.id)
     .eq('company_id', req.companyId)
     .maybeSingle();
+
+  const senderName = staffRecord?.name?.trim() || req.profile?.full_name?.trim() || null;
 
   const sendResult = await sendMessageToCustomer(req.companyId, phone, message.trim());
   if (!sendResult.success) {
@@ -168,8 +171,9 @@ export async function replyToConversation(req: AuthRequest, res: Response): Prom
       sender_type: 'staff',
       status: 'open',
       staff_id: staffRecord?.id || null,
+      sender_name: senderName,
     })
-    .select()
+    .select('*, staff:staff_id(name)')
     .single();
 
   if (error) {
@@ -183,8 +187,8 @@ export async function replyToConversation(req: AuthRequest, res: Response): Prom
     action: 'staff_reply_sent',
     entityType: 'message',
     entityId: msg.id,
-    metadata: { customer_phone: phone },
+    metadata: { customer_phone: phone, sender_name: senderName },
   });
 
-  res.status(201).json({ success: true, data: msg });
+  res.status(201).json({ success: true, data: mapMessageRow(msg) });
 }

@@ -148,6 +148,7 @@
       "activity": "Activity",
       "prompts": "AI Prompts",
       "plans": "Subscription Plans",
+      "users": "Users",
       "adminSettings": "Settings",
       "companyDetail": "Company Detail"
     },
@@ -171,6 +172,8 @@
     "description": "Overview of your WhatsApp messages and assistant performance",
     "totalConversations": "Total Conversations",
     "todayConversations": "Today's Conversations",
+    "conversationCountHint": "A new conversation is counted every 50 customer messages per person, or after a 12-hour gap",
+    "todayConversationCountHint": "Conversation units opened today in your company timezone",
     "aiResponses": "AI Replies",
     "transferred": "Transferred to Staff",
     "activeCustomers": "Active Customers",
@@ -254,6 +257,7 @@
     "empty": "No open support tickets",
     "emptyDesc": "Tickets appear here when customers request a human agent",
     "assigned": "Assigned: {{name}}",
+    "unassigned": "Not assigned to staff yet",
     "department": "Department: {{name}}",
     "claim": "Assign to Me",
     "goToChat": "Go to Chat",
@@ -346,7 +350,12 @@
     "saved": "Staff member updated.",
     "save": "Save",
     "department": "Department",
-    "selectDepartment": "Select department"
+    "selectDepartment": "Select department",
+    "resetPassword": "Change Password",
+    "hidePasswordReset": "Hide Password Fields",
+    "resetPasswordDesc": "Set a new login password for this staff member.",
+    "savePassword": "Save Password",
+    "passwordSaved": "Staff password updated."
   },
   "knowledge": {
     "title": "Knowledge Base",
@@ -603,6 +612,16 @@
       "activate": "Activate",
       "suspend": "Suspend",
       "detail": "Detail"
+    },
+    "users": {
+      "title": "Users",
+      "description": "View all panel users on the platform and manage their passwords",
+      "search": "Search by name, email or company...",
+      "noUsers": "No users found",
+      "resetPassword": "Change Password",
+      "resetPasswordDesc": "Set a new login password for this user. Current password is not required.",
+      "savePassword": "Save Password",
+      "passwordSaved": "User password updated."
     },
     "usage": {
       "title": "AI Usage",

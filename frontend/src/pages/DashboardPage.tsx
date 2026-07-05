@@ -66,8 +66,24 @@ export function DashboardPage() {
       />
 
       <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
-        <StatCard title={t('dashboard.totalConversations')} value={stats?.total_conversations ?? 0} icon={MessageSquare} color="text-sky-600" bgColor="bg-sky-50" to="/panel/messages" />
-        <StatCard title={t('dashboard.todayConversations')} value={stats?.today_conversations ?? 0} icon={TrendingUp} color="text-emerald-600" bgColor="bg-emerald-50" to="/panel/activity/today" />
+        <StatCard
+          title={t('dashboard.totalConversations')}
+          value={stats?.total_conversations ?? 0}
+          trend={t('dashboard.conversationCountHint')}
+          icon={MessageSquare}
+          color="text-sky-600"
+          bgColor="bg-sky-50"
+          to="/panel/messages"
+        />
+        <StatCard
+          title={t('dashboard.todayConversations')}
+          value={stats?.today_conversations ?? 0}
+          trend={t('dashboard.todayConversationCountHint')}
+          icon={TrendingUp}
+          color="text-emerald-600"
+          bgColor="bg-emerald-50"
+          to="/panel/activity/today"
+        />
         <StatCard title={t('dashboard.aiResponses')} value={aiResponses} icon={Bot} color="text-violet-600" bgColor="bg-violet-50" to="/panel/ai-insights" />
         <StatCard title={t('dashboard.transferred')} value={transferred} icon={ArrowRightLeft} color="text-orange-600" bgColor="bg-orange-50" to="/panel/tickets" />
         <StatCard title={t('dashboard.activeCustomers')} value={stats?.active_customers ?? 0} icon={Users} color="text-cyan-600" bgColor="bg-cyan-50" to="/panel/customers" />

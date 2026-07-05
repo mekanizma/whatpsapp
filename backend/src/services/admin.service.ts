@@ -8,6 +8,7 @@ import { getDashboardStats } from './dashboard.service';
 import { getMonthStartISO } from '../utils/date';
 import { getPlatformConversationCount, getConversationCountsByCompany } from './conversation-count.service';
 import { mapSubscriptionToCompanyPlan } from './plan-capabilities.service';
+import { enrichProfilesWithEmail } from './password.service';
 
 const PLAN_LIMITS: Record<string, { messages: number; users: number }> = {
   starter: { messages: 1000, users: 1 },
@@ -152,7 +153,10 @@ export async function getCompanyDetail(companyId: string) {
       .eq('company_id', companyId)
       .single(),
     adminClient.from('whatsapp_configs').select('status, phone_number, business_account_id').eq('company_id', companyId).single(),
-    adminClient.from('profiles').select('id, full_name, role, is_active, created_at').eq('company_id', companyId),
+    adminClient
+      .from('profiles')
+      .select('id, user_id, full_name, role, is_active, created_at')
+      .eq('company_id', companyId),
     adminClient.from('staff').select('id', { count: 'exact', head: true }).eq('company_id', companyId),
     getDashboardStats(companyId),
   ]);
@@ -166,12 +170,14 @@ export async function getCompanyDetail(companyId: string) {
       }
     : null;
 
+  const usersWithEmail = await enrichProfilesWithEmail(profiles.data || []);
+
   return {
     company,
     subscription: subscriptionRow,
     plan: mapSubscriptionToCompanyPlan(subscription.data as Record<string, unknown> | undefined),
     whatsapp: whatsapp.data,
-    users: profiles.data || [],
+    users: usersWithEmail,
     staff_count: staffCount.count || 0,
     stats,
   };

@@ -103,12 +103,19 @@ export function TicketsPage() {
                       <p className="text-sm font-medium text-slate-600">
                         {ticket.customer_name || ticket.customer_phone}
                       </p>
-                      {ticket.staff && (
-                        <p className="text-xs text-slate-400">{t('tickets.assigned', { name: ticket.staff.name })}</p>
-                      )}
-                      {ticket.department?.name && (
-                        <p className="text-xs text-slate-500">{t('tickets.department', { name: ticket.department.name })}</p>
-                      )}
+                      <div className="flex flex-wrap items-center gap-2">
+                        {ticket.staff?.name ? (
+                          <span className="inline-flex min-h-[28px] items-center gap-1.5 rounded-full bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-800 ring-1 ring-violet-100">
+                            <UserCheck className="h-3.5 w-3.5" />
+                            {t('tickets.assigned', { name: ticket.staff.name })}
+                          </span>
+                        ) : ticket.status === 'in_progress' ? (
+                          <span className="text-xs text-slate-400">{t('tickets.unassigned')}</span>
+                        ) : null}
+                        {ticket.department?.name && (
+                          <span className="text-xs text-slate-500">{t('tickets.department', { name: ticket.department.name })}</span>
+                        )}
+                      </div>
                       <div className="flex items-center gap-1 text-xs text-slate-400">
                         <Clock className="h-3 w-3" />
                         {new Date(ticket.created_at).toLocaleString(locale)}

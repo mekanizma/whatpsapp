@@ -50,6 +50,7 @@ import {
   updateInvoiceIssuerSettings,
 } from '../services/invoice-settings.service';
 import { buildContentDisposition } from '../utils/content-disposition';
+import { listPlatformUsers, resetUserPasswordByProfileId } from '../services/password.service';
 
 export async function getCompanies(req: AuthRequest, res: Response): Promise<void> {
   if (isDemoSession(req)) {
@@ -565,5 +566,57 @@ export async function updateAiConversationAddonAdmin(req: AuthRequest, res: Resp
     res.json({ success: true, data });
   } catch (err) {
     res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'Ek paket güncellenemedi' });
+  }
+}
+
+export async function getAdminUsers(req: AuthRequest, res: Response): Promise<void> {
+  if (isDemoSession(req)) {
+    res.json({
+      success: true,
+      data: [],
+      pagination: { page: 1, limit: 50, total: 0, totalPages: 0 },
+    });
+    return;
+  }
+
+  const page = parseInt(req.query.page as string) || 1;
+  const limit = parseInt(req.query.limit as string) || 50;
+  const search = (req.query.search as string) || '';
+
+  try {
+    const result = await listPlatformUsers(page, limit, search);
+    res.json({ success: true, data: result.users, pagination: result.pagination });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'Hata' });
+  }
+}
+
+export async function resetUserPassword(req: AuthRequest, res: Response): Promise<void> {
+  const { password } = req.body;
+
+  if (!password) {
+    res.status(400).json({ success: false, error: 'Yeni şifre zorunludur' });
+    return;
+  }
+
+  if (isDemoSession(req)) {
+    res.status(400).json({ success: false, error: 'Demo modda şifre değiştirilemez' });
+    return;
+  }
+
+  try {
+    const result = await resetUserPasswordByProfileId(String(req.params.profileId), password);
+
+    await logActivity({
+      userId: req.userId,
+      action: 'user_password_reset',
+      entityType: 'profile',
+      entityId: result.profileId,
+      metadata: { email: result.email },
+    });
+
+    res.json({ success: true, message: 'Kullanıcı şifresi güncellendi' });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'Hata' });
   }
 }

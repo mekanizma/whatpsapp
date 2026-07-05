@@ -7,6 +7,7 @@
  */
 
 import { adminClient } from '../database/supabase';
+import { getStartOfTodayInTimezone, parseCompanyTimezone } from './company-timezone.service';
 
 export const MESSAGES_PER_CONVERSATION = 50;
 export const SESSION_GAP_MS = 12 * 60 * 60 * 1000;
@@ -117,7 +118,8 @@ function groupCustomerTimestamps(rows: CustomerMessageRow[]): Map<string, Date[]
   return byPhone;
 }
 
-function startOfToday(): Date {
+function startOfToday(timeZone?: string): Date {
+  if (timeZone) return getStartOfTodayInTimezone(timeZone);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   return today;
@@ -127,16 +129,20 @@ export async function getConversationStatsForCompany(companyId: string): Promise
   total_conversations: number;
   today_conversations: number;
 }> {
-  const { data, error } = await adminClient
-    .from('messages')
-    .select('customer_phone, created_at')
-    .eq('company_id', companyId)
-    .eq('sender_type', 'customer');
+  const [{ data, error }, { data: company, error: companyError }] = await Promise.all([
+    adminClient
+      .from('messages')
+      .select('customer_phone, created_at')
+      .eq('company_id', companyId)
+      .eq('sender_type', 'customer'),
+    adminClient.from('companies').select('timezone').eq('id', companyId).single(),
+  ]);
 
   if (error) throw new Error(error.message);
+  if (companyError) throw new Error(companyError.message);
 
   const rows = (data || []) as CustomerMessageRow[];
-  const todayStart = startOfToday();
+  const todayStart = startOfToday(parseCompanyTimezone(company?.timezone));
   return {
     total_conversations: countConversationUnitsFromRows(rows),
     today_conversations: countTodayConversationUnitsFromRows(rows, todayStart),

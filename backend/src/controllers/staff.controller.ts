@@ -6,7 +6,7 @@ import { Response } from 'express';
 import { adminClient } from '../database/supabase';
 import { AuthRequest, isDemoSession } from '../middleware/auth.middleware';
 import { logActivity } from '../services/log.service';
-import { createStaffUser, deleteStaffUser, formatServiceError, updateStaffMember } from '../services/staff.service';
+import { createStaffUser, deleteStaffUser, formatServiceError, resetStaffPassword, updateStaffMember } from '../services/staff.service';
 import {
   companyHasActiveDepartments,
   validateDepartmentBelongsToCompany,
@@ -138,6 +138,37 @@ export async function deleteStaff(req: AuthRequest, res: Response): Promise<void
     res.json({ success: true, message: 'Personel silindi' });
   } catch (err) {
     console.error('deleteStaff failed:', err);
+    res.status(400).json({ success: false, error: formatServiceError(err) });
+  }
+}
+
+export async function resetStaffPasswordHandler(req: AuthRequest, res: Response): Promise<void> {
+  const { password } = req.body;
+
+  if (!password) {
+    res.status(400).json({ success: false, error: 'Yeni şifre zorunludur' });
+    return;
+  }
+
+  if (isDemoSession(req)) {
+    res.status(400).json({ success: false, error: 'Demo modda şifre değiştirilemez' });
+    return;
+  }
+
+  try {
+    await resetStaffPassword(String(req.params.id), req.companyId!, password);
+
+    await logActivity({
+      userId: req.userId,
+      companyId: req.companyId,
+      action: 'staff_password_reset',
+      entityType: 'staff',
+      entityId: String(req.params.id),
+    });
+
+    res.json({ success: true, message: 'Personel şifresi güncellendi' });
+  } catch (err) {
+    console.error('resetStaffPassword failed:', err);
     res.status(400).json({ success: false, error: formatServiceError(err) });
   }
 }

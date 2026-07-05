@@ -7,10 +7,11 @@ import { useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowLeft, Save, RotateCcw, Smartphone, Users, MessageSquare, Zap, Ticket, FileDown,
+  ArrowLeft, Save, RotateCcw, Smartphone, Users, MessageSquare, Zap, Ticket, FileDown, Lock,
 } from 'lucide-react';
 import { api } from '@/services/api';
 import { PageHeader } from '@/components/PageHeader';
+import { ResetPasswordForm } from '@/components/ResetPasswordForm';
 import { StatCard } from '@/components/StatCard';
 import {
   Button, Input, Label, Card, CardContent, CardHeader, CardTitle,
@@ -34,6 +35,8 @@ export function AdminCompanyDetailPage() {
   const [setupFeeDescription, setSetupFeeDescription] = useState('');
   const [invoiceError, setInvoiceError] = useState<string | null>(null);
   const [invoiceLoading, setInvoiceLoading] = useState(false);
+  const [resetProfileId, setResetProfileId] = useState<string | null>(null);
+  const [passwordMsg, setPasswordMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['admin-company', id],
@@ -52,6 +55,18 @@ export function AdminCompanyDetailPage() {
     mutationFn: (body: Record<string, unknown>) =>
       api.patch(`/admin/companies/${id}/subscription`, body),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-company', id] }),
+  });
+
+  const passwordMutation = useMutation({
+    mutationFn: ({ profileId, password }: { profileId: string; password: string }) =>
+      api.patch(`/admin/users/${profileId}/password`, { password }),
+    onSuccess: () => {
+      setPasswordMsg({ type: 'ok', text: t('admin.users.passwordSaved') });
+      setResetProfileId(null);
+    },
+    onError: (err: Error) => {
+      setPasswordMsg({ type: 'err', text: err.message });
+    },
   });
 
   if (isLoading) {
@@ -341,24 +356,62 @@ export function AdminCompanyDetailPage() {
       {tab === 'kullanicilar' && (
         <Card>
           <CardHeader><CardTitle>{t('admin.companyDetail.users')}</CardTitle></CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
+            {passwordMsg && (
+              <p className={passwordMsg.type === 'ok' ? 'text-sm text-emerald-600' : 'text-sm text-red-600'}>
+                {passwordMsg.text}
+              </p>
+            )}
             {users.length === 0 ? (
               <p className="text-sm text-slate-500">{t('admin.companyDetail.noUsers')}</p>
             ) : (
               <div className="divide-y divide-slate-100">
-                {users.map((u) => (
-                  <div key={u.id} className="flex flex-wrap items-center justify-between gap-2 py-3">
-                    <div>
-                      <p className="font-medium">{u.full_name}</p>
-                      <p className="text-xs text-slate-500">
-                        {t(`common.roles.${u.role}`, { defaultValue: u.role })} · {new Date(u.created_at).toLocaleDateString(locale)}
-                      </p>
+                {users.map((u) => {
+                  const isOpen = resetProfileId === u.id;
+                  return (
+                    <div key={u.id} className="py-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="font-medium">{u.full_name}</p>
+                          {u.email && <p className="text-sm text-slate-500">{u.email}</p>}
+                          <p className="text-xs text-slate-500">
+                            {t(`common.roles.${u.role}`, { defaultValue: u.role })} · {new Date(u.created_at).toLocaleDateString(locale)}
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Badge variant={u.is_active ? 'success' : 'warning'}>
+                            {u.is_active ? t('common.active') : t('common.inactive')}
+                          </Badge>
+                          <Button
+                            size="sm"
+                            variant={isOpen ? 'outline' : 'secondary'}
+                            className="min-h-[44px]"
+                            onClick={() => {
+                              setPasswordMsg(null);
+                              setResetProfileId(isOpen ? null : u.id);
+                            }}
+                          >
+                            <Lock className="h-4 w-4" />
+                            {isOpen ? t('common.cancel') : t('admin.users.resetPassword')}
+                          </Button>
+                        </div>
+                      </div>
+                      {isOpen && (
+                        <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+                          <p className="mb-3 text-sm text-slate-600">{t('admin.users.resetPasswordDesc')}</p>
+                          <ResetPasswordForm
+                            isPending={passwordMutation.isPending}
+                            submitLabel={t('admin.users.savePassword')}
+                            onSubmit={(password) => {
+                              setPasswordMsg(null);
+                              passwordMutation.mutate({ profileId: u.id, password });
+                            }}
+                          />
+                        </div>
+                      )}
                     </div>
-                    <Badge variant={u.is_active ? 'success' : 'warning'}>
-                      {u.is_active ? t('common.active') : t('common.inactive')}
-                    </Badge>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </CardContent>

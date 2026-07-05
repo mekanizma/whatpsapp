@@ -148,6 +148,7 @@
       "activity": "Aktivite",
       "prompts": "AI Promptları",
       "plans": "Abonelik Paketleri",
+      "users": "Kullanıcılar",
       "adminSettings": "Ayarlar",
       "companyDetail": "Şirket Detayı"
     },
@@ -171,6 +172,8 @@
     "description": "WhatsApp mesajlarınızın ve asistan performansınızın özeti",
     "totalConversations": "Toplam Görüşme",
     "todayConversations": "Bugünkü Görüşmeler",
+    "conversationCountHint": "Kişi başına 50 müşteri mesajı veya 12 saat aradan sonra yeni görüşme sayılır",
+    "todayConversationCountHint": "Şirket saat dilimine göre bugün açılan görüşme birimleri",
     "aiResponses": "AI Cevapları",
     "transferred": "Personele Aktarılan",
     "activeCustomers": "Aktif Müşteriler",
@@ -254,6 +257,7 @@
     "empty": "Açık destek talebi yok",
     "emptyDesc": "Müşteriler insan temsilcisi istediğinde talepler burada listelenir",
     "assigned": "Atanan: {{name}}",
+    "unassigned": "Henüz personele atanmadı",
     "department": "Departman: {{name}}",
     "claim": "Bana Ata",
     "goToChat": "Sohbete Git",
@@ -346,7 +350,12 @@
     "saved": "Personel bilgileri güncellendi.",
     "save": "Kaydet",
     "department": "Departman",
-    "selectDepartment": "Departman seçin"
+    "selectDepartment": "Departman seçin",
+    "resetPassword": "Şifre Değiştir",
+    "hidePasswordReset": "Şifre Alanını Gizle",
+    "resetPasswordDesc": "Personel için yeni giriş şifresi belirleyin.",
+    "savePassword": "Şifreyi Kaydet",
+    "passwordSaved": "Personel şifresi güncellendi."
   },
   "knowledge": {
     "title": "Bilgi Bankası",
@@ -603,6 +612,16 @@
       "activate": "Aktifleştir",
       "suspend": "Askıya Al",
       "detail": "Detay"
+    },
+    "users": {
+      "title": "Kullanıcılar",
+      "description": "Platformdaki tüm panel kullanıcılarını görüntüleyin ve şifrelerini yönetin",
+      "search": "Ad, e-posta veya şirket ara...",
+      "noUsers": "Kullanıcı bulunamadı",
+      "resetPassword": "Şifre Değiştir",
+      "resetPasswordDesc": "Kullanıcı için yeni bir giriş şifresi belirleyin. Mevcut şifre gerekmez.",
+      "savePassword": "Şifreyi Kaydet",
+      "passwordSaved": "Kullanıcı şifresi güncellendi."
     },
     "usage": {
       "title": "AI Kullanımı",

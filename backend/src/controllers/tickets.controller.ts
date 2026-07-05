@@ -9,6 +9,7 @@ import { logActivity } from '../services/log.service';
 import { clearTransferState, normalizePhoneNumber } from '../whatsapp/message.handler';
 import { createTicketAndNotify, notifyTicketRecipients } from '../services/ticket-notification.service';
 import { getStaffDepartmentId, getStaffRecord, validateDepartmentBelongsToCompany } from '../services/department-access.service';
+import { mapTicketRow } from '../utils/supabase-join';
 
 async function getStaffIdForProfile(
   companyId: string,
@@ -84,7 +85,7 @@ export async function getTickets(req: AuthRequest, res: Response): Promise<void>
     return;
   }
 
-  res.json({ success: true, data });
+  res.json({ success: true, data: (data || []).map(mapTicketRow) });
 }
 
 export async function getActiveTicketByPhone(req: AuthRequest, res: Response): Promise<void> {
@@ -106,7 +107,7 @@ export async function getActiveTicketByPhone(req: AuthRequest, res: Response): P
     return;
   }
 
-  res.json({ success: true, data: data || null });
+  res.json({ success: true, data: data ? mapTicketRow(data) : null });
 }
 
 export async function createTicket(req: AuthRequest, res: Response): Promise<void> {
@@ -128,7 +129,7 @@ export async function createTicket(req: AuthRequest, res: Response): Promise<voi
 
     const { data, error } = await adminClient
       .from('tickets')
-      .select('*')
+      .select('*, staff:assigned_staff(name, email), department:department_id(id, name)')
       .eq('id', ticket!.id)
       .single();
 
@@ -137,7 +138,7 @@ export async function createTicket(req: AuthRequest, res: Response): Promise<voi
       return;
     }
 
-    res.status(201).json({ success: true, data });
+    res.status(201).json({ success: true, data: mapTicketRow(data) });
   } catch (err) {
     res.status(400).json({ success: false, error: (err as Error).message });
   }
@@ -157,7 +158,7 @@ export async function updateTicket(req: AuthRequest, res: Response): Promise<voi
     .update(updates)
     .eq('id', req.params.id)
     .eq('company_id', req.companyId)
-    .select()
+    .select('*, staff:assigned_staff(name, email), department:department_id(id, name)')
     .single();
 
   if (error) {
@@ -178,7 +179,7 @@ export async function updateTicket(req: AuthRequest, res: Response): Promise<voi
     metadata: updates,
   });
 
-  res.json({ success: true, data });
+  res.json({ success: true, data: mapTicketRow(data) });
 }
 
 /** Ticket'ı mevcut kullanıcıya ata ve işleme al */
@@ -218,7 +219,7 @@ export async function claimTicket(req: AuthRequest, res: Response): Promise<void
     metadata: { customer_phone: data.customer_phone, staff_id: staffId },
   });
 
-  res.json({ success: true, data });
+  res.json({ success: true, data: mapTicketRow(data) });
 }
 
 export async function assignTicket(req: AuthRequest, res: Response): Promise<void> {
@@ -229,7 +230,7 @@ export async function assignTicket(req: AuthRequest, res: Response): Promise<voi
     .update({ assigned_staff: staff_id, status: 'in_progress' })
     .eq('id', req.params.id)
     .eq('company_id', req.companyId)
-    .select()
+    .select('*, staff:assigned_staff(name, email), department:department_id(id, name)')
     .single();
 
   if (error) {
@@ -237,7 +238,7 @@ export async function assignTicket(req: AuthRequest, res: Response): Promise<voi
     return;
   }
 
-  res.json({ success: true, data });
+  res.json({ success: true, data: mapTicketRow(data) });
 }
 
 /** Aktif talebi başka departmana transfer et — atama sıfırlanır, yeni departman bildirilir */
@@ -327,5 +328,5 @@ export async function transferTicket(req: AuthRequest, res: Response): Promise<v
     },
   });
 
-  res.json({ success: true, data });
+  res.json({ success: true, data: mapTicketRow(data) });
 }

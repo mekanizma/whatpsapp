@@ -358,6 +358,43 @@ export async function updateStaffMember(
   return staff;
 }
 
+export async function resetStaffPassword(
+  staffId: string,
+  companyId: string,
+  password: string
+): Promise<void> {
+  if (!password || password.length < 6) {
+    throw new Error('Şifre en az 6 karakter olmalıdır');
+  }
+
+  const { data: staff, error } = await adminClient
+    .from('staff')
+    .select('profile_id, name')
+    .eq('id', staffId)
+    .eq('company_id', companyId)
+    .single();
+
+  if (error || !staff?.profile_id) {
+    throw new Error('Personel bulunamadı');
+  }
+
+  const { data: profile, error: profileError } = await adminClient
+    .from('profiles')
+    .select('user_id, role')
+    .eq('id', staff.profile_id)
+    .single();
+
+  if (profileError || !profile?.user_id) {
+    throw new Error('Kullanıcı hesabı bulunamadı');
+  }
+
+  if (profile.role !== 'staff') {
+    throw new Error('Yalnızca personel şifreleri değiştirilebilir');
+  }
+
+  await updateAuthStaffUser(profile.user_id, password, staff.name);
+}
+
 export async function deleteStaffUser(staffId: string, companyId: string): Promise<void> {
   const { data: staffMember, error: fetchError } = await adminClient
     .from('staff')

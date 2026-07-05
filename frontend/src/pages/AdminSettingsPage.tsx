@@ -5,8 +5,10 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Settings, ExternalLink, Database, Cpu, Shield, Smartphone, FileText } from 'lucide-react';
+import { Settings, ExternalLink, Database, Cpu, Shield, Smartphone, FileText, Lock } from 'lucide-react';
 import { api } from '@/services/api';
+import { useAuthStore } from '@/store/authStore';
+import { isDemoMode } from '@/lib/env';
 import { PageHeader } from '@/components/PageHeader';
 import {
   Button,
@@ -38,8 +40,13 @@ const emptyInvoiceForm: InvoiceIssuerSettings = {
 export function AdminSettingsPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const { changePassword } = useAuthStore();
   const [invoiceForm, setInvoiceForm] = useState<InvoiceIssuerSettings>(emptyInvoiceForm);
   const [invoiceFeedback, setInvoiceFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordMsg, setPasswordMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   const { data: settings, isLoading } = useQuery({
     queryKey: ['admin-settings'],
@@ -77,6 +84,33 @@ export function AdminSettingsPage() {
       });
     },
   });
+
+  const passwordMutation = useMutation({
+    mutationFn: () => changePassword(currentPassword, newPassword),
+    onSuccess: () => {
+      setPasswordMsg({ type: 'ok', text: t('settings.passwordSaved') });
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    },
+    onError: (err: Error) => {
+      setPasswordMsg({ type: 'err', text: err.message });
+    },
+  });
+
+  const handlePasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordMsg(null);
+    if (newPassword.length < 6) {
+      setPasswordMsg({ type: 'err', text: t('settings.passwordMin') });
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordMsg({ type: 'err', text: t('settings.passwordMismatch') });
+      return;
+    }
+    passwordMutation.mutate();
+  };
 
   if (isLoading || invoiceLoading) {
     return <div className="flex justify-center p-12"><Spinner className="h-8 w-8" /></div>;
@@ -153,6 +187,70 @@ export function AdminSettingsPage() {
           </Card>
         ))}
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+            <Lock className="h-5 w-5" />
+            {t('settings.changePassword')}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {isDemoMode ? (
+            <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800 ring-1 ring-amber-200/60">
+              {t('settings.demoPassword')}
+            </p>
+          ) : (
+            <form onSubmit={handlePasswordSubmit} className="mx-auto max-w-md space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="admin-current-password">{t('settings.currentPassword')}</Label>
+                <Input
+                  id="admin-current-password"
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  autoComplete="current-password"
+                  className="h-11"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="admin-new-password">{t('settings.newPassword')}</Label>
+                <Input
+                  id="admin-new-password"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  autoComplete="new-password"
+                  minLength={6}
+                  className="h-11"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="admin-confirm-password">{t('settings.confirmPassword')}</Label>
+                <Input
+                  id="admin-confirm-password"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  autoComplete="new-password"
+                  className="h-11"
+                  required
+                />
+              </div>
+              {passwordMsg && (
+                <p className={passwordMsg.type === 'ok' ? 'text-sm text-emerald-600' : 'text-sm text-red-600'}>
+                  {passwordMsg.text}
+                </p>
+              )}
+              <Button type="submit" disabled={passwordMutation.isPending} className="w-full sm:w-auto min-h-[44px]">
+                {passwordMutation.isPending ? t('settings.updating') : t('settings.updatePassword')}
+              </Button>
+            </form>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

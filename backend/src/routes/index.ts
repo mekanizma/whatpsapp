@@ -55,6 +55,8 @@ router.get('/admin/plans', authenticate, requireRole('super_admin'), asyncHandle
 router.put('/admin/plans/:id', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.updateSubscriptionPlanAdmin));
 router.get('/admin/addons', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.getAiConversationAddonsAdmin));
 router.put('/admin/addons/:id', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.updateAiConversationAddonAdmin));
+router.get('/admin/users', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.getAdminUsers));
+router.patch('/admin/users/:profileId/password', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.resetUserPassword));
 
 // Company
 router.get('/companies/:id', authenticate, companyCtrl.getCompany);
@@ -150,6 +152,7 @@ router.put('/notifications/recipients', authenticate, requireRole('company_admin
 router.get('/staff', authenticate, requireCompany, staffCtrl.getStaff);
 router.post('/staff', authenticate, requireRole('company_admin'), requireCompany, asyncHandler(staffCtrl.createStaff));
 router.put('/staff/:id', authenticate, requireRole('company_admin'), requireCompany, asyncHandler(staffCtrl.updateStaff));
+router.patch('/staff/:id/password', authenticate, requireRole('company_admin'), requireCompany, asyncHandler(staffCtrl.resetStaffPasswordHandler));
 router.delete('/staff/:id', authenticate, requireRole('company_admin'), requireCompany, asyncHandler(staffCtrl.deleteStaff));
 
 // Appointments

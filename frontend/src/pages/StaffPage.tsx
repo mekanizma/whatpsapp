@@ -5,9 +5,10 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, UserX, Eye, EyeOff, Pencil, Save } from 'lucide-react';
+import { Plus, UserX, Eye, EyeOff, Pencil, Save, Lock } from 'lucide-react';
 import { api } from '@/services/api';
 import { getErrorMessage } from '@/lib/errors';
+import { ResetPasswordForm } from '@/components/ResetPasswordForm';
 import { Button, Input, Label, Card, CardContent, CardHeader, CardTitle, Spinner, Badge } from '@/components/ui';
 import type { Department, StaffMember } from '@/types';
 
@@ -27,6 +28,8 @@ export function StaffPage() {
   const [form, setForm] = useState<StaffForm>(emptyForm);
   const [showPassword, setShowPassword] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [showPasswordReset, setShowPasswordReset] = useState(false);
+  const [passwordMsg, setPasswordMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const [editForm, setEditForm] = useState<Pick<StaffForm, 'name' | 'email' | 'phone' | 'department_id'>>({
     name: '',
     email: '',
@@ -73,6 +76,18 @@ export function StaffPage() {
     },
   });
 
+  const passwordMutation = useMutation({
+    mutationFn: (payload: { id: string; password: string }) =>
+      api.patch(`/staff/${payload.id}/password`, { password: payload.password }),
+    onSuccess: () => {
+      setPasswordMsg({ type: 'ok', text: t('staff.passwordSaved') });
+      setShowPasswordReset(false);
+    },
+    onError: (err: Error) => {
+      setPasswordMsg({ type: 'err', text: getErrorMessage(err) });
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/staff/${id}`),
     onSuccess: () => {
@@ -104,6 +119,8 @@ export function StaffPage() {
 
   const startEdit = (member: StaffMember) => {
     setEditingId(member.id);
+    setShowPasswordReset(false);
+    setPasswordMsg(null);
     setEditForm({
       name: member.name,
       email: member.email,
@@ -276,11 +293,44 @@ export function StaffPage() {
                     {updateMutation.isError && (
                       <p className="text-sm text-rose-600">{getErrorMessage(updateMutation.error)}</p>
                     )}
+
+                    <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-3">
+                      <button
+                        type="button"
+                        className="flex min-h-[44px] w-full items-center gap-2 text-sm font-medium text-slate-700"
+                        onClick={() => {
+                          setShowPasswordReset((v) => !v);
+                          setPasswordMsg(null);
+                        }}
+                      >
+                        <Lock className="h-4 w-4 text-primary" />
+                        {showPasswordReset ? t('staff.hidePasswordReset') : t('staff.resetPassword')}
+                      </button>
+                      {showPasswordReset && (
+                        <div className="mt-3 border-t border-slate-200 pt-3">
+                          <p className="mb-3 text-xs text-slate-500">{t('staff.resetPasswordDesc')}</p>
+                          <ResetPasswordForm
+                            isPending={passwordMutation.isPending}
+                            submitLabel={t('staff.savePassword')}
+                            onSubmit={(password) => {
+                              setPasswordMsg(null);
+                              passwordMutation.mutate({ id: member.id, password });
+                            }}
+                          />
+                        </div>
+                      )}
+                      {passwordMsg && (
+                        <p className={`mt-2 text-sm ${passwordMsg.type === 'ok' ? 'text-emerald-600' : 'text-red-600'}`}>
+                          {passwordMsg.text}
+                        </p>
+                      )}
+                    </div>
+
                     <div className="flex flex-wrap gap-2">
                       <Button size="sm" onClick={handleSaveEdit} disabled={!canSaveEdit || updateMutation.isPending}>
                         {updateMutation.isPending ? <Spinner /> : <><Save className="h-4 w-4" />{t('staff.save')}</>}
                       </Button>
-                      <Button size="sm" variant="outline" onClick={() => setEditingId(null)}>
+                      <Button size="sm" variant="outline" onClick={() => { setEditingId(null); setShowPasswordReset(false); setPasswordMsg(null); }}>
                         {t('common.cancel')}
                       </Button>
                     </div>

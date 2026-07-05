@@ -89,9 +89,20 @@ export interface CompanyDetail {
     };
   } | null;
   whatsapp: { status: string; phone_number: string | null } | null;
-  users: { id: string; full_name: string; role: string; is_active: boolean; created_at: string }[];
+  users: { id: string; full_name: string; role: string; is_active: boolean; created_at: string; email?: string | null }[];
   staff_count: number;
   stats: DashboardStats;
+}
+
+export interface PlatformUser {
+  id: string;
+  full_name: string;
+  role: string;
+  is_active: boolean;
+  created_at: string;
+  company_id: string | null;
+  company_name: string | null;
+  email: string | null;
 }
 
 export interface AIUsageRow {
@@ -185,6 +196,10 @@ export interface Message {
   sender_type: 'customer' | 'ai' | 'staff';
   status: string;
   created_at: string;
+  staff_id?: string | null;
+  sender_name?: string | null;
+  sender_display_name?: string | null;
+  staff?: { name: string } | null;
 }
 
 export interface KnowledgeItem {
@@ -242,7 +257,7 @@ export interface Ticket {
   assigned_staff: string | null;
   department_id?: string | null;
   department?: { id: string; name: string } | null;
-  staff?: { name: string; email: string };
+  staff?: { name: string; email?: string } | null;
   created_at: string;
 }
 
