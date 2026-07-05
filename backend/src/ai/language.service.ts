@@ -5,6 +5,10 @@
 import { detectAll } from 'tinyld';
 import { getPromptContent, renderPromptTemplate } from '../services/prompt.service';
 import { config } from '../config';
+import {
+  getAppointmentProviderLabelForCategory,
+  shouldAskAppointmentProvider,
+} from '../services/appointment-category.service';
 
 export type ConversationLang = 'tr' | 'en' | 'de' | 'ar' | 'ru' | 'fr' | 'es' | 'other';
 
@@ -482,12 +486,17 @@ const PROVIDER_LABELS: Record<TemplateLang, string> = {
   es: 'Persona de contacto',
 };
 
-/** Randevu onayında gösterilecek personel/sağlayıcı etiketi — env veya parametre ile özelleştirilebilir */
+/** Randevu onayında gösterilecek personel/sağlayıcı etiketi */
 export function getAppointmentProviderLabel(
   lang: ConversationLang,
-  custom?: string
+  custom?: string,
+  category?: string | null
 ): string {
   if (custom?.trim()) return custom.trim();
+  if (category && shouldAskAppointmentProvider(category)) {
+    const label = getAppointmentProviderLabelForCategory(lang, category);
+    if (label) return label;
+  }
   if (config.ai.appointmentProviderLabel) return config.ai.appointmentProviderLabel;
   const templateLang = lang === 'other' ? 'en' : lang;
   return PROVIDER_LABELS[templateLang] || PROVIDER_LABELS.en;

@@ -16,6 +16,12 @@ import {
 } from '@/components/ui';
 import { useAuthStore } from '@/store/authStore';
 import { cn } from '@/lib/utils';
+import {
+  shouldAskAppointmentProvider,
+  getCalendarProviderLabelKey,
+  resolveAppointmentDisplayTitle,
+  isGenericAppointmentTitle,
+} from '@/lib/appointment-category';
 import type { Appointment } from '@/types';
 
 const WEEKDAYS_TR = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
@@ -116,7 +122,10 @@ export function CalendarPage() {
   const weekdays = i18n.language?.startsWith('en') ? WEEKDAYS_EN : WEEKDAYS_TR;
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
+  const company = useAuthStore((s) => s.company);
   const isAdmin = user?.role === 'company_admin';
+  const askProvider = shouldAskAppointmentProvider(company?.category);
+  const providerLabelKey = getCalendarProviderLabelKey(company?.category);
 
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(new Date()));
   const [selectedDate, setSelectedDate] = useState(() => new Date());
@@ -289,6 +298,7 @@ export function CalendarPage() {
                 {upcoming?.slice(0, 8).map((a) => {
                   const start = new Date(a.starts_at);
                   const end = new Date(a.ends_at);
+                  const displayTitle = resolveAppointmentDisplayTitle(a);
                   return (
                     <button
                       key={a.id}
@@ -304,7 +314,7 @@ export function CalendarPage() {
                         <span className="text-[10px] uppercase">{start.toLocaleDateString(locale, { month: 'short' })}</span>
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate font-medium text-slate-900">{a.title}</p>
+                        <p className="truncate font-medium text-slate-900">{displayTitle}</p>
                         <p className="text-xs text-slate-500">
                           {a.customer_name || a.customer_phone} ·{' '}
                           {start.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
@@ -418,6 +428,8 @@ export function CalendarPage() {
                   const SourceIcon = sourceIcon[a.source] || CalendarDays;
                   const start = new Date(a.starts_at);
                   const end = new Date(a.ends_at);
+                  const displayTitle = resolveAppointmentDisplayTitle(a);
+                  const showNotes = a.notes?.trim() && a.notes.trim() !== displayTitle && !isGenericAppointmentTitle(a.notes);
                   return (
                     <Card key={a.id} className="overflow-hidden">
                       <CardContent className="p-4">
@@ -427,7 +439,7 @@ export function CalendarPage() {
                           </div>
                           <div className="min-w-0 flex-1 space-y-1">
                             <div className="flex flex-wrap items-center gap-2">
-                              <p className="font-semibold text-slate-900">{a.title}</p>
+                              <p className="font-semibold text-slate-900">{displayTitle}</p>
                               <Badge variant={statusBadge[a.status] || 'default'}>
                                 {t(`calendar.status.${a.status}`, { defaultValue: a.status })}
                               </Badge>
@@ -450,12 +462,12 @@ export function CalendarPage() {
                                 {a.customer_phone}
                               </span>
                             </div>
-                            {a.preferred_doctor && (
+                            {askProvider && a.preferred_doctor && (
                               <p className="text-xs font-medium text-sky-700">
-                                {t('calendar.doctor')}: {a.preferred_doctor}
+                                {providerLabelKey ? t(providerLabelKey) : t('calendar.doctor')}: {a.preferred_doctor}
                               </p>
                             )}
-                            {a.notes && (
+                            {showNotes && (
                               <p className="text-xs text-slate-500 line-clamp-2">{a.notes}</p>
                             )}
                           </div>
@@ -541,19 +553,23 @@ export function CalendarPage() {
                       id="cal-title"
                       value={form.title}
                       onChange={(e) => setForm({ ...form, title: e.target.value })}
-                      placeholder={t('calendar.defaultTitle')}
+                      placeholder={t('calendar.titlePlaceholder')}
                       required
                     />
                   </div>
-                  <div className="space-y-1.5 sm:col-span-2">
-                    <Label htmlFor="cal-doctor">{t('calendar.doctor')}</Label>
-                    <Input
-                      id="cal-doctor"
-                      value={form.preferred_doctor}
-                      onChange={(e) => setForm({ ...form, preferred_doctor: e.target.value })}
-                      placeholder={t('calendar.doctorPlaceholder')}
-                    />
-                  </div>
+                  {askProvider && (
+                    <div className="space-y-1.5 sm:col-span-2">
+                      <Label htmlFor="cal-doctor">
+                        {providerLabelKey ? t(providerLabelKey) : t('calendar.doctor')}
+                      </Label>
+                      <Input
+                        id="cal-doctor"
+                        value={form.preferred_doctor}
+                        onChange={(e) => setForm({ ...form, preferred_doctor: e.target.value })}
+                        placeholder={t('calendar.doctorPlaceholder')}
+                      />
+                    </div>
+                  )}
                   <div className="space-y-1.5">
                     <Label htmlFor="cal-date">{t('calendar.date')}</Label>
                     <Input

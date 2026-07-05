@@ -75,6 +75,9 @@ describe('language.service', () => {
   it('varsayılan personel etiketi nötr', () => {
     assert.equal(getAppointmentProviderLabel('tr'), 'İlgili kişi');
     assert.equal(getAppointmentProviderLabel('en'), 'Staff');
+    assert.equal(getAppointmentProviderLabel('tr', undefined, 'klinik'), 'Doktor');
+    assert.equal(getAppointmentProviderLabel('tr', undefined, 'universite'), 'İlgili kişi');
+    assert.equal(getAppointmentProviderLabel('tr', undefined, 'dis_hekimi'), 'Diş hekimi');
   });
 
   it('dil promptu yoksa varsayılan ayna-kural bloğu döner', async () => {

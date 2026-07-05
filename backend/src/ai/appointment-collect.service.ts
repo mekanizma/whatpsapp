@@ -3,6 +3,10 @@
  */
 
 import { ConversationLang, detectConversationLanguage, t, getAppointmentProviderLabel } from './language.service';
+import {
+  buildAppointmentProviderRule,
+  shouldAskAppointmentProvider,
+} from '../services/appointment-category.service';
 
 export interface HistoryMsg {
   sender_type: string;
@@ -183,17 +187,23 @@ export function parseCollectedFields(
 export function buildCollectedFieldsContext(
   history: HistoryMsg[],
   latestMessage: string,
-  lang?: ConversationLang
+  lang?: ConversationLang,
+  companyCategory?: string | null
 ): string {
   const conversationLang = lang ?? detectConversationLanguage(latestMessage, history);
   const c = parseCollectedFields(history, latestMessage);
-  const providerLabel = getAppointmentProviderLabel(conversationLang);
+  const askProvider = shouldAskAppointmentProvider(companyCategory);
+  const providerLabel = askProvider
+    ? getAppointmentProviderLabel(conversationLang, undefined, companyCategory)
+    : '';
   const lines = [
     `Ad soyad: ${c.customer_name || '(eksik)'}`,
     `Telefon: ${c.customer_phone || '(eksik)'}`,
     `Konu: ${c.title || '(eksik)'}`,
-    c.doctor_name ? `${providerLabel}: ${c.doctor_name}` : '',
+    askProvider && c.doctor_name ? `${providerLabel}: ${c.doctor_name}` : '',
   ].filter(Boolean);
+
+  const providerRule = buildAppointmentProviderRule(companyCategory);
 
   const missing = getMissingRequiredFields(c);
   let next = '';
@@ -203,7 +213,7 @@ export function buildCollectedFieldsContext(
     next = '\nTüm bilgiler tamam — tarih/saat öner veya onay bekle.';
   }
 
-  return `TOPLANAN RANDEVU BİLGİLERİ:\n${lines.join('\n')}${next}`;
+  return `${providerRule}\n\nTOPLANAN RANDEVU BİLGİLERİ:\n${lines.join('\n')}${next}`;
 }
 
 export function getMissingRequiredFields(

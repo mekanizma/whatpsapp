@@ -17,6 +17,10 @@ import { DEFAULT_APPOINTMENT_CONTEXT } from '../ai/appointment-company-context';
 import type { HistoryMsg } from '../ai/appointment-collect.service';
 import { isValidFullName, isValidProcedureTitle } from '../ai/appointment-collect.service';
 import { ConversationLang, t, getAppointmentProviderLabel } from '../ai/language.service';
+import {
+  shouldAskAppointmentProvider,
+  isGenericAppointmentTitle,
+} from './appointment-category.service';
 
 const APPOINTMENT_BLOCK_RE = /\[APPOINTMENT\]([\s\S]*?)\[\/APPOINTMENT\]/gi;
 const FALSE_SUCCESS_RE =
@@ -79,6 +83,44 @@ function buildNotes(action: ParsedAppointmentAction): string | null {
 
 function getDoctorName(action: ParsedAppointmentAction): string | null {
   return action.doctor_name?.trim() || action.preferred_doctor?.trim() || null;
+}
+
+export async function fetchCompanyCategory(companyId: string): Promise<string> {
+  const { data } = await adminClient
+    .from('companies')
+    .select('category')
+    .eq('id', companyId)
+    .maybeSingle();
+  return data?.category || 'diger';
+}
+
+function sanitizeAppointmentInput(
+  category: string,
+  input: AppointmentInput
+): AppointmentInput {
+  const askProvider = shouldAskAppointmentProvider(category);
+  let title = input.title?.trim() || '';
+  let notes = input.notes?.trim() || null;
+  let preferred_doctor = input.preferred_doctor?.trim() || null;
+
+  if (!askProvider) {
+    if (preferred_doctor && isGenericAppointmentTitle(title) && isValidProcedureTitle(preferred_doctor)) {
+      title = preferred_doctor;
+    }
+    preferred_doctor = null;
+  }
+
+  if (isGenericAppointmentTitle(title) && notes && isValidProcedureTitle(notes)) {
+    title = notes;
+    notes = null;
+  }
+
+  return {
+    ...input,
+    title: title || 'Randevu',
+    notes,
+    preferred_doctor,
+  };
 }
 
 export function validateAppointmentAction(
@@ -280,19 +322,22 @@ export async function createAppointment(
     throw new Error('Bu saat aralığında başka bir randevu var.');
   }
 
+  const category = await fetchCompanyCategory(companyId);
+  const sanitized = sanitizeAppointmentInput(category, input);
+
   const { data, error } = await adminClient
     .from('appointments')
     .insert({
       company_id: companyId,
-      customer_phone: normalizePhone(input.customer_phone),
-      customer_name: input.customer_name?.trim() || null,
-      title: input.title || 'Randevu',
-      notes: input.notes || null,
-      preferred_doctor: input.preferred_doctor?.trim() || null,
-      starts_at: input.starts_at,
-      ends_at: input.ends_at,
-      status: input.status || 'confirmed',
-      source: input.source || 'panel',
+      customer_phone: normalizePhone(sanitized.customer_phone),
+      customer_name: sanitized.customer_name?.trim() || null,
+      title: sanitized.title || 'Randevu',
+      notes: sanitized.notes || null,
+      preferred_doctor: sanitized.preferred_doctor?.trim() || null,
+      starts_at: sanitized.starts_at,
+      ends_at: sanitized.ends_at,
+      status: sanitized.status || 'confirmed',
+      source: sanitized.source || 'panel',
     })
     .select()
     .single();
@@ -345,6 +390,9 @@ export async function getAppointmentContextForAI(companyId: string): Promise<str
   until.setDate(until.getDate() + 14);
 
   const items = await listAppointments(companyId, now.toISOString(), until.toISOString());
+  const category = await fetchCompanyCategory(companyId);
+  const askProvider = shouldAskAppointmentProvider(category);
+  const providerLabel = getAppointmentProviderLabel('tr', undefined, category);
 
   if (items.length === 0) {
     return 'Önümüzdeki 14 günde kayıtlı randevu yok. Müsait saatleri bilgi bankası çalışma saatlerine göre öner.';
@@ -354,7 +402,8 @@ export async function getAppointmentContextForAI(companyId: string): Promise<str
     const start = new Date(a.starts_at);
     const end = new Date(a.ends_at);
     const who = a.customer_name || a.customer_phone;
-    const doctor = a.preferred_doctor ? ` | Doktor: ${a.preferred_doctor}` : '';
+    const doctor =
+      askProvider && a.preferred_doctor ? ` | ${providerLabel}: ${a.preferred_doctor}` : '';
     return `- ${formatSlot(start, end)}: ${who} — ${a.title}${doctor} [${a.status}]`;
   });
 
@@ -387,16 +436,19 @@ function formatPhoneDisplay(phone: string): string {
 /** Müşteriye gösterilecek randevu onay mesajı */
 export function buildAppointmentConfirmationMessage(
   appointment: Appointment,
-  lang: ConversationLang = 'tr'
+  lang: ConversationLang = 'tr',
+  companyCategory?: string | null
 ): string {
   const slot = formatSlotLocalized(appointment.starts_at, appointment.ends_at, lang);
-  const providerLabel = getAppointmentProviderLabel(lang);
-  const doctorLine = appointment.preferred_doctor
-    ? t(lang, 'appointment_confirmed_doctor', {
-        doctor: appointment.preferred_doctor,
-        provider_label: providerLabel,
-      })
-    : '';
+  const askProvider = shouldAskAppointmentProvider(companyCategory);
+  const providerLabel = getAppointmentProviderLabel(lang, undefined, companyCategory);
+  const doctorLine =
+    askProvider && appointment.preferred_doctor
+      ? t(lang, 'appointment_confirmed_doctor', {
+          doctor: appointment.preferred_doctor,
+          provider_label: providerLabel,
+        })
+      : '';
 
   return t(lang, 'appointment_confirmed', {
     slot,
@@ -528,19 +580,22 @@ export async function processAIAppointmentBooking(
   }
 
   try {
+    const category = await fetchCompanyCategory(companyId);
     const appointment = await createAppointment(companyId, {
       customer_phone: mergedAction.customer_phone || customerPhone,
       customer_name: mergedAction.customer_name!.trim(),
       title: mergedAction.title!.trim(),
       notes: buildNotes(mergedAction),
-      preferred_doctor: getDoctorName(mergedAction),
+      preferred_doctor: shouldAskAppointmentProvider(category)
+        ? getDoctorName(mergedAction)
+        : null,
       starts_at: new Date(mergedAction.starts_at).toISOString(),
       ends_at: new Date(mergedAction.ends_at).toISOString(),
       status: 'confirmed',
       source: 'ai',
     });
 
-    message = buildAppointmentConfirmationMessage(appointment, lang);
+    message = buildAppointmentConfirmationMessage(appointment, lang, category);
 
     console.log(`[Randevu] Oluşturuldu: ${appointment.id} | ${appointment.customer_name} | ${appointment.title}`);
     return { message, appointment };

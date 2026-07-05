@@ -13,6 +13,7 @@ import {
   finalizeCustomerFacingMessage,
   buildConflictMessageWithAlternatives,
   hasConflict,
+  fetchCompanyCategory,
 } from '../services/appointment.service';
 import { Appointment } from '../types';
 import {
@@ -161,6 +162,7 @@ async function persistAppointment(
   }
 
   try {
+    const category = await fetchCompanyCategory(companyId);
     const appointment = await createAppointment(companyId, {
       customer_phone: merged.customer_phone,
       customer_name: merged.customer_name,
@@ -174,7 +176,7 @@ async function persistAppointment(
     });
 
     return {
-      message: buildAppointmentConfirmationMessage(appointment, lang),
+      message: buildAppointmentConfirmationMessage(appointment, lang, category),
       appointment,
     };
   } catch (e) {
@@ -307,11 +309,12 @@ export async function tryStructuredAppointmentBooking(
 function wrapBookingReply(
   result: { message: string; appointment: Appointment | null },
   rawResponse: string,
-  lang: ConversationLang
+  lang: ConversationLang,
+  companyCategory?: string | null
 ): { message: string; appointment: Appointment | null } {
   if (result.appointment) {
     return {
-      message: buildAppointmentConfirmationMessage(result.appointment, lang),
+      message: buildAppointmentConfirmationMessage(result.appointment, lang, companyCategory),
       appointment: result.appointment,
     };
   }
@@ -335,13 +338,14 @@ export async function handleAppointmentBooking(
   ctx: AppointmentCompanyContext = DEFAULT_APPOINTMENT_CONTEXT
 ): Promise<{ message: string; appointment: Appointment | null }> {
   const conversationLang = lang ?? detectConversationLanguage(latestMessage, history);
+  const companyCategory = await fetchCompanyCategory(companyId);
   const confirmed =
     isAppointmentConfirmation(latestMessage, history) ||
     isAlternativeSlotSelection(history, latestMessage, ctx);
 
   if (confirmed) {
     const booking = await bookFromConfirmation(companyId, customerPhone, history, latestMessage, ctx);
-    if (booking) return wrapBookingReply(booking, rawResponse, conversationLang);
+    if (booking) return wrapBookingReply(booking, rawResponse, conversationLang, companyCategory);
   }
 
   const action = rawResponse.includes(APPOINTMENT_MARKER)
@@ -363,7 +367,7 @@ export async function handleAppointmentBooking(
     /randevu(nuz)?\s+.*(kayded|oluştur|olustur)/i.test(rawResponse);
 
   if (gate.blocked && isBookingAttempt) {
-    return wrapBookingReply({ message: gate.message!, appointment: null }, rawResponse, conversationLang);
+    return wrapBookingReply({ message: gate.message!, appointment: null }, rawResponse, conversationLang, companyCategory);
   }
 
   const fromMarker = await processAIAppointmentBooking(
@@ -378,7 +382,7 @@ export async function handleAppointmentBooking(
     confirmed,
     ctx
   );
-  if (fromMarker.appointment) return wrapBookingReply(fromMarker, rawResponse, conversationLang);
+  if (fromMarker.appointment) return wrapBookingReply(fromMarker, rawResponse, conversationLang, companyCategory);
 
   if (rawResponse.includes(APPOINTMENT_MARKER) || confirmed) {
     const structured = await tryStructuredAppointmentBooking(
@@ -388,13 +392,13 @@ export async function handleAppointmentBooking(
       latestMessage,
       ctx
     );
-    if (structured) return wrapBookingReply(structured, rawResponse, conversationLang);
+    if (structured) return wrapBookingReply(structured, rawResponse, conversationLang, companyCategory);
   }
 
   // Marker var ama onay yoksa teyit mesajı öncelikli
   if (fromMarker.message && rawResponse.includes(APPOINTMENT_MARKER) && !confirmed) {
-    return wrapBookingReply(fromMarker, rawResponse, conversationLang);
+    return wrapBookingReply(fromMarker, rawResponse, conversationLang, companyCategory);
   }
 
-  return wrapBookingReply(fromMarker, rawResponse, conversationLang);
+  return wrapBookingReply(fromMarker, rawResponse, conversationLang, companyCategory);
 }

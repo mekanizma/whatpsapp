@@ -221,7 +221,7 @@ export async function generateAIResponse(
     ? (() => {
         const collected = parseCollectedFields(history, trimmed);
         const slotHint = buildParsedSlotHint(history, trimmed, collected, appointmentCtx);
-        return buildCollectedFieldsContext(history, trimmed, conversationLang) + slotHint;
+        return buildCollectedFieldsContext(history, trimmed, conversationLang, company.category) + slotHint;
       })()
     : '';
 
