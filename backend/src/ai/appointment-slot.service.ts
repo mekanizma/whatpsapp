@@ -675,26 +675,14 @@ export function buildAppointmentConfirmationPrompt(
     }
   }
 
-  if (lang === 'tr') {
-    return [
-      'Randevu özeti:',
-      `- Tarih/Saat: ${slotLabel}${weekdayLine}`,
-      `- Ad Soyad: ${fields.customer_name || '—'}`,
-      `- Konu: ${fields.title || '—'}`,
-      `- Telefon: ${displayPhone}`,
-      '',
-      'Bu bilgileri onaylıyor musunuz?',
-    ].join('\n');
-  }
-
   return [
-    'Appointment summary:',
-    `- Date/Time: ${slotLabel}${weekdayLine}`,
-    `- Name: ${fields.customer_name || '—'}`,
-    `- Service: ${fields.title || '—'}`,
-    `- Phone: ${displayPhone}`,
+    t(lang, 'appointment_summary_title'),
+    t(lang, 'appointment_summary_datetime', { slot: `${slotLabel}${weekdayLine}` }),
+    t(lang, 'appointment_summary_name', { name: fields.customer_name || '—' }),
+    t(lang, 'appointment_summary_topic', { title: fields.title || '—' }),
+    t(lang, 'appointment_summary_phone', { phone: displayPhone }),
     '',
-    'Do you confirm these details?',
+    t(lang, 'appointment_summary_confirm'),
   ].join('\n');
 }
 

@@ -92,12 +92,8 @@ export function buildKnowledgeNoMatchHint(
     list = `${list.slice(0, 397)}…`;
   }
 
-  const instruction =
-    lang === 'tr'
-      ? 'Bu soru için bilgi bankasında eşleşen içerik bulunamadı. Bunu müşteriye belirt; bilgin yoksa canlı temsilciye aktarmayı teklif et.'
-      : 'No matching knowledge base content was found for this question. State that clearly; offer live agent handoff if you cannot answer.';
-
-  return list ? `${instruction}\n\nMevcut konular:\n${list}` : instruction;
+  const instruction = t(lang, 'kb_miss_instruction');
+  return list ? `${instruction}\n\n${t(lang, 'kb_topics_header')}\n${list}` : instruction;
 }
 
 /** KB metnini müşterinin diline çevir — içerik değiştirilmez, yalnızca dil */

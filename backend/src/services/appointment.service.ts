@@ -125,25 +125,26 @@ function sanitizeAppointmentInput(
 
 export function validateAppointmentAction(
   action: ParsedAppointmentAction,
-  _fallbackPhone = ''
+  _fallbackPhone = '',
+  lang: ConversationLang = 'tr'
 ): string | null {
   if (!action.customer_name?.trim() || !isValidFullName(action.customer_name)) {
-    return 'Randevu için ad ve soyadınızı yazar mısınız?';
+    return t(lang, 'appointment_name');
   }
   const phone = normalizePhone(action.customer_phone?.trim() || '');
   if (!phone || phone.length < 10) {
-    return 'Randevu için cep telefon numaranızı yazar mısınız?';
+    return t(lang, 'appointment_phone');
   }
   if (!action.title?.trim() || !isValidProcedureTitle(action.title)) {
-    return 'Hangi işlem için randevu almak istediğinizi yazar mısınız?';
+    return t(lang, 'appointment_title');
   }
   if (!action.starts_at || !action.ends_at) {
-    return 'Randevu tarih ve saati eksik.';
+    return t(lang, 'appointment_validation_datetime_missing');
   }
   const start = new Date(action.starts_at);
   const end = new Date(action.ends_at);
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
-    return 'Randevu saati geçersiz.';
+    return t(lang, 'appointment_validation_datetime_invalid');
   }
   return null;
 }
@@ -299,18 +300,14 @@ export async function buildConflictMessageWithAlternatives(
   const alternatives = await findAlternativeSlots(companyId, startsAt, endsAt, 3);
 
   if (alternatives.length === 0) {
-    return lang === 'tr'
-      ? `${requested} saatinde başka bir randevu var ve yakın zamanda müsait saat bulunamadı. Lütfen farklı bir gün veya saat yazın.`
-      : `There is already an appointment at ${requested} and no nearby slots are available. Please suggest another day or time.`;
+    return t(lang, 'appointment_conflict_no_alts', { requested });
   }
 
   const formatted = alternatives
     .map((s, i) => `${i + 1}) ${formatSlotLocalized(s.starts_at, s.ends_at, lang)}`)
     .join('\n');
 
-  return lang === 'tr'
-    ? `${requested} saatinde başka bir randevu var. Şu saatler müsait:\n${formatted}\nHangisini tercih edersiniz? Lütfen numarayı veya saati yazarak onaylayın.`
-    : `There is already an appointment at ${requested}. These times are available:\n${formatted}\nWhich would you prefer? Reply with the number or time to confirm.`;
+  return t(lang, 'appointment_conflict_alts', { requested, options: formatted });
 }
 
 export async function createAppointment(
@@ -497,7 +494,8 @@ export function parseAppointmentAction(text: string): ParsedAppointmentAction | 
 function fixFalseSuccessMessage(
   message: string,
   appointment: Appointment | null,
-  hadMarker: boolean
+  hadMarker: boolean,
+  lang: ConversationLang = 'tr'
 ): string {
   if (appointment) return message;
 
@@ -505,12 +503,12 @@ function fixFalseSuccessMessage(
   if (!claimsSuccess) return message;
 
   if (hadMarker) {
-    return 'Randevu kaydı tamamlanamadı. Lütfen ad soyad, cep telefonu ve işlem özetinizi tekrar paylaşır mısınız?';
+    return t(lang, 'appointment_booking_incomplete_retry');
   }
 
   return message.replace(
     FALSE_SUCCESS_RE,
-    'randevu bilgilerinizi aldım, kayıt için onayınızı bekliyorum'
+    t(lang, 'appointment_false_success_pending')
   );
 }
 
@@ -531,7 +529,7 @@ export async function processAIAppointmentBooking(
   let message = stripAppointmentMarkers(rawResponse);
 
   if (!action) {
-    message = fixFalseSuccessMessage(message, null, hadMarker);
+    message = fixFalseSuccessMessage(message, null, hadMarker, lang);
     if (hadMarker && !action) {
       console.error('[Randevu] Marker var ama JSON okunamadı');
     }
@@ -549,7 +547,7 @@ export async function processAIAppointmentBooking(
     doctor_name: actionWithSlot.doctor_name || actionWithSlot.preferred_doctor || collected?.doctor_name || undefined,
   };
 
-  const validationError = validateAppointmentAction(mergedAction, customerPhone);
+  const validationError = validateAppointmentAction(mergedAction, customerPhone, lang);
   if (validationError) {
     console.warn('[Randevu] Doğrulama hatası:', validationError);
     return { message: validationError, appointment: null };
@@ -557,10 +555,7 @@ export async function processAIAppointmentBooking(
 
   if (!userConfirmed) {
     const slotLabel = formatSlotLocalized(mergedAction.starts_at, mergedAction.ends_at, lang, ctx.timezone);
-    const confirmMsg =
-      lang === 'tr'
-        ? `Randevunuzu ${slotLabel} için kaydetmemi onaylıyor musunuz? Lütfen "evet" veya "onaylıyorum" yazın.`
-        : `Shall I book your appointment for ${slotLabel}? Please reply "yes" or "confirm".`;
+    const confirmMsg = t(lang, 'appointment_confirm_prompt', { slot: slotLabel });
     return { message: confirmMsg, appointment: null };
   }
 
@@ -612,7 +607,7 @@ export async function processAIAppointmentBooking(
       return { message: altMsg, appointment: null };
     }
     return {
-      message: `Randevu kaydedilemedi: ${errMsg}`,
+      message: t(lang, 'appointment_booking_failed', { error: errMsg }),
       appointment: null,
     };
   }

@@ -23,7 +23,7 @@ import {
   HistoryMsg,
 } from './appointment-collect.service';
 import { extractSlotForConfirmation, preferHistorySlot, extractNumberedAlternative, parseSlotFromText, validateSlotWorkingHours, buildWorkingHoursRejectionMessage } from './appointment-slot.service';
-import { ConversationLang, detectConversationLanguage } from './language.service';
+import { ConversationLang, detectConversationLanguage, t } from './language.service';
 import { hasDateTimeIntent } from './appointment-datetime-tokens';
 import {
   type AppointmentCompanyContext,
@@ -220,10 +220,7 @@ export async function bookFromConfirmation(
     !extractNumberedAlternative(history, latestMessage, { timezone: ctx.timezone })
   ) {
     return {
-      message:
-        lang === 'tr'
-          ? 'Randevuyu kaydetmeden önce özet bilgileri onaylamanız gerekiyor. Lütfen önce tarih/saat ve bilgilerinizi tamamlayın.'
-          : 'Please review the appointment summary before confirming.',
+      message: t(lang, 'appointment_incomplete_before_confirm'),
       appointment: null,
     };
   }
@@ -231,10 +228,7 @@ export async function bookFromConfirmation(
   const offered = extractSlotForConfirmation(history, latestMessage, { timezone: ctx.timezone });
   if (!offered) {
     return {
-      message:
-        lang === 'tr'
-          ? 'Randevu saatini anlayamadım. Lütfen tarih ve saati tekrar yazın (ör. "15 temmuz saat 14:00" veya "yarın saat 10").'
-          : 'I could not understand the appointment time. Please write the date and time again.',
+      message: t(lang, 'appointment_time_unclear'),
       appointment: null,
     };
   }
@@ -244,7 +238,7 @@ export async function bookFromConfirmation(
     ends_at: offered.ends_at,
   } as ParsedAppointmentAction);
 
-  const err = validateAppointmentAction(merged, customerPhone);
+  const err = validateAppointmentAction(merged, customerPhone, lang);
   if (err) return { message: err, appointment: null };
 
   const hours = validateSlotWorkingHours(
@@ -295,7 +289,7 @@ export async function tryStructuredAppointmentBooking(
 
   const merged = mergeCollectedWithAction(gate.collected, { ...extracted, ...slot });
 
-  const err = validateAppointmentAction(merged, customerPhone);
+  const err = validateAppointmentAction(merged, customerPhone, lang);
   if (err) return { message: err, appointment: null };
 
   try {

@@ -3,7 +3,7 @@
  */
 
 import { createChatCompletion } from './openai-client';
-import { detectConversationLanguage, type ConversationLang } from '../ai/language.service';
+import { detectConversationLanguage, t, type ConversationLang } from '../ai/language.service';
 import type { Department } from '../types';
 
 const PENDING_TTL_MS = 15 * 60_000;
@@ -54,21 +54,12 @@ export function buildDepartmentSelectionPrompt(
   lang: ConversationLang
 ): string {
   const lines = departments.map((d, i) => `${i + 1}. ${d.name}`);
-  if (lang === 'en') {
-    return [
-      'To connect you with the right team, please tell us which department your request is for:',
-      '',
-      ...lines,
-      '',
-      'Reply with the number or department name.',
-    ].join('\n');
-  }
   return [
-    'Sizi doğru ekibe yönlendirebilmemiz için lütfen talebinizin hangi departmanla ilgili olduğunu belirtin:',
+    t(lang, 'dept_selection_intro'),
     '',
     ...lines,
     '',
-    'Numara veya departman adıyla yanıt verebilirsiniz.',
+    t(lang, 'dept_selection_footer'),
   ].join('\n');
 }
 

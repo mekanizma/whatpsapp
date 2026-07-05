@@ -160,7 +160,38 @@ type MessageKey =
   | 'appointment_schedule_line'
   | 'appointment_schedule_break'
   | 'appointment_schedule_closed'
-  | 'appointment_no_open_days';
+  | 'appointment_no_open_days'
+  | 'dept_selection_intro'
+  | 'dept_selection_footer'
+  | 'dept_forwarded'
+  | 'photo_received'
+  | 'photo_process_failed'
+  | 'photo_transfer_subject'
+  | 'photo_transfer_subject_default'
+  | 'ai_unavailable'
+  | 'demo_welcome'
+  | 'demo_welcome_default'
+  | 'voice_message'
+  | 'appointment_validation_datetime_missing'
+  | 'appointment_validation_datetime_invalid'
+  | 'appointment_incomplete_before_confirm'
+  | 'appointment_time_unclear'
+  | 'appointment_booking_failed'
+  | 'appointment_confirm_prompt'
+  | 'appointment_conflict_no_alts'
+  | 'appointment_conflict_alts'
+  | 'appointment_booking_incomplete_retry'
+  | 'appointment_false_success_pending'
+  | 'appointment_summary_title'
+  | 'appointment_summary_datetime'
+  | 'appointment_summary_name'
+  | 'appointment_summary_topic'
+  | 'appointment_summary_phone'
+  | 'appointment_summary_confirm'
+  | 'kb_miss_instruction'
+  | 'kb_topics_header'
+  | 'history_photo'
+  | 'history_photo_caption';
 
 const MESSAGES: Record<MessageKey, Record<TemplateLang, string>> = {
   greeting: {
@@ -462,6 +493,285 @@ const MESSAGES: Record<MessageKey, Record<TemplateLang, string>> = {
     ru: 'Рабочие дни не настроены',
     fr: 'Aucun jour ouvré configuré',
     es: 'No hay días laborables configurados',
+  },
+  dept_selection_intro: {
+    tr: 'Sizi doğru ekibe yönlendirebilmemiz için lütfen talebinizin hangi departmanla ilgili olduğunu belirtin:',
+    en: 'To connect you with the right team, please tell us which department your request is for:',
+    de: 'Damit wir Sie an das richtige Team weiterleiten, nennen Sie bitte die zuständige Abteilung:',
+    ar: 'لتحويلك إلى الفريق المناسب، يرجى تحديد القسم المعني بطلبك:',
+    ru: 'Чтобы направить вас в нужный отдел, укажите, к какому отделу относится ваш запрос:',
+    fr: 'Pour vous orienter vers la bonne équipe, indiquez le service concerné :',
+    es: 'Para conectarle con el equipo adecuado, indique el departamento de su solicitud:',
+  },
+  dept_selection_footer: {
+    tr: 'Numara veya departman adıyla yanıt verebilirsiniz.',
+    en: 'Reply with the number or department name.',
+    de: 'Antworten Sie mit der Nummer oder dem Abteilungsnamen.',
+    ar: 'يمكنك الرد برقم أو اسم القسم.',
+    ru: 'Ответьте номером или названием отдела.',
+    fr: 'Répondez avec le numéro ou le nom du service.',
+    es: 'Responda con el número o el nombre del departamento.',
+  },
+  dept_forwarded: {
+    tr: 'Talebiniz {department} ekibine iletildi. Bir temsilcimiz kısa süre içinde size yardımcı olacak.',
+    en: 'Your request has been forwarded to the {department} team. A representative will assist you shortly.',
+    de: 'Ihre Anfrage wurde an das Team {department} weitergeleitet. Ein Mitarbeiter wird sich in Kürze melden.',
+    ar: 'تم تحويل طلبك إلى فريق {department}. سيتواصل معك ممثل قريباً.',
+    ru: 'Ваш запрос передан команде {department}. Представитель скоро свяжется с вами.',
+    fr: 'Votre demande a été transmise à l’équipe {department}. Un conseiller vous contactera sous peu.',
+    es: 'Su solicitud se envió al equipo {department}. Un representante le atenderá en breve.',
+  },
+  photo_received: {
+    tr: 'Fotoğrafınızı aldık. Bir temsilcimiz kısa süre içinde size yardımcı olacak.',
+    en: 'Your photo has been received. A representative will assist you shortly.',
+    de: 'Wir haben Ihr Foto erhalten. Ein Mitarbeiter wird sich in Kürze melden.',
+    ar: 'استلمنا صورتك. سيتواصل معك ممثل قريباً.',
+    ru: 'Мы получили ваше фото. Представитель скоро свяжется с вами.',
+    fr: 'Nous avons bien reçu votre photo. Un conseiller vous contactera sous peu.',
+    es: 'Hemos recibido su foto. Un representante le atenderá en breve.',
+  },
+  photo_process_failed: {
+    tr: 'Üzgünüz, fotoğrafınız işlenemedi. Lütfen tekrar deneyin.',
+    en: 'Sorry, we could not process your photo. Please try again.',
+    de: 'Entschuldigung, Ihr Foto konnte nicht verarbeitet werden. Bitte versuchen Sie es erneut.',
+    ar: 'عذراً، تعذر معالجة صورتك. يرجى المحاولة مرة أخرى.',
+    ru: 'Извините, не удалось обработать фото. Попробуйте ещё раз.',
+    fr: 'Désolé, votre photo n’a pas pu être traitée. Veuillez réessayer.',
+    es: 'Lo sentimos, no pudimos procesar su foto. Inténtelo de nuevo.',
+  },
+  photo_transfer_subject: {
+    tr: 'Müşteri fotoğraf gönderdi: {caption}',
+    en: 'Customer sent a photo: {caption}',
+    de: 'Kunde hat ein Foto gesendet: {caption}',
+    ar: 'أرسل العميل صورة: {caption}',
+    ru: 'Клиент отправил фото: {caption}',
+    fr: 'Le client a envoyé une photo : {caption}',
+    es: 'El cliente envió una foto: {caption}',
+  },
+  photo_transfer_subject_default: {
+    tr: 'Müşteri fotoğraf gönderdi',
+    en: 'Customer sent a photo',
+    de: 'Kunde hat ein Foto gesendet',
+    ar: 'أرسل العميل صورة',
+    ru: 'Клиент отправил фото',
+    fr: 'Le client a envoyé une photo',
+    es: 'El cliente envió una foto',
+  },
+  ai_unavailable: {
+    tr: 'Üzgünüz, şu an yanıt veremiyoruz. Lütfen kısa süre sonra tekrar deneyin.',
+    en: 'Sorry, we cannot reply right now. Please try again shortly.',
+    de: 'Entschuldigung, wir können gerade nicht antworten. Bitte versuchen Sie es später erneut.',
+    ar: 'عذراً، لا يمكننا الرد الآن. يرجى المحاولة بعد قليل.',
+    ru: 'Извините, сейчас мы не можем ответить. Попробуйте чуть позже.',
+    fr: 'Désolé, nous ne pouvons pas répondre pour le moment. Réessayez bientôt.',
+    es: 'Lo sentimos, no podemos responder ahora. Inténtelo de nuevo en breve.',
+  },
+  demo_welcome: {
+    tr: 'Merhaba! Mesajınızı aldık. {company} olarak yardımcı olmaktan mutluluk duyarız.',
+    en: 'Hello! We received your message. We are happy to help you as {company}.',
+    de: 'Hallo! Wir haben Ihre Nachricht erhalten. Gerne helfen wir Ihnen als {company}.',
+    ar: 'مرحباً! استلمنا رسالتك. يسعدنا مساعدتك كـ {company}.',
+    ru: 'Здравствуйте! Мы получили ваше сообщение. Рады помочь вам — {company}.',
+    fr: 'Bonjour ! Nous avons reçu votre message. Nous sommes heureux de vous aider — {company}.',
+    es: '¡Hola! Recibimos su mensaje. Estamos encantados de ayudarle como {company}.',
+  },
+  demo_welcome_default: {
+    tr: 'Merhaba! Mesajınızı aldık. Size nasıl yardımcı olabiliriz?',
+    en: 'Hello! We received your message. How can we help you?',
+    de: 'Hallo! Wir haben Ihre Nachricht erhalten. Wie können wir Ihnen helfen?',
+    ar: 'مرحباً! استلمنا رسالتك. كيف يمكننا مساعدتك؟',
+    ru: 'Здравствуйте! Мы получили ваше сообщение. Чем можем помочь?',
+    fr: 'Bonjour ! Nous avons reçu votre message. Comment pouvons-nous vous aider ?',
+    es: '¡Hola! Recibimos su mensaje. ¿Cómo podemos ayudarle?',
+  },
+  voice_message: {
+    tr: 'Ben bir AI destek asistanıyım, sesli mesajlarınıza cevap veremiyorum. Lütfen talebinizi yazılı olarak iletin.',
+    en: 'I am an AI support assistant and cannot respond to voice messages. Please send your request in writing.',
+    de: 'Ich bin ein KI-Support-Assistent und kann auf Sprachnachrichten nicht antworten. Bitte senden Sie Ihre Anfrage schriftlich.',
+    ar: 'أنا مساعد دعم بالذكاء الاصطناعي ولا أستطيع الرد على الرسائل الصوتية. يرجى إرسال طلبك كتابةً.',
+    ru: 'Я AI-ассистент поддержки и не могу отвечать на голосовые сообщения. Пожалуйста, отправьте ваш запрос в письменном виде.',
+    fr: 'Je suis un assistant de support IA et je ne peux pas répondre aux messages vocaux. Veuillez envoyer votre demande par écrit.',
+    es: 'Soy un asistente de soporte con IA y no puedo responder a mensajes de voz. Por favor, envíe su solicitud por escrito.',
+  },
+  appointment_validation_datetime_missing: {
+    tr: 'Randevu tarih ve saati eksik.',
+    en: 'Appointment date and time are missing.',
+    de: 'Termindatum und -uhrzeit fehlen.',
+    ar: 'تاريخ ووقت الموعد مفقودان.',
+    ru: 'Не указаны дата и время записи.',
+    fr: 'La date et l’heure du rendez-vous manquent.',
+    es: 'Faltan la fecha y la hora de la cita.',
+  },
+  appointment_validation_datetime_invalid: {
+    tr: 'Randevu saati geçersiz.',
+    en: 'The appointment time is invalid.',
+    de: 'Die Terminzeit ist ungültig.',
+    ar: 'وقت الموعد غير صالح.',
+    ru: 'Недопустимое время записи.',
+    fr: 'L’horaire du rendez-vous est invalide.',
+    es: 'La hora de la cita no es válida.',
+  },
+  appointment_incomplete_before_confirm: {
+    tr: 'Randevuyu kaydetmeden önce özet bilgileri onaylamanız gerekiyor. Lütfen önce tarih/saat ve bilgilerinizi tamamlayın.',
+    en: 'Please review the appointment summary before confirming. Complete the date/time and your details first.',
+    de: 'Bitte bestätigen Sie zuerst die Terminübersicht. Vervollständigen Sie Datum/Uhrzeit und Ihre Angaben.',
+    ar: 'يرجى مراجعة ملخص الموعد قبل التأكيد. أكمل التاريخ/الوقت وبياناتك أولاً.',
+    ru: 'Перед подтверждением проверьте сводку записи. Сначала укажите дату/время и данные.',
+    fr: 'Veuillez valider le récapitulatif avant confirmation. Complétez d’abord la date/heure et vos informations.',
+    es: 'Revise el resumen de la cita antes de confirmar. Complete primero fecha/hora y sus datos.',
+  },
+  appointment_time_unclear: {
+    tr: 'Randevu saatini anlayamadım. Lütfen tarih ve saati tekrar yazın (ör. "15 temmuz saat 14:00" veya "yarın saat 10").',
+    en: 'I could not understand the appointment time. Please write the date and time again (e.g. "July 15 at 2 PM" or "tomorrow at 10").',
+    de: 'Ich habe die Terminzeit nicht verstanden. Bitte nennen Sie Datum und Uhrzeit erneut.',
+    ar: 'لم أفهم وقت الموعد. يرجى كتابة التاريخ والوقت مرة أخرى.',
+    ru: 'Я не понял время записи. Укажите дату и время ещё раз.',
+    fr: 'Je n’ai pas compris l’horaire. Indiquez à nouveau la date et l’heure.',
+    es: 'No entendí la hora de la cita. Escriba de nuevo la fecha y la hora.',
+  },
+  appointment_booking_failed: {
+    tr: 'Randevu kaydedilemedi: {error}',
+    en: 'Could not save the appointment: {error}',
+    de: 'Termin konnte nicht gespeichert werden: {error}',
+    ar: 'تعذر حفظ الموعد: {error}',
+    ru: 'Не удалось сохранить запись: {error}',
+    fr: 'Impossible d’enregistrer le rendez-vous : {error}',
+    es: 'No se pudo guardar la cita: {error}',
+  },
+  appointment_confirm_prompt: {
+    tr: 'Randevunuzu {slot} için kaydetmemi onaylıyor musunuz? Lütfen "evet" veya "onaylıyorum" yazın.',
+    en: 'Shall I book your appointment for {slot}? Please reply "yes" or "confirm".',
+    de: 'Soll ich Ihren Termin für {slot} buchen? Antworten Sie mit „ja“ oder „bestätigen“.',
+    ar: 'هل أحجز موعدك في {slot}؟ يرجى الرد بـ "نعم" أو "أؤكد".',
+    ru: 'Записать вас на {slot}? Ответьте «да» или «подтверждаю».',
+    fr: 'Dois-je réserver votre rendez-vous pour {slot} ? Répondez « oui » ou « je confirme ».',
+    es: '¿Reservo su cita para {slot}? Responda «sí» o «confirmo».',
+  },
+  appointment_conflict_no_alts: {
+    tr: '{requested} saatinde başka bir randevu var ve yakın zamanda müsait saat bulunamadı. Lütfen farklı bir gün veya saat yazın.',
+    en: 'There is already an appointment at {requested} and no nearby slots are available. Please suggest another day or time.',
+    de: 'Um {requested} ist bereits ein Termin und es gibt keine nahen freien Zeiten. Bitte nennen Sie einen anderen Tag oder eine andere Uhrzeit.',
+    ar: 'يوجد موعد بالفعل في {requested} ولا توجد أوقات قريبة متاحة. يرجى اقتراح يوم أو وقت آخر.',
+    ru: 'На {requested} уже есть запись, ближайших слотов нет. Предложите другой день или время.',
+    fr: 'Un rendez-vous existe déjà à {requested} et aucun créneau proche n’est libre. Proposez un autre jour ou horaire.',
+    es: 'Ya hay una cita a las {requested} y no hay huecos cercanos. Proponga otro día u hora.',
+  },
+  appointment_conflict_alts: {
+    tr: '{requested} saatinde başka bir randevu var. Şu saatler müsait:\n{options}\nHangisini tercih edersiniz? Lütfen numarayı veya saati yazarak onaylayın.',
+    en: 'There is already an appointment at {requested}. These times are available:\n{options}\nWhich would you prefer? Reply with the number or time to confirm.',
+    de: 'Um {requested} ist bereits ein Termin. Diese Zeiten sind frei:\n{options}\nWelche bevorzugen Sie? Antworten Sie mit Nummer oder Uhrzeit.',
+    ar: 'يوجد موعد بالفعل في {requested}. الأوقات المتاحة:\n{options}\nأيها تفضل؟ رد برقم أو وقت للتأكيد.',
+    ru: 'На {requested} уже есть запись. Свободно:\n{options}\nЧто выберете? Ответьте номером или временем.',
+    fr: 'Un rendez-vous existe déjà à {requested}. Créneaux disponibles :\n{options}\nLequel préférez-vous ? Répondez avec le numéro ou l’heure.',
+    es: 'Ya hay una cita a las {requested}. Horarios disponibles:\n{options}\n¿Cuál prefiere? Responda con el número u hora.',
+  },
+  appointment_booking_incomplete_retry: {
+    tr: 'Randevu kaydı tamamlanamadı. Lütfen ad soyad, cep telefonu ve işlem özetinizi tekrar paylaşır mısınız?',
+    en: 'The appointment could not be completed. Please share your full name, mobile number, and service summary again.',
+    de: 'Der Termin konnte nicht abgeschlossen werden. Bitte senden Sie Name, Mobilnummer und Anliegen erneut.',
+    ar: 'تعذر إكمال الموعد. يرجى إرسال الاسم الكامل ورقم الجوال وملخص الخدمة مرة أخرى.',
+    ru: 'Запись не завершена. Укажите снова имя, телефон и суть обращения.',
+    fr: 'Le rendez-vous n’a pas pu être enregistré. Renvoyez nom, mobile et résumé du service.',
+    es: 'No se pudo completar la cita. Envíe de nuevo nombre, móvil y resumen del servicio.',
+  },
+  appointment_false_success_pending: {
+    tr: 'randevu bilgilerinizi aldım, kayıt için onayınızı bekliyorum',
+    en: 'I have your appointment details and am waiting for your confirmation to book',
+    de: 'Ich habe Ihre Termindaten und warte auf Ihre Bestätigung',
+    ar: 'استلمت بيانات موعدك وأنتظر تأكيدك للحجز',
+    ru: 'Данные для записи получены, жду вашего подтверждения',
+    fr: 'J’ai vos informations de rendez-vous et attends votre confirmation',
+    es: 'Tengo los datos de su cita y espero su confirmación',
+  },
+  appointment_summary_title: {
+    tr: 'Randevu özeti:',
+    en: 'Appointment summary:',
+    de: 'Terminübersicht:',
+    ar: 'ملخص الموعد:',
+    ru: 'Сводка записи:',
+    fr: 'Récapitulatif du rendez-vous :',
+    es: 'Resumen de la cita:',
+  },
+  appointment_summary_datetime: {
+    tr: '- Tarih/Saat: {slot}',
+    en: '- Date/Time: {slot}',
+    de: '- Datum/Uhrzeit: {slot}',
+    ar: '- التاريخ/الوقت: {slot}',
+    ru: '- Дата/время: {slot}',
+    fr: '- Date/Heure : {slot}',
+    es: '- Fecha/Hora: {slot}',
+  },
+  appointment_summary_name: {
+    tr: '- Ad Soyad: {name}',
+    en: '- Name: {name}',
+    de: '- Name: {name}',
+    ar: '- الاسم: {name}',
+    ru: '- Имя: {name}',
+    fr: '- Nom : {name}',
+    es: '- Nombre: {name}',
+  },
+  appointment_summary_topic: {
+    tr: '- Konu: {title}',
+    en: '- Service: {title}',
+    de: '- Anliegen: {title}',
+    ar: '- الموضوع: {title}',
+    ru: '- Тема: {title}',
+    fr: '- Sujet : {title}',
+    es: '- Tema: {title}',
+  },
+  appointment_summary_phone: {
+    tr: '- Telefon: {phone}',
+    en: '- Phone: {phone}',
+    de: '- Telefon: {phone}',
+    ar: '- الهاتف: {phone}',
+    ru: '- Телефон: {phone}',
+    fr: '- Téléphone : {phone}',
+    es: '- Teléfono: {phone}',
+  },
+  appointment_summary_confirm: {
+    tr: 'Bu bilgileri onaylıyor musunuz?',
+    en: 'Do you confirm these details?',
+    de: 'Bestätigen Sie diese Angaben?',
+    ar: 'هل تؤكد هذه البيانات؟',
+    ru: 'Подтверждаете эти данные?',
+    fr: 'Confirmez-vous ces informations ?',
+    es: '¿Confirma estos datos?',
+  },
+  kb_miss_instruction: {
+    tr: 'Bu soru için bilgi bankasında eşleşen içerik bulunamadı. Bunu müşteriye belirt; bilgin yoksa canlı temsilciye aktarmayı teklif et.',
+    en: 'No matching knowledge base content was found for this question. State that clearly; offer live agent handoff if you cannot answer.',
+    de: 'Kein passender Wissensdatenbank-Inhalt gefunden. Teilen Sie das mit; bieten Sie Live-Support an, wenn nötig.',
+    ar: 'لم يُعثر على محتوى مطابق في قاعدة المعرفة. أوضح ذلك للعميل واعرض التحويل إلى ممثل إذا لزم.',
+    ru: 'В базе знаний нет подходящего ответа. Сообщите об этом клиенту; предложите перевод к оператору.',
+    fr: 'Aucun contenu correspondant dans la base de connaissances. Indiquez-le clairement et proposez un conseiller.',
+    es: 'No hay contenido coincidente en la base de conocimientos. Indíquelo y ofrezca un agente en vivo si hace falta.',
+  },
+  kb_topics_header: {
+    tr: 'Mevcut konular:',
+    en: 'Available topics:',
+    de: 'Verfügbare Themen:',
+    ar: 'المواضيع المتاحة:',
+    ru: 'Доступные темы:',
+    fr: 'Sujets disponibles :',
+    es: 'Temas disponibles:',
+  },
+  history_photo: {
+    tr: '[Fotoğraf]',
+    en: '[Photo]',
+    de: '[Foto]',
+    ar: '[صورة]',
+    ru: '[Фото]',
+    fr: '[Photo]',
+    es: '[Foto]',
+  },
+  history_photo_caption: {
+    tr: '[Fotoğraf] {caption}',
+    en: '[Photo] {caption}',
+    de: '[Foto] {caption}',
+    ar: '[صورة] {caption}',
+    ru: '[Фото] {caption}',
+    fr: '[Photo] {caption}',
+    es: '[Foto] {caption}',
   },
 };
 

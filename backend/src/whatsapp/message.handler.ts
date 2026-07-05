@@ -23,7 +23,7 @@ import {
   matchDepartmentFromReply,
   buildDepartmentSelectionPrompt,
 } from '../ai/department-routing.service';
-import { detectConversationLanguage, type ConversationLang } from '../ai/language.service';
+import { detectConversationLanguage, t, type ConversationLang } from '../ai/language.service';
 import { uploadMessageMedia } from '../services/message-media.service';
 import crypto from 'crypto';
 
@@ -225,12 +225,12 @@ export interface InboundImagePayload {
   caption?: string;
 }
 
-function buildImageTransferSubject(caption?: string): string {
+function buildImageTransferSubject(caption?: string, lang: ConversationLang = 'tr'): string {
   const trimmed = caption?.trim() || '';
   if (trimmed) {
-    return `Müşteri fotoğraf gönderdi: ${trimmed.slice(0, 60)}`;
+    return t(lang, 'photo_transfer_subject', { caption: trimmed.slice(0, 60) });
   }
-  return 'Müşteri fotoğraf gönderdi';
+  return t(lang, 'photo_transfer_subject_default');
 }
 
 /** Gelen resim mesajı — canlı desteğe aktar, departman seçimi sor */
@@ -246,9 +246,8 @@ export async function processInboundImage(
   const caption = image.caption?.trim() || '';
 
   if (config.demoMode) {
-    return caption
-      ? 'Fotoğrafınızı aldık. Bir temsilcimiz kısa süre içinde size yardımcı olacak.'
-      : 'Fotoğrafınızı aldık. Bir temsilcimiz kısa süre içinde size yardımcı olacak.';
+    const lang = detectConversationLanguage(caption);
+    return t(lang, 'photo_received');
   }
 
   return withCustomerLock(`${companyId}:${phone}`, async () => {
@@ -272,7 +271,7 @@ export async function processInboundImage(
       mediaFilename = uploaded.filename;
     } catch (err) {
       console.error('[WhatsApp] Resim yükleme hatası:', err instanceof Error ? err.message : err);
-      return 'Üzgünüz, fotoğrafınız işlenemedi. Lütfen tekrar deneyin.';
+      return t(detectConversationLanguage(caption), 'photo_process_failed');
     }
 
     const { error: insertError } = await adminClient.from('messages').insert({
@@ -334,10 +333,7 @@ export async function processInboundImage(
         markTransferReply(companyId, phone);
 
         const lang = detectConversationLanguage(caption);
-        const confirmMsg =
-          lang === 'en'
-            ? `Your request has been forwarded to the ${matched.name} team. A representative will assist you shortly.`
-            : `Talebiniz ${matched.name} ekibine iletildi. Bir temsilcimiz kısa süre içinde size yardımcı olacak.`;
+        const confirmMsg = t(lang, 'dept_forwarded', { department: matched.name });
 
         await adminClient.from('messages').insert({
           company_id: companyId,
@@ -366,7 +362,7 @@ export async function processInboundImage(
       return retryPrompt;
     }
 
-    const subject = buildImageTransferSubject(caption);
+    const subject = buildImageTransferSubject(caption, detectConversationLanguage(caption));
     const transferResult = await handleTransferWithDepartment(
       companyId,
       phone,
@@ -380,10 +376,7 @@ export async function processInboundImage(
     let replyMessage = transferResult.reply;
     if (!replyMessage && transferResult.ticketCreated) {
       const lang = detectConversationLanguage(caption);
-      replyMessage =
-        lang === 'en'
-          ? 'Your photo has been received. A representative will assist you shortly.'
-          : 'Fotoğrafınız alındı. Bir temsilcimiz kısa süre içinde size yardımcı olacak.';
+      replyMessage = t(lang, 'photo_received');
     }
 
     if (!replyMessage) return '';
@@ -425,19 +418,8 @@ export async function processInboundImage(
   });
 }
 
-const VOICE_MESSAGE_REPLIES: Record<ConversationLang, string> = {
-  tr: 'Ben bir AI destek asistanıyım, sesli mesajlarınıza cevap veremiyorum. Lütfen talebinizi yazılı olarak iletin.',
-  en: 'I am an AI support assistant and cannot respond to voice messages. Please send your request in writing.',
-  de: 'Ich bin ein KI-Support-Assistent und kann auf Sprachnachrichten nicht antworten. Bitte senden Sie Ihre Anfrage schriftlich.',
-  ar: 'أنا مساعد دعم بالذكاء الاصطناعي ولا أستطيع الرد على الرسائل الصوتية. يرجى إرسال طلبك كتابةً.',
-  ru: 'Я AI-ассистент поддержки и не могу отвечать на голосовые сообщения. Пожалуйста, отправьте ваш запрос в письменном виде.',
-  fr: 'Je suis un assistant de support IA et je ne peux pas répondre aux messages vocaux. Veuillez envoyer votre demande par écrit.',
-  es: 'Soy un asistente de soporte con IA y no puedo responder a mensajes de voz. Por favor, envíe su solicitud por escrito.',
-  other: 'I am an AI support assistant and cannot respond to voice messages. Please send your request in writing.',
-};
-
 function buildVoiceMessageReply(lang: ConversationLang): string {
-  return VOICE_MESSAGE_REPLIES[lang] || VOICE_MESSAGE_REPLIES.tr;
+  return t(lang, 'voice_message');
 }
 
 /** Gelen sesli mesaj — kaydetme, yazılı talep iste */
@@ -449,7 +431,8 @@ export async function processInboundVoiceMessage(
   const phone = resolveCustomerPhone(customerPhone);
 
   if (config.demoMode) {
-    return buildVoiceMessageReply('tr');
+    const history = await fetchRecentHistory(companyId, phone);
+    return buildVoiceMessageReply(detectConversationLanguage('', history));
   }
 
   return withCustomerLock(`${companyId}:${phone}`, async () => {
@@ -479,6 +462,7 @@ export async function processInboundMessage(
   const phone = resolveCustomerPhone(customerPhone);
 
   if (config.demoMode) {
+    const lang = detectConversationLanguage(trimmed);
     const { data: company } = await adminClient
       .from('companies')
       .select('company_name')
@@ -486,9 +470,9 @@ export async function processInboundMessage(
       .single();
     const name = company?.company_name?.trim();
     if (name) {
-      return `Merhaba! Mesajınızı aldık. ${name} olarak yardımcı olmaktan mutluluk duyarız.`;
+      return t(lang, 'demo_welcome', { company: name });
     }
-    return 'Merhaba! Mesajınızı aldık. Size nasıl yardımcı olabiliriz?';
+    return t(lang, 'demo_welcome_default');
   }
 
   return withCustomerLock(`${companyId}:${phone}`, async () => {
@@ -559,10 +543,7 @@ export async function processInboundMessage(
         markTransferReply(companyId, phone);
 
         const lang = detectConversationLanguage(trimmed);
-        const confirmMsg =
-          lang === 'en'
-            ? `Your request has been forwarded to the ${matched.name} team. A representative will assist you shortly.`
-            : `Talebiniz ${matched.name} ekibine iletildi. Bir temsilcimiz kısa süre içinde size yardımcı olacak.`;
+        const confirmMsg = t(lang, 'dept_forwarded', { department: matched.name });
 
         await adminClient.from('messages').insert({
           company_id: companyId,
@@ -597,7 +578,7 @@ export async function processInboundMessage(
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);
       console.error('[WhatsApp] AI hatası:', detail);
-      return 'Üzgünüz, şu an yanıt veremiyoruz. Lütfen kısa süre sonra tekrar deneyin.';
+      return t(detectConversationLanguage(trimmed), 'ai_unavailable');
     }
 
     let replyMessage = aiResponse.message;
