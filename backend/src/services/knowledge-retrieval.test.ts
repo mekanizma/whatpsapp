@@ -8,8 +8,10 @@ import {
   collectFulfilledVariantResults,
   allVariantRetrievalsFailed,
   mergeRetrievalChunksByMax,
+  retrieveKnowledgeContext,
+  knowledgeRetrievalDeps,
 } from './knowledge-retrieval.service';
-import type { RetrievedKnowledgeChunk } from '../types';
+import type { KnowledgeItem, RetrievedKnowledgeChunk } from '../types';
 
 const UCRETLER_CHUNK: RetrievedKnowledgeChunk = {
   id: 'chunk-ucretler',
@@ -337,5 +339,54 @@ describe('knowledge-retrieval', () => {
       ]),
       false
     );
+  });
+
+  it('retrieveKnowledgeContext uses lexical fallback when embedding model mismatches', async () => {
+    const origCount = knowledgeRetrievalDeps.countReadyDocuments;
+    const origReady = knowledgeRetrievalDeps.isCompanyVectorIndexReady;
+    const origExpand = knowledgeRetrievalDeps.expandQueryForRetrieval;
+    const origEmbeddings = knowledgeRetrievalDeps.createEmbeddings;
+    let embeddingsCalled = false;
+
+    knowledgeRetrievalDeps.countReadyDocuments = async () => 2;
+    knowledgeRetrievalDeps.isCompanyVectorIndexReady = async () => false;
+    knowledgeRetrievalDeps.expandQueryForRetrieval = async () => ({
+      variants: ['ücret bilgisi'],
+      intentVariant: 'ücret fiyat',
+      isBroad: false,
+    });
+    knowledgeRetrievalDeps.createEmbeddings = async () => {
+      embeddingsCalled = true;
+      return [];
+    };
+
+    const fallbackItems: KnowledgeItem[] = [
+      {
+        id: 'kb-1',
+        company_id: 'company-mismatch',
+        title: 'Ücretler',
+        content: 'Dolgu: 2000 TL',
+        category: 'general',
+        is_active: true,
+      },
+    ];
+
+    try {
+      const result = await retrieveKnowledgeContext(
+        'company-mismatch',
+        'fiyat ne kadar',
+        fallbackItems
+      );
+
+      assert.equal(result.usedLexicalFallback, true);
+      assert.equal(result.usedRag, false);
+      assert.equal(embeddingsCalled, false);
+      assert.match(result.context, /2000 TL/);
+    } finally {
+      knowledgeRetrievalDeps.countReadyDocuments = origCount;
+      knowledgeRetrievalDeps.isCompanyVectorIndexReady = origReady;
+      knowledgeRetrievalDeps.expandQueryForRetrieval = origExpand;
+      knowledgeRetrievalDeps.createEmbeddings = origEmbeddings;
+    }
   });
 });

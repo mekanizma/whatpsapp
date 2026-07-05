@@ -237,8 +237,8 @@ describe('ai-cache.service', () => {
     assert.ok(await getCachedResponse('tenant-b', message));
   });
 
-  it('rewrite cache key includes REWRITE_CACHE_VERSION (default 5)', () => {
-    assert.equal(config.ai.rewriteCacheVersion, '5');
+  it('rewrite cache key includes REWRITE_CACHE_VERSION (default 6)', () => {
+    assert.equal(config.ai.rewriteCacheVersion, '6');
     const companyId = 'tenant-a';
     const message = 'üniversite nerede';
     setCachedQueryRewrite(companyId, message, {

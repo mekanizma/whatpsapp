@@ -18,7 +18,8 @@
     "db:test": "tsx src/scripts/test-supabase.ts",
     "db:apply-invoice": "tsx src/scripts/apply-invoice-migration.ts",
     "prompts:reset": "tsx src/scripts/reset-prompts.ts",
-    "prompts:cleanup": "tsx src/scripts/cleanup-prompts.ts"
+    "prompts:cleanup": "tsx src/scripts/cleanup-prompts.ts",
+    "reindex:embeddings": "tsx src/scripts/reindex-embeddings.ts"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",

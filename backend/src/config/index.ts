@@ -98,7 +98,7 @@ export const config = {
   },
 
   rag: {
-    embeddingModel: process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small',
+    embeddingModel: process.env.EMBEDDING_MODEL || 'text-embedding-3-large',
     embeddingDimensions: parseInt(process.env.OPENAI_EMBEDDING_DIMENSIONS || '1536', 10),
     chunkSize: parseInt(process.env.RAG_CHUNK_SIZE || '1200', 10),
     chunkOverlap: parseInt(process.env.RAG_CHUNK_OVERLAP || '150', 10),
@@ -125,7 +125,7 @@ export const config = {
     /** Bumped on deploy to invalidate all cached AI responses (memory + DB) */
     cacheVersion: process.env.CACHE_VERSION || '2',
     /** Bumped when query-rewrite / intent-variant logic changes */
-    rewriteCacheVersion: process.env.REWRITE_CACHE_VERSION || '5',
+    rewriteCacheVersion: process.env.REWRITE_CACHE_VERSION || '6',
     /** Max age for persistent cache rows — enforced at read time */
     cacheMaxAgeMs:
       (parseInt(process.env.AI_CACHE_TTL_HOURS || '168', 10) || 168) * 60 * 60 * 1000,

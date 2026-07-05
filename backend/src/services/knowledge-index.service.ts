@@ -38,7 +38,12 @@ async function setIndexStatus(
         index_status: status,
         ...(extra?.chunk_count !== undefined ? { chunk_count: extra.chunk_count } : {}),
         ...(extra?.index_error !== undefined ? { index_error: extra.index_error } : {}),
-        ...(status === 'ready' ? { indexed_at: new Date().toISOString() } : {}),
+        ...(status === 'ready'
+          ? {
+              indexed_at: new Date().toISOString(),
+              embedding_model: config.rag.embeddingModel,
+            }
+          : {}),
       })
       .eq('knowledge_base_id', knowledgeBaseId)
       .eq('company_id', companyId),

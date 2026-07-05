@@ -5,7 +5,7 @@
 import { config } from '../config';
 import { adminClient } from '../database/supabase';
 import { createEmbeddings as createEmbeddingsImpl } from './embedding.service';
-import { expandQueryForRetrieval } from './query-expansion.service';
+import { expandQueryForRetrieval as expandQueryForRetrievalImpl } from './query-expansion.service';
 import {
   buildKnowledgeContextForAI,
   filterRelevantKnowledge,
@@ -15,6 +15,9 @@ import type { KnowledgeItem, RetrievedKnowledgeChunk } from '../types';
 /** Test / override hooks for embedding + RPC (see webhookDeps pattern) */
 export const knowledgeRetrievalDeps = {
   createEmbeddings: createEmbeddingsImpl,
+  countReadyDocuments: countReadyDocumentsImpl,
+  isCompanyVectorIndexReady: isCompanyVectorIndexReadyImpl,
+  expandQueryForRetrieval: expandQueryForRetrievalImpl,
   matchKnowledgeChunksRpc: (
     companyId: string,
     queryText: string,
@@ -182,7 +185,7 @@ function buildLexicalFallbackResult(
   };
 }
 
-async function countReadyDocuments(companyId: string): Promise<number> {
+async function countReadyDocumentsImpl(companyId: string): Promise<number> {
   const { count } = await adminClient
     .from('knowledge_documents')
     .select('id', { count: 'exact', head: true })
@@ -190,6 +193,24 @@ async function countReadyDocuments(companyId: string): Promise<number> {
     .eq('index_status', 'ready');
 
   return count ?? 0;
+}
+
+/** True when every ready document was embedded with the current config model */
+async function isCompanyVectorIndexReadyImpl(companyId: string): Promise<boolean> {
+  const { data, error } = await adminClient
+    .from('knowledge_documents')
+    .select('embedding_model')
+    .eq('company_id', companyId)
+    .eq('index_status', 'ready');
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!data?.length) return false;
+
+  const currentModel = config.rag.embeddingModel;
+  return data.every((row) => row.embedding_model === currentModel);
 }
 
 async function queryKnowledgeChunksRaw(
@@ -273,7 +294,7 @@ export async function retrieveKnowledgeContext(
     };
   }
 
-  const readyCount = await countReadyDocuments(companyId);
+  const readyCount = await knowledgeRetrievalDeps.countReadyDocuments(companyId);
   if (!readyCount) {
     return {
       context: '',
@@ -285,7 +306,16 @@ export async function retrieveKnowledgeContext(
     };
   }
 
-  const rewrite = await expandQueryForRetrieval(companyId, trimmed);
+  const vectorIndexReady = await knowledgeRetrievalDeps.isCompanyVectorIndexReady(companyId);
+  const rewrite = await knowledgeRetrievalDeps.expandQueryForRetrieval(companyId, trimmed);
+
+  if (!vectorIndexReady) {
+    console.warn(
+      `[RAG] Company ${companyId} has ready docs with stale/mixed embedding model — lexical fallback`
+    );
+    return buildLexicalFallbackResult(fallbackItems, trimmed, rewrite.isBroad);
+  }
+
   const texts = buildRetrievalTexts(trimmed, rewrite.variants, rewrite.intentVariant);
 
   try {
