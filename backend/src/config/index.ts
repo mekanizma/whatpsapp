@@ -139,6 +139,9 @@ export const config = {
     baseUrl: `https://graph.facebook.com/${process.env.WHATSAPP_API_VERSION || 'v21.0'}`,
     embeddedSignupUrl: process.env.WHATSAPP_EMBEDDED_SIGNUP_URL || '',
     metaAppId: process.env.META_APP_ID || '',
+    /** Meta onaylı utility şablon — personel talep bildirimi */
+    staffTicketTemplateName: process.env.WHATSAPP_STAFF_TICKET_TEMPLATE || 'staff_new_ticket',
+    staffTicketTemplateLang: process.env.WHATSAPP_STAFF_TICKET_TEMPLATE_LANG || 'tr',
   },
 
   cors: {

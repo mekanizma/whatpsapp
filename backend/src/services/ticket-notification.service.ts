@@ -5,7 +5,7 @@
 import { adminClient } from '../database/supabase';
 import { resolveDepartmentForSubject } from '../ai/department-routing.service';
 import { listActiveDepartments } from './department-access.service';
-import { sendMessageToCustomer } from '../whatsapp/whatsapp.service';
+import { sendStaffTicketNotification } from '../whatsapp/whatsapp.service';
 import { normalizePhoneNumber } from '../whatsapp/message.handler';
 
 export interface NotificationUserRow {
@@ -204,13 +204,25 @@ export async function notifyTicketRecipients(
   }
 
   const message = buildTicketNotificationMessage(ticket, departmentName);
+  const customerLabel = ticket.customer_name
+    ? `${ticket.customer_name} (${ticket.customer_phone})`
+    : ticket.customer_phone;
   const sentPhones = new Set<string>();
 
   for (const phone of phonesToNotify) {
     if (sentPhones.has(phone)) continue;
     sentPhones.add(phone);
 
-    const result = await sendMessageToCustomer(companyId, phone, message);
+    const result = await sendStaffTicketNotification(
+      companyId,
+      phone,
+      {
+        customerLabel,
+        subject: ticket.subject,
+        departmentName: departmentName || '-',
+      },
+      message
+    );
     if (result.success) {
       console.log(`[TicketNotify] Bildirim gönderildi → ${phone}`);
     } else {

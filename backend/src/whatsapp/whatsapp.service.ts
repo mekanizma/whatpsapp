@@ -70,6 +70,16 @@ export async function sendWhatsAppMessage(
   to: string,
   message: string
 ): Promise<boolean> {
+  const result = await sendWhatsAppTextMessage(phoneNumberId, accessToken, to, message);
+  return result.success;
+}
+
+async function sendWhatsAppTextMessage(
+  phoneNumberId: string,
+  accessToken: string,
+  to: string,
+  message: string
+): Promise<{ success: boolean; error?: string }> {
   try {
     const response = await fetch(
       `${config.whatsapp.baseUrl}/${phoneNumberId}/messages`,
@@ -87,9 +97,73 @@ export async function sendWhatsAppMessage(
         }),
       }
     );
-    return response.ok;
-  } catch {
-    return false;
+    if (response.ok) return { success: true };
+    const errBody = await response.text().catch(() => '');
+    return { success: false, error: errBody || 'Mesaj gönderilemedi' };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Mesaj gönderilemedi',
+    };
+  }
+}
+
+export function sanitizeWhatsAppTemplateParam(value: string, maxLen = 900): string {
+  const cleaned = value.replace(/[\n\r\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+  return cleaned.slice(0, maxLen) || '-';
+}
+
+export interface StaffTicketTemplateParams {
+  customerLabel: string;
+  subject: string;
+  departmentName: string;
+}
+
+export async function sendWhatsAppTemplate(
+  phoneNumberId: string,
+  accessToken: string,
+  to: string,
+  templateName: string,
+  languageCode: string,
+  bodyParameters: string[]
+): Promise<{ success: boolean; error?: string }> {
+  try {
+    const response = await fetch(
+      `${config.whatsapp.baseUrl}/${phoneNumberId}/messages`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          to,
+          type: 'template',
+          template: {
+            name: templateName,
+            language: { code: languageCode },
+            components: [
+              {
+                type: 'body',
+                parameters: bodyParameters.map((text) => ({
+                  type: 'text',
+                  text: sanitizeWhatsAppTemplateParam(text),
+                })),
+              },
+            ],
+          },
+        }),
+      }
+    );
+    if (response.ok) return { success: true };
+    const errBody = await response.text().catch(() => '');
+    return { success: false, error: errBody || 'Şablon gönderilemedi' };
+  } catch (err) {
+    return {
+      success: false,
+      error: err instanceof Error ? err.message : 'Şablon gönderilemedi',
+    };
   }
 }
 
@@ -297,13 +371,12 @@ async function sendViaAccount(
   }
 
   if (account.access_token && account.business_account_id) {
-    const sent = await sendWhatsAppMessage(
+    return sendWhatsAppTextMessage(
       account.business_account_id,
       account.access_token,
       toPhone,
       message
     );
-    return sent ? { success: true } : { success: false, error: 'Mesaj gönderilemedi' };
   }
 
   return { success: false, error: 'WhatsApp bağlantısı yapılandırılmamış' };
@@ -372,6 +445,52 @@ export async function sendMessageToCustomer(
     return { success: false, error: 'Aktif WhatsApp hattı bulunamadı' };
   }
   return sendViaAccount(account, toPhone, message);
+}
+
+async function sendStaffTicketViaAccount(
+  account: WhatsAppAccount,
+  toPhone: string,
+  params: StaffTicketTemplateParams,
+  plainTextFallback: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!account.is_active) {
+    return { success: false, error: 'Bu WhatsApp hattı pasif durumda' };
+  }
+
+  if (account.business_account_id?.startsWith('baileys:')) {
+    const baileysStatus = await getBaileysConnectionStatus(account.id);
+    if (baileysStatus.connected) {
+      return sendBaileysMessage(account.id, account.company_id, toPhone, plainTextFallback);
+    }
+    return { success: false, error: 'WhatsApp bağlantısı aktif değil. QR ile yeniden bağlanın.' };
+  }
+
+  if (account.access_token && account.business_account_id) {
+    return sendWhatsAppTemplate(
+      account.business_account_id,
+      account.access_token,
+      toPhone,
+      config.whatsapp.staffTicketTemplateName,
+      config.whatsapp.staffTicketTemplateLang,
+      [params.customerLabel, params.subject, params.departmentName]
+    );
+  }
+
+  return { success: false, error: 'WhatsApp bağlantısı yapılandırılmamış' };
+}
+
+/** Personel talep bildirimi — Meta Cloud API'de utility şablon, Baileys'te düz metin */
+export async function sendStaffTicketNotification(
+  companyId: string,
+  toPhone: string,
+  params: StaffTicketTemplateParams,
+  plainTextFallback: string
+): Promise<{ success: boolean; error?: string }> {
+  const account = await resolveOutboundAccount(companyId, toPhone);
+  if (!account) {
+    return { success: false, error: 'Aktif WhatsApp hattı bulunamadı' };
+  }
+  return sendStaffTicketViaAccount(account, toPhone, params, plainTextFallback);
 }
 
 export async function sendImageToCustomer(
