@@ -57,6 +57,8 @@ router.get('/admin/addons', authenticate, requireRole('super_admin'), asyncHandl
 router.put('/admin/addons/:id', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.updateAiConversationAddonAdmin));
 router.get('/admin/users', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.getAdminUsers));
 router.patch('/admin/users/:profileId/password', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.resetUserPassword));
+router.get('/admin/super-admins', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.getSuperAdmins));
+router.post('/admin/super-admins', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.createSuperAdmin));
 
 // Company
 router.get('/companies/:id', authenticate, companyCtrl.getCompany);

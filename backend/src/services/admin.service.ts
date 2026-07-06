@@ -368,4 +368,93 @@ export async function getActivityLogs(page = 1, limit = 30, companyId?: string) 
   };
 }
 
+export interface SuperAdminUser {
+  id: string;
+  user_id: string;
+  full_name: string;
+  email: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export async function listSuperAdmins(): Promise<SuperAdminUser[]> {
+  const { data, error } = await adminClient
+    .from('profiles')
+    .select('id, user_id, full_name, is_active, created_at')
+    .eq('role', 'super_admin')
+    .order('created_at', { ascending: true });
+
+  if (error) throw new Error(error.message);
+
+  const enriched = await enrichProfilesWithEmail(data || []);
+  return enriched.map((row) => ({
+    id: row.id,
+    user_id: row.user_id!,
+    full_name: row.full_name,
+    email: row.email,
+    is_active: row.is_active,
+    created_at: row.created_at,
+  }));
+}
+
+export async function createSuperAdminUser(
+  email: string,
+  password: string,
+  fullName: string
+): Promise<{ userId: string; profileId: string }> {
+  const trimmedEmail = email.trim().toLowerCase();
+  const trimmedName = fullName.trim();
+
+  if (!trimmedEmail || !trimmedName) {
+    throw new Error('E-posta ve ad soyad zorunludur');
+  }
+  if (!password || password.length < 6) {
+    throw new Error('Şifre en az 6 karakter olmalıdır');
+  }
+
+  const { data: existing } = await adminClient.auth.admin.listUsers();
+  const found = existing?.users?.find((u) => u.email?.toLowerCase() === trimmedEmail);
+
+  if (found) {
+    const { data: profile } = await adminClient
+      .from('profiles')
+      .select('id, role')
+      .eq('user_id', found.id)
+      .maybeSingle();
+
+    if (profile?.role === 'super_admin') {
+      throw new Error('Bu e-posta ile zaten bir platform yöneticisi kayıtlı');
+    }
+    throw new Error('Bu e-posta adresi başka bir hesapta kullanılıyor');
+  }
+
+  const { data, error } = await adminClient.auth.admin.createUser({
+    email: trimmedEmail,
+    password,
+    email_confirm: true,
+    user_metadata: { full_name: trimmedName, role: 'super_admin' },
+  });
+  if (error) throw new Error(error.message);
+
+  const userId = data.user.id;
+
+  const { data: profile, error: profileError } = await adminClient
+    .from('profiles')
+    .upsert(
+      {
+        user_id: userId,
+        full_name: trimmedName,
+        role: 'super_admin',
+        company_id: null,
+        is_active: true,
+      },
+      { onConflict: 'user_id' }
+    )
+    .select('id')
+    .single();
+
+  if (profileError) throw new Error(profileError.message);
+  return { userId, profileId: profile.id };
+}
+
 export { PLAN_LIMITS };

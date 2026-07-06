@@ -15,8 +15,10 @@ import {
   updateCompanyAdmin,
   updateSubscriptionAdmin,
   createCompanyAdminUser,
+  createSuperAdminUser,
   getPlatformAIUsage,
   getActivityLogs,
+  listSuperAdmins,
   PLAN_LIMITS,
 } from '../services/admin.service';
 import {
@@ -586,6 +588,62 @@ export async function getAdminUsers(req: AuthRequest, res: Response): Promise<vo
   try {
     const result = await listPlatformUsers(page, limit, search);
     res.json({ success: true, data: result.users, pagination: result.pagination });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'Hata' });
+  }
+}
+
+export async function getSuperAdmins(req: AuthRequest, res: Response): Promise<void> {
+  if (isDemoSession(req)) {
+    res.json({
+      success: true,
+      data: [
+        {
+          id: 'demo-admin',
+          user_id: 'demo-admin-user',
+          full_name: 'Demo Admin',
+          email: 'admin@demo.com',
+          is_active: true,
+          created_at: new Date().toISOString(),
+        },
+      ],
+    });
+    return;
+  }
+
+  try {
+    const data = await listSuperAdmins();
+    res.json({ success: true, data });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'Hata' });
+  }
+}
+
+export async function createSuperAdmin(req: AuthRequest, res: Response): Promise<void> {
+  const { email, password, full_name } = req.body;
+
+  if (!email?.trim() || !password || !full_name?.trim()) {
+    res.status(400).json({ success: false, error: 'E-posta, şifre ve ad soyad zorunludur' });
+    return;
+  }
+
+  if (isDemoSession(req)) {
+    res.status(400).json({ success: false, error: 'Demo modda yeni yönetici oluşturulamaz' });
+    return;
+  }
+
+  try {
+    const result = await createSuperAdminUser(email, password, full_name);
+
+    await logActivity({
+      userId: req.userId,
+      action: 'super_admin_created',
+      entityType: 'profile',
+      entityId: result.profileId,
+      metadata: { email: email.trim().toLowerCase() },
+    });
+
+    res.status(201).json({ success: true, data: result });
   } catch (err) {
     res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'Hata' });
   }

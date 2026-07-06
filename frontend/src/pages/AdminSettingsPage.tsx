@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Settings, ExternalLink, Database, Cpu, Shield, Smartphone, FileText, Lock } from 'lucide-react';
+import { Settings, ExternalLink, Database, Cpu, Shield, Smartphone, FileText, Lock, UserPlus } from 'lucide-react';
 import { api } from '@/services/api';
 import { useAuthStore } from '@/store/authStore';
 import { isDemoMode } from '@/lib/env';
@@ -22,7 +22,7 @@ import {
   Badge,
   Textarea,
 } from '@/components/ui';
-import type { InvoiceIssuerSettings, PlatformSettings } from '@/types';
+import type { InvoiceIssuerSettings, PlatformSettings, SuperAdminUser } from '@/types';
 
 const emptyInvoiceForm: InvoiceIssuerSettings = {
   name: '',
@@ -47,6 +47,11 @@ export function AdminSettingsPage() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [passwordMsg, setPasswordMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [adminFullName, setAdminFullName] = useState('');
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [adminConfirmPassword, setAdminConfirmPassword] = useState('');
+  const [adminFeedback, setAdminFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   const { data: settings, isLoading } = useQuery({
     queryKey: ['admin-settings'],
@@ -56,6 +61,11 @@ export function AdminSettingsPage() {
   const { data: invoiceSettings, isLoading: invoiceLoading } = useQuery({
     queryKey: ['admin-invoice-settings'],
     queryFn: () => api.get<InvoiceIssuerSettings>('/admin/invoice-settings'),
+  });
+
+  const { data: superAdmins = [], isLoading: superAdminsLoading } = useQuery({
+    queryKey: ['admin-super-admins'],
+    queryFn: () => api.get<SuperAdminUser[]>('/admin/super-admins'),
   });
 
   useEffect(() => {
@@ -98,6 +108,29 @@ export function AdminSettingsPage() {
     },
   });
 
+  const createAdminMutation = useMutation({
+    mutationFn: () =>
+      api.post('/admin/super-admins', {
+        full_name: adminFullName.trim(),
+        email: adminEmail.trim(),
+        password: adminPassword,
+      }),
+    onSuccess: () => {
+      setAdminFeedback({ type: 'success', text: t('admin.settings.adminCreated') });
+      setAdminFullName('');
+      setAdminEmail('');
+      setAdminPassword('');
+      setAdminConfirmPassword('');
+      queryClient.invalidateQueries({ queryKey: ['admin-super-admins'] });
+    },
+    onError: (err) => {
+      setAdminFeedback({
+        type: 'error',
+        text: err instanceof Error ? err.message : t('admin.settings.adminCreateError'),
+      });
+    },
+  });
+
   const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordMsg(null);
@@ -112,7 +145,26 @@ export function AdminSettingsPage() {
     passwordMutation.mutate();
   };
 
-  if (isLoading || invoiceLoading) {
+  const handleCreateAdminSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAdminFeedback(null);
+
+    if (!adminFullName.trim() || !adminEmail.trim()) {
+      setAdminFeedback({ type: 'error', text: t('admin.settings.adminFieldsRequired') });
+      return;
+    }
+    if (adminPassword.length < 6) {
+      setAdminFeedback({ type: 'error', text: t('settings.passwordMin') });
+      return;
+    }
+    if (adminPassword !== adminConfirmPassword) {
+      setAdminFeedback({ type: 'error', text: t('settings.passwordMismatch') });
+      return;
+    }
+    createAdminMutation.mutate();
+  };
+
+  if (isLoading || invoiceLoading || superAdminsLoading) {
     return <div className="flex justify-center p-12"><Spinner className="h-8 w-8" /></div>;
   }
 
@@ -246,6 +298,113 @@ export function AdminSettingsPage() {
               )}
               <Button type="submit" disabled={passwordMutation.isPending} className="w-full sm:w-auto min-h-[44px]">
                 {passwordMutation.isPending ? t('settings.updating') : t('settings.updatePassword')}
+              </Button>
+            </form>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+            <UserPlus className="h-5 w-5" />
+            {t('admin.settings.createAdminTitle')}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <p className="text-sm text-slate-600">{t('admin.settings.createAdminDesc')}</p>
+
+          {superAdmins.length > 0 && (
+            <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                {t('admin.settings.existingAdmins')}
+              </p>
+              <ul className="mt-3 space-y-2">
+                {superAdmins.map((admin) => (
+                  <li
+                    key={admin.id}
+                    className="flex flex-col gap-1 rounded-lg bg-white px-3 py-2.5 ring-1 ring-slate-100 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-slate-900">{admin.full_name}</p>
+                      <p className="truncate text-sm text-slate-500">{admin.email || '—'}</p>
+                    </div>
+                    <Badge variant={admin.is_active ? 'success' : 'warning'} className="w-fit shrink-0">
+                      {admin.is_active ? t('admin.settings.adminActive') : t('admin.settings.adminInactive')}
+                    </Badge>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {isDemoMode ? (
+            <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800 ring-1 ring-amber-200/60">
+              {t('admin.settings.adminDemo')}
+            </p>
+          ) : (
+            <form onSubmit={handleCreateAdminSubmit} className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="new-admin-name">{t('auth.fullName')}</Label>
+                  <Input
+                    id="new-admin-name"
+                    value={adminFullName}
+                    onChange={(e) => setAdminFullName(e.target.value)}
+                    autoComplete="name"
+                    className="h-11"
+                    required
+                  />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="new-admin-email">{t('common.email')}</Label>
+                  <Input
+                    id="new-admin-email"
+                    type="email"
+                    value={adminEmail}
+                    onChange={(e) => setAdminEmail(e.target.value)}
+                    autoComplete="email"
+                    className="h-11"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="new-admin-password">{t('common.password')}</Label>
+                  <Input
+                    id="new-admin-password"
+                    type="password"
+                    value={adminPassword}
+                    onChange={(e) => setAdminPassword(e.target.value)}
+                    autoComplete="new-password"
+                    minLength={6}
+                    className="h-11"
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="new-admin-confirm-password">{t('settings.confirmPassword')}</Label>
+                  <Input
+                    id="new-admin-confirm-password"
+                    type="password"
+                    value={adminConfirmPassword}
+                    onChange={(e) => setAdminConfirmPassword(e.target.value)}
+                    autoComplete="new-password"
+                    className="h-11"
+                    required
+                  />
+                </div>
+              </div>
+              {adminFeedback && (
+                <p className={`text-sm ${adminFeedback.type === 'success' ? 'text-emerald-600' : 'text-red-600'}`}>
+                  {adminFeedback.text}
+                </p>
+              )}
+              <Button
+                type="submit"
+                disabled={createAdminMutation.isPending}
+                className="w-full min-h-[44px] sm:w-auto"
+              >
+                {createAdminMutation.isPending ? <Spinner /> : t('admin.settings.createAdmin')}
               </Button>
             </form>
           )}

@@ -107,6 +107,15 @@ export interface PlatformUser {
   email: string | null;
 }
 
+export interface SuperAdminUser {
+  id: string;
+  user_id: string;
+  full_name: string;
+  email: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
 export interface AIUsageRow {
   company_id: string;
   company_name: string;

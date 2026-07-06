@@ -72,7 +72,7 @@ export async function listPlatformUsers(
 
   let query = adminClient
     .from('profiles')
-    .select('id, user_id, full_name, role, is_active, created_at, company_id, companies(company_name)', {
+    .select('id, user_id, full_name, role, is_active, created_at, company_id', {
       count: 'exact',
     })
     .order('created_at', { ascending: false });
@@ -84,9 +84,25 @@ export async function listPlatformUsers(
   const { data, error, count } = await query.range(offset, offset + limit - 1);
   if (error) throw new Error(error.message);
 
+  const rows = data || [];
+  const companyIds = [...new Set(rows.map((row) => row.company_id).filter(Boolean))] as string[];
+
+  let companyMap = new Map<string, string>();
+  if (companyIds.length > 0) {
+    const { data: companies, error: companyError } = await adminClient
+      .from('companies')
+      .select('id, company_name')
+      .in('id', companyIds);
+
+    if (companyError) throw new Error(companyError.message);
+
+    for (const company of companies || []) {
+      companyMap.set(company.id, company.company_name);
+    }
+  }
+
   const users = await Promise.all(
-    (data || []).map(async (row) => {
-      const company = Array.isArray(row.companies) ? row.companies[0] : row.companies;
+    rows.map(async (row) => {
       const email = row.user_id ? await getAuthEmail(row.user_id) : null;
 
       return {
@@ -96,7 +112,7 @@ export async function listPlatformUsers(
         is_active: row.is_active,
         created_at: row.created_at,
         company_id: row.company_id,
-        company_name: company?.company_name || null,
+        company_name: row.company_id ? companyMap.get(row.company_id) || null : null,
         email,
       };
     })

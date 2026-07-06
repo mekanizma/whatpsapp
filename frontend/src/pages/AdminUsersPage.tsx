@@ -28,7 +28,7 @@ export function AdminUsersPage() {
   const [feedback, setFeedback] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const queryClient = useQueryClient();
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ['admin-users', search],
     queryFn: () => api.getWithMeta<PlatformUser[]>(`/admin/users?search=${encodeURIComponent(search)}`),
   });
@@ -79,6 +79,15 @@ export function AdminUsersPage() {
 
       {isLoading ? (
         <div className="flex justify-center p-12"><Spinner className="h-8 w-8" /></div>
+      ) : isError ? (
+        <Card>
+          <CardContent className="flex flex-col items-center gap-2 py-12 text-center">
+            <Users className="h-10 w-10 text-rose-300" />
+            <p className="text-sm text-rose-600">
+              {error instanceof Error ? error.message : t('admin.users.loadError')}
+            </p>
+          </CardContent>
+        </Card>
       ) : users.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center gap-2 py-12 text-center">

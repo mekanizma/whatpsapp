@@ -767,6 +767,7 @@
       "description": "Platformdaki tüm panel kullanıcılarını görüntüleyin ve şifrelerini yönetin",
       "search": "Ad, e-posta veya şirket ara...",
       "noUsers": "Kullanıcı bulunamadı",
+      "loadError": "Kullanıcılar yüklenemedi",
       "resetPassword": "Şifre Değiştir",
       "resetPasswordDesc": "Kullanıcı için yeni bir giriş şifresi belirleyin. Mevcut şifre gerekmez.",
       "savePassword": "Şifreyi Kaydet",
@@ -907,7 +908,17 @@
       "footerNotePlaceholder": "PDF altında görünecek ek açıklama",
       "saveInvoice": "Fatura Bilgilerini Kaydet",
       "invoiceSaved": "Fatura bilgileri kaydedildi. Yeni PDF'ler güncel bilgilerle oluşturulur.",
-      "invoiceSaveError": "Fatura bilgileri kaydedilemedi"
+      "invoiceSaveError": "Fatura bilgileri kaydedilemedi",
+      "createAdminTitle": "Platform Yöneticileri",
+      "createAdminDesc": "Yeni super admin hesabı oluşturun. Oluşturulan kullanıcı admin paneline tam erişimle giriş yapabilir.",
+      "existingAdmins": "Mevcut yöneticiler",
+      "adminActive": "Aktif",
+      "adminInactive": "Pasif",
+      "createAdmin": "Yönetici Oluştur",
+      "adminCreated": "Yeni platform yöneticisi başarıyla oluşturuldu.",
+      "adminCreateError": "Yönetici oluşturulamadı",
+      "adminFieldsRequired": "Ad soyad ve e-posta zorunludur",
+      "adminDemo": "Demo modda yeni yönetici oluşturulamaz."
     },
     "prompts": {
       "title": "AI Promptları",

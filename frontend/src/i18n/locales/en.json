@@ -767,6 +767,7 @@
       "description": "View all panel users on the platform and manage their passwords",
       "search": "Search by name, email or company...",
       "noUsers": "No users found",
+      "loadError": "Could not load users",
       "resetPassword": "Change Password",
       "resetPasswordDesc": "Set a new login password for this user. Current password is not required.",
       "savePassword": "Save Password",
@@ -907,7 +908,17 @@
       "footerNotePlaceholder": "Extra text shown at the bottom of the PDF",
       "saveInvoice": "Save Invoice Details",
       "invoiceSaved": "Invoice details saved. New PDFs will use the updated information.",
-      "invoiceSaveError": "Could not save invoice details"
+      "invoiceSaveError": "Could not save invoice details",
+      "createAdminTitle": "Platform Administrators",
+      "createAdminDesc": "Create a new super admin account. The user will have full access to the admin panel.",
+      "existingAdmins": "Current administrators",
+      "adminActive": "Active",
+      "adminInactive": "Inactive",
+      "createAdmin": "Create Administrator",
+      "adminCreated": "New platform administrator created successfully.",
+      "adminCreateError": "Could not create administrator",
+      "adminFieldsRequired": "Full name and email are required",
+      "adminDemo": "Creating new administrators is disabled in demo mode."
     },
     "prompts": {
       "title": "AI Prompts",
