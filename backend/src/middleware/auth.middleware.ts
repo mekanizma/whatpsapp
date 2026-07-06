@@ -17,6 +17,35 @@ export interface AuthRequest extends Request {
   role?: UserRole;
   staffRole?: StaffSubRole | null;
   accessToken?: string;
+  isImpersonating?: boolean;
+}
+
+const IMPERSONATE_HEADER = 'x-impersonate-company';
+
+async function applyImpersonation(req: AuthRequest): Promise<void> {
+  if (req.role !== 'super_admin') return;
+
+  const raw = req.headers[IMPERSONATE_HEADER];
+  const companyId = typeof raw === 'string' ? raw.trim() : null;
+  if (!companyId) return;
+
+  if (config.demoMode && isDemoSession(req)) {
+    req.companyId = demoProfilesByToken[req.accessToken!]?.company_id ?? companyId;
+    req.isImpersonating = true;
+    return;
+  }
+
+  const { data: company, error } = await adminClient
+    .from('companies')
+    .select('id')
+    .eq('id', companyId)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!company) throw new Error('Geçersiz şirket kimliği');
+
+  req.companyId = companyId;
+  req.isImpersonating = true;
 }
 
 /** Yalnızca demo token ile giriş yapılmış oturumlar (gerçek Supabase JWT değil) */
@@ -46,6 +75,10 @@ export async function authenticate(
       req.role = profile.role;
       req.staffRole = profile.staff_role ?? null;
       req.accessToken = token;
+      await applyImpersonation(req);
+      if (req.isImpersonating && req.role === 'super_admin') {
+        req.companyId = demoProfilesByToken[DEMO_TOKENS.company].company_id;
+      }
       next();
       return;
     }
@@ -83,19 +116,35 @@ export async function authenticate(
       req.staffRole = await getStaffSubRoleForProfile(profile.id);
     }
 
+    await applyImpersonation(req);
+
     next();
-  } catch {
-    res.status(500).json({ success: false, error: 'Kimlik doğrulama hatası' });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Kimlik doğrulama hatası';
+    const status = message.includes('Geçersiz şirket') ? 403 : 500;
+    res.status(status).json({ success: false, error: message });
   }
 }
 
 export function requireRole(...roles: UserRole[]) {
   return (req: AuthRequest, res: Response, next: NextFunction): void => {
-    if (!req.role || !roles.includes(req.role)) {
+    if (!req.role) {
       res.status(403).json({ success: false, error: 'Bu işlem için yetkiniz yok' });
       return;
     }
-    next();
+    if (roles.includes(req.role)) {
+      next();
+      return;
+    }
+    if (
+      req.role === 'super_admin' &&
+      req.isImpersonating &&
+      (roles.includes('company_admin') || roles.includes('staff'))
+    ) {
+      next();
+      return;
+    }
+    res.status(403).json({ success: false, error: 'Bu işlem için yetkiniz yok' });
   };
 }
 
@@ -109,7 +158,7 @@ export function requireKnowledgeAccess(req: AuthRequest, res: Response, next: Ne
 }
 
 export function requireCompany(req: AuthRequest, res: Response, next: NextFunction): void {
-  if (req.role === 'super_admin') {
+  if (req.role === 'super_admin' && !req.isImpersonating) {
     next();
     return;
   }

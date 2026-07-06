@@ -9,6 +9,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/authStore';
 import { AuthQuerySync } from '@/components/AuthQuerySync';
 import { RoleRoute } from '@/components/RoleRoute';
+import { PanelRoute } from '@/components/PanelRoute';
 import { AdminOnlyRoute, PanelIndexRedirect, StaffKnowledgeRoute } from '@/components/AdminOnlyRoute';
 import { PlanModuleRoute } from '@/components/PlanModuleRoute';
 import { AdminLayout } from '@/layouts/AdminLayout';
@@ -30,6 +31,7 @@ import { AiInsightsPage } from '@/pages/AiInsightsPage';
 import { CustomersPage } from '@/pages/CustomersPage';
 import { UnknownQuestionsPage } from '@/pages/UnknownQuestionsPage';
 import { TodayActivityPage } from '@/pages/TodayActivityPage';
+import { PlatformSupportPage } from '@/pages/PlatformSupportPage';
 import { AdminPage } from '@/pages/AdminPage';
 import { AdminCompaniesPage } from '@/pages/AdminCompaniesPage';
 import { AdminCompanyDetailPage } from '@/pages/AdminCompanyDetailPage';
@@ -39,6 +41,8 @@ import { AdminSettingsPage } from '@/pages/AdminSettingsPage';
 import { AdminPromptsPage } from '@/pages/AdminPromptsPage';
 import { AdminPlansPage } from '@/pages/AdminPlansPage';
 import { AdminUsersPage } from '@/pages/AdminUsersPage';
+import { AdminWhatsAppHealthPage } from '@/pages/AdminWhatsAppHealthPage';
+import { AdminSupportTicketsPage } from '@/pages/AdminSupportTicketsPage';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30000 } },
@@ -74,19 +78,21 @@ function AppRoutes() {
         <Route path="companies/:id" element={<AdminCompanyDetailPage />} />
         <Route path="usage" element={<AdminUsagePage />} />
         <Route path="activity" element={<AdminActivityPage />} />
+        <Route path="whatsapp-health" element={<AdminWhatsAppHealthPage />} />
+        <Route path="support-tickets" element={<AdminSupportTicketsPage />} />
         <Route path="prompts" element={<AdminPromptsPage />} />
         <Route path="plans" element={<AdminPlansPage />} />
         <Route path="users" element={<AdminUsersPage />} />
         <Route path="settings" element={<AdminSettingsPage />} />
       </Route>
 
-      {/* Müşteri Paneli - company_admin ve staff */}
+      {/* Müşteri Paneli - company_admin, staff veya impersonation ile super_admin */}
       <Route
         path="/panel"
         element={
-          <RoleRoute allowedRoles={['company_admin', 'staff']} redirectTo="/login">
+          <PanelRoute redirectTo="/login">
             <CompanyLayout />
-          </RoleRoute>
+          </PanelRoute>
         }
       >
         <Route index element={<PanelIndexRedirect />} />
@@ -103,6 +109,7 @@ function AppRoutes() {
         <Route path="whatsapp" element={<PlanModuleRoute module="whatsapp"><AdminOnlyRoute><WhatsAppPage /></AdminOnlyRoute></PlanModuleRoute>} />
         <Route path="subscription" element={<PlanModuleRoute module="subscription"><AdminOnlyRoute><SubscriptionPage /></AdminOnlyRoute></PlanModuleRoute>} />
         <Route path="settings" element={<PlanModuleRoute module="settings"><SettingsPage /></PlanModuleRoute>} />
+        <Route path="platform-support" element={<PlanModuleRoute module="settings"><AdminOnlyRoute><PlatformSupportPage /></AdminOnlyRoute></PlanModuleRoute>} />
       </Route>
 
       {/* Eski URL yönlendirmeleri */}

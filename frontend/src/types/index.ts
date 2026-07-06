@@ -66,11 +66,103 @@ export interface PlatformStats {
   total_messages_used: number;
   active_subscriptions: number;
   open_tickets: number;
+  platform_support_open: number;
   whatsapp_connected: number;
   ai_tokens_month: number;
   ai_api_calls_month: number;
   ai_saved_month: number;
   ai_model: string;
+}
+
+export type ActionCenterCategory = 'quota' | 'whatsapp' | 'trial' | 'activity' | 'tickets';
+export type ActionCenterSeverity = 'critical' | 'warning' | 'info';
+export type ActionCenterItemType =
+  | 'quota_exhausted'
+  | 'quota_high'
+  | 'whatsapp_disconnected'
+  | 'trial_expired'
+  | 'trial_ending'
+  | 'inactive_messaging'
+  | 'open_ticket';
+
+export interface ActionCenterItem {
+  id: string;
+  type: ActionCenterItemType;
+  category: ActionCenterCategory;
+  severity: ActionCenterSeverity;
+  company_id: string;
+  company_name: string;
+  meta: {
+    quota_percent?: number;
+    messages_used?: number;
+    messages_limit?: number;
+    days_left?: number;
+    trial_end?: string;
+    ticket_id?: string;
+    ticket_subject?: string;
+    ticket_priority?: string;
+    hours_inactive?: number;
+  };
+}
+
+export interface ActionCenterData {
+  total: number;
+  critical_count: number;
+  warning_count: number;
+  items: ActionCenterItem[];
+}
+
+export type WhatsAppHealthStatus =
+  | 'connected'
+  | 'disconnected'
+  | 'qr_pending'
+  | 'reconnecting'
+  | 'error'
+  | 'not_configured';
+
+export type WhatsAppConnectionType = 'qr' | 'api' | 'none';
+
+export interface WhatsAppHealthAccount {
+  account_id: string;
+  company_id: string;
+  company_name: string;
+  company_status: string;
+  label: string | null;
+  phone_number: string | null;
+  db_status: string;
+  health_status: WhatsAppHealthStatus;
+  connection_type: WhatsAppConnectionType;
+  is_default: boolean;
+  is_active: boolean;
+  last_synced_at: string | null;
+  last_message_at: string | null;
+  updated_at: string | null;
+  live_connected: boolean | null;
+}
+
+export interface WhatsAppHealthSummary {
+  total_accounts: number;
+  connected: number;
+  disconnected: number;
+  qr_pending: number;
+  reconnecting: number;
+  error: number;
+  issues: number;
+}
+
+export interface WhatsAppHealthData {
+  summary: WhatsAppHealthSummary;
+  accounts: WhatsAppHealthAccount[];
+  checked_at: string;
+}
+
+export interface CompanyAdminNote {
+  id: string;
+  company_id: string;
+  content: string;
+  author_profile_id: string | null;
+  author_name: string;
+  created_at: string;
 }
 
 export interface CompanyDetail {
@@ -114,6 +206,12 @@ export interface SuperAdminUser {
   email: string | null;
   is_active: boolean;
   created_at: string;
+}
+
+export interface ImpersonationState {
+  active: boolean;
+  company_id: string | null;
+  company_name: string | null;
 }
 
 export interface AIUsageRow {
@@ -273,6 +371,34 @@ export interface Ticket {
   department?: { id: string; name: string } | null;
   staff?: { name: string; email?: string } | null;
   created_at: string;
+}
+
+export interface PlatformSupportMessage {
+  id: string;
+  ticket_id: string;
+  sender_type: 'customer' | 'admin';
+  sender_profile_id: string | null;
+  sender_name: string;
+  message: string;
+  created_at: string;
+}
+
+export interface PlatformSupportTicket {
+  id: string;
+  company_id: string;
+  company_name?: string;
+  subject: string;
+  category: string;
+  priority: string;
+  status: string;
+  created_by_profile_id: string | null;
+  created_by_name: string;
+  created_by_email: string | null;
+  created_at: string;
+  updated_at: string;
+  closed_at: string | null;
+  messages?: PlatformSupportMessage[];
+  message_count?: number;
 }
 
 export interface Department {

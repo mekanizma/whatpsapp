@@ -36,13 +36,22 @@ export async function getMe(req: AuthRequest, res: Response): Promise<void> {
         }
       : null;
 
+    const impersonating = !!(req.isImpersonating && profile.role === 'super_admin');
+
     res.json({
       success: true,
       data: {
         profile,
-        company: profile.company_id ? demoCompany : null,
-        companyPlan: profile.company_id ? companyPlan : null,
+        company: profile.company_id || impersonating ? demoCompany : null,
+        companyPlan: profile.company_id || impersonating ? companyPlan : null,
         email: DEMO_EMAILS[token] || '',
+        impersonation: impersonating
+          ? {
+              active: true,
+              company_id: demoCompany.id,
+              company_name: demoCompany.company_name,
+            }
+          : { active: false, company_id: null, company_name: null },
       },
     });
     return;
@@ -67,15 +76,18 @@ export async function getMe(req: AuthRequest, res: Response): Promise<void> {
     ? { ...profile, staff_role: staffRole }
     : profile;
 
-  if (profile?.company_id) {
+  const targetCompanyId =
+    profile?.company_id || (req.isImpersonating ? req.companyId : null);
+
+  if (targetCompanyId) {
     const [{ data }, { data: sub }] = await Promise.all([
-      adminClient.from('companies').select('*').eq('id', profile.company_id).single(),
+      adminClient.from('companies').select('*').eq('id', targetCompanyId).single(),
       adminClient
         .from('subscriptions')
         .select(
           '*, subscription_plans(plan_type, name, description, features, message_limit, user_limit)'
         )
-        .eq('company_id', profile.company_id)
+        .eq('company_id', targetCompanyId)
         .single(),
     ]);
     company = data;
@@ -84,7 +96,19 @@ export async function getMe(req: AuthRequest, res: Response): Promise<void> {
 
   res.json({
     success: true,
-    data: { profile: enrichedProfile, company, companyPlan, email },
+    data: {
+      profile: enrichedProfile,
+      company,
+      companyPlan,
+      email,
+      impersonation: req.isImpersonating && company
+        ? {
+            active: true,
+            company_id: company.id,
+            company_name: company.company_name,
+          }
+        : { active: false, company_id: null, company_name: null },
+    },
   });
 }
 

@@ -6,12 +6,13 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import {
-  Building2, MessageSquare, CreditCard, Zap, Ticket, Smartphone,
-  ArrowRight, Plus, Activity,
+  Building2, MessageSquare, CreditCard, Zap, Smartphone,
+  ArrowRight, Plus, Activity, Headphones,
 } from 'lucide-react';
 import { api } from '@/services/api';
 import { StatCard } from '@/components/StatCard';
 import { PageHeader } from '@/components/PageHeader';
+import { AdminActionCenter } from '@/components/admin/AdminActionCenter';
 import { Button, Card, CardContent, CardHeader, CardTitle, Spinner, Badge } from '@/components/ui';
 import type { PlatformStats, AdminCompany } from '@/types';
 
@@ -41,6 +42,8 @@ export function AdminPage() {
 
   const quickLinks = [
     { to: '/admin/companies', labelKey: 'admin.overview.companyMgmt', icon: Building2 },
+    { to: '/admin/support-tickets', labelKey: 'admin.overview.supportTickets', icon: Headphones },
+    { to: '/admin/whatsapp-health', labelKey: 'admin.overview.whatsappHealth', icon: Smartphone },
     { to: '/admin/usage', labelKey: 'admin.overview.aiUsage', icon: Zap },
     { to: '/admin/activity', labelKey: 'admin.overview.activityLogs', icon: Activity },
     { to: '/admin/settings', labelKey: 'admin.overview.platformSettings', icon: CreditCard },
@@ -60,6 +63,8 @@ export function AdminPage() {
           </Button>
         }
       />
+
+      <AdminActionCenter />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard title={t('admin.overview.totalCompanies')} value={stats?.total_companies ?? 0} icon={Building2} color="text-blue-600" bgColor="bg-blue-50" />
@@ -85,7 +90,15 @@ export function AdminPage() {
           color="text-orange-600"
           bgColor="bg-orange-50"
         />
-        <StatCard title={t('admin.overview.openTickets')} value={stats?.open_tickets ?? 0} icon={Ticket} color="text-rose-600" bgColor="bg-rose-50" />
+        <Link to="/admin/support-tickets" className="block transition hover:opacity-90">
+          <StatCard
+            title={t('admin.overview.platformSupportOpen')}
+            value={stats?.platform_support_open ?? 0}
+            icon={Headphones}
+            color="text-rose-600"
+            bgColor="bg-rose-50"
+          />
+        </Link>
         <StatCard title={t('admin.overview.whatsappConnected')} value={stats?.whatsapp_connected ?? 0} icon={Smartphone} color="text-green-600" bgColor="bg-green-50" />
       </div>
 

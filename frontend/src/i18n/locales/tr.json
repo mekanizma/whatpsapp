@@ -265,6 +265,7 @@
       "staff": "Personel",
       "whatsapp": "WhatsApp",
       "subscription": "Abonelik",
+      "platformSupport": "Platform Desteği",
       "settings": "Hesap Ayarları",
       "adminOverview": "Platform Özeti",
       "companies": "Şirketler",
@@ -273,6 +274,8 @@
       "prompts": "AI Promptları",
       "plans": "Abonelik Paketleri",
       "users": "Kullanıcılar",
+      "whatsappHealth": "WhatsApp Sağlık",
+      "supportTickets": "Destek Talepleri",
       "adminSettings": "Ayarlar",
       "companyDetail": "Şirket Detayı"
     },
@@ -289,6 +292,7 @@
       "staff": "Personel",
       "whatsapp": "WhatsApp",
       "subscription": "Abonelik",
+      "platformSupport": "Platform Desteği",
       "settings": "Hesap Ayarları"
     }
   },
@@ -733,16 +737,103 @@
       "aiCalls": "AI API Çağrısı",
       "aiSaved": "{{count}} istek önbellek/filtre ile tasarruf",
       "openTickets": "Açık Talepler",
+      "platformSupportOpen": "Platform Destek Talepleri",
+      "supportTickets": "Destek Talepleri",
       "whatsappConnected": "WhatsApp Bağlı",
       "recentCompanies": "Son Eklenen Şirketler",
       "noCompanies": "Henüz şirket yok",
       "quickAccess": "Hızlı Erişim",
       "companyMgmt": "Şirket Yönetimi",
+      "whatsappHealth": "WhatsApp Sağlık Monitörü",
       "aiUsage": "AI Kullanımı",
       "activityLogs": "Aktivite Logları",
       "platformSettings": "Platform Ayarları",
       "modelTrend": "Model: {{model}}",
       "all": "Tümü"
+    },
+    "actionCenter": {
+      "title": "Aksiyon Merkezi",
+      "criticalCount": "{{count}} kritik",
+      "warningCount": "{{count}} uyarı",
+      "loadError": "Aksiyon merkezi yüklenemedi",
+      "allClear": "Her şey yolunda",
+      "allClearDesc": "Şu an dikkat gerektiren bir durum yok.",
+      "hint": "Bir öğeye tıklayarak şirket detayına gidebilirsiniz.",
+      "categories": {
+        "quota": "Kota & Kullanım",
+        "whatsapp": "WhatsApp",
+        "trial": "Deneme Süresi",
+        "activity": "Aktivite",
+        "tickets": "Destek Talepleri"
+      },
+      "details": {
+        "quota_exhausted": "AI görüşme kotası doldu ({{used}} / {{limit}})",
+        "quota_high": "Kota %{{percent}} dolu ({{used}} / {{limit}})",
+        "whatsapp_disconnected": "WhatsApp bağlantısı kopuk",
+        "trial_expired": "Deneme süresi sona erdi",
+        "trial_ending": "Deneme süresi {{days}} gün içinde bitiyor",
+        "inactive_messaging": "Son {{hours}} saatte mesaj yok",
+        "open_ticket": "Açık talep: {{subject}}"
+      }
+    },
+    "whatsappHealth": {
+      "title": "WhatsApp Sağlık Monitörü",
+      "description": "Tüm firmaların WhatsApp hatlarının bağlantı durumu, son senkron ve mesaj aktivitesi",
+      "refresh": "Yenile",
+      "lastChecked": "Son kontrol: {{time}}",
+      "search": "Şirket, numara veya hat adı ara...",
+      "loadError": "WhatsApp sağlık verisi yüklenemedi",
+      "empty": "Filtreye uygun WhatsApp hesabı bulunamadı",
+      "accountList": "WhatsApp Hatları",
+      "noPhone": "Numara yok",
+      "inactive": "Pasif",
+      "lastSync": "Son senkron",
+      "lastMessage": "Son mesaj",
+      "stats": {
+        "total": "Toplam Hat",
+        "connected": "Bağlı",
+        "disconnected": "Kopuk",
+        "qrPending": "QR Bekliyor",
+        "reconnecting": "Yeniden Bağlanıyor",
+        "issues": "Sorunlu"
+      },
+      "filters": {
+        "all": "Tümü",
+        "issues": "Sorunlu",
+        "connected": "Bağlı",
+        "disconnected": "Kopuk",
+        "qr_pending": "QR Bekliyor",
+        "reconnecting": "Yeniden Bağlanıyor",
+        "error": "Hata",
+        "not_configured": "Yapılandırılmamış"
+      },
+      "status": {
+        "connected": "Bağlı",
+        "disconnected": "Kopuk",
+        "qr_pending": "QR Bekliyor",
+        "reconnecting": "Yeniden Bağlanıyor",
+        "error": "Hata",
+        "not_configured": "Yapılandırılmamış"
+      },
+      "connectionType": {
+        "qr": "QR (Baileys)",
+        "api": "Cloud API",
+        "none": "Yapılandırılmamış"
+      },
+      "relative": {
+        "justNow": "Az önce",
+        "minutes": "{{count}} dk önce",
+        "hours": "{{count}} sa önce",
+        "days": "{{count}} gün önce"
+      }
+    },
+    "impersonation": {
+      "enterPanel": "Firma Paneline Gir",
+      "error": "Firma paneline giriş yapılamadı",
+      "bannerTitle": "Destek modu",
+      "bannerDesc": "Bu firmayı yönetici olarak görüntülüyorsunuz.",
+      "exit": "Admin Paneline Dön",
+      "viewingAsAdmin": "Platform yöneticisi (destek modu)"
     },
     "companies": {
       "title": "Şirketler",
@@ -806,6 +897,11 @@
       "actions": {
         "company_created": "Şirket oluşturuldu",
         "company_updated": "Şirket güncellendi",
+        "company_admin_note_created": "Şirket iç notu eklendi",
+        "company_admin_note_deleted": "Şirket iç notu silindi",
+        "platform_support_ticket_created": "Platform destek talebi oluşturuldu",
+        "platform_support_ticket_updated": "Platform destek talebi güncellendi",
+        "platform_support_ticket_replied": "Platform destek talebine yanıt verildi",
         "subscription_updated": "Abonelik güncellendi",
         "login": "Giriş",
         "message_sent": "Mesaj gönderildi",
@@ -1008,8 +1104,22 @@
       "noPlanFeatures": "Bu paket için özellik tanımlanmamış.",
       "tabs": {
         "general": "Genel Bilgiler",
+        "notes": "İç Notlar",
         "subscription": "Abonelik & Kota",
         "users": "Kullanıcılar"
+      },
+      "notes": {
+        "addTitle": "Yeni İç Not",
+        "placeholder": "Örn: Kurulum 15 Mart'ta yapıldı, özel fiyat anlaşması var, WhatsApp numarası değişecek...",
+        "add": "Not Ekle",
+        "privacyHint": "Bu notlar yalnızca platform yöneticileri tarafından görülür. Müşteri panelinde görünmez.",
+        "historyTitle": "Not Geçmişi",
+        "empty": "Henüz iç not eklenmemiş",
+        "emptyHint": "Destek ve operasyon notlarınızı burada biriktirebilirsiniz.",
+        "loadError": "Notlar yüklenemedi",
+        "emptyError": "Not içeriği boş olamaz",
+        "delete": "Sil",
+        "deleteConfirm": "Bu notu silmek istediğinize emin misiniz?"
       },
       "invoiceCard": "E-Fatura (MEKANİZMA)",
       "invoiceDesc": "Şirketin aldığı pakete göre MEKANİZMA e-fatura belgesi oluşturulur. Paket bilgileri, tutarlar, abonelik tarihleri ve ek paketler PDF olarak indirilebilir.",
@@ -1022,6 +1132,84 @@
       "setupFeeHint": "Bu faturaya özel tek seferlik ücret. Boş bırakırsanız eklenmez.",
       "setupFeeDescription": "Kurulum Kalemi Açıklaması",
       "setupFeeDescriptionPlaceholder": "Örn: Kurulum Ücreti (tek seferlik)"
+    },
+    "supportTickets": {
+      "title": "Platform Destek Talepleri",
+      "description": "Müşteri şirketlerden gelen destek taleplerini tek yerden yönetin",
+      "search": "Konu, şirket veya kullanıcı ara...",
+      "loadError": "Destek talepleri yüklenemedi",
+      "empty": "Filtreye uygun destek talebi yok",
+      "selectHint": "Detayları görmek için soldan bir talep seçin",
+      "resolve": "Çözüldü olarak işaretle",
+      "close": "Kapat",
+      "replyLabel": "Yanıtınız",
+      "replyPlaceholder": "Müşteriye yanıt yazın...",
+      "sendReply": "Yanıt Gönder",
+      "stats": {
+        "open": "Açık Talepler",
+        "total": "Listelenen"
+      },
+      "filters": {
+        "all": "Tümü",
+        "open": "Açık",
+        "in_progress": "İşlemde",
+        "resolved": "Çözüldü",
+        "closed": "Kapatıldı"
+      },
+      "status": {
+        "open": "Açık",
+        "in_progress": "İşlemde",
+        "resolved": "Çözüldü",
+        "closed": "Kapatıldı"
+      },
+      "priority": {
+        "low": "Düşük",
+        "medium": "Orta",
+        "high": "Yüksek",
+        "urgent": "Acil"
+      },
+      "category": {
+        "general": "Genel",
+        "billing": "Fatura & Abonelik",
+        "technical": "Teknik",
+        "whatsapp": "WhatsApp",
+        "account": "Hesap"
+      }
+    }
+  },
+  "platformSupport": {
+    "title": "Platform Desteği",
+    "description": "Teknik sorun, fatura veya WhatsApp bağlantısı için platform ekibimize ulaşın",
+    "newTicket": "Yeni Talep",
+    "newTicketDesc": "Sorununuzu kısaca özetleyin, en kısa sürede dönüş yapılacaktır",
+    "empty": "Henüz destek talebiniz yok",
+    "emptyDesc": "Bir sorunuz veya sorununuz mu var? Platform ekibimize talep açabilirsiniz.",
+    "openCount": "{{count}} açık talep",
+    "subject": "Konu",
+    "subjectPlaceholder": "Örn: WhatsApp bağlantısı kopuyor",
+    "category": "Kategori",
+    "message": "Mesajınız",
+    "messagePlaceholder": "Sorununuzu detaylı anlatın...",
+    "submit": "Talep Gönder",
+    "formError": "Konu ve mesaj zorunludur",
+    "addMessage": "Ek mesaj",
+    "replyPlaceholder": "Ek bilgi veya soru yazın...",
+    "send": "Gönder",
+    "closedHint": "Bu talep kapatıldı. Yeni bir sorun için yeni talep açabilirsiniz.",
+    "platformTeam": "Platform Destek",
+    "messageCount": "{{count}} mesaj",
+    "categories": {
+      "general": "Genel",
+      "billing": "Fatura & Abonelik",
+      "technical": "Teknik Sorun",
+      "whatsapp": "WhatsApp",
+      "account": "Hesap & Erişim"
+    },
+    "status": {
+      "open": "Açık",
+      "in_progress": "İşlemde",
+      "resolved": "Çözüldü",
+      "closed": "Kapatıldı"
     }
   }
 }

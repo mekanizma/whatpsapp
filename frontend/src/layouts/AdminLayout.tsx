@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
-  Shield, Building2, BarChart3, Settings, Zap, Activity, FileText, CreditCard, Users,
+  Shield, Building2, BarChart3, Settings, Zap, Activity, FileText, CreditCard, Users, Smartphone, Headphones,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
@@ -31,6 +31,8 @@ const adminNavGroups: { sectionKey: string; items: { to: string; icon: typeof Ba
     sectionKey: 'layout.navSections.operations',
     items: [
       { to: '/admin/usage', icon: Zap, labelKey: 'layout.nav.usage' },
+      { to: '/admin/whatsapp-health', icon: Smartphone, labelKey: 'layout.nav.whatsappHealth' },
+      { to: '/admin/support-tickets', icon: Headphones, labelKey: 'layout.nav.supportTickets' },
       { to: '/admin/activity', icon: Activity, labelKey: 'layout.nav.activity' },
       { to: '/admin/prompts', icon: FileText, labelKey: 'layout.nav.prompts' },
     ],
@@ -51,6 +53,8 @@ function resolvePageTitleKey(pathname: string): string {
     '/admin': 'layout.nav.adminOverview',
     '/admin/companies': 'layout.nav.companies',
     '/admin/usage': 'layout.nav.usage',
+    '/admin/whatsapp-health': 'layout.nav.whatsappHealth',
+    '/admin/support-tickets': 'layout.nav.supportTickets',
     '/admin/activity': 'layout.nav.activity',
     '/admin/prompts': 'layout.nav.prompts',
     '/admin/plans': 'layout.nav.plans',

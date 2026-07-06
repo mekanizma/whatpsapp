@@ -25,6 +25,19 @@ const API_BASE = (() => {
 
 const API_URL = API_BASE;
 const DEMO_TOKEN_KEY = 'wa_demo_token';
+export const IMPERSONATE_COMPANY_KEY = 'wa_impersonate_company';
+
+export function setImpersonateCompanyId(companyId: string) {
+  sessionStorage.setItem(IMPERSONATE_COMPANY_KEY, companyId);
+}
+
+export function clearImpersonateCompanyId() {
+  sessionStorage.removeItem(IMPERSONATE_COMPANY_KEY);
+}
+
+export function getImpersonateCompanyId(): string | null {
+  return sessionStorage.getItem(IMPERSONATE_COMPANY_KEY);
+}
 
 export function setDemoToken(token: string) {
   localStorage.setItem(DEMO_TOKEN_KEY, token);
@@ -35,19 +48,26 @@ export function clearDemoToken() {
 }
 
 async function getAuthHeaders(): Promise<HeadersInit> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+
+  const impersonateCompanyId = getImpersonateCompanyId();
+  if (impersonateCompanyId) {
+    headers['X-Impersonate-Company'] = impersonateCompanyId;
+  }
+
   if (isDemoMode) {
     const token = localStorage.getItem(DEMO_TOKEN_KEY) || 'demo-company-token';
-    return {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    };
+    headers.Authorization = `Bearer ${token}`;
+    return headers;
   }
 
   const { data: { session } } = await supabase.auth.getSession();
-  return {
-    'Content-Type': 'application/json',
-    ...(session?.access_token && { Authorization: `Bearer ${session.access_token}` }),
-  };
+  if (session?.access_token) {
+    headers.Authorization = `Bearer ${session.access_token}`;
+  }
+  return headers;
 }
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {

@@ -265,6 +265,7 @@
       "staff": "Staff",
       "whatsapp": "WhatsApp",
       "subscription": "Subscription",
+      "platformSupport": "Platform Support",
       "settings": "Account Settings",
       "adminOverview": "Platform Overview",
       "companies": "Companies",
@@ -273,6 +274,8 @@
       "prompts": "AI Prompts",
       "plans": "Subscription Plans",
       "users": "Users",
+      "whatsappHealth": "WhatsApp Health",
+      "supportTickets": "Support Tickets",
       "adminSettings": "Settings",
       "companyDetail": "Company Detail"
     },
@@ -289,6 +292,7 @@
       "staff": "Staff",
       "whatsapp": "WhatsApp",
       "subscription": "Subscription",
+      "platformSupport": "Platform Support",
       "settings": "Account Settings"
     }
   },
@@ -733,16 +737,103 @@
       "aiCalls": "AI API Calls",
       "aiSaved": "{{count}} requests saved via cache/filter",
       "openTickets": "Open Tickets",
+      "platformSupportOpen": "Platform Support Tickets",
+      "supportTickets": "Support Tickets",
       "whatsappConnected": "WhatsApp Connected",
       "recentCompanies": "Recently Added Companies",
       "noCompanies": "No companies yet",
       "quickAccess": "Quick Access",
       "companyMgmt": "Company Management",
+      "whatsappHealth": "WhatsApp Health Monitor",
       "aiUsage": "AI Usage",
       "activityLogs": "Activity Logs",
       "platformSettings": "Platform Settings",
       "modelTrend": "Model: {{model}}",
       "all": "All"
+    },
+    "actionCenter": {
+      "title": "Action Center",
+      "criticalCount": "{{count}} critical",
+      "warningCount": "{{count}} warnings",
+      "loadError": "Could not load action center",
+      "allClear": "All clear",
+      "allClearDesc": "Nothing needs your attention right now.",
+      "hint": "Click an item to open the company detail page.",
+      "categories": {
+        "quota": "Quota & Usage",
+        "whatsapp": "WhatsApp",
+        "trial": "Trial Period",
+        "activity": "Activity",
+        "tickets": "Support Tickets"
+      },
+      "details": {
+        "quota_exhausted": "AI conversation quota exhausted ({{used}} / {{limit}})",
+        "quota_high": "Quota {{percent}}% full ({{used}} / {{limit}})",
+        "whatsapp_disconnected": "WhatsApp connection is down",
+        "trial_expired": "Trial period has expired",
+        "trial_ending": "Trial ends in {{days}} days",
+        "inactive_messaging": "No messages in the last {{hours}} hours",
+        "open_ticket": "Open ticket: {{subject}}"
+      }
+    },
+    "whatsappHealth": {
+      "title": "WhatsApp Health Monitor",
+      "description": "Connection status, last sync, and message activity for all company WhatsApp lines",
+      "refresh": "Refresh",
+      "lastChecked": "Last checked: {{time}}",
+      "search": "Search company, number, or line name...",
+      "loadError": "Could not load WhatsApp health data",
+      "empty": "No WhatsApp accounts match the current filter",
+      "accountList": "WhatsApp Lines",
+      "noPhone": "No number",
+      "inactive": "Inactive",
+      "lastSync": "Last sync",
+      "lastMessage": "Last message",
+      "stats": {
+        "total": "Total Lines",
+        "connected": "Connected",
+        "disconnected": "Disconnected",
+        "qrPending": "QR Pending",
+        "reconnecting": "Reconnecting",
+        "issues": "Issues"
+      },
+      "filters": {
+        "all": "All",
+        "issues": "Issues",
+        "connected": "Connected",
+        "disconnected": "Disconnected",
+        "qr_pending": "QR Pending",
+        "reconnecting": "Reconnecting",
+        "error": "Error",
+        "not_configured": "Not configured"
+      },
+      "status": {
+        "connected": "Connected",
+        "disconnected": "Disconnected",
+        "qr_pending": "QR Pending",
+        "reconnecting": "Reconnecting",
+        "error": "Error",
+        "not_configured": "Not configured"
+      },
+      "connectionType": {
+        "qr": "QR (Baileys)",
+        "api": "Cloud API",
+        "none": "Not configured"
+      },
+      "relative": {
+        "justNow": "Just now",
+        "minutes": "{{count}}m ago",
+        "hours": "{{count}}h ago",
+        "days": "{{count}}d ago"
+      }
+    },
+    "impersonation": {
+      "enterPanel": "Enter Company Panel",
+      "error": "Could not enter company panel",
+      "bannerTitle": "Support mode",
+      "bannerDesc": "You are viewing this company as an administrator.",
+      "exit": "Back to Admin Panel",
+      "viewingAsAdmin": "Platform admin (support mode)"
     },
     "companies": {
       "title": "Companies",
@@ -806,6 +897,11 @@
       "actions": {
         "company_created": "Company created",
         "company_updated": "Company updated",
+        "company_admin_note_created": "Internal company note added",
+        "company_admin_note_deleted": "Internal company note deleted",
+        "platform_support_ticket_created": "Platform support ticket created",
+        "platform_support_ticket_updated": "Platform support ticket updated",
+        "platform_support_ticket_replied": "Replied to platform support ticket",
         "subscription_updated": "Subscription updated",
         "login": "Login",
         "message_sent": "Message sent",
@@ -1008,8 +1104,22 @@
       "noPlanFeatures": "No features defined for this plan.",
       "tabs": {
         "general": "General",
+        "notes": "Internal Notes",
         "subscription": "Subscription & Quota",
         "users": "Users"
+      },
+      "notes": {
+        "addTitle": "New Internal Note",
+        "placeholder": "E.g. Setup completed on March 15, special pricing agreed, WhatsApp number will change...",
+        "add": "Add Note",
+        "privacyHint": "These notes are only visible to platform administrators. They do not appear in the customer panel.",
+        "historyTitle": "Note History",
+        "empty": "No internal notes yet",
+        "emptyHint": "Keep support and operations notes here for your team.",
+        "loadError": "Could not load notes",
+        "emptyError": "Note content cannot be empty",
+        "delete": "Delete",
+        "deleteConfirm": "Are you sure you want to delete this note?"
       },
       "invoiceCard": "E-Invoice (MEKANIZMA)",
       "invoiceDesc": "Generates a MEKANIZMA e-invoice based on the company's plan. Package details, amounts, subscription dates and add-ons are included in the downloadable PDF.",
@@ -1022,6 +1132,84 @@
       "setupFeeHint": "One-time fee for this invoice only. Leave empty to omit.",
       "setupFeeDescription": "Setup Line Item Description",
       "setupFeeDescriptionPlaceholder": "e.g. Setup Fee (one-time)"
+    },
+    "supportTickets": {
+      "title": "Platform Support Tickets",
+      "description": "Manage support requests from customer companies in one place",
+      "search": "Search subject, company, or user...",
+      "loadError": "Could not load support tickets",
+      "empty": "No support tickets match the filter",
+      "selectHint": "Select a ticket on the left to view details",
+      "resolve": "Mark as resolved",
+      "close": "Close",
+      "replyLabel": "Your reply",
+      "replyPlaceholder": "Write a reply to the customer...",
+      "sendReply": "Send Reply",
+      "stats": {
+        "open": "Open Tickets",
+        "total": "Listed"
+      },
+      "filters": {
+        "all": "All",
+        "open": "Open",
+        "in_progress": "In Progress",
+        "resolved": "Resolved",
+        "closed": "Closed"
+      },
+      "status": {
+        "open": "Open",
+        "in_progress": "In Progress",
+        "resolved": "Resolved",
+        "closed": "Closed"
+      },
+      "priority": {
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High",
+        "urgent": "Urgent"
+      },
+      "category": {
+        "general": "General",
+        "billing": "Billing & Subscription",
+        "technical": "Technical",
+        "whatsapp": "WhatsApp",
+        "account": "Account"
+      }
+    }
+  },
+  "platformSupport": {
+    "title": "Platform Support",
+    "description": "Contact our platform team for technical issues, billing, or WhatsApp connection help",
+    "newTicket": "New Ticket",
+    "newTicketDesc": "Briefly describe your issue — we'll get back to you as soon as possible",
+    "empty": "No support tickets yet",
+    "emptyDesc": "Have a question or issue? Open a ticket to reach the platform team.",
+    "openCount": "{{count}} open ticket(s)",
+    "subject": "Subject",
+    "subjectPlaceholder": "e.g. WhatsApp keeps disconnecting",
+    "category": "Category",
+    "message": "Your message",
+    "messagePlaceholder": "Describe your issue in detail...",
+    "submit": "Submit Ticket",
+    "formError": "Subject and message are required",
+    "addMessage": "Add message",
+    "replyPlaceholder": "Add more details or ask a follow-up...",
+    "send": "Send",
+    "closedHint": "This ticket is closed. Open a new ticket for a new issue.",
+    "platformTeam": "Platform Support",
+    "messageCount": "{{count}} message(s)",
+    "categories": {
+      "general": "General",
+      "billing": "Billing & Subscription",
+      "technical": "Technical Issue",
+      "whatsapp": "WhatsApp",
+      "account": "Account & Access"
+    },
+    "status": {
+      "open": "Open",
+      "in_progress": "In Progress",
+      "resolved": "Resolved",
+      "closed": "Closed"
     }
   }
 }

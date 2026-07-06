@@ -19,6 +19,7 @@ import * as subscriptionCtrl from '../controllers/subscription.controller';
 import * as appointmentsCtrl from '../controllers/appointments.controller';
 import * as notificationsCtrl from '../controllers/notifications.controller';
 import * as unknownQuestionsCtrl from '../controllers/unknown-questions.controller';
+import * as platformSupportCtrl from '../controllers/platform-support.controller';
 import { companyLogoUpload, knowledgeFileUpload, messageImageUpload } from '../middleware/upload.middleware';
 
 const router = Router();
@@ -29,13 +30,19 @@ router.put('/auth/profile', authenticate, authCtrl.updateProfile);
 
 // Super Admin
 router.get('/admin/stats', authenticate, requireRole('super_admin'), adminCtrl.getAdminStats);
+router.get('/admin/action-center', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.getActionCenter));
 router.get('/admin/companies', authenticate, requireRole('super_admin'), adminCtrl.getCompanies);
 router.get('/admin/companies/:id', authenticate, requireRole('super_admin'), adminCtrl.getCompany);
+router.get('/admin/companies/:id/notes', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.getCompanyNotes));
+router.post('/admin/companies/:id/notes', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.createCompanyNote));
+router.delete('/admin/companies/:id/notes/:noteId', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.deleteCompanyNote));
+router.post('/admin/companies/:id/impersonate', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.startCompanyImpersonation));
 router.get('/admin/companies/:id/invoice', authenticate, requireRole('super_admin'), adminCtrl.downloadCompanyInvoice);
 router.post('/admin/companies', authenticate, requireRole('super_admin'), adminCtrl.createCompany);
 router.put('/admin/companies/:id', authenticate, requireRole('super_admin'), adminCtrl.updateCompany);
 router.patch('/admin/companies/:id/status', authenticate, requireRole('super_admin'), adminCtrl.updateCompanyStatus);
 router.patch('/admin/companies/:id/subscription', authenticate, requireRole('super_admin'), adminCtrl.updateCompanySubscription);
+router.get('/admin/whatsapp-health', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.getWhatsAppHealth));
 router.get('/admin/ai-usage', authenticate, requireRole('super_admin'), adminCtrl.getAIUsage);
 router.get('/admin/activity', authenticate, requireRole('super_admin'), adminCtrl.getLogs);
 router.get('/admin/settings', authenticate, requireRole('super_admin'), adminCtrl.getPlatformSettings);
@@ -59,6 +66,17 @@ router.get('/admin/users', authenticate, requireRole('super_admin'), asyncHandle
 router.patch('/admin/users/:profileId/password', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.resetUserPassword));
 router.get('/admin/super-admins', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.getSuperAdmins));
 router.post('/admin/super-admins', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.createSuperAdmin));
+
+router.get('/admin/support-tickets', authenticate, requireRole('super_admin'), asyncHandler(platformSupportCtrl.adminListSupportTickets));
+router.get('/admin/support-tickets/:id', authenticate, requireRole('super_admin'), asyncHandler(platformSupportCtrl.adminGetSupportTicket));
+router.patch('/admin/support-tickets/:id', authenticate, requireRole('super_admin'), asyncHandler(platformSupportCtrl.adminUpdateSupportTicket));
+router.post('/admin/support-tickets/:id/messages', authenticate, requireRole('super_admin'), asyncHandler(platformSupportCtrl.adminReplySupportTicket));
+
+// Platform support (company admin → platform)
+router.get('/platform-support/tickets', authenticate, requireRole('company_admin'), requireCompany, asyncHandler(platformSupportCtrl.listMySupportTickets));
+router.post('/platform-support/tickets', authenticate, requireRole('company_admin'), requireCompany, asyncHandler(platformSupportCtrl.createMySupportTicket));
+router.get('/platform-support/tickets/:id', authenticate, requireRole('company_admin'), requireCompany, asyncHandler(platformSupportCtrl.getMySupportTicket));
+router.post('/platform-support/tickets/:id/messages', authenticate, requireRole('company_admin'), requireCompany, asyncHandler(platformSupportCtrl.replyMySupportTicket));
 
 // Company
 router.get('/companies/:id', authenticate, companyCtrl.getCompany);

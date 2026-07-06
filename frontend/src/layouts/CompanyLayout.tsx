@@ -7,7 +7,7 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   LayoutDashboard, MessageSquare, BookOpen, Users, Ticket,
-  CreditCard, Smartphone, Bell, Settings, CalendarDays, UserRound, HelpCircle,
+  CreditCard, Smartphone, Bell, Settings, CalendarDays, UserRound, HelpCircle, Headphones,
   Sparkles, UserCog,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
@@ -15,6 +15,7 @@ import { planHasModule, type PlanModuleKey } from '@/lib/plan-capabilities';
 import { canSeeNavItem } from '@/lib/staff-permissions';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { CompanyLogo } from '@/components/CompanyLogo';
+import { ImpersonationBanner } from '@/components/ImpersonationBanner';
 import { PremiumPanelFrame, PremiumSidebar, type PremiumNavGroup } from '@/components/layout/PremiumSidebar';
 import { PanelRobotMascot } from '@/components/layout/PanelRobotMascot';
 import type { UserRole } from '@/types';
@@ -57,6 +58,7 @@ const navGroups: { sectionKey: string; items: NavItem[] }[] = [
     items: [
       { to: '/panel/staff', icon: Users, labelKey: 'layout.nav.staff', roles: ['company_admin'], module: 'staff' },
       { to: '/panel/subscription', icon: CreditCard, labelKey: 'layout.nav.subscription', roles: ['company_admin'], module: 'subscription' },
+      { to: '/panel/platform-support', icon: Headphones, labelKey: 'layout.nav.platformSupport', roles: ['company_admin'], module: 'settings' },
     ],
   },
   {
@@ -80,13 +82,30 @@ const pageTitleKeys: Record<string, string> = {
   '/panel/staff': 'layout.titles.staff',
   '/panel/whatsapp': 'layout.titles.whatsapp',
   '/panel/subscription': 'layout.titles.subscription',
+  '/panel/platform-support': 'layout.titles.platformSupport',
   '/panel/settings': 'layout.titles.settings',
 };
 
-function filterNavItem(item: NavItem, user: ReturnType<typeof useAuthStore.getState>['user'], planType: string | undefined) {
-  if (!user?.role || !item.roles.includes(user.role)) return false;
+function getEffectivePanelRole(
+  user: ReturnType<typeof useAuthStore.getState>['user'],
+  isImpersonating: boolean
+): UserRole | null {
+  if (!user) return null;
+  if (user.role === 'super_admin' && isImpersonating) return 'company_admin';
+  return user.role;
+}
+
+function filterNavItem(
+  item: NavItem,
+  user: ReturnType<typeof useAuthStore.getState>['user'],
+  planType: string | undefined,
+  isImpersonating: boolean
+) {
+  const role = getEffectivePanelRole(user, isImpersonating);
+  if (!role || !item.roles.includes(role)) return false;
+  if (role === 'super_admin' && !isImpersonating) return false;
   if (!planHasModule(planType, item.module)) return false;
-  if (user.role === 'staff' && item.staffNav) {
+  if (user?.role === 'staff' && item.staffNav) {
     return canSeeNavItem(user.role, user.staff_role, item.staffNav);
   }
   return true;
@@ -95,7 +114,7 @@ function filterNavItem(item: NavItem, user: ReturnType<typeof useAuthStore.getSt
 export function CompanyLayout() {
   const { t } = useTranslation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { user, company, companyPlan, logout } = useAuthStore();
+  const { user, company, companyPlan, logout, isImpersonating } = useAuthStore();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -106,7 +125,7 @@ export function CompanyLayout() {
     .map((group) => ({
       sectionLabel: t(group.sectionKey),
       items: group.items
-        .filter((item) => filterNavItem(item, user, planType))
+        .filter((item) => filterNavItem(item, user, planType, isImpersonating))
         .map((item) => ({
           to: item.to,
           icon: item.icon,
@@ -117,11 +136,13 @@ export function CompanyLayout() {
 
   const pageTitle = t(pageTitleKeys[location.pathname] || 'layout.panel');
 
-  const roleLabel = user?.role === 'staff' && user.staff_role
-    ? t(`staff.roles.${user.staff_role}`, { defaultValue: user.staff_role })
-    : user?.role
-      ? t(`common.roles.${user.role}`, { defaultValue: user.role })
-      : '';
+  const roleLabel = isImpersonating
+    ? t('admin.impersonation.viewingAsAdmin')
+    : user?.role === 'staff' && user.staff_role
+      ? t(`staff.roles.${user.staff_role}`, { defaultValue: user.staff_role })
+      : user?.role
+        ? t(`common.roles.${user.role}`, { defaultValue: user.role })
+        : '';
 
   const handleLogout = async () => {
     await logout();
@@ -129,7 +150,9 @@ export function CompanyLayout() {
   };
 
   return (
-    <PremiumPanelFrame
+    <>
+      <ImpersonationBanner />
+      <PremiumPanelFrame
       sidebarOpen={sidebarOpen}
       onOpenSidebar={() => setSidebarOpen(true)}
       onCloseSidebar={() => setSidebarOpen(false)}
@@ -211,5 +234,6 @@ export function CompanyLayout() {
       <Outlet />
       <PanelRobotMascot />
     </PremiumPanelFrame>
+    </>
   );
 }

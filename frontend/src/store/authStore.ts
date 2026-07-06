@@ -5,9 +5,9 @@
 import { create } from 'zustand';
 import { supabase, supabaseConfigured } from '@/services/supabase';
 import { isDemoMode } from '@/lib/env';
-import { api, setDemoToken, clearDemoToken } from '@/services/api';
+import { api, setDemoToken, clearDemoToken, setImpersonateCompanyId, clearImpersonateCompanyId } from '@/services/api';
 import i18n from '@/i18n';
-import type { Profile, Company, UserRole, CompanyPlan } from '@/types';
+import type { Profile, Company, UserRole, CompanyPlan, ImpersonationState } from '@/types';
 export type LoginPanel = 'admin' | 'customer';
 
 const DEMO_USERS: Record<string, { password: string; token: string; role: UserRole }> = {
@@ -22,16 +22,45 @@ interface AuthState {
   companyPlan: CompanyPlan | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  isImpersonating: boolean;
+  impersonatedCompanyId: string | null;
+  impersonatedCompanyName: string | null;
   login: (email: string, password: string, panel: LoginPanel) => Promise<void>;
   register: (email: string, password: string, fullName: string) => Promise<void>;
   logout: () => Promise<void>;
   fetchProfile: () => Promise<void>;
+  startImpersonation: (companyId: string) => Promise<void>;
+  stopImpersonation: () => Promise<void>;
   updateProfile: (data: { full_name?: string; phone?: string | null }) => Promise<Profile>;
   updateCompany: (data: Partial<Company>) => Promise<Company>;
   uploadCompanyLogo: (file: File) => Promise<Company>;
   removeCompanyLogo: () => Promise<Company>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   initialize: () => Promise<void>;
+}
+
+type MeResponse = {
+  profile: Profile;
+  company: Company | null;
+  companyPlan: CompanyPlan | null;
+  impersonation?: ImpersonationState;
+};
+
+function applyMeResponse(
+  set: (partial: Partial<AuthState> | ((state: AuthState) => Partial<AuthState>)) => void,
+  data: MeResponse
+) {
+  const impersonation = data.impersonation;
+  set({
+    user: data.profile,
+    company: data.company,
+    companyPlan: data.companyPlan,
+    isAuthenticated: true,
+    isLoading: false,
+    isImpersonating: !!impersonation?.active,
+    impersonatedCompanyId: impersonation?.company_id ?? null,
+    impersonatedCompanyName: impersonation?.company_name ?? null,
+  });
 }
 
 export function getRedirectPath(role?: UserRole): string {
@@ -46,6 +75,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   companyPlan: null,
   isLoading: true,
   isAuthenticated: false,
+  isImpersonating: false,
+  impersonatedCompanyId: null,
+  impersonatedCompanyName: null,
 
   login: async (email, password, panel) => {
     if (isDemoMode) {
@@ -59,9 +91,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (panel === 'customer' && demoUser.role === 'super_admin') {
         throw new Error(i18n.t('auth.errors.customerPanelAdminOnly'));
       }
+      clearImpersonateCompanyId();
       setDemoToken(demoUser.token);
-      const data = await api.get<{ profile: Profile; company: Company | null; companyPlan: CompanyPlan | null }>('/auth/me');
-      set({ user: data.profile, company: data.company, companyPlan: data.companyPlan, isAuthenticated: true });
+      const data = await api.get<MeResponse>('/auth/me');
+      applyMeResponse(set, data);
       return;
     }
 
@@ -72,7 +105,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw new Error(error.message);
 
-    const data = await api.get<{ profile: Profile; company: Company | null; companyPlan: CompanyPlan | null }>('/auth/me');
+    clearImpersonateCompanyId();
+    const data = await api.get<MeResponse>('/auth/me');
 
     if (panel === 'admin' && data.profile.role !== 'super_admin') {
       await supabase.auth.signOut();
@@ -83,12 +117,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       throw new Error(i18n.t('auth.errors.customerPanelDenied'));
     }
 
-    set({
-      user: data.profile,
-      company: data.company,
-      companyPlan: data.companyPlan,
-      isAuthenticated: true,
-    });
+    applyMeResponse(set, data);
   },
 
   register: async (email, password, fullName) => {
@@ -104,32 +133,65 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: async () => {
+    clearImpersonateCompanyId();
     if (isDemoMode) {
       clearDemoToken();
     } else if (supabaseConfigured) {
       await supabase.auth.signOut();
     }
-    set({ user: null, company: null, companyPlan: null, isAuthenticated: false });
+    set({
+      user: null,
+      company: null,
+      companyPlan: null,
+      isAuthenticated: false,
+      isImpersonating: false,
+      impersonatedCompanyId: null,
+      impersonatedCompanyName: null,
+    });
   },
 
   fetchProfile: async () => {
     try {
-      const data = await api.get<{ profile: Profile; company: Company | null; companyPlan: CompanyPlan | null }>('/auth/me');
-      set({
-        user: data.profile,
-        company: data.company,
-        companyPlan: data.companyPlan,
-        isAuthenticated: true,
-        isLoading: false,
-      });
+      const data = await api.get<MeResponse>('/auth/me');
+      applyMeResponse(set, data);
     } catch (err) {
       const message = err instanceof Error ? err.message : '';
       if (message.includes('429') || message.includes('Çok fazla istek') || message.includes('Too many requests')) {
         set({ isLoading: false });
         return;
       }
-      set({ user: null, company: null, companyPlan: null, isAuthenticated: false, isLoading: false });
+      clearImpersonateCompanyId();
+      set({
+        user: null,
+        company: null,
+        companyPlan: null,
+        isAuthenticated: false,
+        isLoading: false,
+        isImpersonating: false,
+        impersonatedCompanyId: null,
+        impersonatedCompanyName: null,
+      });
     }
+  },
+
+  startImpersonation: async (companyId) => {
+    const result = await api.post<{ company_id: string; company_name: string }>(
+      `/admin/companies/${companyId}/impersonate`
+    );
+    setImpersonateCompanyId(result.company_id);
+    await get().fetchProfile();
+  },
+
+  stopImpersonation: async () => {
+    clearImpersonateCompanyId();
+    set({
+      isImpersonating: false,
+      impersonatedCompanyId: null,
+      impersonatedCompanyName: null,
+      company: null,
+      companyPlan: null,
+    });
+    await get().fetchProfile();
   },
 
   updateProfile: async (data) => {

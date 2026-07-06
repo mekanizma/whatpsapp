@@ -4,12 +4,13 @@
 
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowLeft, Save, RotateCcw, Smartphone, Users, MessageSquare, Zap, Ticket, FileDown, Lock,
+  ArrowLeft, Save, RotateCcw, Smartphone, Users, MessageSquare, Zap, Ticket, FileDown, Lock, ExternalLink,
 } from 'lucide-react';
 import { api } from '@/services/api';
+import { useAuthStore } from '@/store/authStore';
 import { PageHeader } from '@/components/PageHeader';
 import { ResetPasswordForm } from '@/components/ResetPasswordForm';
 import { StatCard } from '@/components/StatCard';
@@ -17,6 +18,7 @@ import {
   Button, Input, Label, Card, CardContent, CardHeader, CardTitle,
   Spinner, Badge,
 } from '@/components/ui';
+import { AdminCompanyNotes } from '@/components/admin/AdminCompanyNotes';
 import { CompanyPlanFeatures } from '@/components/CompanyPlanFeatures';
 import type { CompanyDetail } from '@/types';
 import { cn } from '@/lib/utils';
@@ -28,8 +30,12 @@ export function AdminCompanyDetailPage() {
   const { t, i18n } = useTranslation();
   const locale = i18n.language?.startsWith('en') ? 'en-US' : 'tr-TR';
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const startImpersonation = useAuthStore((s) => s.startImpersonation);
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<'genel' | 'abonelik' | 'kullanicilar'>('genel');
+  const [tab, setTab] = useState<'genel' | 'notlar' | 'abonelik' | 'kullanicilar'>('genel');
+  const [impersonateLoading, setImpersonateLoading] = useState(false);
+  const [impersonateError, setImpersonateError] = useState<string | null>(null);
   const [invoicePeriod, setInvoicePeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [setupFee, setSetupFee] = useState('');
   const [setupFeeDescription, setSetupFeeDescription] = useState('');
@@ -96,6 +102,7 @@ export function AdminCompanyDetailPage() {
 
   const tabs = [
     { id: 'genel' as const, labelKey: 'admin.companyDetail.tabs.general' },
+    { id: 'notlar' as const, labelKey: 'admin.companyDetail.tabs.notes' },
     { id: 'abonelik' as const, labelKey: 'admin.companyDetail.tabs.subscription' },
     { id: 'kullanicilar' as const, labelKey: 'admin.companyDetail.tabs.users' },
   ];
@@ -123,20 +130,47 @@ export function AdminCompanyDetailPage() {
     }
   };
 
+  const handleEnterPanel = async () => {
+    if (!id) return;
+    setImpersonateError(null);
+    setImpersonateLoading(true);
+    try {
+      await startImpersonation(id);
+      navigate('/panel/dashboard');
+    } catch (err) {
+      setImpersonateError(err instanceof Error ? err.message : t('admin.impersonation.error'));
+    } finally {
+      setImpersonateLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" asChild>
-          <Link to="/admin/companies"><ArrowLeft className="h-4 w-4" /></Link>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="sm" asChild>
+            <Link to="/admin/companies"><ArrowLeft className="h-4 w-4" /></Link>
+          </Button>
+          <PageHeader
+            title={company.company_name}
+            description={t('admin.companyDetail.headerDesc', {
+              id: company.id.slice(0, 8),
+              plan: planLabel,
+            })}
+          />
+        </div>
+        <Button
+          className="w-full min-h-[44px] sm:w-auto"
+          disabled={impersonateLoading}
+          onClick={handleEnterPanel}
+        >
+          {impersonateLoading ? <Spinner /> : <ExternalLink className="h-4 w-4" />}
+          {t('admin.impersonation.enterPanel')}
         </Button>
-        <PageHeader
-          title={company.company_name}
-          description={t('admin.companyDetail.headerDesc', {
-            id: company.id.slice(0, 8),
-            plan: planLabel,
-          })}
-        />
       </div>
+      {impersonateError && (
+        <p className="text-sm text-rose-600">{impersonateError}</p>
+      )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatCard title={t('admin.companyDetail.conversations')} value={stats.total_conversations} icon={MessageSquare} color="text-blue-600" bgColor="bg-blue-50" />
@@ -217,6 +251,8 @@ export function AdminCompanyDetailPage() {
           </CardContent>
         </Card>
       )}
+
+      {tab === 'notlar' && id && <AdminCompanyNotes companyId={id} />}
 
       {tab === 'abonelik' && subscription && (
         <div className="space-y-4">
