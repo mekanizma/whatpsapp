@@ -155,6 +155,12 @@
       "description": "Müşterileriniz WhatsApp'tan yazdığında yapay zeka saniyeler içinde yanıt verir. Gece gündüz demeden işletmeniz müşterilerinize ulaşır.",
       "buttonHint": "Hesabınız varsa hemen giriş yapın"
     },
+    "chatBotAriaLabel": "WhatsApp üzerinden Waai Sistemleri hakkında bilgi alın",
+    "chatBotMessage": "Waai Sistemleri Hakkında Bilgi Almak İstiyorum.",
+    "footer": {
+      "copyright": "{{year}} WhatsApp AI Saas Platform Mekanizma.",
+      "address": "Beşparmaklar Caddesi, No: 6, Çatalköy, Girne, KKTC"
+    },
     "stats": [
       { "value": "7/24", "label": "Kesintisiz AI yanıt" },
       { "value": "<3sn", "label": "Ortalama yanıt süresi" },

@@ -16,6 +16,7 @@ import { canSeeNavItem } from '@/lib/staff-permissions';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { CompanyLogo } from '@/components/CompanyLogo';
 import { PremiumPanelFrame, PremiumSidebar, type PremiumNavGroup } from '@/components/layout/PremiumSidebar';
+import { PanelRobotMascot } from '@/components/layout/PanelRobotMascot';
 import type { UserRole } from '@/types';
 
 type NavItem = {
@@ -208,6 +209,7 @@ export function CompanyLayout() {
       }
     >
       <Outlet />
+      <PanelRobotMascot />
     </PremiumPanelFrame>
   );
 }

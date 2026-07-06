@@ -19,6 +19,8 @@ import { HeroTitle } from '@/components/onboarding/HeroTitle';
 import { LandingStatCards } from '@/components/onboarding/LandingStatCards';
 import { LandingModulesSection } from '@/components/onboarding/LandingModulesSection';
 import { LandingCtaSection } from '@/components/onboarding/LandingCtaSection';
+import { LandingChatBot } from '@/components/onboarding/LandingChatBot';
+import { LandingFooter } from '@/components/onboarding/LandingFooter';
 
 const FEATURE_ICONS = [Bot, BookOpen] as const;
 const FEATURE_VISUALS = [AiEngineGraphic, KnowledgeGraphic] as const;
@@ -182,11 +184,9 @@ export function OnboardingPage() {
         </section>
       </main>
 
-      <footer className="border-t border-white/[0.06] px-4 py-8 text-center sm:px-8">
-        <p className="text-xs text-slate-600">
-          © {new Date().getFullYear()} {t('showcase.copyright')}
-        </p>
-      </footer>
+      <LandingChatBot />
+
+      <LandingFooter />
     </div>
   );
 }
