@@ -13,6 +13,7 @@ import { AdminOnlyRoute, PanelIndexRedirect, StaffKnowledgeRoute } from '@/compo
 import { PlanModuleRoute } from '@/components/PlanModuleRoute';
 import { AdminLayout } from '@/layouts/AdminLayout';
 import { CompanyLayout } from '@/layouts/CompanyLayout';
+import { OnboardingPage } from '@/pages/OnboardingPage';
 import { LoginPage } from '@/pages/LoginPage';
 import { AdminLoginPage } from '@/pages/AdminLoginPage';
 import { RegisterPage } from '@/pages/RegisterPage';
@@ -52,7 +53,9 @@ function AppRoutes() {
 
   return (
     <Routes>
-      {/* Giriş sayfaları */}
+      {/* Tanıtım & giriş sayfaları */}
+      <Route path="/" element={<OnboardingPage />} />
+      <Route path="/welcome" element={<OnboardingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/admin/login" element={<AdminLoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
@@ -107,8 +110,7 @@ function AppRoutes() {
       <Route path="/messages" element={<Navigate to="/panel/messages" replace />} />
       <Route path="/whatsapp" element={<Navigate to="/panel/whatsapp" replace />} />
 
-      <Route path="/" element={<Navigate to="/login" replace />} />
-      <Route path="*" element={<Navigate to="/login" replace />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

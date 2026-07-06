@@ -106,6 +106,92 @@
     "invalidResponse": "Sunucu geçersiz yanıt döndü ({{status}})",
     "tooManyRequests": "Çok fazla istek"
   },
+  "onboarding": {
+    "tagline": "Akıllı müşteri hizmetleri platformu",
+    "online": "Çevrimiçi",
+    "heroNote": "Demo hesap ile hemen deneyin",
+    "heroTitleLead": "Müşteri hizmetlerinizi",
+    "heroTitleAccent": "yapay zeka ile güçlendirin",
+    "heroBubble1": "Merhaba, fiyat listesini öğrenebilir miyim?",
+    "heroBubble2": "Tabii! Size hemen göndereyim.",
+    "heroBubble3": "Çalışma saatleriniz nedir?",
+    "heroBubble4": "Hafta içi 09:00–18:00 arası hizmet veriyoruz.",
+    "aiAgentLabel": "AI Temsilci",
+    "aiCore": "AI Motor",
+    "aiNode1": "Anında Yanıt",
+    "aiNode2": "Akıllı Analiz",
+    "aiNode3": "Otomatik",
+    "dashTitle": "Canlı Panel",
+    "dashStat1": "Memnuniyet",
+    "dashStat2": "Mesaj",
+    "dashStat3": "Yanıt",
+    "dashFloat1": "Canlı Aktarım",
+    "dashFloat2": "Randevu",
+    "featuresLabel": "Platform Özellikleri",
+    "featuresTitle": "İşletmeniz için eksiksiz çözüm",
+    "featuresSubtitle": "WhatsApp üzerinden müşteri iletişimini yapay zeka ile otomatikleştirin, ekibiniz kritik anlarda devreye girsin.",
+    "stepsLabel": "Kurulum",
+    "stepsTitle": "3 adımda hazırsınız",
+    "capabilitiesLabel": "Modüller",
+    "capabilitiesTitleLead": "Tüm yetenekler",
+    "capabilitiesTitleAccent": "tek platformda",
+    "capabilitiesSubtitle": "İletişimden raporlamaya kadar ihtiyacınız olan her araç, tek bir güvenli panelde bir araya gelir.",
+    "knowledgePanelTitle": "Bilgi Kaynakları",
+    "capabilities": [
+      { "icon": "MessageSquare", "label": "Mesajlar", "description": "Tüm WhatsApp konuşmalarını tek panelden yönetin." },
+      { "icon": "Bot", "label": "AI Temsilci", "description": "Akıllı otomatik yanıtlar ve bağlam hafızası." },
+      { "icon": "BookOpen", "label": "Bilgi Bankası", "description": "SSS ve dokümanlarla yapay zekayı eğitin." },
+      { "icon": "Headphones", "label": "Canlı Aktarım", "description": "Gerektiğinde insana sorunsuz aktarım." },
+      { "icon": "Calendar", "label": "Takvim", "description": "Randevu ve müsaitlik yönetimi." },
+      { "icon": "Ticket", "label": "Destek Talepleri", "description": "Ticket oluşturma, atama ve takip." },
+      { "icon": "LayoutDashboard", "label": "Dashboard", "description": "Performans metrikleri ve özet görünüm." },
+      { "icon": "Shield", "label": "7/24 Güvenlik", "description": "Şifreli bağlantı ve güvenli erişim." }
+    ],
+    "knowledgeDocs": ["Sık Sorulan Sorular", "Ürün & Hizmet Bilgileri", "Fiyat Listesi", "Şirket Politikaları"],
+    "cta": {
+      "badge": "Son Adım",
+      "titleLead": "WhatsApp AI temsilcinizi",
+      "titleAccent": "birkaç dakikada kurun",
+      "description": "Müşterileriniz WhatsApp'tan yazdığında yapay zeka saniyeler içinde yanıt verir. Gece gündüz demeden işletmeniz müşterilerinize ulaşır.",
+      "buttonHint": "Hesabınız varsa hemen giriş yapın"
+    },
+    "stats": [
+      { "value": "7/24", "label": "Kesintisiz AI yanıt" },
+      { "value": "<3sn", "label": "Ortalama yanıt süresi" },
+      { "value": "4.2K+", "label": "Aylık işlenen mesaj" }
+    ],
+    "steps": [
+      { "title": "Hesap oluşturun", "description": "Şirket bilgilerinizle kayıt olun veya demo hesapla giriş yapın." },
+      { "title": "WhatsApp'ı bağlayın", "description": "QR kod ile WhatsApp hesabınızı güvenli şekilde platforma bağlayın." },
+      { "title": "AI'ı eğitin", "description": "Bilgi bankanızı yükleyin, özel talimatlar ekleyin ve yayına alın." }
+    ],
+    "slides": [
+      {
+        "badge": "Hoş Geldiniz",
+        "title": "WhatsApp'ta Yapay Zeka Devri",
+        "description": "Müşterileriniz WhatsApp üzerinden yazdığında AI temsilciniz saniyeler içinde yanıt verir. 7 gün 24 saat kesintisiz hizmet.",
+        "highlights": ["WhatsApp QR Bağlantı", "7/24 Aktif", "Anında Yanıt"]
+      },
+      {
+        "badge": "AI Temsilci",
+        "title": "Akıllı ve Öğrenen Asistan",
+        "description": "Yapay zeka müşteri sorularını anlar, bağlamı korur ve firmanıza özel yanıtlar üretir. İnsan temsilciye gerektiğinde sorunsuz aktarım yapar.",
+        "highlights": ["Doğal Dil İşleme", "Bağlam Hafızası", "Canlı Aktarım"]
+      },
+      {
+        "badge": "Bilgi Bankası",
+        "title": "Firmanıza Özel Bilgi",
+        "description": "SSS, ürün bilgileri, fiyat listeleri ve şirket politikalarınızı yükleyin. AI her yanıtı sizin verilerinize göre üretsin.",
+        "highlights": ["SSS Yönetimi", "Özel Talimatlar", "Türkçe FTS Arama"]
+      },
+      {
+        "badge": "Hazırsınız",
+        "title": "Hemen Başlayın",
+        "description": "Hesabınıza giriş yaparak WhatsApp AI temsilcinizi dakikalar içinde aktif edin. Müşterileriniz artık beklemeyecek.",
+        "highlights": ["Kolay Kurulum", "Güvenli Giriş"]
+      }
+    ]
+  },
   "showcase": {
     "customerMarquee": ["7/24 AI Yanıt", "WhatsApp QR Bağlantı", "Canlı Aktarım", "Bilgi Bankası", "Talep Yönetimi", "AI Görüşme Kotası", "Otomatik Karşılama", "Anlık Bildirim"],
     "adminMarquee": ["Şirket Yönetimi", "Abonelik Kontrolü", "AI Kullanım Raporu", "Aktivite Logları", "Kota Yönetimi", "WhatsApp Durumu", "Platform İstatistik", "Güvenli Erişim"],

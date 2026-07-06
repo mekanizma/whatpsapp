@@ -5,7 +5,8 @@
 import { useState, FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { MessageSquare, Shield, ArrowRight } from 'lucide-react';
+import { Shield, ArrowRight } from 'lucide-react';
+import { WaaiLogo } from '@/components/WaaiLogo';
 import { useAuthStore, getRedirectPath } from '@/store/authStore';
 import { isDemoMode } from '@/lib/env';
 import { AuthPageLayout } from '@/components/auth/AuthPageLayout';
@@ -39,7 +40,7 @@ export function LoginPage() {
   return (
     <AuthPageLayout variant="customer">
       <AuthFormShell
-        icon={<MessageSquare className="h-7 w-7 text-teal-400" />}
+        icon={<WaaiLogo size="2xl" className="mx-auto lg:mx-0" />}
         title={t('auth.customerPanel')}
         subtitle={t('auth.customerSubtitle')}
         onSubmit={handleSubmit}

@@ -59,14 +59,7 @@ export function AuthFormShell({
 
       <div className="relative z-10 mx-auto w-full min-w-0 max-w-md flex-1 space-y-5 pb-6 sm:space-y-8 sm:pb-8 lg:flex-none">
         <div className="text-center lg:text-left">
-          <div
-            className={cn(
-              'mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl ring-1 lg:mx-0',
-              isAmber
-                ? 'bg-amber-500/15 ring-amber-400/30'
-                : 'bg-teal-500/15 ring-teal-400/30'
-            )}
-          >
+          <div className="mx-auto mb-4 w-fit lg:mx-0">
             {icon}
           </div>
           <h1 className="text-2xl font-bold text-white sm:text-3xl">{title}</h1>

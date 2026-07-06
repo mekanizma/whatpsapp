@@ -106,6 +106,92 @@
     "invalidResponse": "Server returned an invalid response ({{status}})",
     "tooManyRequests": "Too many requests"
   },
+  "onboarding": {
+    "tagline": "Smart customer service platform",
+    "online": "Online",
+    "heroNote": "Try instantly with a demo account",
+    "heroTitleLead": "Power your customer service",
+    "heroTitleAccent": "with artificial intelligence",
+    "heroBubble1": "Hi, can I get your price list?",
+    "heroBubble2": "Sure! Sending it right away.",
+    "heroBubble3": "What are your business hours?",
+    "heroBubble4": "We're open Mon–Fri, 9 AM to 6 PM.",
+    "aiAgentLabel": "AI Agent",
+    "aiCore": "AI Engine",
+    "aiNode1": "Instant Reply",
+    "aiNode2": "Smart Analysis",
+    "aiNode3": "Automated",
+    "dashTitle": "Live Panel",
+    "dashStat1": "Satisfaction",
+    "dashStat2": "Messages",
+    "dashStat3": "Response",
+    "dashFloat1": "Live Transfer",
+    "dashFloat2": "Booking",
+    "featuresLabel": "Platform Features",
+    "featuresTitle": "A complete solution for your business",
+    "featuresSubtitle": "Automate customer communication on WhatsApp with AI, while your team steps in when it matters.",
+    "stepsLabel": "Setup",
+    "stepsTitle": "Ready in 3 steps",
+    "capabilitiesLabel": "Modules",
+    "capabilitiesTitleLead": "All capabilities",
+    "capabilitiesTitleAccent": "in one platform",
+    "capabilitiesSubtitle": "Every tool you need — from communication to reporting — unified in one secure panel.",
+    "knowledgePanelTitle": "Knowledge Sources",
+    "capabilities": [
+      { "icon": "MessageSquare", "label": "Messages", "description": "Manage all WhatsApp conversations from one panel." },
+      { "icon": "Bot", "label": "AI Agent", "description": "Smart auto-replies with context memory." },
+      { "icon": "BookOpen", "label": "Knowledge Base", "description": "Train AI with FAQs and documents." },
+      { "icon": "Headphones", "label": "Live Transfer", "description": "Seamless handoff to a human when needed." },
+      { "icon": "Calendar", "label": "Calendar", "description": "Appointment and availability management." },
+      { "icon": "Ticket", "label": "Support Tickets", "description": "Create, assign, and track support requests." },
+      { "icon": "LayoutDashboard", "label": "Dashboard", "description": "Performance metrics and overview." },
+      { "icon": "Shield", "label": "24/7 Security", "description": "Encrypted connections and secure access." }
+    ],
+    "knowledgeDocs": ["Frequently Asked Questions", "Product & Service Info", "Price List", "Company Policies"],
+    "cta": {
+      "badge": "Final Step",
+      "titleLead": "Set up your WhatsApp AI agent",
+      "titleAccent": "in just a few minutes",
+      "description": "When customers message you on WhatsApp, AI replies in seconds. Your business stays available around the clock.",
+      "buttonHint": "Sign in if you already have an account"
+    },
+    "stats": [
+      { "value": "24/7", "label": "Uninterrupted AI replies" },
+      { "value": "<3s", "label": "Average response time" },
+      { "value": "4.2K+", "label": "Messages processed monthly" }
+    ],
+    "steps": [
+      { "title": "Create your account", "description": "Register with your company details or sign in with a demo account." },
+      { "title": "Connect WhatsApp", "description": "Securely link your WhatsApp account to the platform via QR code." },
+      { "title": "Train your AI", "description": "Upload your knowledge base, add custom instructions, and go live." }
+    ],
+    "slides": [
+      {
+        "badge": "Welcome",
+        "title": "The AI Era on WhatsApp",
+        "description": "When customers message you on WhatsApp, your AI agent replies in seconds. 24/7 uninterrupted service.",
+        "highlights": ["WhatsApp QR Connect", "24/7 Active", "Instant Reply"]
+      },
+      {
+        "badge": "AI Agent",
+        "title": "Smart, Learning Assistant",
+        "description": "AI understands customer questions, keeps context, and generates company-specific answers. Seamless handoff to humans when needed.",
+        "highlights": ["Natural Language", "Context Memory", "Live Transfer"]
+      },
+      {
+        "badge": "Knowledge Base",
+        "title": "Knowledge Tailored to You",
+        "description": "Upload FAQs, product info, price lists and policies. AI generates every answer from your data.",
+        "highlights": ["FAQ Management", "Custom Instructions", "Full-Text Search"]
+      },
+      {
+        "badge": "Ready",
+        "title": "Get Started Now",
+        "description": "Sign in to activate your WhatsApp AI agent in minutes. Your customers won't have to wait anymore.",
+        "highlights": ["Easy Setup", "Secure Login"]
+      }
+    ]
+  },
   "showcase": {
     "customerMarquee": ["24/7 AI Replies", "WhatsApp QR Connect", "Live Transfer", "Knowledge Base", "Ticket Management", "AI Conversation Quota", "Auto Greeting", "Instant Alerts"],
     "adminMarquee": ["Company Management", "Subscription Control", "AI Usage Reports", "Activity Logs", "Quota Management", "WhatsApp Status", "Platform Stats", "Secure Access"],

@@ -9,6 +9,7 @@ import {
   Sparkles, Clock, Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { SiteHeader } from '@/components/SiteHeader';
 
 export type AuthVariant = 'customer' | 'admin';
 
@@ -180,38 +181,36 @@ export function AuthShowcase({ variant }: AuthShowcaseProps) {
     <div className="auth-page relative flex h-full min-h-0 flex-col overflow-y-auto text-white scrollbar-thin">
       <ShowcaseBackground isAdmin={isAdmin} />
 
-      <div className="relative z-10 shrink-0 space-y-5 p-6 sm:p-8 lg:p-10 lg:pb-4">
-        <div className="flex items-center gap-3">
-          <div
-            className={cn(
-              'flex h-11 w-11 items-center justify-center rounded-xl ring-1',
-              isAdmin ? 'bg-amber-500/15 ring-amber-500/30' : 'bg-white/10 ring-white/20'
-            )}
-          >
-            {isAdmin ? (
-              <Shield className="h-6 w-6 text-amber-400" />
-            ) : (
-              <MessageSquare className="h-6 w-6 text-[#25d366]" />
-            )}
+      <div className="relative z-10 shrink-0">
+        {isAdmin ? (
+          <div className="space-y-5 p-6 sm:p-8 lg:p-10 lg:pb-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-500/15 ring-1 ring-amber-500/30">
+                <Shield className="h-6 w-6 text-amber-400" />
+              </div>
+              <div>
+                <span className="text-lg font-bold text-white">{t('showcase.platformAdmin')}</span>
+                <p className="text-xs text-slate-400">{t('showcase.adminHeadline')}</p>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <h2 className="text-2xl font-bold leading-tight text-white sm:text-3xl">
+                {t('showcase.adminDesc')}
+              </h2>
+              <p className="max-w-md text-sm text-slate-300">{t('showcase.adminSub')}</p>
+            </div>
           </div>
-          <div>
-            <span className="text-lg font-bold text-white">
-              {isAdmin ? t('showcase.platformAdmin') : t('showcase.whatsappAi')}
-            </span>
-            <p className="text-xs text-slate-400">
-              {isAdmin ? t('showcase.adminHeadline') : t('showcase.customerHeadline')}
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          <h2 className="text-2xl font-bold leading-tight text-white sm:text-3xl">
-            {isAdmin ? t('showcase.adminDesc') : t('showcase.customerDesc')}
-          </h2>
-          <p className="max-w-md text-sm text-slate-300">
-            {isAdmin ? t('showcase.adminSub') : t('showcase.customerSub')}
-          </p>
-        </div>
+        ) : (
+          <>
+            <SiteHeader />
+            <div className="space-y-3 px-6 pb-2 sm:px-8 lg:px-10">
+              <h2 className="text-2xl font-bold leading-tight text-white sm:text-3xl">
+                {t('showcase.customerDesc')}
+              </h2>
+              <p className="max-w-md text-sm text-slate-300">{t('showcase.customerSub')}</p>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="relative z-10 flex shrink-0 items-center justify-center px-6 py-4 sm:px-8">
@@ -248,37 +247,40 @@ export function AuthShowcase({ variant }: AuthShowcaseProps) {
 export function AuthMobileBanner({ variant }: AuthShowcaseProps) {
   const { t } = useTranslation();
   const isAdmin = variant === 'admin';
+
+  if (!isAdmin) {
+    return (
+      <div className="auth-page relative shrink-0 overflow-x-clip lg:hidden">
+        <div className="pointer-events-none absolute inset-0 overflow-hidden bg-[#020617]">
+          <ShowcaseBackground isAdmin={false} />
+        </div>
+        <div className="relative z-10">
+          <SiteHeader />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className={cn(
         'auth-page relative shrink-0 overflow-hidden text-white lg:hidden',
-        isAdmin
-          ? 'bg-gradient-to-br from-slate-950 via-stone-950 to-slate-900'
-          : 'bg-gradient-to-br from-slate-950 via-teal-950 to-emerald-900'
+        'bg-gradient-to-br from-slate-950 via-stone-950 to-slate-900'
       )}
     >
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <ShowcaseBackground isAdmin={isAdmin} />
+        <ShowcaseBackground isAdmin />
       </div>
       <div className="relative z-10 flex items-center gap-3 px-4 py-4 sm:px-6 sm:py-5">
-        <div
-          className={cn(
-            'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1 sm:h-11 sm:w-11',
-            isAdmin ? 'bg-amber-500/15 ring-amber-500/30' : 'bg-white/10 ring-white/20'
-          )}
-        >
-          {isAdmin ? (
-            <Shield className="h-5 w-5 text-amber-400 sm:h-6 sm:w-6" />
-          ) : (
-            <MessageSquare className="h-5 w-5 text-[#25d366] sm:h-6 sm:w-6" />
-          )}
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/15 ring-1 ring-amber-500/30 sm:h-11 sm:w-11">
+          <Shield className="h-5 w-5 text-amber-400 sm:h-6 sm:w-6" />
         </div>
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-base font-bold text-white sm:text-lg">
-            {isAdmin ? t('showcase.platformAdmin') : t('showcase.whatsappAi')}
+            {t('showcase.platformAdmin')}
           </h2>
           <p className="truncate text-xs text-slate-400 sm:text-sm">
-            {isAdmin ? t('showcase.mobileAdmin') : t('showcase.mobileCustomer')}
+            {t('showcase.mobileAdmin')}
           </p>
         </div>
       </div>
