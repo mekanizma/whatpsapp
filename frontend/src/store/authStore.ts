@@ -5,7 +5,7 @@
 import { create } from 'zustand';
 import { supabase, supabaseConfigured } from '@/services/supabase';
 import { isDemoMode } from '@/lib/env';
-import { api, setDemoToken, clearDemoToken, setImpersonateCompanyId, clearImpersonateCompanyId } from '@/services/api';
+import { api, setDemoToken, clearDemoToken, setImpersonateToken, clearImpersonateToken, clearImpersonateCompanyId } from '@/services/api';
 import i18n from '@/i18n';
 import type { Profile, Company, UserRole, CompanyPlan, ImpersonationState } from '@/types';
 export type LoginPanel = 'admin' | 'customer';
@@ -48,9 +48,14 @@ type MeResponse = {
 
 function applyMeResponse(
   set: (partial: Partial<AuthState> | ((state: AuthState) => Partial<AuthState>)) => void,
-  data: MeResponse
+  data: MeResponse,
+  options?: { preserveImpersonationOnInactive?: boolean }
 ) {
   const impersonation = data.impersonation;
+  if (!impersonation?.active && !options?.preserveImpersonationOnInactive) {
+    clearImpersonateToken();
+    clearImpersonateCompanyId();
+  }
   set({
     user: data.profile,
     company: data.company,
@@ -91,6 +96,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       if (panel === 'customer' && demoUser.role === 'super_admin') {
         throw new Error(i18n.t('auth.errors.customerPanelAdminOnly'));
       }
+      clearImpersonateToken();
       clearImpersonateCompanyId();
       setDemoToken(demoUser.token);
       const data = await api.get<MeResponse>('/auth/me');
@@ -105,6 +111,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw new Error(error.message);
 
+    clearImpersonateToken();
     clearImpersonateCompanyId();
     const data = await api.get<MeResponse>('/auth/me');
 
@@ -133,6 +140,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   logout: async () => {
+    clearImpersonateToken();
     clearImpersonateCompanyId();
     if (isDemoMode) {
       clearDemoToken();
@@ -160,6 +168,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         set({ isLoading: false });
         return;
       }
+      clearImpersonateToken();
       clearImpersonateCompanyId();
       set({
         user: null,
@@ -175,14 +184,34 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   startImpersonation: async (companyId) => {
-    const result = await api.post<{ company_id: string; company_name: string }>(
+    const result = await api.post<{ company_id: string; company_name: string; token: string }>(
       `/admin/companies/${companyId}/impersonate`
     );
-    setImpersonateCompanyId(result.company_id);
-    await get().fetchProfile();
+    if (!result?.token) {
+      throw new Error(i18n.t('admin.impersonation.error'));
+    }
+    setImpersonateToken(result.token);
+    set({
+      isImpersonating: true,
+      impersonatedCompanyId: result.company_id,
+      impersonatedCompanyName: result.company_name,
+    });
+    const data = await api.get<MeResponse>('/auth/me');
+    applyMeResponse(set, data, { preserveImpersonationOnInactive: true });
+    if (!data.impersonation?.active) {
+      clearImpersonateToken();
+      clearImpersonateCompanyId();
+      set({
+        isImpersonating: false,
+        impersonatedCompanyId: null,
+        impersonatedCompanyName: null,
+      });
+      throw new Error(i18n.t('admin.impersonation.error'));
+    }
   },
 
   stopImpersonation: async () => {
+    clearImpersonateToken();
     clearImpersonateCompanyId();
     set({
       isImpersonating: false,

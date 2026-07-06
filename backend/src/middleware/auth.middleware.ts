@@ -8,6 +8,7 @@ import { config } from '../config';
 import { adminClient } from '../database/supabase';
 import { DEMO_TOKENS, demoProfilesByToken } from '../demo/mockData';
 import { getStaffSubRoleForProfile, staffCanAccessKnowledge } from '../services/staff-permissions.service';
+import { verifyImpersonationToken } from '../services/impersonation.service';
 import { Profile, UserRole, StaffSubRole } from '../types';
 
 export interface AuthRequest extends Request {
@@ -20,17 +21,25 @@ export interface AuthRequest extends Request {
   isImpersonating?: boolean;
 }
 
-const IMPERSONATE_HEADER = 'x-impersonate-company';
+const IMPERSONATE_TOKEN_HEADER = 'x-impersonate-token';
 
 async function applyImpersonation(req: AuthRequest): Promise<void> {
-  if (req.role !== 'super_admin') return;
+  if (req.role !== 'super_admin' || !req.userId) return;
 
-  const raw = req.headers[IMPERSONATE_HEADER];
-  const companyId = typeof raw === 'string' ? raw.trim() : null;
+  const raw = req.headers[IMPERSONATE_TOKEN_HEADER];
+  const token =
+    typeof raw === 'string'
+      ? raw.trim()
+      : Array.isArray(raw)
+        ? raw[0]?.trim() ?? null
+        : null;
+  if (!token) return;
+
+  const companyId = verifyImpersonationToken(token, req.userId);
   if (!companyId) return;
 
   if (config.demoMode && isDemoSession(req)) {
-    req.companyId = demoProfilesByToken[req.accessToken!]?.company_id ?? companyId;
+    req.companyId = demoProfilesByToken[DEMO_TOKENS.company].company_id;
     req.isImpersonating = true;
     return;
   }
@@ -42,7 +51,7 @@ async function applyImpersonation(req: AuthRequest): Promise<void> {
     .maybeSingle();
 
   if (error) throw new Error(error.message);
-  if (!company) throw new Error('Geçersiz şirket kimliği');
+  if (!company) return;
 
   req.companyId = companyId;
   req.isImpersonating = true;
@@ -121,8 +130,7 @@ export async function authenticate(
     next();
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Kimlik doğrulama hatası';
-    const status = message.includes('Geçersiz şirket') ? 403 : 500;
-    res.status(status).json({ success: false, error: message });
+    res.status(500).json({ success: false, error: message });
   }
 }
 
@@ -169,11 +177,17 @@ export function requireCompany(req: AuthRequest, res: Response, next: NextFuncti
   next();
 }
 
-/** Super admin hariç yalnızca kendi şirketine erişim */
+/** Super admin hariç yalnızca kendi şirketine erişim; impersonation sırasında yalnızca hedef firma */
 export function resolveAuthorizedCompanyId(
   req: AuthRequest,
   paramId?: string
 ): string | null {
+  if (req.role === 'super_admin' && req.isImpersonating) {
+    if (!req.companyId) return null;
+    if (paramId && paramId !== req.companyId) return null;
+    return req.companyId;
+  }
+
   const targetId = paramId || req.companyId;
   if (!targetId) return null;
   if (req.role === 'super_admin') return targetId;

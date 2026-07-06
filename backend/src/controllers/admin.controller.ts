@@ -8,6 +8,7 @@ import { adminClient } from '../database/supabase';
 import { demoCompany, demoPlans, demoAiConversationAddons } from '../demo/mockData';
 import { AuthRequest, isDemoSession } from '../middleware/auth.middleware';
 import { logActivity } from '../services/log.service';
+import { createImpersonationToken } from '../services/impersonation.service';
 import {
   getExtendedPlatformStats,
   getCompaniesWithUsage,
@@ -94,9 +95,14 @@ export async function startCompanyImpersonation(req: AuthRequest, res: Response)
   const companyId = req.params.id as string;
 
   if (isDemoSession(req)) {
+    const token = createImpersonationToken(req.userId!, demoCompany.id);
     res.json({
       success: true,
-      data: { company_id: demoCompany.id, company_name: demoCompany.company_name },
+      data: {
+        company_id: demoCompany.id,
+        company_name: demoCompany.company_name,
+        token,
+      },
     });
     return;
   }
@@ -120,9 +126,11 @@ export async function startCompanyImpersonation(req: AuthRequest, res: Response)
     metadata: { company_name: company.company_name },
   });
 
+  const token = createImpersonationToken(req.userId!, company.id);
+
   res.json({
     success: true,
-    data: { company_id: company.id, company_name: company.company_name },
+    data: { company_id: company.id, company_name: company.company_name, token },
   });
 }
 

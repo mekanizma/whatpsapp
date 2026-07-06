@@ -101,11 +101,11 @@ export async function getMe(req: AuthRequest, res: Response): Promise<void> {
       company,
       companyPlan,
       email,
-      impersonation: req.isImpersonating && company
+      impersonation: req.isImpersonating && req.companyId
         ? {
             active: true,
-            company_id: company.id,
-            company_name: company.company_name,
+            company_id: req.companyId,
+            company_name: company?.company_name ?? null,
           }
         : { active: false, company_id: null, company_name: null },
     },

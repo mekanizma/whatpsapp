@@ -25,18 +25,26 @@ const API_BASE = (() => {
 
 const API_URL = API_BASE;
 const DEMO_TOKEN_KEY = 'wa_demo_token';
-export const IMPERSONATE_COMPANY_KEY = 'wa_impersonate_company';
+export const IMPERSONATE_TOKEN_KEY = 'wa_impersonate_token';
 
-export function setImpersonateCompanyId(companyId: string) {
-  sessionStorage.setItem(IMPERSONATE_COMPANY_KEY, companyId);
+export function setImpersonateToken(token: string) {
+  if (!token) return;
+  sessionStorage.setItem(IMPERSONATE_TOKEN_KEY, token);
 }
+
+export function clearImpersonateToken() {
+  sessionStorage.removeItem(IMPERSONATE_TOKEN_KEY);
+}
+
+export function getImpersonateToken(): string | null {
+  return sessionStorage.getItem(IMPERSONATE_TOKEN_KEY);
+}
+
+/** @deprecated Eski oturumlar için — yalnızca temizlik */
+export const IMPERSONATE_COMPANY_KEY = 'wa_impersonate_company';
 
 export function clearImpersonateCompanyId() {
   sessionStorage.removeItem(IMPERSONATE_COMPANY_KEY);
-}
-
-export function getImpersonateCompanyId(): string | null {
-  return sessionStorage.getItem(IMPERSONATE_COMPANY_KEY);
 }
 
 export function setDemoToken(token: string) {
@@ -52,9 +60,9 @@ async function getAuthHeaders(): Promise<HeadersInit> {
     'Content-Type': 'application/json',
   };
 
-  const impersonateCompanyId = getImpersonateCompanyId();
-  if (impersonateCompanyId) {
-    headers['X-Impersonate-Company'] = impersonateCompanyId;
+  const impersonateToken = getImpersonateToken();
+  if (impersonateToken) {
+    headers['X-Impersonate-Token'] = impersonateToken;
   }
 
   if (isDemoMode) {
