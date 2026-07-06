@@ -2,14 +2,14 @@
  * Auth sayfaları — animasyonlu showcase paneli
  */
 
-import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Bot, Headphones, MessageSquare, BarChart3, Shield,
+  Bot, Headphones, BarChart3, Shield,
   Sparkles, Clock, Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { SiteHeader } from '@/components/SiteHeader';
+import { HeroTitle } from '@/components/onboarding/HeroTitle';
+import { ChatMockup } from '@/components/onboarding/ChatMockup';
 
 export type AuthVariant = 'customer' | 'admin';
 
@@ -19,11 +19,6 @@ interface AuthShowcaseProps {
 
 const CUSTOMER_ICONS = [Bot, Headphones, Clock, Sparkles];
 const ADMIN_ICONS = [Users, BarChart3, Shield, Sparkles];
-
-interface ChatMessage {
-  from: string;
-  text: string;
-}
 
 function MarqueeRow({ items, reverse = false, className }: { items: string[]; reverse?: boolean; className?: string }) {
   const doubled = [...items, ...items];
@@ -43,71 +38,6 @@ function MarqueeRow({ items, reverse = false, className }: { items: string[]; re
             {item}
           </span>
         ))}
-      </div>
-    </div>
-  );
-}
-
-export function ChatMockup({ compact = false }: { compact?: boolean }) {
-  const { t } = useTranslation();
-  const chatMessages = t('showcase.chatMessages', { returnObjects: true }) as ChatMessage[];
-  const [shown, setShown] = useState(1);
-
-  useEffect(() => {
-    if (shown >= chatMessages.length) {
-      const timer = setTimeout(() => setShown(1), 2500);
-      return () => clearTimeout(timer);
-    }
-    const timer = setTimeout(() => setShown((s) => s + 1), 1400);
-    return () => clearTimeout(timer);
-  }, [shown, chatMessages.length]);
-
-  return (
-    <div
-      className={cn(
-        'relative z-20 mx-auto w-full',
-        compact ? 'max-w-[280px]' : 'max-w-sm'
-      )}
-    >
-      <div className="overflow-hidden rounded-2xl border border-teal-400/30 bg-slate-900 shadow-2xl shadow-black/50 ring-1 ring-white/10">
-        <div className="flex items-center gap-2 border-b border-white/10 bg-teal-900/40 px-4 py-3">
-          <div className="flex gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
-            <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
-            <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
-          </div>
-          <div className="flex flex-1 items-center justify-center gap-2">
-            <MessageSquare className="h-3.5 w-3.5 text-[#25d366]" />
-            <span className="text-xs font-semibold text-white">{t('showcase.whatsappAi')}</span>
-          </div>
-        </div>
-        <div
-          className={cn(
-            'flex flex-col justify-end space-y-2.5 bg-slate-900 p-3',
-            compact ? 'min-h-[180px]' : 'min-h-[220px]'
-          )}
-        >
-          {chatMessages.slice(0, shown).map((msg, i) => (
-            <div
-              key={`${msg.text}-${i}`}
-              className={cn(
-                'max-w-[88%] animate-chat-in rounded-2xl px-3 py-2 text-sm leading-snug',
-                msg.from === 'customer'
-                  ? 'ml-auto rounded-br-sm bg-[#25d366] text-white'
-                  : 'mr-auto rounded-bl-sm bg-slate-700 text-white'
-              )}
-            >
-              {msg.text}
-            </div>
-          ))}
-          {shown < chatMessages.length && shown > 0 && (
-            <div className="mr-auto flex gap-1 rounded-2xl rounded-bl-sm bg-slate-700 px-3 py-2.5">
-              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-white/60 [animation-delay:0ms]" />
-              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-white/60 [animation-delay:150ms]" />
-              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-white/60 [animation-delay:300ms]" />
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );
@@ -201,19 +131,17 @@ export function AuthShowcase({ variant }: AuthShowcaseProps) {
             </div>
           </div>
         ) : (
-          <>
-            <SiteHeader />
-            <div className="space-y-3 px-6 pb-2 sm:px-8 lg:px-10">
-              <h2 className="text-2xl font-bold leading-tight text-white sm:text-3xl">
-                {t('showcase.customerDesc')}
-              </h2>
-              <p className="max-w-md text-sm text-slate-300">{t('showcase.customerSub')}</p>
-            </div>
-          </>
+          <div className="auth-showcase-copy px-6 pb-2 pt-6 sm:px-8 sm:pt-8 lg:px-10 lg:pt-10">
+            <HeroTitle
+              lead={t('onboarding.heroTitleLead')}
+              accent={t('onboarding.heroTitleAccent')}
+            />
+            <p className="auth-showcase-desc">{t('showcase.customerSub')}</p>
+          </div>
         )}
       </div>
 
-      <div className="relative z-10 flex shrink-0 items-center justify-center px-6 py-4 sm:px-8">
+      <div className="auth-showcase-hero relative z-10 flex shrink-0 items-center justify-center px-6 py-4 sm:px-8">
         {isAdmin ? <AdminDashboardMockup /> : <ChatMockup />}
       </div>
 
@@ -249,16 +177,7 @@ export function AuthMobileBanner({ variant }: AuthShowcaseProps) {
   const isAdmin = variant === 'admin';
 
   if (!isAdmin) {
-    return (
-      <div className="auth-page relative shrink-0 overflow-x-clip lg:hidden">
-        <div className="pointer-events-none absolute inset-0 overflow-hidden bg-[#020617]">
-          <ShowcaseBackground isAdmin={false} />
-        </div>
-        <div className="relative z-10">
-          <SiteHeader />
-        </div>
-      </div>
-    );
+    return null;
   }
 
   return (

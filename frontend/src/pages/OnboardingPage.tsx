@@ -12,8 +12,9 @@ import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { Button } from '@/components/ui';
 import { cn } from '@/lib/utils';
 import {
-  HeroShowcase, AiEngineGraphic, KnowledgeGraphic,
+  AiEngineGraphic, KnowledgeGraphic,
 } from '@/components/onboarding/OnboardingVisuals';
+import { ChatMockup } from '@/components/onboarding/ChatMockup';
 import { HeroTitle } from '@/components/onboarding/HeroTitle';
 import { LandingStatCards } from '@/components/onboarding/LandingStatCards';
 import { LandingModulesSection } from '@/components/onboarding/LandingModulesSection';
@@ -87,7 +88,7 @@ export function OnboardingPage() {
                 </div>
               </div>
               <div className="flex justify-center lg:justify-end">
-                <HeroShowcase />
+                <ChatMockup size="landing" />
               </div>
             </div>
           </div>

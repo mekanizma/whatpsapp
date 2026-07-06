@@ -40,7 +40,7 @@ export function LoginPage() {
   return (
     <AuthPageLayout variant="customer">
       <AuthFormShell
-        icon={<WaaiLogo size="2xl" className="mx-auto lg:mx-0" />}
+        icon={<WaaiLogo className="auth-form-logo" />}
         title={t('auth.customerPanel')}
         subtitle={t('auth.customerSubtitle')}
         onSubmit={handleSubmit}
