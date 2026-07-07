@@ -10,6 +10,15 @@ import i18n from '@/i18n';
 import type { Profile, Company, UserRole, CompanyPlan, ImpersonationState } from '@/types';
 export type LoginPanel = 'admin' | 'customer';
 
+export interface RegisterData {
+  email: string;
+  password: string;
+  fullName: string;
+  phone?: string;
+  companyName?: string;
+  category?: string;
+}
+
 const DEMO_USERS: Record<string, { password: string; token: string; role: UserRole }> = {
   'admin@demo.com': { password: 'demo123', token: 'demo-admin-token', role: 'super_admin' },
   'firma@demo.com': { password: 'demo123', token: 'demo-company-token', role: 'company_admin' },
@@ -26,7 +35,7 @@ interface AuthState {
   impersonatedCompanyId: string | null;
   impersonatedCompanyName: string | null;
   login: (email: string, password: string, panel: LoginPanel) => Promise<void>;
-  register: (email: string, password: string, fullName: string) => Promise<void>;
+  register: (data: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
   fetchProfile: () => Promise<void>;
   startImpersonation: (companyId: string) => Promise<void>;
@@ -127,14 +136,19 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     applyMeResponse(set, data);
   },
 
-  register: async (email, password, fullName) => {
+  register: async ({ email, password, fullName, phone, companyName, category }) => {
     if (isDemoMode) throw new Error(i18n.t('auth.errors.demoRegisterDisabled'));
     if (!supabaseConfigured) throw new Error(i18n.t('auth.errors.supabaseNotConfigured'));
+
+    const metadata: Record<string, string> = { full_name: fullName };
+    if (phone?.trim()) metadata.phone = phone.trim();
+    if (companyName?.trim()) metadata.company_name = companyName.trim();
+    if (category?.trim()) metadata.category = category.trim();
 
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: fullName } },
+      options: { data: metadata },
     });
     if (error) throw new Error(error.message);
   },

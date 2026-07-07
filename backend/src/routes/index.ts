@@ -20,7 +20,8 @@ import * as appointmentsCtrl from '../controllers/appointments.controller';
 import * as notificationsCtrl from '../controllers/notifications.controller';
 import * as unknownQuestionsCtrl from '../controllers/unknown-questions.controller';
 import * as platformSupportCtrl from '../controllers/platform-support.controller';
-import { companyLogoUpload, knowledgeFileUpload, messageImageUpload } from '../middleware/upload.middleware';
+import * as referenceLogosCtrl from '../controllers/reference-logos.controller';
+import { companyLogoUpload, knowledgeFileUpload, messageImageUpload, referenceLogoUpload } from '../middleware/upload.middleware';
 
 const router = Router();
 
@@ -60,6 +61,10 @@ router.post('/admin/prompts-cleanup', authenticate, requireRole('super_admin'), 
 router.post('/admin/prompts-seed', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.seedPrompts));
 router.get('/admin/plans', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.getSubscriptionPlans));
 router.put('/admin/plans/:id', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.updateSubscriptionPlanAdmin));
+router.get('/admin/reference-logos', authenticate, requireRole('super_admin'), asyncHandler(referenceLogosCtrl.adminListReferenceLogos));
+router.post('/admin/reference-logos', authenticate, requireRole('super_admin'), referenceLogoUpload.single('file'), asyncHandler(referenceLogosCtrl.createReferenceLogo));
+router.put('/admin/reference-logos/:id', authenticate, requireRole('super_admin'), asyncHandler(referenceLogosCtrl.updateReferenceLogo));
+router.delete('/admin/reference-logos/:id', authenticate, requireRole('super_admin'), asyncHandler(referenceLogosCtrl.deleteReferenceLogo));
 router.get('/admin/addons', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.getAiConversationAddonsAdmin));
 router.put('/admin/addons/:id', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.updateAiConversationAddonAdmin));
 router.get('/admin/users', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.getAdminUsers));
@@ -204,6 +209,10 @@ router.get('/appointments', authenticate, requireCompany, appointmentsCtrl.getAp
 router.post('/appointments', authenticate, requireCompany, appointmentsCtrl.createAppointmentHandler);
 router.put('/appointments/:id', authenticate, requireCompany, appointmentsCtrl.updateAppointmentHandler);
 router.delete('/appointments/:id', authenticate, requireRole('company_admin', 'staff'), requireCompany, appointmentsCtrl.deleteAppointmentHandler);
+
+// Public (kimlik doğrulama gerektirmeyen) uç noktalar
+router.get('/public/plans', asyncHandler(subscriptionCtrl.getPublicPlans));
+router.get('/public/reference-logos', asyncHandler(referenceLogosCtrl.getPublicReferenceLogos));
 
 // Subscriptions
 router.get('/subscriptions/current', authenticate, requireCompany, subscriptionCtrl.getCurrentSubscription);

@@ -454,6 +454,17 @@ export interface WhatsAppConfig {
   status: string;
 }
 
+export interface ReferenceLogo {
+  id: string;
+  name: string;
+  logo_url: string;
+  website?: string | null;
+  display_order: number;
+  is_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface SubscriptionPlan {
   id: string;
   plan_type: string;

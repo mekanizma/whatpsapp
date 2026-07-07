@@ -2,7 +2,7 @@
  * Subscription controller
  */
 
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import { adminClient } from '../database/supabase';
 import { demoCompany, demoPlans, demoSubscriptionUsage, demoAiConversationAddons } from '../demo/mockData';
 import { AuthRequest, isDemoSession } from '../middleware/auth.middleware';
@@ -151,4 +151,25 @@ export async function getPlans(req: AuthRequest, res: Response): Promise<void> {
   }
 
   res.json({ success: true, data });
+}
+
+/**
+ * Herkese açık aktif abonelik paketleri — tanıtım / fiyatlar sayfası için.
+ * Kimlik doğrulama gerektirmez, yalnızca aktif planları döner.
+ */
+export async function getPublicPlans(_req: Request, res: Response): Promise<void> {
+  const { data, error } = await adminClient
+    .from('subscription_plans')
+    .select(
+      'id, plan_type, name, description, features, message_limit, user_limit, price_monthly, price_yearly, currency, is_active'
+    )
+    .eq('is_active', true)
+    .order('price_monthly', { ascending: true });
+
+  if (error) {
+    res.json({ success: true, data: demoPlans });
+    return;
+  }
+
+  res.json({ success: true, data: data && data.length > 0 ? data : demoPlans });
 }

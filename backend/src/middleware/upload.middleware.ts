@@ -51,3 +51,24 @@ export const companyLogoUpload = multer({
     cb(new Error('Yalnızca JPEG, PNG, WebP veya GIF logoları desteklenir'));
   },
 });
+
+const REFERENCE_LOGO_MIMES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/svg+xml',
+]);
+const REFERENCE_LOGO_MAX_SIZE = 5 * 1024 * 1024;
+
+export const referenceLogoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: REFERENCE_LOGO_MAX_SIZE, files: 1 },
+  fileFilter: (_req, file, cb) => {
+    if (REFERENCE_LOGO_MIMES.has(file.mimetype)) {
+      cb(null, true);
+      return;
+    }
+    cb(new Error('Yalnızca JPEG, PNG, WebP, GIF veya SVG logoları desteklenir'));
+  },
+});

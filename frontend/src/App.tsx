@@ -15,6 +15,7 @@ import { PlanModuleRoute } from '@/components/PlanModuleRoute';
 import { AdminLayout } from '@/layouts/AdminLayout';
 import { CompanyLayout } from '@/layouts/CompanyLayout';
 import { OnboardingPage } from '@/pages/OnboardingPage';
+import { PricingPage } from '@/pages/PricingPage';
 import { LoginPage } from '@/pages/LoginPage';
 import { AdminLoginPage } from '@/pages/AdminLoginPage';
 import { RegisterPage } from '@/pages/RegisterPage';
@@ -40,6 +41,7 @@ import { AdminActivityPage } from '@/pages/AdminActivityPage';
 import { AdminSettingsPage } from '@/pages/AdminSettingsPage';
 import { AdminPromptsPage } from '@/pages/AdminPromptsPage';
 import { AdminPlansPage } from '@/pages/AdminPlansPage';
+import { AdminReferenceLogosPage } from '@/pages/AdminReferenceLogosPage';
 import { AdminUsersPage } from '@/pages/AdminUsersPage';
 import { AdminWhatsAppHealthPage } from '@/pages/AdminWhatsAppHealthPage';
 import { AdminSupportTicketsPage } from '@/pages/AdminSupportTicketsPage';
@@ -60,6 +62,7 @@ function AppRoutes() {
       {/* Tanıtım & giriş sayfaları */}
       <Route path="/" element={<OnboardingPage />} />
       <Route path="/welcome" element={<OnboardingPage />} />
+      <Route path="/pricing" element={<PricingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/admin/login" element={<AdminLoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
@@ -82,6 +85,7 @@ function AppRoutes() {
         <Route path="support-tickets" element={<AdminSupportTicketsPage />} />
         <Route path="prompts" element={<AdminPromptsPage />} />
         <Route path="plans" element={<AdminPlansPage />} />
+        <Route path="reference-logos" element={<AdminReferenceLogosPage />} />
         <Route path="users" element={<AdminUsersPage />} />
         <Route path="settings" element={<AdminSettingsPage />} />
       </Route>

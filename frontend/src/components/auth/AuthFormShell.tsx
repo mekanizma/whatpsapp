@@ -58,7 +58,7 @@ export function AuthFormShell({
       </div>
 
       <div className="relative z-10 mx-auto w-full min-w-0 max-w-md flex-1 space-y-5 pb-6 sm:space-y-8 sm:pb-8 lg:flex-none">
-        <div className="text-center lg:text-left">
+        <div className="auth-form-header text-center">
           <div className="auth-form-logo-wrap">
             {icon}
           </div>

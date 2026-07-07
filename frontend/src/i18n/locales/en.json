@@ -1,4 +1,18 @@
 {
+  "landingNav": {
+    "services": "Services",
+    "references": "References",
+    "pricing": "Pricing"
+  },
+  "pricing": {
+    "label": "Pricing",
+    "title": "Choose the plan that fits your business",
+    "subtitle": "Every plan includes the WhatsApp AI agent, knowledge base, and live transfer. Upgrade whenever you need.",
+    "empty": "There are no active plans to display right now.",
+    "ctaHint": "Already have an account? Sign in and get started right away.",
+    "backHome": "Back to home",
+    "mostPopular": "Most Popular"
+  },
   "common": {
     "language": "Language",
     "save": "Save",
@@ -76,8 +90,28 @@
     "noAccount": "Don't have an account?",
     "hasAccount": "Already have an account?",
     "createAccount": "Create Account",
+    "registerSubtitle": "Create a free account for your business",
     "registerSuccess": "Registration successful! Verify your email and sign in.",
     "fullName": "Full Name",
+    "fullNamePlaceholder": "Your full name",
+    "companyName": "Business Name",
+    "companyNamePlaceholder": "e.g. La Vista Cafe",
+    "category": "Industry",
+    "categories": {
+      "restoran": "Cafe & Restaurant",
+      "otel": "Hotel & Hospitality",
+      "rent_a_car": "Rent a Car",
+      "guzellik_merkezi": "Beauty Center",
+      "klinik": "Clinic & Health",
+      "dis_hekimi": "Dentist",
+      "emlak": "Real Estate",
+      "universite": "University & Education",
+      "kurs": "Courses & Training",
+      "diger": "Other"
+    },
+    "phone": "Phone",
+    "phonePlaceholder": "+1 555 123 4567",
+    "passwordHint": "Must be at least 6 characters",
     "demoAccounts": "Demo accounts",
     "demoHint": "firma@demo.com / personel@demo.com — demo123",
     "emailPlaceholder": "you@company.com",
@@ -130,12 +164,180 @@
     "featuresLabel": "Platform Features",
     "featuresTitle": "A complete solution for your business",
     "featuresSubtitle": "Automate customer communication on WhatsApp with AI, while your team steps in when it matters.",
+    "featureCards": [
+      {
+        "badge": "AI Engine",
+        "title": "Smart, Learning AI Agent",
+        "description": "AI understands customer questions, keeps context, and generates company-specific answers.",
+        "items": [
+          { "icon": "Brain", "label": "Natural Language", "desc": "Understands like a human" },
+          { "icon": "MessageSquare", "label": "Context Memory", "desc": "Remembers the chat" },
+          { "icon": "Languages", "label": "Multilingual", "desc": "EN, TR and more" },
+          { "icon": "Sparkles", "label": "Intent Detection", "desc": "Grasps the goal" },
+          { "icon": "Zap", "label": "Auto Greeting", "desc": "Instant first reply" },
+          { "icon": "Headphones", "label": "Live Transfer", "desc": "Handoff when needed" }
+        ]
+      },
+      {
+        "badge": "Knowledge & Automation",
+        "title": "Your Own Knowledge Base",
+        "description": "Upload FAQs, product and price info; let AI answer from your own data.",
+        "items": [
+          { "icon": "BookOpen", "label": "FAQ Management", "desc": "Train common questions" },
+          { "icon": "FileText", "label": "Document Upload", "desc": "PDF and text support" },
+          { "icon": "Tag", "label": "Price List", "desc": "Share up-to-date prices" },
+          { "icon": "Calendar", "label": "Booking & Calendar", "desc": "Automatic reservations" },
+          { "icon": "Ticket", "label": "Support Tickets", "desc": "Create & track tickets" },
+          { "icon": "Clock", "label": "24/7 Active", "desc": "Uninterrupted service" }
+        ]
+      }
+    ],
     "stepsLabel": "Setup",
     "stepsTitle": "Ready in 3 steps",
     "capabilitiesLabel": "Modules",
     "capabilitiesTitleLead": "All capabilities",
     "capabilitiesTitleAccent": "in one platform",
     "capabilitiesSubtitle": "Every tool you need — from communication to reporting — unified in one secure panel.",
+    "heroIndustries": ["Café", "Restaurant", "Hotel", "Rent a Car", "Beauty", "Salon", "Clinic", "Real Estate"],
+    "industriesLabel": "Industries",
+    "industriesTitleLead": "Tailored for",
+    "industriesTitleAccent": "every business",
+    "industriesSubtitle": "Service businesses reply to WhatsApp inquiries in seconds. AI handles bookings, reservations, and information requests automatically.",
+    "industries": [
+      {
+        "icon": "Coffee",
+        "name": "Café & Restaurant",
+        "tagline": "Instant answers for table reservations, menus, and pricing.",
+        "useCases": ["Table booking", "Menu & pricing", "Opening hours"]
+      },
+      {
+        "icon": "Hotel",
+        "name": "Hotel & Hospitality",
+        "tagline": "24/7 info on room availability, check-in, and amenities.",
+        "useCases": ["Room booking", "Check-in/out", "Hotel amenities"]
+      },
+      {
+        "icon": "Car",
+        "name": "Rent a Car",
+        "tagline": "Auto-reply to availability, pricing, and pickup questions.",
+        "useCases": ["Car availability", "Price quotes", "Pickup & return"]
+      },
+      {
+        "icon": "Sparkles",
+        "name": "Beauty Center",
+        "tagline": "Share appointments, services, and promotions instantly.",
+        "useCases": ["Book appointment", "Services & pricing", "Promotions"]
+      },
+      {
+        "icon": "Scissors",
+        "name": "Hair Salon & Barber",
+        "tagline": "Let customers book while you focus on your craft.",
+        "useCases": ["Appointment mgmt", "Price list", "Staff availability"]
+      },
+      {
+        "icon": "Stethoscope",
+        "name": "Clinic & Healthcare",
+        "tagline": "Auto-share appointments, hours, and preparation info.",
+        "useCases": ["Appointment booking", "Opening hours", "Prep instructions"]
+      },
+      {
+        "icon": "Dumbbell",
+        "name": "Gym & Fitness",
+        "tagline": "Instant answers on memberships, schedules, and pricing.",
+        "useCases": ["Membership info", "Class schedule", "PT booking"]
+      },
+      {
+        "icon": "Building2",
+        "name": "Real Estate",
+        "tagline": "Share listing details, viewings, and location info.",
+        "useCases": ["Listing details", "Viewing booking", "Location & transit"]
+      },
+      {
+        "icon": "ShoppingBag",
+        "name": "Retail Store",
+        "tagline": "Quickly share stock, product, and store information.",
+        "useCases": ["Product inquiry", "Stock status", "Store address"]
+      },
+      {
+        "icon": "Package",
+        "name": "E-commerce",
+        "tagline": "Auto-reply to order tracking, returns, and shipping.",
+        "useCases": ["Order status", "Returns & exchange", "Shipping tracking"]
+      },
+      {
+        "icon": "GraduationCap",
+        "name": "Education & Courses",
+        "tagline": "Share enrollment, schedules, and fees around the clock.",
+        "useCases": ["Enrollment info", "Class schedule", "Fees & scholarships"]
+      },
+      {
+        "icon": "Wrench",
+        "name": "Auto Service",
+        "tagline": "Info on appointments, maintenance pricing, and status.",
+        "useCases": ["Service booking", "Maintenance pricing", "Vehicle status"]
+      }
+    ],
+    "testimonialsLabel": "Testimonials",
+    "testimonialsTitleLead": "What businesses",
+    "testimonialsTitleAccent": "are saying",
+    "testimonialsSubtitle": "Businesses across industries transformed customer communication with WhatsApp AI agents.",
+    "referenceLogosLabel": "Businesses that trust us",
+    "testimonials": [
+      {
+        "quote": "Evening reservation questions no longer wait. AI replies instantly and we just confirm.",
+        "author": "Mehmet A.",
+        "role": "Business Owner",
+        "business": "La Vista Restaurant",
+        "sector": "Restaurant",
+        "metric": "Response time down 80%"
+      },
+      {
+        "quote": "Guests ask about room availability and check-in on WhatsApp. They get instant answers even at midnight.",
+        "author": "Elif Y.",
+        "role": "Operations Manager",
+        "business": "Sunset Boutique Hotel",
+        "sector": "Hotel",
+        "metric": "95% of night messages auto-replied"
+      },
+      {
+        "quote": "Appointment requests no longer slip through. Customers ask about services and AI answers right away.",
+        "author": "Zeynep K.",
+        "role": "Salon Manager",
+        "business": "Glow Beauty Center",
+        "sector": "Beauty",
+        "metric": "Booking conversion up 40%"
+      },
+      {
+        "quote": "We used to get dozens of availability and pricing questions daily. Now they're all answered in seconds.",
+        "author": "Can D.",
+        "role": "General Manager",
+        "business": "DriveGo Rent a Car",
+        "sector": "Rent a Car",
+        "metric": "50+ daily questions auto-answered"
+      },
+      {
+        "quote": "Our salon phone rang constantly. WhatsApp AI handles bookings so we can focus on clients.",
+        "author": "Ayşe T.",
+        "role": "Salon Owner",
+        "business": "Style Point Hair Salon",
+        "sector": "Hair Salon",
+        "metric": "Missed bookings down 60%"
+      },
+      {
+        "quote": "Order tracking and return questions kept customers waiting. Now both sides are happy.",
+        "author": "Burak S.",
+        "role": "E-commerce Manager",
+        "business": "ModaBox",
+        "sector": "E-commerce",
+        "metric": "Support load down 55%"
+      }
+    ],
+    "trustBadges": [
+      { "value": "200+", "label": "Active businesses" },
+      { "value": "4.9/5", "label": "Customer satisfaction" },
+      { "value": "12+", "label": "Industries served" },
+      { "value": "24/7", "label": "Always available" }
+    ],
     "knowledgePanelTitle": "Knowledge Sources",
     "capabilities": [
       { "icon": "MessageSquare", "label": "Messages", "description": "Manage all WhatsApp conversations from one panel." },
@@ -200,6 +402,7 @@
   },
   "showcase": {
     "customerMarquee": ["24/7 AI Replies", "WhatsApp QR Connect", "Live Transfer", "Knowledge Base", "Ticket Management", "AI Conversation Quota", "Auto Greeting", "Instant Alerts"],
+    "industryMarquee": ["Café & Restaurant", "Hotel", "Rent a Car", "Beauty Center", "Hair Salon", "Clinic", "Gym", "Real Estate", "E-commerce", "Auto Service", "Education", "Retail"],
     "adminMarquee": ["Company Management", "Subscription Control", "AI Usage Reports", "Activity Logs", "Quota Management", "WhatsApp Status", "Platform Stats", "Secure Access"],
     "customerFeatures": [
       { "title": "AI Agent", "desc": "Smart replies in seconds" },
@@ -273,6 +476,7 @@
       "activity": "Activity",
       "prompts": "AI Prompts",
       "plans": "Subscription Plans",
+      "referenceLogos": "Reference Logos",
       "users": "Users",
       "whatsappHealth": "WhatsApp Health",
       "supportTickets": "Support Tickets",
@@ -963,6 +1167,28 @@
       "noDescription": "No description added",
       "empty": "No subscription plans found",
       "demoHint": "Plan editing is disabled in demo mode. Use a live environment to make changes."
+    },
+    "referenceLogos": {
+      "title": "Reference Logos",
+      "description": "Manage the customer logos shown in the scrolling reference strip on the landing page.",
+      "addTitle": "Add new logo",
+      "name": "Company name",
+      "namePlaceholder": "e.g. La Vista Restaurant",
+      "website": "Website (optional)",
+      "file": "Logo file",
+      "chooseFile": "Choose file",
+      "fileHint": "PNG, JPG, WebP, GIF or SVG (max 5MB)",
+      "add": "Add logo",
+      "added": "Logo added",
+      "nameRequired": "Company name is required",
+      "fileRequired": "Logo file is required",
+      "listTitle": "Current logos",
+      "active": "Active",
+      "inactive": "Hidden",
+      "show": "Show",
+      "hide": "Hide",
+      "deleteConfirm": "Are you sure you want to delete this logo?",
+      "empty": "No logos added yet. Add your first one above."
     },
     "settings": {
       "title": "Platform Settings",

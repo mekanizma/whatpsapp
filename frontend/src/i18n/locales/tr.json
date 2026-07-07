@@ -1,4 +1,18 @@
 {
+  "landingNav": {
+    "services": "Hizmetler",
+    "references": "Referanslar",
+    "pricing": "Fiyatlar"
+  },
+  "pricing": {
+    "label": "Fiyatlandırma",
+    "title": "İşletmenize uygun paketi seçin",
+    "subtitle": "Tüm paketler WhatsApp AI temsilcisi, bilgi bankası ve canlı aktarım içerir. İhtiyacınıza göre yükseltin.",
+    "empty": "Şu anda gösterilecek aktif paket bulunmuyor.",
+    "ctaHint": "Hesabınız varsa giriş yapıp hemen başlayın.",
+    "backHome": "Ana sayfaya dön",
+    "mostPopular": "En Popüler"
+  },
   "common": {
     "language": "Dil",
     "save": "Kaydet",
@@ -76,8 +90,28 @@
     "noAccount": "Hesabınız yok mu?",
     "hasAccount": "Zaten hesabınız var mı?",
     "createAccount": "Hesap Oluştur",
+    "registerSubtitle": "İşletmeniz için ücretsiz hesap oluşturun",
     "registerSuccess": "Kayıt başarılı! E-postanızı doğrulayın ve giriş yapın.",
     "fullName": "Ad Soyad",
+    "fullNamePlaceholder": "Adınız Soyadınız",
+    "companyName": "İşletme Adı",
+    "companyNamePlaceholder": "Örn. La Vista Cafe",
+    "category": "Sektör",
+    "categories": {
+      "restoran": "Kafe & Restoran",
+      "otel": "Otel & Konaklama",
+      "rent_a_car": "Rent a Car",
+      "guzellik_merkezi": "Güzellik Merkezi",
+      "klinik": "Klinik & Sağlık",
+      "dis_hekimi": "Diş Hekimi",
+      "emlak": "Emlak",
+      "universite": "Üniversite & Eğitim",
+      "kurs": "Kurs & Dershane",
+      "diger": "Diğer"
+    },
+    "phone": "Telefon",
+    "phonePlaceholder": "+90 5xx xxx xx xx",
+    "passwordHint": "En az 6 karakter olmalıdır",
     "demoAccounts": "Demo hesaplar",
     "demoHint": "firma@demo.com / personel@demo.com — demo123",
     "emailPlaceholder": "ornek@sirket.com",
@@ -130,12 +164,180 @@
     "featuresLabel": "Platform Özellikleri",
     "featuresTitle": "İşletmeniz için eksiksiz çözüm",
     "featuresSubtitle": "WhatsApp üzerinden müşteri iletişimini yapay zeka ile otomatikleştirin, ekibiniz kritik anlarda devreye girsin.",
+    "featureCards": [
+      {
+        "badge": "Yapay Zeka Motoru",
+        "title": "Akıllı ve Öğrenen AI Temsilci",
+        "description": "Yapay zeka müşteri sorularını anlar, bağlamı korur ve firmanıza özel yanıtlar üretir.",
+        "items": [
+          { "icon": "Brain", "label": "Doğal Dil İşleme", "desc": "Soruları insan gibi anlar" },
+          { "icon": "MessageSquare", "label": "Bağlam Hafızası", "desc": "Konuşmayı hatırlar" },
+          { "icon": "Languages", "label": "Çok Dilli Yanıt", "desc": "TR, EN ve daha fazlası" },
+          { "icon": "Sparkles", "label": "Niyet Tespiti", "desc": "Amacı otomatik anlar" },
+          { "icon": "Zap", "label": "Otomatik Karşılama", "desc": "Anında ilk yanıt" },
+          { "icon": "Headphones", "label": "Canlı Aktarım", "desc": "Gerekince insana geçiş" }
+        ]
+      },
+      {
+        "badge": "Bilgi & Otomasyon",
+        "title": "Firmanıza Özel Bilgi Bankası",
+        "description": "SSS, ürün ve fiyat bilgilerinizi yükleyin; AI her yanıtı sizin verilerinize göre üretsin.",
+        "items": [
+          { "icon": "BookOpen", "label": "SSS Yönetimi", "desc": "Sık sorulanları eğitin" },
+          { "icon": "FileText", "label": "Doküman Yükleme", "desc": "PDF ve metin desteği" },
+          { "icon": "Tag", "label": "Fiyat Listesi", "desc": "Güncel fiyat paylaşımı" },
+          { "icon": "Calendar", "label": "Randevu & Takvim", "desc": "Otomatik rezervasyon" },
+          { "icon": "Ticket", "label": "Destek Talebi", "desc": "Ticket oluştur & takip" },
+          { "icon": "Clock", "label": "7/24 Aktif", "desc": "Kesintisiz hizmet" }
+        ]
+      }
+    ],
     "stepsLabel": "Kurulum",
     "stepsTitle": "3 adımda hazırsınız",
     "capabilitiesLabel": "Modüller",
     "capabilitiesTitleLead": "Tüm yetenekler",
     "capabilitiesTitleAccent": "tek platformda",
     "capabilitiesSubtitle": "İletişimden raporlamaya kadar ihtiyacınız olan her araç, tek bir güvenli panelde bir araya gelir.",
+    "heroIndustries": ["Kafe", "Restoran", "Otel", "Rent a Car", "Güzellik", "Kuaför", "Klinik", "Emlak"],
+    "industriesLabel": "Sektörler",
+    "industriesTitleLead": "Her işletme için",
+    "industriesTitleAccent": "özel çözüm",
+    "industriesSubtitle": "Hizmet sektöründeki işletmeler WhatsApp üzerinden gelen sorulara saniyeler içinde yanıt verir. Randevu, rezervasyon ve bilgi taleplerini AI otomatik karşılar.",
+    "industries": [
+      {
+        "icon": "Coffee",
+        "name": "Kafe & Restoran",
+        "tagline": "Masa rezervasyonu, menü ve fiyat sorularına anında yanıt.",
+        "useCases": ["Masa rezervasyonu", "Menü & fiyat", "Çalışma saatleri"]
+      },
+      {
+        "icon": "Hotel",
+        "name": "Otel & Konaklama",
+        "tagline": "Oda müsaitliği, check-in ve olanaklar hakkında 7/24 bilgi.",
+        "useCases": ["Oda rezervasyonu", "Check-in/out", "Otel olanakları"]
+      },
+      {
+        "icon": "Car",
+        "name": "Rent a Car",
+        "tagline": "Araç müsaitliği, fiyat ve teslim noktası sorularını otomatik yanıtlayın.",
+        "useCases": ["Araç müsaitliği", "Fiyat teklifi", "Teslim & iade"]
+      },
+      {
+        "icon": "Sparkles",
+        "name": "Güzellik Merkezi",
+        "tagline": "Randevu, hizmet listesi ve kampanya bilgilerini paylaşın.",
+        "useCases": ["Randevu alma", "Hizmet & fiyat", "Kampanya bilgisi"]
+      },
+      {
+        "icon": "Scissors",
+        "name": "Kuaför & Berber",
+        "tagline": "Müşterileriniz randevu alırken siz işinize odaklanın.",
+        "useCases": ["Randevu yönetimi", "Fiyat listesi", "Personel müsaitliği"]
+      },
+      {
+        "icon": "Stethoscope",
+        "name": "Klinik & Sağlık",
+        "tagline": "Randevu, çalışma saatleri ve hazırlık bilgilerini otomatik iletin.",
+        "useCases": ["Muayene randevusu", "Çalışma saatleri", "Hazırlık bilgisi"]
+      },
+      {
+        "icon": "Dumbbell",
+        "name": "Spor Salonu",
+        "tagline": "Üyelik, ders programı ve fiyat sorularına anında cevap.",
+        "useCases": ["Üyelik bilgisi", "Ders programı", "PT randevusu"]
+      },
+      {
+        "icon": "Building2",
+        "name": "Emlak",
+        "tagline": "İlan detayları, görüşme randevusu ve lokasyon bilgisi paylaşımı.",
+        "useCases": ["İlan bilgisi", "Görüşme randevusu", "Lokasyon & ulaşım"]
+      },
+      {
+        "icon": "ShoppingBag",
+        "name": "Perakende Mağaza",
+        "tagline": "Stok, ürün ve mağaza bilgilerini müşterilere hızlıca iletin.",
+        "useCases": ["Ürün sorgulama", "Stok durumu", "Mağaza adresi"]
+      },
+      {
+        "icon": "Package",
+        "name": "E-ticaret",
+        "tagline": "Sipariş takibi, iade ve kargo sorularını otomatik yanıtlayın.",
+        "useCases": ["Sipariş durumu", "İade & değişim", "Kargo takibi"]
+      },
+      {
+        "icon": "GraduationCap",
+        "name": "Eğitim & Kurs",
+        "tagline": "Kayıt, program ve ücret bilgilerini 7/24 paylaşın.",
+        "useCases": ["Kayıt bilgisi", "Ders programı", "Ücret & burs"]
+      },
+      {
+        "icon": "Wrench",
+        "name": "Oto Servis",
+        "tagline": "Randevu, bakım fiyatı ve araç durumu hakkında bilgi verin.",
+        "useCases": ["Servis randevusu", "Bakım fiyatı", "Araç durumu"]
+      }
+    ],
+    "testimonialsLabel": "Referanslar",
+    "testimonialsTitleLead": "İşletmeler",
+    "testimonialsTitleAccent": "ne diyor?",
+    "testimonialsSubtitle": "Farklı sektörlerden işletmeler WhatsApp AI temsilcisiyle müşteri iletişimini dönüştürdü.",
+    "referenceLogosLabel": "Bize güvenen işletmeler",
+    "testimonials": [
+      {
+        "quote": "Akşam saatlerinde gelen rezervasyon soruları artık beklemiyor. AI anında yanıt veriyor, biz sadece onaylıyoruz.",
+        "author": "Mehmet A.",
+        "role": "İşletme Sahibi",
+        "business": "La Vista Restoran",
+        "sector": "Restoran",
+        "metric": "Yanıt süresi %80 azaldı"
+      },
+      {
+        "quote": "Misafirlerimiz oda müsaitliği ve check-in saatlerini WhatsApp'tan soruyor. Gece yarısı bile anında yanıt alıyorlar.",
+        "author": "Elif Y.",
+        "role": "Operasyon Müdürü",
+        "business": "Sunset Boutique Hotel",
+        "sector": "Otel",
+        "metric": "Gece mesajları %95 otomatik yanıtlandı"
+      },
+      {
+        "quote": "Randevu talepleri artık kaçmıyor. Müşteriler hizmet ve fiyatları soruyor, AI hemen bilgi veriyor.",
+        "author": "Zeynep K.",
+        "role": "Salon Yöneticisi",
+        "business": "Glow Güzellik Merkezi",
+        "sector": "Güzellik",
+        "metric": "Randevu dönüşümü %40 arttı"
+      },
+      {
+        "quote": "Araç müsaitliği ve fiyat soruları günde onlarca geliyordu. Şimdi hepsi saniyeler içinde yanıtlanıyor.",
+        "author": "Can D.",
+        "role": "Genel Müdür",
+        "business": "DriveGo Rent a Car",
+        "sector": "Rent a Car",
+        "metric": "Günlük 50+ soru otomatik yanıt"
+      },
+      {
+        "quote": "Kuaför salonumuzda telefon sürekli çalıyordu. WhatsApp AI randevuları yönetiyor, biz müşteriye odaklanıyoruz.",
+        "author": "Ayşe T.",
+        "role": "Salon Sahibi",
+        "business": "Style Point Kuaför",
+        "sector": "Kuaför",
+        "metric": "Kaçan randevu %60 azaldı"
+      },
+      {
+        "quote": "Sipariş takibi ve iade soruları ekibimizi yormuyordu ama müşteri bekliyordu. Artık ikisi de memnun.",
+        "author": "Burak S.",
+        "role": "E-ticaret Yöneticisi",
+        "business": "ModaBox",
+        "sector": "E-ticaret",
+        "metric": "Destek yükü %55 düştü"
+      }
+    ],
+    "trustBadges": [
+      { "value": "200+", "label": "Aktif işletme" },
+      { "value": "4.9/5", "label": "Müşteri memnuniyeti" },
+      { "value": "12+", "label": "Farklı sektör" },
+      { "value": "7/24", "label": "Kesintisiz hizmet" }
+    ],
     "knowledgePanelTitle": "Bilgi Kaynakları",
     "capabilities": [
       { "icon": "MessageSquare", "label": "Mesajlar", "description": "Tüm WhatsApp konuşmalarını tek panelden yönetin." },
@@ -200,6 +402,7 @@
   },
   "showcase": {
     "customerMarquee": ["7/24 AI Yanıt", "WhatsApp QR Bağlantı", "Canlı Aktarım", "Bilgi Bankası", "Talep Yönetimi", "AI Görüşme Kotası", "Otomatik Karşılama", "Anlık Bildirim"],
+    "industryMarquee": ["Kafe & Restoran", "Otel", "Rent a Car", "Güzellik Merkezi", "Kuaför", "Klinik", "Spor Salonu", "Emlak", "E-ticaret", "Oto Servis", "Eğitim", "Perakende"],
     "adminMarquee": ["Şirket Yönetimi", "Abonelik Kontrolü", "AI Kullanım Raporu", "Aktivite Logları", "Kota Yönetimi", "WhatsApp Durumu", "Platform İstatistik", "Güvenli Erişim"],
     "customerFeatures": [
       { "title": "AI Temsilci", "desc": "Saniyeler içinde akıllı yanıt" },
@@ -273,6 +476,7 @@
       "activity": "Aktivite",
       "prompts": "AI Promptları",
       "plans": "Abonelik Paketleri",
+      "referenceLogos": "Referans Logoları",
       "users": "Kullanıcılar",
       "whatsappHealth": "WhatsApp Sağlık",
       "supportTickets": "Destek Talepleri",
@@ -963,6 +1167,28 @@
       "noDescription": "Açıklama eklenmemiş",
       "empty": "Henüz abonelik paketi bulunamadı",
       "demoHint": "Demo modda paket düzenleme kapalıdır. Canlı ortamda değişiklik yapabilirsiniz."
+    },
+    "referenceLogos": {
+      "title": "Referans Logoları",
+      "description": "Tanıtım sayfasındaki kayan referans şeridinde gösterilecek şirket logolarını buradan yönetin.",
+      "addTitle": "Yeni logo ekle",
+      "name": "Şirket adı",
+      "namePlaceholder": "Örn. La Vista Restoran",
+      "website": "Web sitesi (opsiyonel)",
+      "file": "Logo dosyası",
+      "chooseFile": "Dosya seç",
+      "fileHint": "PNG, JPG, WebP, GIF veya SVG (maks. 5MB)",
+      "add": "Logo ekle",
+      "added": "Logo eklendi",
+      "nameRequired": "Şirket adı gerekli",
+      "fileRequired": "Logo dosyası gerekli",
+      "listTitle": "Mevcut logolar",
+      "active": "Aktif",
+      "inactive": "Gizli",
+      "show": "Göster",
+      "hide": "Gizle",
+      "deleteConfirm": "Bu logoyu silmek istediğinize emin misiniz?",
+      "empty": "Henüz logo eklenmemiş. İlk logoyu yukarıdan ekleyin."
     },
     "settings": {
       "title": "Platform Ayarları",

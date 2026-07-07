@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
-  Shield, Building2, BarChart3, Settings, Zap, Activity, FileText, CreditCard, Users, Smartphone, Headphones,
+  Shield, Building2, BarChart3, Settings, Zap, Activity, FileText, CreditCard, Users, Smartphone, Headphones, Images,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
@@ -25,6 +25,7 @@ const adminNavGroups: { sectionKey: string; items: { to: string; icon: typeof Ba
       { to: '/admin/companies', icon: Building2, labelKey: 'layout.nav.companies' },
       { to: '/admin/users', icon: Users, labelKey: 'layout.nav.users' },
       { to: '/admin/plans', icon: CreditCard, labelKey: 'layout.nav.plans' },
+      { to: '/admin/reference-logos', icon: Images, labelKey: 'layout.nav.referenceLogos' },
     ],
   },
   {
@@ -58,6 +59,7 @@ function resolvePageTitleKey(pathname: string): string {
     '/admin/activity': 'layout.nav.activity',
     '/admin/prompts': 'layout.nav.prompts',
     '/admin/plans': 'layout.nav.plans',
+    '/admin/reference-logos': 'layout.nav.referenceLogos',
     '/admin/users': 'layout.nav.users',
     '/admin/settings': 'layout.nav.adminSettings',
   };
