@@ -250,7 +250,6 @@ export function localizePlan<T extends LocalizablePlan>(plan: T, language?: stri
     };
   }
 
-  const isEn = isEnglishLanguage(language);
   return {
     ...plan,
     name: catalog?.name || translateNameToEnglish(plan),

@@ -30,6 +30,7 @@ const ECOMMERCE_MODULES: PlanModuleKey[] = [
   'knowledge',
   'unknown_questions',
   'tickets',
+  'calendar',
   'staff',
   'whatsapp',
   'subscription',
