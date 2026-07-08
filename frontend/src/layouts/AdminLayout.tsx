@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
-  Shield, Building2, BarChart3, Settings, Zap, Activity, FileText, CreditCard, Users, Smartphone, Headphones, Images,
+  Shield, Building2, BarChart3, Settings, Zap, Activity, FileText, CreditCard, Users, Smartphone, Headphones, Images, ClipboardList,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
@@ -23,6 +23,7 @@ const adminNavGroups: { sectionKey: string; items: { to: string; icon: typeof Ba
     sectionKey: 'layout.navSections.management',
     items: [
       { to: '/admin/companies', icon: Building2, labelKey: 'layout.nav.companies' },
+      { to: '/admin/applications', icon: ClipboardList, labelKey: 'layout.nav.applications' },
       { to: '/admin/users', icon: Users, labelKey: 'layout.nav.users' },
       { to: '/admin/plans', icon: CreditCard, labelKey: 'layout.nav.plans' },
       { to: '/admin/reference-logos', icon: Images, labelKey: 'layout.nav.referenceLogos' },
@@ -53,6 +54,7 @@ function resolvePageTitleKey(pathname: string): string {
   const map: Record<string, string> = {
     '/admin': 'layout.nav.adminOverview',
     '/admin/companies': 'layout.nav.companies',
+    '/admin/applications': 'layout.nav.applications',
     '/admin/usage': 'layout.nav.usage',
     '/admin/whatsapp-health': 'layout.nav.whatsappHealth',
     '/admin/support-tickets': 'layout.nav.supportTickets',

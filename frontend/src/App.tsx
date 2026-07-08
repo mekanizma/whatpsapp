@@ -45,6 +45,7 @@ import { AdminReferenceLogosPage } from '@/pages/AdminReferenceLogosPage';
 import { AdminUsersPage } from '@/pages/AdminUsersPage';
 import { AdminWhatsAppHealthPage } from '@/pages/AdminWhatsAppHealthPage';
 import { AdminSupportTicketsPage } from '@/pages/AdminSupportTicketsPage';
+import { AdminApplicationsPage } from '@/pages/AdminApplicationsPage';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30000 } },
@@ -83,6 +84,7 @@ function AppRoutes() {
         <Route path="activity" element={<AdminActivityPage />} />
         <Route path="whatsapp-health" element={<AdminWhatsAppHealthPage />} />
         <Route path="support-tickets" element={<AdminSupportTicketsPage />} />
+        <Route path="applications" element={<AdminApplicationsPage />} />
         <Route path="prompts" element={<AdminPromptsPage />} />
         <Route path="plans" element={<AdminPlansPage />} />
         <Route path="reference-logos" element={<AdminReferenceLogosPage />} />

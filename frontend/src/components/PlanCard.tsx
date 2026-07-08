@@ -2,6 +2,7 @@
  * Abonelik paketi kartı — müşteri ve admin görünümü
  */
 
+import { useMemo } from 'react';
 import { Check, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Card, CardContent, Badge } from '@/components/ui';
@@ -11,6 +12,7 @@ import {
   resolvePlanFeatures,
   resolvePlanTagline,
 } from '@/lib/plan-format';
+import { localizePlan, resolveLocaleFromLanguage, resolvePlanBadgeLabel } from '@/lib/plan-localize';
 import type { BillingPeriod } from '@/lib/plan-format';
 import { cn } from '@/lib/utils';
 
@@ -18,8 +20,11 @@ export interface PlanCardData {
   id?: string;
   plan_type: string;
   name: string;
+  name_en?: string | null;
   description?: string | null;
+  description_en?: string | null;
   features?: string[] | null;
+  features_en?: string[] | null;
   message_limit: number;
   user_limit: number;
   price_monthly: number;
@@ -30,7 +35,7 @@ export interface PlanCardData {
 
 interface PlanCardProps {
   plan: PlanCardData;
-  locale: string;
+  locale?: string;
   billingPeriod?: BillingPeriod;
   highlighted?: boolean;
   embedded?: boolean;
@@ -110,44 +115,51 @@ export function PlanCard({
   variant = 'default',
   className,
 }: PlanCardProps) {
-  const { t } = useTranslation();
-  const features = resolvePlanFeatures(plan.features, plan.description);
-  const tagline = resolvePlanTagline(plan.description, plan.features);
-  const planLabel = t(`common.plans.${plan.plan_type}`, { defaultValue: plan.plan_type });
+  const { t, i18n } = useTranslation();
+  const language = i18n.language;
+  const displayLocale = locale ?? resolveLocaleFromLanguage(language);
+  const displayPlan = useMemo(() => localizePlan(plan, language), [plan, language]);
+  const features = resolvePlanFeatures(displayPlan.features, displayPlan.description, language);
+  const tagline = resolvePlanTagline(displayPlan.description, displayPlan.features);
+  const planLabel = resolvePlanBadgeLabel(plan, t, displayLocale, language);
   const { price, period, fallbackFromYearly } = resolvePlanDisplayPrice(plan, billingPeriod);
   const isLanding = variant === 'landing';
   const accent = TIER_ACCENTS[plan.plan_type] ?? TIER_ACCENTS.business;
-  const formattedPrice = formatPlanPrice(price, plan.currency || 'TRY', locale);
+  const formattedPrice = formatPlanPrice(price, plan.currency || 'TRY', displayLocale);
 
   const messageLabel =
     plan.message_limit >= 999999
       ? t('subscription.unlimitedMessages')
-      : t('subscription.messages', { count: plan.message_limit.toLocaleString(locale) });
+      : plan.message_limit === 1
+        ? t('subscription.messageOne')
+        : t('subscription.messages', { count: plan.message_limit.toLocaleString(displayLocale) });
 
   const userLabel =
     plan.user_limit >= 999
       ? t('subscription.unlimitedUsers')
-      : t('subscription.users', { count: plan.user_limit });
+      : plan.user_limit === 1
+        ? t('subscription.userOne')
+        : t('subscription.users', { count: plan.user_limit.toLocaleString(displayLocale) });
 
   const priceBlock = (
     <div className={cn('border-b border-slate-100', isLanding ? 'mb-6 pb-6' : 'mb-5 pb-5')}>
-      <div className="flex items-end gap-1.5">
+      <div className="flex flex-wrap items-end gap-x-2 gap-y-1">
         <p
           className={cn(
-            'font-extrabold tracking-tight text-slate-900',
-            isLanding ? 'text-4xl sm:text-[2.75rem] sm:leading-none' : 'text-3xl sm:text-[2rem]'
+            'max-w-full break-words font-extrabold tabular-nums tracking-tight text-slate-900',
+            isLanding ? 'text-[1.75rem] leading-none sm:text-4xl lg:text-[2.75rem]' : 'text-3xl sm:text-[2rem]'
           )}
         >
           {formattedPrice}
         </p>
-        <p className="mb-1 text-sm font-medium text-slate-500">
+        <p className="mb-0.5 shrink-0 text-sm font-medium text-slate-500">
           {period === 'yearly' ? t('subscription.perYear') : t('subscription.perMonth')}
         </p>
       </div>
       {period === 'yearly' && price > 0 && (
         <p className="mt-1.5 text-xs text-slate-400">
           {t('subscription.yearlyMonthlyEquivalent', {
-            amount: formatPlanPrice(price / 12, plan.currency || 'TRY', locale),
+            amount: formatPlanPrice(price / 12, plan.currency || 'TRY', displayLocale),
           })}
         </p>
       )}
@@ -158,7 +170,7 @@ export function PlanCard({
   );
 
   const body = (
-    <div className={cn('flex h-full flex-col', embedded ? 'p-0' : isLanding ? 'p-6 sm:p-7' : 'p-5 sm:p-6')}>
+    <div className={cn('flex h-full flex-col', embedded ? 'p-0' : isLanding ? 'p-5 sm:p-7' : 'p-5 sm:p-6')}>
       <div className={cn('mb-5', isLanding && 'mb-6')}>
         {isLanding ? (
           <span className="inline-flex items-center rounded-full border border-slate-200/80 bg-slate-50 px-2.5 py-1 text-[0.6875rem] font-semibold uppercase tracking-wider text-slate-600">
@@ -175,7 +187,7 @@ export function PlanCard({
             isLanding ? 'mt-3 text-2xl' : 'text-xl'
           )}
         >
-          {plan.name}
+          {displayPlan.name}
         </h3>
         {tagline && (
           <p className="mt-2 text-sm leading-relaxed text-slate-500">{tagline}</p>

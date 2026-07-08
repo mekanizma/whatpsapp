@@ -144,6 +144,16 @@ export const config = {
     staffTicketTemplateLang: process.env.WHATSAPP_STAFF_TICKET_TEMPLATE_LANG || 'tr',
   },
 
+  platform: {
+    /** Başvuru bildirimi gönderilecek şirket (WhatsApp hattı) */
+    companyId: process.env.PLATFORM_COMPANY_ID?.trim() || '',
+    /** Virgülle ayrılmış bildirim telefonları (varsayılan: platform WhatsApp) */
+    signupNotifyPhones: (process.env.PLATFORM_SIGNUP_NOTIFY_PHONES || '905338507761')
+      .split(',')
+      .map((p) => p.trim().replace(/\D/g, ''))
+      .filter(Boolean),
+  },
+
   cors: {
     origins: getCorsOrigins(),
   },

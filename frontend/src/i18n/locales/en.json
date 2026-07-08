@@ -11,7 +11,25 @@
     "empty": "There are no active plans to display right now.",
     "ctaHint": "Already have an account? Sign in and get started right away.",
     "backHome": "Back to home",
-    "mostPopular": "Most Popular"
+    "mostPopular": "Most Popular",
+    "planCatalog": {
+      "starter": {
+        "name": "Starter",
+        "description": "A fast and easy AI customer agent for small businesses. Automate your WhatsApp customer communication and deliver professional 24/7 support."
+      },
+      "e_ticaret": {
+        "name": "E-Commerce",
+        "description": "AI sales and support assistant built for e-commerce stores. Automate order tracking, product recommendations, and 24/7 customer support to grow sales."
+      },
+      "business": {
+        "name": "Business",
+        "description": "Powerful AI customer management for growing businesses. Handle more conversations with ease, save time, and increase sales opportunities."
+      },
+      "enterprise": {
+        "name": "Enterprise",
+        "description": "The most powerful AI customer communication platform for enterprise businesses. Manage all customer operations from one hub with unlimited scale, advanced automations, and custom solutions."
+      }
+    }
   },
   "common": {
     "language": "Language",
@@ -60,7 +78,8 @@
     },
     "plans": {
       "starter": "Starter (1,000 AI conversations)",
-      "business": "Business (5,000 AI conversations)",
+      "e_ticaret": "E-Commerce (5,000 AI conversations)",
+      "business": "Business (7,000 AI conversations)",
       "enterprise": "Enterprise (Unlimited)"
     },
     "status": {
@@ -78,6 +97,24 @@
   "auth": {
     "login": "Log In",
     "register": "Sign Up",
+    "submitApplication": "Submit Application",
+    "applicationForm": "Application Form",
+    "applicationSubtitle": "Apply for your business — we'll get in touch with you",
+    "applicationSuccess": "Your application has been received! We'll contact you shortly.",
+    "applicationFailed": "Could not submit application",
+    "applyLink": "Apply Now",
+    "captchaLabel": "Security Check",
+    "captchaPlaceholder": "Enter the result",
+    "captchaHint": "Solve the calculation to verify you're not a robot.",
+    "captchaRefresh": "New question",
+    "captchaRequired": "Please solve the security check.",
+    "captchaUnavailable": "Could not load the security check. Please try again.",
+    "selectPlan": "Select Plan",
+    "selectPlanPlaceholder": "Select a plan",
+    "selectPlanHint": "Choose the plan that fits your needs",
+    "planRequired": "Please select a plan",
+    "plansLoading": "Loading plans...",
+    "plansUnavailable": "Could not load plans. Please refresh the page.",
     "customerPanel": "Customer Panel",
     "customerSubtitle": "Sign in with your company account",
     "adminLogin": "Admin Login",
@@ -91,7 +128,6 @@
     "hasAccount": "Already have an account?",
     "createAccount": "Create Account",
     "registerSubtitle": "Create a free account for your business",
-    "registerSuccess": "Registration successful! Verify your email and sign in.",
     "fullName": "Full Name",
     "fullNamePlaceholder": "Your full name",
     "companyName": "Business Name",
@@ -480,6 +516,7 @@
       "users": "Users",
       "whatsappHealth": "WhatsApp Health",
       "supportTickets": "Support Tickets",
+      "applications": "Applications",
       "adminSettings": "Settings",
       "companyDetail": "Company Detail"
     },
@@ -844,12 +881,16 @@
     "userCount": "User Count",
     "unlimitedMessages": "Unlimited AI conversations",
     "messages": "{{count}} AI conversations",
+    "messageOne": "1 AI conversation",
+    "userOne": "1 user",
     "unlimitedUsers": "Unlimited users",
     "users": "{{count}} users",
     "perMonth": "/mo",
     "perYear": "/yr",
     "billingMonthly": "Monthly",
     "billingYearly": "Yearly",
+    "yearlyPromoPrefix": "On annual plans",
+    "yearlyPromoHighlight": "2 months free",
     "billingPeriodLabel": "Billing period",
     "billingPeriodHint": "Preview how prices appear on the customer panel",
     "yearlyNotAvailable": "Yearly price is not set for this plan",
@@ -943,6 +984,8 @@
       "openTickets": "Open Tickets",
       "platformSupportOpen": "Platform Support Tickets",
       "supportTickets": "Support Tickets",
+      "applications": "Applications",
+      "pendingApplications": "Pending Applications",
       "whatsappConnected": "WhatsApp Connected",
       "recentCompanies": "Recently Added Companies",
       "noCompanies": "No companies yet",
@@ -1117,13 +1160,24 @@
         "prompt_created": "Prompt created",
         "prompt_updated": "Prompt updated",
         "prompt_reset": "Prompt reset to default",
-        "subscription_plan_updated": "Subscription plan updated"
+        "subscription_plan_updated": "Subscription plan updated",
+        "subscription_plan_created": "New subscription plan created"
       }
     },
     "plans": {
       "title": "Subscription Plans",
-      "description": "Edit pricing and limits for Starter, Business, and Enterprise. Changes appear on the customer subscription page.",
+      "description": "Create subscription plans and edit pricing and limits. Changes appear on the customer subscription page.",
+      "addNew": "New Plan",
+      "addTitle": "Add New Plan",
+      "create": "Create Plan",
+      "created": "New plan created",
+      "planType": "Plan Code",
+      "planTypePlaceholder": "e.g. pro, premium_plus",
+      "planTypeHint": "Lowercase letters, numbers, and underscores. Must be unique.",
+      "planTypeRequired": "Plan code is required",
+      "nameRequired": "Plan name is required",
       "name": "Plan Name",
+      "namePlaceholder": "e.g. Pro Plan",
       "fieldDescription": "Short description",
       "descriptionPlaceholder": "Starter package for small businesses",
       "descriptionHint": "One-line summary shown at the top of the plan card.",
@@ -1315,6 +1369,8 @@
       "address": "Address",
       "subscription": "Subscription & AI Conversation Quota",
       "package": "Plan",
+      "billingPeriod": "Billing Period",
+      "subscriptionSaved": "Subscription updated",
       "subStatus": "Subscription Status",
       "messageLimit": "AI Conversation Limit",
       "messagesUsed": "AI Conversations Used",
@@ -1400,6 +1456,46 @@
         "technical": "Technical",
         "whatsapp": "WhatsApp",
         "account": "Account"
+      }
+    },
+    "applications": {
+      "title": "Applications",
+      "description": "Review and manage signup application forms",
+      "search": "Search business, name, or email...",
+      "loadError": "Could not load applications",
+      "empty": "No applications match the filter",
+      "selectHint": "Select an application on the left to view details",
+      "listTitle": "Application List",
+      "detailTitle": "Application Details",
+      "submittedAt": "Submitted:",
+      "adminNotes": "Admin Notes",
+      "adminNotesPlaceholder": "Write internal notes here...",
+      "saveNotes": "Save Notes",
+      "markReviewed": "Mark Reviewed",
+      "approve": "Approve",
+      "reject": "Reject",
+      "createAccount": "Create Account",
+      "createAccountSuccess": "Company account created",
+      "accountCreated": "Provisioned account",
+      "viewCompany": "Open Company",
+      "whatsappSent": "WhatsApp sent",
+      "selectedPlan": "Selected Plan",
+      "stats": {
+        "pending": "Pending",
+        "total": "Listed"
+      },
+      "filters": {
+        "all": "All",
+        "pending": "Pending",
+        "reviewed": "Reviewed",
+        "approved": "Approved",
+        "rejected": "Rejected"
+      },
+      "status": {
+        "pending": "Pending",
+        "reviewed": "Reviewed",
+        "approved": "Approved",
+        "rejected": "Rejected"
       }
     }
   },

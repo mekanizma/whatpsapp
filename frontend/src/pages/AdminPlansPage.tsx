@@ -5,7 +5,7 @@
 import { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { CreditCard, Save, Pencil, X } from 'lucide-react';
+import { CreditCard, Save, Pencil, X, Plus } from 'lucide-react';
 import { api } from '@/services/api';
 import { getErrorMessage } from '@/lib/errors';
 import { PageHeader } from '@/components/PageHeader';
@@ -39,6 +39,7 @@ import { planHasYearlyPrice } from '@/lib/plan-format';
 import type { BillingPeriod } from '@/lib/plan-format';
 
 interface PlanForm {
+  plan_type?: string;
   name: string;
   description: string;
   features: string;
@@ -50,6 +51,20 @@ interface PlanForm {
   is_active: boolean;
   sync_subscriptions: boolean;
 }
+
+const EMPTY_CREATE_FORM: PlanForm = {
+  plan_type: '',
+  name: '',
+  description: '',
+  features: '',
+  message_limit: '1000',
+  user_limit: '1',
+  price_monthly: '0',
+  price_yearly: '',
+  currency: 'TRY',
+  is_active: true,
+  sync_subscriptions: false,
+};
 
 function toForm(plan: SubscriptionPlan): PlanForm {
   const features =
@@ -82,6 +97,9 @@ export function AdminPlansPage() {
   const [form, setForm] = useState<PlanForm | null>(null);
   const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>('monthly');
   const [saveMsg, setSaveMsg] = useState<{ id: string; type: 'ok' | 'err'; text: string } | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [createForm, setCreateForm] = useState<PlanForm>(EMPTY_CREATE_FORM);
+  const [createMsg, setCreateMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   const { data: plans, isLoading } = useQuery({
     queryKey: ['admin-plans'],
@@ -94,12 +112,29 @@ export function AdminPlansPage() {
     onSuccess: (updated) => {
       queryClient.invalidateQueries({ queryKey: ['admin-plans'] });
       queryClient.invalidateQueries({ queryKey: ['subscription-plans'] });
+      queryClient.invalidateQueries({ queryKey: ['public-plans'] });
       setEditingId(null);
       setForm(null);
       setSaveMsg({ id: updated.id, type: 'ok', text: t('admin.plans.saved') });
     },
     onError: (err, variables) => {
       setSaveMsg({ id: variables.id, type: 'err', text: getErrorMessage(err) });
+    },
+  });
+
+  const createMutation = useMutation({
+    mutationFn: (body: Record<string, unknown>) =>
+      api.post<SubscriptionPlan>('/admin/plans', body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-plans'] });
+      queryClient.invalidateQueries({ queryKey: ['subscription-plans'] });
+      queryClient.invalidateQueries({ queryKey: ['public-plans'] });
+      setCreateForm(EMPTY_CREATE_FORM);
+      setShowCreate(false);
+      setCreateMsg({ type: 'ok', text: t('admin.plans.created') });
+    },
+    onError: (err) => {
+      setCreateMsg({ type: 'err', text: getErrorMessage(err) });
     },
   });
 
@@ -148,6 +183,45 @@ export function AdminPlansPage() {
     });
   };
 
+  const handleCreate = () => {
+    setCreateMsg(null);
+
+    const priceMonthly = parsePlanPriceInput(createForm.price_monthly);
+    const priceYearly = createForm.price_yearly.trim()
+      ? parsePlanPriceInput(createForm.price_yearly)
+      : null;
+
+    if (!createForm.plan_type?.trim()) {
+      setCreateMsg({ type: 'err', text: t('admin.plans.planTypeRequired') });
+      return;
+    }
+    if (!createForm.name.trim()) {
+      setCreateMsg({ type: 'err', text: t('admin.plans.nameRequired') });
+      return;
+    }
+    if (!Number.isFinite(priceMonthly) || priceMonthly < 0) {
+      setCreateMsg({ type: 'err', text: t('admin.plans.invalidPrice') });
+      return;
+    }
+    if (priceYearly != null && (!Number.isFinite(priceYearly) || priceYearly < 0)) {
+      setCreateMsg({ type: 'err', text: t('admin.plans.invalidYearlyPrice') });
+      return;
+    }
+
+    createMutation.mutate({
+      plan_type: createForm.plan_type.trim(),
+      name: createForm.name.trim(),
+      description: createForm.description.trim() || null,
+      features: textareaToFeatures(createForm.features),
+      message_limit: Number(createForm.message_limit),
+      user_limit: Number(createForm.user_limit),
+      price_monthly: priceMonthly,
+      price_yearly: priceYearly,
+      currency: createForm.currency,
+      is_active: createForm.is_active,
+    });
+  };
+
   const currencyLabel = (code: string) =>
     t(`admin.plans.currencies.${code}`, { defaultValue: code });
 
@@ -169,7 +243,189 @@ export function AdminPlansPage() {
       <PageHeader
         title={t('admin.plans.title')}
         description={t('admin.plans.description')}
+        action={
+          !isDemoMode ? (
+            <Button
+              type="button"
+              variant={showCreate ? 'outline' : 'default'}
+              onClick={() => {
+                setShowCreate((v) => !v);
+                setCreateMsg(null);
+              }}
+            >
+              {showCreate ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+              {showCreate ? t('common.cancel') : t('admin.plans.addNew')}
+            </Button>
+          ) : undefined
+        }
       />
+
+      {createMsg && !showCreate && (
+        <div
+          className={cn(
+            'rounded-xl border px-4 py-3 text-sm',
+            createMsg.type === 'ok'
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+              : 'border-red-200 bg-red-50 text-red-700'
+          )}
+        >
+          {createMsg.text}
+        </div>
+      )}
+
+      {showCreate && !isDemoMode && (
+        <Card className="overflow-hidden border-amber-200/80 shadow-sm">
+          <CardHeader className="border-b border-amber-100 bg-amber-50/60 pb-4">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Plus className="h-5 w-5 text-amber-600" />
+              {t('admin.plans.addTitle')}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 p-4 sm:p-5">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>{t('admin.plans.planType')}</Label>
+                <Input
+                  value={createForm.plan_type || ''}
+                  onChange={(e) =>
+                    setCreateForm({
+                      ...createForm,
+                      plan_type: e.target.value.toLowerCase().replace(/\s+/g, '_'),
+                    })
+                  }
+                  placeholder={t('admin.plans.planTypePlaceholder')}
+                />
+                <p className="text-xs text-slate-500">{t('admin.plans.planTypeHint')}</p>
+              </div>
+              <div className="space-y-2">
+                <Label>{t('admin.plans.name')}</Label>
+                <Input
+                  value={createForm.name}
+                  onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
+                  placeholder={t('admin.plans.namePlaceholder')}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>{t('admin.plans.fieldDescription')}</Label>
+              <Input
+                value={createForm.description}
+                onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
+                placeholder={t('admin.plans.descriptionPlaceholder')}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>{t('admin.plans.features')}</Label>
+              <Textarea
+                value={createForm.features}
+                onChange={(e) => setCreateForm({ ...createForm, features: e.target.value })}
+                rows={5}
+                placeholder={t('admin.plans.featuresPlaceholder')}
+                className="min-h-[7rem] resize-y font-mono text-sm"
+              />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>{t('admin.plans.messageLimit')}</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={createForm.message_limit}
+                  onChange={(e) => setCreateForm({ ...createForm, message_limit: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{t('admin.plans.userLimit')}</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  value={createForm.user_limit}
+                  onChange={(e) => setCreateForm({ ...createForm, user_limit: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="space-y-2">
+                <Label>{t('admin.plans.currency')}</Label>
+                <select
+                  value={createForm.currency}
+                  onChange={(e) => setCreateForm({ ...createForm, currency: e.target.value })}
+                  className="flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                >
+                  {PLAN_CURRENCIES.map((code) => (
+                    <option key={code} value={code}>
+                      {currencyLabel(code)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label>{t('admin.plans.priceMonthly')}</Label>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  value={createForm.price_monthly}
+                  onChange={(e) => setCreateForm({ ...createForm, price_monthly: e.target.value })}
+                  placeholder={t('admin.plans.priceInputPlaceholder')}
+                />
+              </div>
+              <div className="space-y-2 sm:col-span-2 lg:col-span-1">
+                <Label>{t('admin.plans.priceYearly')}</Label>
+                <Input
+                  type="text"
+                  inputMode="decimal"
+                  value={createForm.price_yearly}
+                  onChange={(e) => setCreateForm({ ...createForm, price_yearly: e.target.value })}
+                  placeholder={t('admin.plans.priceYearlyPlaceholder')}
+                />
+              </div>
+            </div>
+
+            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-slate-200 bg-slate-50/80 p-3">
+              <input
+                type="checkbox"
+                className="mt-1 h-4 w-4 rounded border-slate-300"
+                checked={createForm.is_active}
+                onChange={(e) => setCreateForm({ ...createForm, is_active: e.target.checked })}
+              />
+              <span className="text-sm text-slate-700">{t('admin.plans.activeHint')}</span>
+            </label>
+
+            {createMsg && (
+              <p className={createMsg.type === 'ok' ? 'text-sm text-emerald-600' : 'text-sm text-rose-600'}>
+                {createMsg.text}
+              </p>
+            )}
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                onClick={handleCreate}
+                disabled={createMutation.isPending || !createForm.name.trim() || !createForm.plan_type?.trim()}
+              >
+                {createMutation.isPending ? <Spinner /> : <Plus className="h-4 w-4" />}
+                {t('admin.plans.create')}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowCreate(false);
+                  setCreateForm(EMPTY_CREATE_FORM);
+                  setCreateMsg(null);
+                }}
+                disabled={createMutation.isPending}
+              >
+                {t('common.cancel')}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {isDemoMode && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">

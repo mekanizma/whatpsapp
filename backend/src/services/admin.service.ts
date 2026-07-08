@@ -13,18 +13,20 @@ import { getMonthStartISO } from '../utils/date';
 import { getPlatformConversationCount, getConversationCountsByCompany } from './conversation-count.service';
 import { mapSubscriptionToCompanyPlan } from './plan-capabilities.service';
 import { countOpenPlatformSupportTickets } from './platform-support.service';
+import { countPendingSignupApplications } from './signup-application.service';
 import { enrichProfilesWithEmail } from './password.service';
-
-const PLAN_LIMITS: Record<string, { messages: number; users: number }> = {
-  starter: { messages: 1000, users: 1 },
-  business: { messages: 5000, users: 5 },
-  enterprise: { messages: 999999, users: 999 },
-};
+import {
+  applyPlanToCompany,
+  getSubscriptionPlanById,
+  getSubscriptionPlanByType,
+  normalizeBillingPeriod,
+  type BillingPeriod,
+} from './company-subscription.service';
 
 export async function getExtendedPlatformStats() {
   const monthStart = getMonthStartISO();
 
-  const [companies, totalConversations, subs, aiLogs, tickets, waConnected, platformSupportOpen] = await Promise.all([
+  const [companies, totalConversations, subs, aiLogs, tickets, waConnected, platformSupportOpen, signupApplicationsPending] = await Promise.all([
     adminClient.from('companies').select('id', { count: 'exact', head: true }),
     getPlatformConversationCount(),
     adminClient.from('subscriptions').select('messages_used, messages_limit, status'),
@@ -41,6 +43,7 @@ export async function getExtendedPlatformStats() {
       .select('id', { count: 'exact', head: true })
       .eq('status', 'connected'),
     countOpenPlatformSupportTickets(),
+    countPendingSignupApplications(),
   ]);
 
   const allSubs = subs.data || [];
@@ -61,6 +64,7 @@ export async function getExtendedPlatformStats() {
     active_subscriptions: allSubs.filter((s) => s.status === 'active' || s.status === 'trial').length,
     open_tickets: tickets.count || 0,
     platform_support_open: platformSupportOpen,
+    signup_applications_pending: signupApplicationsPending,
     whatsapp_connected: waConnected.count || 0,
     ai_tokens_month: ai.reduce((s, l) => s + (l.total_tokens || 0), 0),
     ai_api_calls_month: Math.max(apiCallsFromLogs, apiCallsFromMessages),
@@ -74,7 +78,7 @@ export async function getCompaniesWithUsage(page = 1, limit = 50, search = '') {
   let query = adminClient
     .from('companies')
     .select(
-      `*, subscriptions(messages_used, messages_limit, status, users_limit, plan:plan_id(plan_type, name, description, features, message_limit, user_limit)),
+      `*, subscriptions(messages_used, messages_limit, status, users_limit, billing_period, plan:plan_id(plan_type, name, description, features, message_limit, user_limit)),
        whatsapp_configs(status, phone_number)`,
       { count: 'exact' }
     )
@@ -127,6 +131,7 @@ export async function getCompaniesWithUsage(page = 1, limit = 50, search = '') {
               messages_limit: subscription.messages_limit,
               status: subscription.status,
               users_limit: subscription.users_limit,
+              billing_period: subscription.billing_period,
             }
           : undefined,
         plan,
@@ -155,7 +160,7 @@ export async function getCompanyDetail(companyId: string) {
     adminClient
       .from('subscriptions')
       .select(
-        '*, subscription_plans(plan_type, name, description, features, message_limit, user_limit, price_monthly, price_yearly, currency)'
+        '*, subscription_plans(id, plan_type, name, description, features, message_limit, user_limit, price_monthly, price_yearly, currency, name_en, description_en, features_en, is_active)'
       )
       .eq('company_id', companyId)
       .single(),
@@ -220,45 +225,92 @@ export async function updateSubscriptionAdmin(
     messages_used?: number;
     status?: string;
     plan_type?: string;
+    plan_id?: string;
+    billing_period?: BillingPeriod;
+    sync_plan_limits?: boolean;
   }
 ) {
+  if (updates.plan_type || updates.plan_id) {
+    const resolvedPlan = updates.plan_id
+      ? await getSubscriptionPlanById(updates.plan_id)
+      : await getSubscriptionPlanByType(updates.plan_type!);
+
+    if (!resolvedPlan) {
+      throw new Error('Geçersiz paket seçimi');
+    }
+
+    await applyPlanToCompany({
+      companyId,
+      plan: resolvedPlan,
+      billingPeriod: updates.billing_period,
+      syncLimits: updates.sync_plan_limits !== false,
+    });
+  } else if (updates.billing_period) {
+    const billingPeriod = normalizeBillingPeriod(updates.billing_period);
+    const { data: currentSub, error: currentSubError } = await adminClient
+      .from('subscriptions')
+      .select('plan_id, subscription_plans(price_yearly)')
+      .eq('company_id', companyId)
+      .single();
+
+    if (currentSubError || !currentSub) {
+      throw new Error('Şirket aboneliği bulunamadı');
+    }
+
+    if (billingPeriod === 'yearly') {
+      const plan = Array.isArray(currentSub.subscription_plans)
+        ? currentSub.subscription_plans[0]
+        : currentSub.subscription_plans;
+      const yearlyPrice = plan?.price_yearly != null ? Number(plan.price_yearly) : 0;
+      if (!(yearlyPrice > 0)) {
+        throw new Error('Seçilen paket için yıllık fiyat tanımlı değil');
+      }
+    }
+
+    const { data: billingUpdated, error: billingError } = await adminClient
+      .from('subscriptions')
+      .update({ billing_period: billingPeriod })
+      .eq('company_id', companyId)
+      .select('id')
+      .maybeSingle();
+
+    if (billingError) throw new Error(billingError.message);
+    if (!billingUpdated) throw new Error('Şirket aboneliği bulunamadı');
+  }
+
   const subUpdates: Record<string, unknown> = {};
   if (updates.messages_limit !== undefined) subUpdates.messages_limit = updates.messages_limit;
   if (updates.messages_used !== undefined) subUpdates.messages_used = updates.messages_used;
   if (updates.status) subUpdates.status = updates.status;
 
-  if (updates.plan_type) {
-    const limits = PLAN_LIMITS[updates.plan_type] || PLAN_LIMITS.starter;
-    const { data: plan } = await adminClient
-      .from('subscription_plans')
-      .select('id, message_limit, user_limit')
-      .eq('plan_type', updates.plan_type)
-      .single();
+  if (Object.keys(subUpdates).length) {
+    const { data: patched, error } = await adminClient
+      .from('subscriptions')
+      .update(subUpdates)
+      .eq('company_id', companyId)
+      .select('id')
+      .maybeSingle();
 
-    if (plan) {
-      subUpdates.plan_id = plan.id;
-      subUpdates.messages_limit = plan.message_limit ?? limits.messages;
-      subUpdates.users_limit = plan.user_limit ?? limits.users;
-    } else {
-      subUpdates.messages_limit = limits.messages;
-      subUpdates.users_limit = limits.users;
-    }
-
-    await adminClient
-      .from('companies')
-      .update({ subscription_plan: updates.plan_type })
-      .eq('id', companyId);
+    if (error) throw new Error(error.message);
+    if (!patched) throw new Error('Şirket aboneliği bulunamadı');
   }
 
   const { data, error } = await adminClient
     .from('subscriptions')
-    .update(subUpdates)
+    .select(
+      '*, subscription_plans(id, plan_type, name, description, features, message_limit, user_limit, price_monthly, price_yearly, currency, name_en, description_en, features_en, is_active)'
+    )
     .eq('company_id', companyId)
-    .select()
     .single();
 
   if (error) throw new Error(error.message);
-  return data;
+
+  return {
+    ...data,
+    plan: Array.isArray(data.subscription_plans)
+      ? data.subscription_plans[0]
+      : data.subscription_plans,
+  };
 }
 
 export async function createCompanyAdminUser(
@@ -984,8 +1036,6 @@ export async function getWhatsAppHealthMonitor(options?: {
 
   return { summary, accounts: filtered, checked_at: nowIso };
 }
-
-export { PLAN_LIMITS };
 
 export interface CompanyAdminNote {
   id: string;

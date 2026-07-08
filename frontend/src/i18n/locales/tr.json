@@ -11,7 +11,25 @@
     "empty": "Şu anda gösterilecek aktif paket bulunmuyor.",
     "ctaHint": "Hesabınız varsa giriş yapıp hemen başlayın.",
     "backHome": "Ana sayfaya dön",
-    "mostPopular": "En Popüler"
+    "mostPopular": "En Popüler",
+    "planCatalog": {
+      "starter": {
+        "name": "Starter",
+        "description": "Küçük işletmeler için başlangıç paketi"
+      },
+      "e_ticaret": {
+        "name": "E-ticaret",
+        "description": "Online mağazalar ve pazar yerleri için"
+      },
+      "business": {
+        "name": "Business",
+        "description": "Büyüyen ekipler için"
+      },
+      "enterprise": {
+        "name": "Enterprise",
+        "description": "Kurumsal ölçekte işletmeler için"
+      }
+    }
   },
   "common": {
     "language": "Dil",
@@ -60,7 +78,8 @@
     },
     "plans": {
       "starter": "Starter (1.000 AI görüşme)",
-      "business": "Business (5.000 AI görüşme)",
+      "e_ticaret": "E-ticaret (5.000 AI görüşme)",
+      "business": "Business (7.000 AI görüşme)",
       "enterprise": "Enterprise (Sınırsız)"
     },
     "status": {
@@ -78,6 +97,24 @@
   "auth": {
     "login": "Giriş Yap",
     "register": "Kayıt Ol",
+    "submitApplication": "Başvuruyu Gönder",
+    "applicationForm": "Başvuru Formu",
+    "applicationSubtitle": "İşletmeniz için başvuru yapın, sizinle iletişime geçelim",
+    "applicationSuccess": "Başvurunuz alındı! En kısa sürede sizinle iletişime geçeceğiz.",
+    "applicationFailed": "Başvuru gönderilemedi",
+    "applyLink": "Başvuru Yap",
+    "captchaLabel": "Güvenlik Doğrulaması",
+    "captchaPlaceholder": "Sonucu girin",
+    "captchaHint": "Robot olmadığınızı doğrulamak için işlemi çözün.",
+    "captchaRefresh": "Yeni soru",
+    "captchaRequired": "Lütfen güvenlik doğrulamasını çözün.",
+    "captchaUnavailable": "Güvenlik doğrulaması yüklenemedi. Lütfen tekrar deneyin.",
+    "selectPlan": "Paket Seçimi",
+    "selectPlanPlaceholder": "Paket seçin",
+    "selectPlanHint": "İhtiyacınıza uygun paketi seçin",
+    "planRequired": "Lütfen bir paket seçin",
+    "plansLoading": "Paketler yükleniyor...",
+    "plansUnavailable": "Paketler yüklenemedi. Sayfayı yenileyin.",
     "customerPanel": "Müşteri Paneli",
     "customerSubtitle": "Şirket hesabınızla giriş yapın",
     "adminLogin": "Admin Girişi",
@@ -91,7 +128,6 @@
     "hasAccount": "Zaten hesabınız var mı?",
     "createAccount": "Hesap Oluştur",
     "registerSubtitle": "İşletmeniz için ücretsiz hesap oluşturun",
-    "registerSuccess": "Kayıt başarılı! E-postanızı doğrulayın ve giriş yapın.",
     "fullName": "Ad Soyad",
     "fullNamePlaceholder": "Adınız Soyadınız",
     "companyName": "İşletme Adı",
@@ -480,6 +516,7 @@
       "users": "Kullanıcılar",
       "whatsappHealth": "WhatsApp Sağlık",
       "supportTickets": "Destek Talepleri",
+      "applications": "Başvurular",
       "adminSettings": "Ayarlar",
       "companyDetail": "Şirket Detayı"
     },
@@ -844,12 +881,16 @@
     "userCount": "Kullanıcı Sayısı",
     "unlimitedMessages": "Sınırsız AI görüşme",
     "messages": "{{count}} AI görüşme",
+    "messageOne": "1 AI görüşme",
+    "userOne": "1 kullanıcı",
     "unlimitedUsers": "Sınırsız kullanıcı",
     "users": "{{count}} kullanıcı",
     "perMonth": "/ay",
     "perYear": "/yıl",
     "billingMonthly": "Aylık",
     "billingYearly": "Yıllık",
+    "yearlyPromoPrefix": "Yıllık alımlarda",
+    "yearlyPromoHighlight": "2 ay ücretsiz",
     "billingPeriodLabel": "Faturalandırma dönemi",
     "billingPeriodHint": "Müşteri panelinde görünecek fiyat dönemini seçin",
     "yearlyNotAvailable": "Bu paket için yıllık fiyat tanımlı değil",
@@ -943,6 +984,8 @@
       "openTickets": "Açık Talepler",
       "platformSupportOpen": "Platform Destek Talepleri",
       "supportTickets": "Destek Talepleri",
+      "applications": "Başvurular",
+      "pendingApplications": "Bekleyen Başvurular",
       "whatsappConnected": "WhatsApp Bağlı",
       "recentCompanies": "Son Eklenen Şirketler",
       "noCompanies": "Henüz şirket yok",
@@ -1117,13 +1160,24 @@
         "prompt_created": "Prompt oluşturuldu",
         "prompt_updated": "Prompt güncellendi",
         "prompt_reset": "Prompt varsayılana döndürüldü",
-        "subscription_plan_updated": "Abonelik paketi güncellendi"
+        "subscription_plan_updated": "Abonelik paketi güncellendi",
+        "subscription_plan_created": "Yeni abonelik paketi oluşturuldu"
       }
     },
     "plans": {
       "title": "Abonelik Paketleri",
-      "description": "Starter, Business ve Enterprise paketlerinin fiyat ve limitlerini buradan düzenleyin. Değişiklikler müşteri abonelik sayfasına yansır.",
+      "description": "Abonelik paketlerini oluşturun, fiyat ve limitlerini düzenleyin. Değişiklikler müşteri abonelik sayfasına yansır.",
+      "addNew": "Yeni Paket",
+      "addTitle": "Yeni Paket Ekle",
+      "create": "Paketi Oluştur",
+      "created": "Yeni paket oluşturuldu",
+      "planType": "Paket Kodu",
+      "planTypePlaceholder": "örn. pro, premium_plus",
+      "planTypeHint": "Küçük harf, rakam ve alt çizgi. Benzersiz olmalıdır.",
+      "planTypeRequired": "Paket kodu zorunludur",
+      "nameRequired": "Paket adı zorunludur",
       "name": "Paket Adı",
+      "namePlaceholder": "Örn. Pro Paket",
       "fieldDescription": "Kısa açıklama",
       "descriptionPlaceholder": "Küçük işletmeler için başlangıç paketi",
       "descriptionHint": "Paket kartının üstünde görünen tek satırlık özet.",
@@ -1315,6 +1369,8 @@
       "address": "Adres",
       "subscription": "Abonelik & AI Görüşme Kotası",
       "package": "Paket",
+      "billingPeriod": "Faturalandırma Dönemi",
+      "subscriptionSaved": "Abonelik bilgileri güncellendi",
       "subStatus": "Abonelik Durumu",
       "messageLimit": "AI Görüşme Limiti",
       "messagesUsed": "Kullanılan AI Görüşme",
@@ -1400,6 +1456,46 @@
         "technical": "Teknik",
         "whatsapp": "WhatsApp",
         "account": "Hesap"
+      }
+    },
+    "applications": {
+      "title": "Başvurular",
+      "description": "Kayıt başvuru formlarını inceleyin ve yönetin",
+      "search": "İşletme, ad veya e-posta ara...",
+      "loadError": "Başvurular yüklenemedi",
+      "empty": "Filtreye uygun başvuru yok",
+      "selectHint": "Detayları görmek için soldan bir başvuru seçin",
+      "listTitle": "Başvuru Listesi",
+      "detailTitle": "Başvuru Detayı",
+      "submittedAt": "Gönderim:",
+      "adminNotes": "Admin Notları",
+      "adminNotesPlaceholder": "İç notlarınızı buraya yazın...",
+      "saveNotes": "Notları Kaydet",
+      "markReviewed": "İncelendi",
+      "approve": "Onayla",
+      "reject": "Reddet",
+      "createAccount": "Hesap Oluştur",
+      "createAccountSuccess": "Şirket hesabı oluşturuldu",
+      "accountCreated": "Oluşturulan hesap",
+      "viewCompany": "Şirkete Git",
+      "whatsappSent": "WhatsApp gönderildi",
+      "selectedPlan": "Seçilen Paket",
+      "stats": {
+        "pending": "Bekleyen",
+        "total": "Listelenen"
+      },
+      "filters": {
+        "all": "Tümü",
+        "pending": "Bekleyen",
+        "reviewed": "İncelendi",
+        "approved": "Onaylandı",
+        "rejected": "Reddedildi"
+      },
+      "status": {
+        "pending": "Bekleyen",
+        "reviewed": "İncelendi",
+        "approved": "Onaylandı",
+        "rejected": "Reddedildi"
       }
     }
   },

@@ -2,6 +2,8 @@
  * Abonelik paketi fiyat ve özellik yardımcıları
  */
 
+import { isEnglishLanguage } from '@/lib/plan-localize';
+
 export const PLAN_CURRENCIES = ['TRY', 'USD', 'EUR', 'GBP'] as const;
 export type PlanCurrency = (typeof PLAN_CURRENCIES)[number];
 export type BillingPeriod = 'monthly' | 'yearly';
@@ -11,6 +13,29 @@ export function normalizePlanPrice(value: unknown): number {
   if (value == null || value === '') return 0;
   const num = typeof value === 'number' ? value : Number(String(value).replace(',', '.'));
   return Number.isFinite(num) ? num : 0;
+}
+
+export const HIGHLIGHTED_PLAN_TYPE = 'business';
+
+function normalizePlanKey(value: string): string {
+  return value.trim().toLowerCase().replace(/[\s-]+/g, '_');
+}
+
+/** Business paketini plan_type veya görünen isimden tanır. */
+export function isBusinessPlan(plan: { plan_type: string; name?: string | null }): boolean {
+  if (normalizePlanKey(plan.plan_type) === HIGHLIGHTED_PLAN_TYPE) return true;
+  return normalizePlanKey(plan.name || '') === HIGHLIGHTED_PLAN_TYPE;
+}
+
+export function isHighlightedPlan(
+  plan: { id?: string; plan_type: string; name?: string | null },
+  plans: { id?: string; plan_type: string; name?: string | null }[]
+): boolean {
+  const highlighted = plans.find(isBusinessPlan);
+  if (!highlighted) return false;
+
+  if (plan.id && highlighted.id) return plan.id === highlighted.id;
+  return normalizePlanKey(plan.plan_type) === normalizePlanKey(highlighted.plan_type);
 }
 
 export function planHasYearlyPrice(plan: { price_yearly?: number | null }): boolean {
@@ -72,12 +97,12 @@ function currencyFormatLocale(currency: string): string {
 export function formatPlanPrice(
   price: number,
   currency: string,
-  _locale?: string
+  locale?: string
 ): string {
   const code = (currency || 'TRY').toUpperCase();
   const num = normalizePlanPrice(price);
   const isWhole = Number.isFinite(num) && Math.abs(num % 1) < 1e-9;
-  const formatLocale = currencyFormatLocale(code);
+  const formatLocale = locale?.trim() || currencyFormatLocale(code);
 
   try {
     return new Intl.NumberFormat(formatLocale, {
@@ -91,7 +116,15 @@ export function formatPlanPrice(
   }
 }
 
-export function normalizePlanFeatureText(text: string): string {
+export function normalizePlanFeatureText(text: string, language?: string): string {
+  if (isEnglishLanguage(language)) {
+    return text
+      .replace(/\bmesaj\s*hakk[ıi]/gi, 'AI conversation quota')
+      .replace(/\bmesaj\s*limiti/gi, 'AI conversation limit')
+      .replace(/\b(\d[\d.,]*)\s*mesaj\b/gi, '$1 AI conversations')
+      .replace(/\bsınırsız\s*mesaj\b/gi, 'Unlimited AI conversations');
+  }
+
   return text
     .replace(/\bmesaj\s*hakk[ıi]/gi, 'AI görüşme hakkı')
     .replace(/\bmesaj\s*limiti/gi, 'AI görüşme limiti')
@@ -100,7 +133,7 @@ export function normalizePlanFeatureText(text: string): string {
     .replace(/\bunlimited\s*messages?\b/gi, 'Unlimited AI conversations');
 }
 
-export function parseLegacyDescriptionFeatures(description: string): string[] {
+export function parseLegacyDescriptionFeatures(description: string, language?: string): string[] {
   const cleaned = description.trim();
   if (!cleaned) return [];
 
@@ -119,18 +152,19 @@ export function parseLegacyDescriptionFeatures(description: string): string[] {
     items = [cleaned];
   }
 
-  return items.map(normalizePlanFeatureText);
+  return items.map((item) => normalizePlanFeatureText(item, language));
 }
 
 export function resolvePlanFeatures(
   features: string[] | null | undefined,
-  description: string | null | undefined
+  description: string | null | undefined,
+  language?: string
 ): string[] {
   if (features && features.length > 0) {
-    return features.map((f) => normalizePlanFeatureText(f.trim())).filter(Boolean);
+    return features.map((f) => normalizePlanFeatureText(f.trim(), language)).filter(Boolean);
   }
   if (!description?.trim()) return [];
-  return parseLegacyDescriptionFeatures(description);
+  return parseLegacyDescriptionFeatures(description, language);
 }
 
 export function resolvePlanTagline(

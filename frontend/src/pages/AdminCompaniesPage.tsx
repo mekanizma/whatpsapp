@@ -15,14 +15,13 @@ import {
   Spinner, Badge,
 } from '@/components/ui';
 import type { AdminCompany, SubscriptionPlan } from '@/types';
+import { localizePlan } from '@/lib/plan-localize';
 import { cn } from '@/lib/utils';
 
 const CATEGORY_VALUES = [
   'universite', 'klinik', 'dis_hekimi', 'guzellik_merkezi', 'emlak',
   'rent_a_car', 'otel', 'restoran', 'kurs', 'diger',
 ];
-
-const PLAN_VALUES = ['starter', 'business', 'enterprise'];
 
 function UsageBar({ used, limit }: { used: number; limit: number }) {
   const pct = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
@@ -51,6 +50,7 @@ export function AdminCompaniesPage() {
     email: '',
     phone: '',
     subscription_plan: 'starter',
+    billing_period: 'monthly' as 'monthly' | 'yearly',
     admin_full_name: '',
     admin_email: '',
     admin_password: '',
@@ -67,7 +67,9 @@ export function AdminCompaniesPage() {
     queryFn: () => api.get<SubscriptionPlan[]>('/admin/plans'),
   });
 
-  const selectedPlan = plans?.find((p) => p.plan_type === form.subscription_plan);
+  const activePlans = (plans || []).filter((p) => p.is_active);
+  const selectedPlan = activePlans.find((p) => p.plan_type === form.subscription_plan)
+    || activePlans[0];
 
   const createMutation = useMutation({
     mutationFn: (body: Record<string, string>) => api.post('/admin/companies', body),
@@ -77,7 +79,9 @@ export function AdminCompaniesPage() {
       setShowForm(false);
       setForm({
         company_name: '', category: 'diger', email: '', phone: '',
-        subscription_plan: 'starter', admin_full_name: '', admin_email: '', admin_password: '',
+        subscription_plan: activePlans[0]?.plan_type || 'starter',
+        billing_period: 'monthly',
+        admin_full_name: '', admin_email: '', admin_password: '',
       });
     },
   });
@@ -146,9 +150,23 @@ export function AdminCompaniesPage() {
                   value={form.subscription_plan}
                   onChange={(e) => setForm({ ...form, subscription_plan: e.target.value })}
                 >
-                  {PLAN_VALUES.map((value) => (
-                    <option key={value} value={value}>{t(`common.plans.${value}`)}</option>
-                  ))}
+                  {activePlans.map((plan) => {
+                    const label = localizePlan(plan, i18n.language).name;
+                    return (
+                      <option key={plan.id} value={plan.plan_type}>{label}</option>
+                    );
+                  })}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label>{t('admin.companyDetail.billingPeriod')}</Label>
+                <select
+                  className="flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                  value={form.billing_period}
+                  onChange={(e) => setForm({ ...form, billing_period: e.target.value as 'monthly' | 'yearly' })}
+                >
+                  <option value="monthly">{t('admin.companyDetail.invoiceMonthly')}</option>
+                  <option value="yearly">{t('admin.companyDetail.invoiceYearly')}</option>
                 </select>
               </div>
               {selectedPlan && (

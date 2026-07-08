@@ -61,7 +61,7 @@ export function LoginPage() {
             <p className="flex flex-wrap items-center justify-center gap-x-1 gap-y-1">
               <span>{t('auth.noAccount')}</span>
               <Link to="/register" className="font-semibold text-teal-300 hover:text-teal-200 hover:underline">
-                {t('auth.register')}
+                {t('auth.applyLink')}
               </Link>
             </p>
           </div>

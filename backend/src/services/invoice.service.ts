@@ -136,7 +136,6 @@ export async function buildInvoiceData(
   companyId: string,
   options: InvoiceOptions = {}
 ): Promise<InvoiceData> {
-  const billingPeriod = options.billingPeriod ?? 'monthly';
   const setupFee = Math.max(0, Number(options.setupFee) || 0);
   const setupFeeDescription = options.setupFeeDescription?.trim() || 'Kurulum Ücreti (tek seferlik)';
 
@@ -161,6 +160,8 @@ export async function buildInvoiceData(
   if (subError || !subscription) {
     throw new Error('Abonelik bulunamadı');
   }
+
+  const billingPeriod = options.billingPeriod ?? subscription.billing_period ?? 'monthly';
 
   const plan = Array.isArray(subscription.subscription_plans)
     ? subscription.subscription_plans[0]

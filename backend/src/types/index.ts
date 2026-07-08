@@ -8,7 +8,7 @@ export type CompanyCategory =
   | 'universite' | 'klinik' | 'dis_hekimi' | 'guzellik_merkezi'
   | 'emlak' | 'rent_a_car' | 'otel' | 'restoran' | 'kurs' | 'diger';
 export type CompanyStatus = 'active' | 'inactive' | 'suspended' | 'trial';
-export type SubscriptionPlanType = 'starter' | 'business' | 'enterprise';
+export type SubscriptionPlanType = string;
 export type WhatsAppStatus = 'connected' | 'disconnected' | 'pending' | 'error';
 export type MessageSenderType = 'customer' | 'ai' | 'staff';
 export type MessageStatus = 'open' | 'closed' | 'transferred';

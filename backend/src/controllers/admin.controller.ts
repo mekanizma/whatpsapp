@@ -25,8 +25,12 @@ import {
   createCompanyAdminNote,
   deleteCompanyAdminNote,
   listSuperAdmins,
-  PLAN_LIMITS,
 } from '../services/admin.service';
+import {
+  createCompanySubscription,
+  normalizeBillingPeriod,
+  resolveSubscriptionPlan,
+} from '../services/company-subscription.service';
 import {
   listPromptTemplates,
   getPromptTemplate,
@@ -43,6 +47,7 @@ import {
 import {
   getAllSubscriptionPlans,
   updateSubscriptionPlan,
+  createSubscriptionPlan,
 } from '../services/subscription-plan.service';
 import {
   getAllAiConversationAddons,
@@ -178,6 +183,8 @@ export async function createCompany(req: AuthRequest, res: Response): Promise<vo
     email,
     address,
     subscription_plan,
+    subscription_plan_id,
+    billing_period,
     admin_email,
     admin_password,
     admin_full_name,
@@ -188,8 +195,22 @@ export async function createCompany(req: AuthRequest, res: Response): Promise<vo
     return;
   }
 
-  const plan = subscription_plan || 'starter';
-  const limits = PLAN_LIMITS[plan] || PLAN_LIMITS.starter;
+  let planRow;
+  try {
+    planRow = await resolveSubscriptionPlan({
+      plan_id: subscription_plan_id,
+      plan_type: subscription_plan || 'starter',
+      require_active: true,
+    });
+  } catch (err) {
+    res.status(400).json({
+      success: false,
+      error: err instanceof Error ? err.message : 'Geçersiz paket seçimi',
+    });
+    return;
+  }
+
+  const billingPeriod = normalizeBillingPeriod(billing_period);
 
   const { data: company, error } = await adminClient
     .from('companies')
@@ -199,7 +220,7 @@ export async function createCompany(req: AuthRequest, res: Response): Promise<vo
       phone: phone || null,
       email: email || null,
       address: address || null,
-      subscription_plan: plan,
+      subscription_plan: planRow.plan_type,
       status: 'trial',
     })
     .select()
@@ -210,20 +231,20 @@ export async function createCompany(req: AuthRequest, res: Response): Promise<vo
     return;
   }
 
-  const { data: planRow } = await adminClient
-    .from('subscription_plans')
-    .select('id, message_limit, user_limit')
-    .eq('plan_type', plan)
-    .single();
-
-  if (planRow) {
-    await adminClient.from('subscriptions').insert({
-      company_id: company.id,
-      plan_id: planRow.id,
-      messages_limit: planRow.message_limit ?? limits.messages,
-      users_limit: planRow.user_limit ?? limits.users,
+  try {
+    await createCompanySubscription({
+      companyId: company.id,
+      plan: planRow,
+      billingPeriod,
       status: 'trial',
     });
+  } catch (subErr) {
+    await adminClient.from('companies').delete().eq('id', company.id);
+    res.status(400).json({
+      success: false,
+      error: subErr instanceof Error ? subErr.message : 'Abonelik oluşturulamadı',
+    });
+    return;
   }
 
   await adminClient.from('whatsapp_configs').insert({ company_id: company.id });
@@ -802,6 +823,58 @@ export async function updateSubscriptionPlanAdmin(req: AuthRequest, res: Respons
     res.json({ success: true, data });
   } catch (err) {
     res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'Paket güncellenemedi' });
+  }
+}
+
+export async function createSubscriptionPlanAdmin(req: AuthRequest, res: Response): Promise<void> {
+  if (isDemoSession(req)) {
+    res.status(400).json({ success: false, error: 'Demo modda yeni paket eklenemez' });
+    return;
+  }
+
+  const {
+    plan_type,
+    name,
+    description,
+    features,
+    message_limit,
+    user_limit,
+    price_monthly,
+    price_yearly,
+    currency,
+    is_active,
+  } = req.body;
+
+  try {
+    const data = await createSubscriptionPlan({
+      plan_type: String(plan_type || ''),
+      name: String(name || ''),
+      description: typeof description === 'string' ? description : null,
+      features: Array.isArray(features) ? features : undefined,
+      message_limit: Number(message_limit),
+      user_limit: Number(user_limit),
+      price_monthly: Number(price_monthly),
+      price_yearly:
+        price_yearly === null || price_yearly === ''
+          ? null
+          : price_yearly !== undefined
+            ? Number(price_yearly)
+            : null,
+      currency: typeof currency === 'string' ? currency : undefined,
+      is_active: is_active !== false,
+    });
+
+    await logActivity({
+      userId: req.userId,
+      action: 'subscription_plan_created',
+      entityType: 'subscription_plan',
+      entityId: data.id,
+      metadata: { plan_type: data.plan_type },
+    });
+
+    res.json({ success: true, data });
+  } catch (err) {
+    res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'Paket oluşturulamadı' });
   }
 }
 

@@ -2,7 +2,7 @@
  * Super admin — şirket detay ve yönetim
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -20,10 +20,10 @@ import {
 } from '@/components/ui';
 import { AdminCompanyNotes } from '@/components/admin/AdminCompanyNotes';
 import { CompanyPlanFeatures } from '@/components/CompanyPlanFeatures';
-import type { CompanyDetail } from '@/types';
+import type { CompanyDetail, SubscriptionPlan } from '@/types';
+import { localizePlan } from '@/lib/plan-localize';
 import { cn } from '@/lib/utils';
 
-const PLAN_VALUES = ['starter', 'business', 'enterprise'];
 const STATUS_VALUES = ['trial', 'active', 'suspended', 'inactive', 'cancelled'];
 
 export function AdminCompanyDetailPage() {
@@ -43,12 +43,22 @@ export function AdminCompanyDetailPage() {
   const [invoiceLoading, setInvoiceLoading] = useState(false);
   const [resetProfileId, setResetProfileId] = useState<string | null>(null);
   const [passwordMsg, setPasswordMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [subMsg, setSubMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [selectedPlanId, setSelectedPlanId] = useState('');
+  const [selectedBillingPeriod, setSelectedBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
+  const [selectedSubStatus, setSelectedSubStatus] = useState('trial');
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['admin-company', id],
     queryFn: () => api.get<CompanyDetail>(`/admin/companies/${id}`),
     enabled: !!id,
   });
+
+  const { data: plans } = useQuery({
+    queryKey: ['admin-plans'],
+    queryFn: () => api.get<SubscriptionPlan[]>('/admin/plans'),
+  });
+  const activePlans = (plans || []).filter((p) => p.is_active);
 
   const [form, setForm] = useState<Record<string, string>>({});
 
@@ -60,7 +70,14 @@ export function AdminCompanyDetailPage() {
   const subMutation = useMutation({
     mutationFn: (body: Record<string, unknown>) =>
       api.patch(`/admin/companies/${id}/subscription`, body),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['admin-company', id] }),
+    onSuccess: () => {
+      setSubMsg({ type: 'ok', text: t('admin.companyDetail.subscriptionSaved') });
+      queryClient.invalidateQueries({ queryKey: ['admin-company', id] });
+      queryClient.invalidateQueries({ queryKey: ['admin-companies'] });
+    },
+    onError: (err: Error) => {
+      setSubMsg({ type: 'err', text: err.message });
+    },
   });
 
   const passwordMutation = useMutation({
@@ -74,6 +91,20 @@ export function AdminCompanyDetailPage() {
       setPasswordMsg({ type: 'err', text: err.message });
     },
   });
+
+  useEffect(() => {
+    if (!data?.subscription) return;
+    const currentPlanType = data.subscription.plan?.plan_type || data.company.subscription_plan;
+    const matchedPlan =
+      (plans || []).find((p) => p.id === data.subscription?.plan?.id) ||
+      (plans || []).find((p) => p.plan_type === currentPlanType);
+    setSelectedPlanId(matchedPlan?.id || '');
+    setSelectedBillingPeriod(data.subscription.billing_period || 'monthly');
+    setSelectedSubStatus(data.subscription.status || 'trial');
+    if (data.subscription.billing_period) {
+      setInvoicePeriod(data.subscription.billing_period);
+    }
+  }, [data, plans]);
 
   if (isLoading) {
     return <div className="flex justify-center p-12"><Spinner className="h-8 w-8" /></div>;
@@ -91,6 +122,15 @@ export function AdminCompanyDetailPage() {
   }
 
   const { company, subscription, whatsapp, users, staff_count, stats, plan } = data;
+  const selectablePlans = (() => {
+    const list = [...(plans || [])];
+    const currentPlanType = subscription?.plan?.plan_type || company.subscription_plan;
+    const currentPlan = list.find((p) => p.plan_type === currentPlanType);
+    if (currentPlan && !list.some((p) => p.id === currentPlan.id)) {
+      list.unshift(currentPlan);
+    }
+    return list.length ? list : activePlans;
+  })();
   const companyForm = {
     company_name: form.company_name ?? company.company_name,
     category: form.category ?? company.category,
@@ -107,7 +147,15 @@ export function AdminCompanyDetailPage() {
     { id: 'kullanicilar' as const, labelKey: 'admin.companyDetail.tabs.users' },
   ];
 
-  const planLabel = t(`common.plans.${company.subscription_plan}`, { defaultValue: company.subscription_plan });
+  const planLabel = plan?.name
+    || localizePlan(
+      {
+        plan_type: company.subscription_plan,
+        name: subscription?.plan?.name || company.subscription_plan,
+        name_en: null,
+      },
+      i18n.language
+    ).name;
 
   const handleDownloadInvoice = async () => {
     if (!id) return;
@@ -313,25 +361,61 @@ export function AdminCompanyDetailPage() {
           <Card>
             <CardHeader><CardTitle>{t('admin.companyDetail.subscription')}</CardTitle></CardHeader>
             <CardContent className="space-y-4">
+              {subMsg && (
+                <p className={cn('text-sm', subMsg.type === 'ok' ? 'text-emerald-600' : 'text-rose-600')}>
+                  {subMsg.text}
+                </p>
+              )}
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label>{t('admin.companyDetail.package')}</Label>
                   <select
                     className="flex h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                    defaultValue={subscription.plan?.plan_type || company.subscription_plan}
-                    onChange={(e) => subMutation.mutate({ plan_type: e.target.value })}
+                    value={selectedPlanId}
+                    disabled={subMutation.isPending || selectablePlans.length === 0}
+                    onChange={(e) => {
+                      const nextPlanId = e.target.value;
+                      setSelectedPlanId(nextPlanId);
+                      setSubMsg(null);
+                      subMutation.mutate({ plan_id: nextPlanId });
+                    }}
                   >
-                    {PLAN_VALUES.map((value) => (
-                      <option key={value} value={value}>{t(`common.plans.${value}`)}</option>
-                    ))}
+                    {selectablePlans.map((item) => {
+                      const label = localizePlan(item, i18n.language).name;
+                      return (
+                        <option key={item.id} value={item.id}>{label}</option>
+                      );
+                    })}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label>{t('admin.companyDetail.billingPeriod')}</Label>
+                  <select
+                    className="flex h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
+                    value={selectedBillingPeriod}
+                    disabled={subMutation.isPending}
+                    onChange={(e) => {
+                      const nextPeriod = e.target.value as 'monthly' | 'yearly';
+                      setSelectedBillingPeriod(nextPeriod);
+                      setSubMsg(null);
+                      subMutation.mutate({ billing_period: nextPeriod });
+                    }}
+                  >
+                    <option value="monthly">{t('admin.companyDetail.invoiceMonthly')}</option>
+                    <option value="yearly">{t('admin.companyDetail.invoiceYearly')}</option>
                   </select>
                 </div>
                 <div className="space-y-2">
                   <Label>{t('admin.companyDetail.subStatus')}</Label>
                   <select
                     className="flex h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                    defaultValue={subscription.status}
-                    onChange={(e) => subMutation.mutate({ status: e.target.value })}
+                    value={selectedSubStatus}
+                    disabled={subMutation.isPending}
+                    onChange={(e) => {
+                      setSelectedSubStatus(e.target.value);
+                      setSubMsg(null);
+                      subMutation.mutate({ status: e.target.value });
+                    }}
                   >
                     {['trial', 'active', 'cancelled'].map((value) => (
                       <option key={value} value={value}>{t(`common.status.${value}`)}</option>

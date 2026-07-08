@@ -1,11 +1,11 @@
 import { useTranslation } from 'react-i18next';
 
-const WHATSAPP_PHONE = '905338507761';
+import { PLATFORM_WHATSAPP_PHONE } from '@/lib/platform';
 
 export function LandingChatBot() {
   const { t } = useTranslation();
   const message = t('onboarding.chatBotMessage');
-  const href = `https://wa.me/${WHATSAPP_PHONE}?text=${encodeURIComponent(message)}`;
+  const href = `https://wa.me/${PLATFORM_WHATSAPP_PHONE}?text=${encodeURIComponent(message)}`;
 
   return (
     <a

@@ -2,7 +2,7 @@
  * Fiyatlar — herkese açık abonelik paketleri (login öncesi)
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
@@ -11,20 +11,31 @@ import { api } from '@/services/api';
 import { SiteHeader } from '@/components/SiteHeader';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { LandingNav } from '@/components/onboarding/LandingNav';
+import { LandingChatBot } from '@/components/onboarding/LandingChatBot';
 import { LandingFooter } from '@/components/onboarding/LandingFooter';
 import { TerrariumBackground } from '@/components/onboarding/TerrariumBackground';
 import { PlanCard } from '@/components/PlanCard';
 import { BillingPeriodToggle } from '@/components/BillingPeriodToggle';
+import { YearlyPromoCelebration } from '@/components/YearlyPromoCelebration';
 import { Spinner } from '@/components/ui';
-import { planHasYearlyPrice } from '@/lib/plan-format';
+import { planHasYearlyPrice, isHighlightedPlan } from '@/lib/plan-format';
+import { resolveLocaleFromLanguage } from '@/lib/plan-localize';
 import type { BillingPeriod } from '@/lib/plan-format';
 import type { SubscriptionPlan } from '@/types';
 
 export function PricingPage() {
   const { t, i18n } = useTranslation();
-  const locale = i18n.language?.startsWith('en') ? 'en-US' : 'tr-TR';
+  const locale = resolveLocaleFromLanguage(i18n.language);
   const navigate = useNavigate();
   const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>('monthly');
+  const [promoTrigger, setPromoTrigger] = useState(0);
+
+  const handleBillingChange = useCallback((period: BillingPeriod) => {
+    setBillingPeriod(period);
+    if (period === 'yearly') {
+      setPromoTrigger((n) => n + 1);
+    }
+  }, []);
 
   const { data: plans, isLoading } = useQuery({
     queryKey: ['public-plans'],
@@ -36,8 +47,6 @@ export function PricingPage() {
     () => (plans ?? []).some(planHasYearlyPrice),
     [plans]
   );
-
-  const highlightIndex = plans && plans.length > 1 ? Math.floor((plans.length - 1) / 2) : 0;
 
   return (
     <div className="landing-page auth-page min-h-[100dvh] overflow-x-clip text-white">
@@ -69,8 +78,12 @@ export function PricingPage() {
           </div>
 
           {showBillingToggle && (
-            <div className="mt-8 flex justify-center">
-              <BillingPeriodToggle value={billingPeriod} onChange={setBillingPeriod} />
+            <div className="mt-8 flex justify-center px-1">
+              <BillingPeriodToggle
+                value={billingPeriod}
+                onChange={handleBillingChange}
+                variant="landing"
+              />
             </div>
           )}
 
@@ -79,14 +92,14 @@ export function PricingPage() {
               <Spinner className="h-8 w-8" />
             </div>
           ) : plans && plans.length > 0 ? (
-            <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3 lg:items-center">
-              {plans.map((plan, i) => (
+            <div className="mt-10 grid grid-cols-1 gap-5 sm:mt-12 sm:gap-6 sm:grid-cols-2 lg:grid-cols-3 lg:items-center">
+              {plans.map((plan) => (
                 <PlanCard
                   key={plan.id}
                   plan={plan}
                   locale={locale}
                   billingPeriod={billingPeriod}
-                  highlighted={i === highlightIndex}
+                  highlighted={isHighlightedPlan(plan, plans)}
                   variant="landing"
                 />
               ))}
@@ -119,7 +132,11 @@ export function PricingPage() {
         </div>
       </main>
 
+      <LandingChatBot />
+
       <LandingFooter />
+
+      <YearlyPromoCelebration trigger={promoTrigger} />
     </div>
   );
 }

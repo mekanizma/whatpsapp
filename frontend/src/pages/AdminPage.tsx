@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import {
   Building2, MessageSquare, CreditCard, Zap, Smartphone,
-  ArrowRight, Plus, Activity, Headphones,
+  ArrowRight, Plus, Activity, Headphones, ClipboardList,
 } from 'lucide-react';
 import { api } from '@/services/api';
 import { StatCard } from '@/components/StatCard';
@@ -42,6 +42,7 @@ export function AdminPage() {
 
   const quickLinks = [
     { to: '/admin/companies', labelKey: 'admin.overview.companyMgmt', icon: Building2 },
+    { to: '/admin/applications', labelKey: 'admin.overview.applications', icon: ClipboardList },
     { to: '/admin/support-tickets', labelKey: 'admin.overview.supportTickets', icon: Headphones },
     { to: '/admin/whatsapp-health', labelKey: 'admin.overview.whatsappHealth', icon: Smartphone },
     { to: '/admin/usage', labelKey: 'admin.overview.aiUsage', icon: Zap },
@@ -97,6 +98,15 @@ export function AdminPage() {
             icon={Headphones}
             color="text-rose-600"
             bgColor="bg-rose-50"
+          />
+        </Link>
+        <Link to="/admin/applications" className="block transition hover:opacity-90">
+          <StatCard
+            title={t('admin.overview.pendingApplications')}
+            value={stats?.signup_applications_pending ?? 0}
+            icon={ClipboardList}
+            color="text-amber-600"
+            bgColor="bg-amber-50"
           />
         </Link>
         <StatCard title={t('admin.overview.whatsappConnected')} value={stats?.whatsapp_connected ?? 0} icon={Smartphone} color="text-green-600" bgColor="bg-green-50" />

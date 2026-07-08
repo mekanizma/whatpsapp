@@ -21,6 +21,7 @@ import * as notificationsCtrl from '../controllers/notifications.controller';
 import * as unknownQuestionsCtrl from '../controllers/unknown-questions.controller';
 import * as platformSupportCtrl from '../controllers/platform-support.controller';
 import * as referenceLogosCtrl from '../controllers/reference-logos.controller';
+import * as signupApplicationCtrl from '../controllers/signup-application.controller';
 import { companyLogoUpload, knowledgeFileUpload, messageImageUpload, referenceLogoUpload } from '../middleware/upload.middleware';
 
 const router = Router();
@@ -60,6 +61,7 @@ router.post('/admin/prompts-reset-all', authenticate, requireRole('super_admin')
 router.post('/admin/prompts-cleanup', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.cleanupPrompts));
 router.post('/admin/prompts-seed', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.seedPrompts));
 router.get('/admin/plans', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.getSubscriptionPlans));
+router.post('/admin/plans', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.createSubscriptionPlanAdmin));
 router.put('/admin/plans/:id', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.updateSubscriptionPlanAdmin));
 router.get('/admin/reference-logos', authenticate, requireRole('super_admin'), asyncHandler(referenceLogosCtrl.adminListReferenceLogos));
 router.post('/admin/reference-logos', authenticate, requireRole('super_admin'), referenceLogoUpload.single('file'), asyncHandler(referenceLogosCtrl.createReferenceLogo));
@@ -76,6 +78,10 @@ router.get('/admin/support-tickets', authenticate, requireRole('super_admin'), a
 router.get('/admin/support-tickets/:id', authenticate, requireRole('super_admin'), asyncHandler(platformSupportCtrl.adminGetSupportTicket));
 router.patch('/admin/support-tickets/:id', authenticate, requireRole('super_admin'), asyncHandler(platformSupportCtrl.adminUpdateSupportTicket));
 router.post('/admin/support-tickets/:id/messages', authenticate, requireRole('super_admin'), asyncHandler(platformSupportCtrl.adminReplySupportTicket));
+
+router.get('/admin/signup-applications', authenticate, requireRole('super_admin'), asyncHandler(signupApplicationCtrl.adminListSignupApplications));
+router.patch('/admin/signup-applications/:id', authenticate, requireRole('super_admin'), asyncHandler(signupApplicationCtrl.adminUpdateSignupApplication));
+router.post('/admin/signup-applications/:id/provision', authenticate, requireRole('super_admin'), asyncHandler(signupApplicationCtrl.adminProvisionSignupApplication));
 
 // Platform support (company admin → platform)
 router.get('/platform-support/tickets', authenticate, requireRole('company_admin'), requireCompany, asyncHandler(platformSupportCtrl.listMySupportTickets));
@@ -213,6 +219,8 @@ router.delete('/appointments/:id', authenticate, requireRole('company_admin', 's
 // Public (kimlik doğrulama gerektirmeyen) uç noktalar
 router.get('/public/plans', asyncHandler(subscriptionCtrl.getPublicPlans));
 router.get('/public/reference-logos', asyncHandler(referenceLogosCtrl.getPublicReferenceLogos));
+router.get('/public/signup-captcha', asyncHandler(signupApplicationCtrl.getSignupCaptcha));
+router.post('/public/signup-applications', asyncHandler(signupApplicationCtrl.submitSignupApplication));
 
 // Subscriptions
 router.get('/subscriptions/current', authenticate, requireCompany, subscriptionCtrl.getCurrentSubscription);

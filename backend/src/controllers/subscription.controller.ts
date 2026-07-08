@@ -11,6 +11,7 @@ import {
   isQuotaExhausted,
   purchaseAiConversationAddon,
 } from '../services/ai-addon.service';
+import { getActivePublicPlans } from '../services/subscription-plan.service';
 
 export async function getCurrentSubscription(req: AuthRequest, res: Response): Promise<void> {
   if (isDemoSession(req)) {
@@ -158,18 +159,10 @@ export async function getPlans(req: AuthRequest, res: Response): Promise<void> {
  * Kimlik doğrulama gerektirmez, yalnızca aktif planları döner.
  */
 export async function getPublicPlans(_req: Request, res: Response): Promise<void> {
-  const { data, error } = await adminClient
-    .from('subscription_plans')
-    .select(
-      'id, plan_type, name, description, features, message_limit, user_limit, price_monthly, price_yearly, currency, is_active'
-    )
-    .eq('is_active', true)
-    .order('price_monthly', { ascending: true });
-
-  if (error) {
+  try {
+    const plans = await getActivePublicPlans();
+    res.json({ success: true, data: plans.length > 0 ? plans : demoPlans });
+  } catch {
     res.json({ success: true, data: demoPlans });
-    return;
   }
-
-  res.json({ success: true, data: data && data.length > 0 ? data : demoPlans });
 }

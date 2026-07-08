@@ -2,7 +2,7 @@
  * Subscription and usage page
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { CreditCard, AlertTriangle, Package } from 'lucide-react';
@@ -34,6 +34,12 @@ export function SubscriptionPage() {
     queryKey: ['subscription-current'],
     queryFn: () => api.get<CurrentSubscription>('/subscriptions/current'),
   });
+
+  useEffect(() => {
+    if (current?.billing_period) {
+      setBillingPeriod(current.billing_period);
+    }
+  }, [current?.billing_period]);
 
   const { data: addons, isLoading: addonsLoading } = useQuery({
     queryKey: ['subscription-addons'],

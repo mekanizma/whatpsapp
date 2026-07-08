@@ -53,6 +53,7 @@ export interface AdminCompany extends Company {
     messages_limit: number;
     status: string;
     users_limit?: number;
+    billing_period?: 'monthly' | 'yearly';
   };
   whatsapp?: {
     status: string;
@@ -67,6 +68,7 @@ export interface PlatformStats {
   active_subscriptions: number;
   open_tickets: number;
   platform_support_open: number;
+  signup_applications_pending: number;
   whatsapp_connected: number;
   ai_tokens_month: number;
   ai_api_calls_month: number;
@@ -173,7 +175,9 @@ export interface CompanyDetail {
     messages_limit: number;
     status: string;
     users_limit: number;
+    billing_period?: 'monthly' | 'yearly';
     plan?: {
+      id?: string;
       plan_type: string;
       name: string;
       description?: string | null;
@@ -401,6 +405,32 @@ export interface PlatformSupportTicket {
   message_count?: number;
 }
 
+export interface SignupApplication {
+  id: string;
+  company_name: string;
+  category: string;
+  full_name: string;
+  phone: string | null;
+  email: string;
+  subscription_plan_id: string | null;
+  billing_period: 'monthly' | 'yearly';
+  provisioned_company_id?: string | null;
+  status: 'pending' | 'reviewed' | 'approved' | 'rejected';
+  admin_notes: string | null;
+  whatsapp_sent: boolean;
+  created_at: string;
+  updated_at: string;
+  plan?: {
+    id: string;
+    plan_type: string;
+    name: string;
+    name_en?: string | null;
+    price_monthly: number;
+    price_yearly?: number | null;
+    currency?: string;
+  } | null;
+}
+
 export interface Department {
   id: string;
   name: string;
@@ -469,8 +499,11 @@ export interface SubscriptionPlan {
   id: string;
   plan_type: string;
   name: string;
+  name_en?: string | null;
   description: string | null;
+  description_en?: string | null;
   features?: string[];
+  features_en?: string[];
   message_limit: number;
   user_limit: number;
   price_monthly: number;
@@ -508,6 +541,7 @@ export interface CurrentSubscription {
   messages_limit: number;
   users_limit: number;
   status: string;
+  billing_period?: 'monthly' | 'yearly';
   plan: SubscriptionPlan | null;
 }
 
