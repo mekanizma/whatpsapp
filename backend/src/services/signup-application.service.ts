@@ -71,6 +71,22 @@ function billingPeriodLabel(period: SignupBillingPeriod): string {
   return period === 'yearly' ? 'Yıllık' : 'Aylık';
 }
 
+const SIGNUP_PLAN_SELECT =
+  'id, plan_type, name, name_en, price_monthly, price_yearly, currency';
+
+const SIGNUP_PLAN_SELECT_WITH_LIMITS =
+  'id, plan_type, name, name_en, price_monthly, price_yearly, currency, message_limit, user_limit, is_active';
+
+function normalizeSignupApplicationRow(row: Record<string, unknown>): SignupApplication {
+  const planRaw = row.plan ?? row.subscription_plans;
+  const plan = Array.isArray(planRaw) ? planRaw[0] : planRaw;
+  const { subscription_plans: _subscriptionPlans, plan: _plan, ...rest } = row;
+  return {
+    ...(rest as unknown as SignupApplication),
+    plan: (plan as SignupApplicationPlan | null | undefined) || null,
+  };
+}
+
 function buildWhatsAppMessage(app: SignupApplication): string {
   const planName = app.plan?.name || '—';
   const billing = billingPeriodLabel(app.billing_period || 'monthly');
@@ -236,10 +252,7 @@ export async function listSignupApplicationsAdmin(options?: {
 
   let query = adminClient
     .from('signup_applications')
-    .select(
-      '*, plan:subscription_plan_id(id, plan_type, name, name_en, price_monthly, price_yearly, currency)',
-      { count: 'exact' }
-    )
+    .select(`*, subscription_plans(${SIGNUP_PLAN_SELECT})`, { count: 'exact' })
     .order('created_at', { ascending: false });
 
   if (options?.status && options.status !== 'all') {
@@ -258,7 +271,7 @@ export async function listSignupApplicationsAdmin(options?: {
 
   const total = count || 0;
   return {
-    applications: (data || []) as SignupApplication[],
+    applications: (data || []).map((row) => normalizeSignupApplicationRow(row as Record<string, unknown>)),
     pagination: {
       page,
       limit,
@@ -296,9 +309,7 @@ export async function provisionCompanyFromSignupApplication(
 ): Promise<{ company_id: string; application: SignupApplication }> {
   const { data: appRow, error: appError } = await adminClient
     .from('signup_applications')
-    .select(
-      '*, plan:subscription_plan_id(id, plan_type, name, name_en, price_monthly, price_yearly, currency, message_limit, user_limit, is_active)'
-    )
+    .select(`*, subscription_plans(${SIGNUP_PLAN_SELECT_WITH_LIMITS})`)
     .eq('id', applicationId)
     .single();
 
@@ -306,28 +317,30 @@ export async function provisionCompanyFromSignupApplication(
     throw new Error('Başvuru bulunamadı');
   }
 
-  if (appRow.provisioned_company_id) {
+  const normalizedApp = normalizeSignupApplicationRow(appRow as Record<string, unknown>);
+
+  if (normalizedApp.provisioned_company_id) {
     throw new Error('Bu başvuru için zaten hesap oluşturulmuş');
   }
 
-  const planRaw = Array.isArray(appRow.plan) ? appRow.plan[0] : appRow.plan;
-  if (!planRaw?.id || !planRaw.is_active) {
+  const planId = normalizedApp.subscription_plan_id || normalizedApp.plan?.id;
+  if (!planId) {
     throw new Error('Başvuruda geçerli bir paket seçimi yok');
   }
 
   const plan = await resolveSubscriptionPlan({
-    plan_id: String(planRaw.id),
+    plan_id: String(planId),
     require_active: true,
   });
-  const billingPeriod = appRow.billing_period === 'yearly' ? 'yearly' : 'monthly';
+  const billingPeriod = normalizedApp.billing_period === 'yearly' ? 'yearly' : 'monthly';
 
   const { data: company, error: companyError } = await adminClient
     .from('companies')
     .insert({
-      company_name: appRow.company_name,
-      category: appRow.category || 'diger',
-      phone: appRow.phone,
-      email: appRow.email,
+      company_name: normalizedApp.company_name,
+      category: normalizedApp.category || 'diger',
+      phone: normalizedApp.phone,
+      email: normalizedApp.email,
       subscription_plan: plan.plan_type,
       status: 'trial',
     })
@@ -359,9 +372,7 @@ export async function provisionCompanyFromSignupApplication(
       provisioned_company_id: company.id,
     })
     .eq('id', applicationId)
-    .select(
-      '*, plan:subscription_plan_id(id, plan_type, name, name_en, price_monthly, price_yearly, currency)'
-    )
+    .select(`*, subscription_plans(${SIGNUP_PLAN_SELECT})`)
     .single();
 
   if (updateError) {
@@ -370,6 +381,6 @@ export async function provisionCompanyFromSignupApplication(
 
   return {
     company_id: company.id,
-    application: updatedApp as SignupApplication,
+    application: normalizeSignupApplicationRow(updatedApp as Record<string, unknown>),
   };
 }
