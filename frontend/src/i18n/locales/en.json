@@ -2,7 +2,10 @@
   "landingNav": {
     "services": "Services",
     "references": "References",
-    "pricing": "Pricing"
+    "pricing": "Pricing",
+    "menu": "Main menu",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu"
   },
   "pricing": {
     "label": "Pricing",

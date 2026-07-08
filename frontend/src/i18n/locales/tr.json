@@ -2,7 +2,10 @@
   "landingNav": {
     "services": "Hizmetler",
     "references": "Referanslar",
-    "pricing": "Fiyatlar"
+    "pricing": "Fiyatlar",
+    "menu": "Ana menü",
+    "openMenu": "Menüyü aç",
+    "closeMenu": "Menüyü kapat"
   },
   "pricing": {
     "label": "Fiyatlandırma",
