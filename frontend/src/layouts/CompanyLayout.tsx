@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import {
   LayoutDashboard, MessageSquare, BookOpen, Users, Ticket,
   CreditCard, Smartphone, Bell, Settings, CalendarDays, UserRound, HelpCircle, Headphones,
-  Sparkles, UserCog,
+  Sparkles, UserCog, PackageSearch, Truck, ShoppingCart, RefreshCcw, Globe,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/authStore';
 import { planHasModule, type PlanModuleKey } from '@/lib/plan-capabilities';
@@ -17,7 +17,6 @@ import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { CompanyLogo } from '@/components/CompanyLogo';
 import { ImpersonationBanner } from '@/components/ImpersonationBanner';
 import { PremiumPanelFrame, PremiumSidebar, type PremiumNavGroup } from '@/components/layout/PremiumSidebar';
-import { PanelRobotMascot } from '@/components/layout/PanelRobotMascot';
 import type { UserRole } from '@/types';
 
 type NavItem = {
@@ -42,6 +41,7 @@ const navGroups: { sectionKey: string; items: NavItem[] }[] = [
       { to: '/panel/messages', icon: MessageSquare, labelKey: 'layout.nav.messages', roles: ['company_admin', 'staff'], module: 'messages', staffNav: 'messages' },
       { to: '/panel/customers', icon: UserRound, labelKey: 'layout.nav.customers', roles: ['company_admin'], module: 'customers' },
       { to: '/panel/whatsapp', icon: Smartphone, labelKey: 'layout.nav.whatsapp', roles: ['company_admin'], module: 'whatsapp' },
+      { to: '/panel/website', icon: Globe, labelKey: 'layout.nav.website', roles: ['company_admin'], module: 'website' },
     ],
   },
   {
@@ -51,6 +51,10 @@ const navGroups: { sectionKey: string; items: NavItem[] }[] = [
       { to: '/panel/unknown-questions', icon: HelpCircle, labelKey: 'layout.nav.unknownQuestions', roles: ['company_admin'], module: 'unknown_questions' },
       { to: '/panel/tickets', icon: Ticket, labelKey: 'layout.nav.tickets', roles: ['company_admin', 'staff'], module: 'tickets', staffNav: 'tickets' },
       { to: '/panel/calendar', icon: CalendarDays, labelKey: 'layout.nav.calendar', roles: ['company_admin', 'staff'], module: 'calendar', staffNav: 'calendar' },
+      { to: '/panel/order-status', icon: PackageSearch, labelKey: 'layout.nav.orderStatus', roles: ['company_admin'], module: 'order_status' },
+      { to: '/panel/shipping-tracking', icon: Truck, labelKey: 'layout.nav.shippingTracking', roles: ['company_admin'], module: 'shipping_tracking' },
+      { to: '/panel/cart', icon: ShoppingCart, labelKey: 'layout.nav.cart', roles: ['company_admin'], module: 'cart' },
+      { to: '/panel/returns', icon: RefreshCcw, labelKey: 'layout.nav.returns', roles: ['company_admin'], module: 'returns' },
     ],
   },
   {
@@ -75,10 +79,15 @@ const pageTitleKeys: Record<string, string> = {
   '/panel/activity/today': 'layout.titles.todayActivity',
   '/panel/ai-insights': 'layout.titles.aiInsights',
   '/panel/customers': 'layout.titles.customers',
+  '/panel/website': 'layout.titles.website',
   '/panel/knowledge': 'layout.titles.knowledge',
   '/panel/unknown-questions': 'layout.titles.unknownQuestions',
   '/panel/tickets': 'layout.titles.tickets',
   '/panel/calendar': 'layout.titles.calendar',
+  '/panel/order-status': 'layout.titles.orderStatus',
+  '/panel/shipping-tracking': 'layout.titles.shippingTracking',
+  '/panel/cart': 'layout.titles.cart',
+  '/panel/returns': 'layout.titles.returns',
   '/panel/staff': 'layout.titles.staff',
   '/panel/whatsapp': 'layout.titles.whatsapp',
   '/panel/subscription': 'layout.titles.subscription',
@@ -232,7 +241,6 @@ export function CompanyLayout() {
       }
     >
       <Outlet />
-      <PanelRobotMascot />
     </PremiumPanelFrame>
     </>
   );

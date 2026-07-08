@@ -19,6 +19,7 @@ import * as subscriptionCtrl from '../controllers/subscription.controller';
 import * as appointmentsCtrl from '../controllers/appointments.controller';
 import * as notificationsCtrl from '../controllers/notifications.controller';
 import * as unknownQuestionsCtrl from '../controllers/unknown-questions.controller';
+import * as ecommerceCtrl from '../controllers/ecommerce.controller';
 import * as platformSupportCtrl from '../controllers/platform-support.controller';
 import * as referenceLogosCtrl from '../controllers/reference-logos.controller';
 import * as signupApplicationCtrl from '../controllers/signup-application.controller';
@@ -188,6 +189,83 @@ router.patch(
   requireRole('company_admin'),
   requireCompany,
   asyncHandler(unknownQuestionsCtrl.patchUnknownQuestion)
+);
+
+// E-ticaret operasyonları (E-ticaret paketi)
+router.get('/ecommerce/settings', authenticate, requireCompany, asyncHandler(ecommerceCtrl.getSettings));
+router.put(
+  '/ecommerce/settings',
+  authenticate,
+  requireRole('company_admin'),
+  requireCompany,
+  asyncHandler(ecommerceCtrl.updateSettings)
+);
+router.post(
+  '/ecommerce/settings/test',
+  authenticate,
+  requireRole('company_admin'),
+  requireCompany,
+  asyncHandler(ecommerceCtrl.testWebsiteApi)
+);
+router.get('/ecommerce/orders', authenticate, requireCompany, asyncHandler(ecommerceCtrl.getOrders));
+router.post(
+  '/ecommerce/orders',
+  authenticate,
+  requireRole('company_admin'),
+  requireCompany,
+  asyncHandler(ecommerceCtrl.createOrder)
+);
+router.patch(
+  '/ecommerce/orders/:id',
+  authenticate,
+  requireRole('company_admin'),
+  requireCompany,
+  asyncHandler(ecommerceCtrl.patchOrder)
+);
+router.get('/ecommerce/shipments', authenticate, requireCompany, asyncHandler(ecommerceCtrl.getShipments));
+router.post(
+  '/ecommerce/shipments',
+  authenticate,
+  requireRole('company_admin'),
+  requireCompany,
+  asyncHandler(ecommerceCtrl.createShipment)
+);
+router.patch(
+  '/ecommerce/shipments/:id',
+  authenticate,
+  requireRole('company_admin'),
+  requireCompany,
+  asyncHandler(ecommerceCtrl.patchShipment)
+);
+router.get('/ecommerce/carts', authenticate, requireCompany, asyncHandler(ecommerceCtrl.getCarts));
+router.post(
+  '/ecommerce/carts',
+  authenticate,
+  requireRole('company_admin'),
+  requireCompany,
+  asyncHandler(ecommerceCtrl.createCart)
+);
+router.patch(
+  '/ecommerce/carts/:id',
+  authenticate,
+  requireRole('company_admin'),
+  requireCompany,
+  asyncHandler(ecommerceCtrl.patchCart)
+);
+router.get('/ecommerce/returns', authenticate, requireCompany, asyncHandler(ecommerceCtrl.getReturns));
+router.post(
+  '/ecommerce/returns',
+  authenticate,
+  requireRole('company_admin'),
+  requireCompany,
+  asyncHandler(ecommerceCtrl.createReturn)
+);
+router.patch(
+  '/ecommerce/returns/:id',
+  authenticate,
+  requireRole('company_admin'),
+  requireCompany,
+  asyncHandler(ecommerceCtrl.patchReturn)
 );
 
 // Tickets

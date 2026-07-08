@@ -129,7 +129,8 @@ export function isGreetingMessage(message: string): boolean {
 export function preAIGate(
   message: string,
   history: { sender_type: string; message: string }[] = [],
-  lang?: ConversationLang
+  lang?: ConversationLang,
+  options?: { ecommerceReturnsEnabled?: boolean }
 ): GateResult {
   const trimmed = message.trim();
   const normalized = normalizeForGate(trimmed);
@@ -219,7 +220,7 @@ export function preAIGate(
     };
   }
 
-  if (REFUND_PATTERNS.test(normalized)) {
+  if (REFUND_PATTERNS.test(normalized) && !options?.ecommerceReturnsEnabled) {
     return {
       skipAI: true,
       shouldTransfer: false,

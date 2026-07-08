@@ -501,8 +501,13 @@
       "unknownQuestions": "Bilinmeyen Sorular",
       "tickets": "Destek",
       "calendar": "Takvim",
+      "orderStatus": "Sipariş Durumu Sorgulama",
+      "shippingTracking": "Kargo Takibi",
+      "cart": "Sepet",
+      "returns": "İade ve Değişim",
       "staff": "Personel",
       "whatsapp": "WhatsApp",
+      "website": "Web Sitesi",
       "subscription": "Abonelik",
       "platformSupport": "Platform Desteği",
       "settings": "Hesap Ayarları",
@@ -530,8 +535,13 @@
       "unknownQuestions": "Bilinmeyen Sorular",
       "tickets": "Destek Talepleri",
       "calendar": "Randevu Takvimi",
+      "orderStatus": "Sipariş Durumu Sorgulama",
+      "shippingTracking": "Kargo Takibi",
+      "cart": "Sepet",
+      "returns": "İade ve Değişim",
       "staff": "Personel",
       "whatsapp": "WhatsApp",
+      "website": "Web Sitesi",
       "subscription": "Abonelik",
       "platformSupport": "Platform Desteği",
       "settings": "Hesap Ayarları"
@@ -669,6 +679,143 @@
       "resolved": "Çözüldü",
       "dismissed": "Yoksayıldı",
       "added_to_kb": "KB'ye Eklendi"
+    }
+  },
+  "ecommerce": {
+    "common": {
+      "phone": "Telefon",
+      "customerName": "Müşteri Adı",
+      "items": "Ürünler",
+      "status": "Durum",
+      "noCustomer": "Müşteri bilgisi yok"
+    },
+    "settings": {
+      "unnamedStore": "Mağaza adı tanımlı değil"
+    },
+    "website": {
+      "title": "Web Sitesi",
+      "description": "Mağaza API’nizi bağlayın; AI ürün, fiyat, stok ve gönderi durumunu canlı sorgulasın",
+      "connected": "Bağlı",
+      "notConnected": "Bağlı değil",
+      "storeSection": "Mağaza bilgileri",
+      "storeSectionDesc": "Müşteriye gösterilecek mağaza adı ve site adresi",
+      "storeName": "Mağaza adı",
+      "storeUrl": "Web sitesi URL",
+      "provider": "Altyapı",
+      "providers": {
+        "custom": "Özel API",
+        "shopify": "Shopify",
+        "woocommerce": "WooCommerce",
+        "manual": "Manuel"
+      },
+      "apiSection": "API bağlantısı",
+      "apiSectionDesc": "Ürün arama, stok, sipariş ve kargo uç noktaları",
+      "apiBaseUrl": "API taban URL",
+      "apiKey": "API anahtarı / token",
+      "authType": "Kimlik doğrulama",
+      "authTypes": {
+        "bearer": "Bearer token",
+        "api_key": "X-API-Key",
+        "header": "Özel header"
+      },
+      "authHeader": "Header adı",
+      "enableApi": "AI canlı API kullanılsın",
+      "productsPath": "Ürün listesi yolu",
+      "searchPath": "Ürün arama yolu",
+      "stockPath": "Stok yolu ({sku})",
+      "orderPath": "Sipariş yolu ({orderNumber})",
+      "shippingPath": "Kargo yolu ({trackingNumber})",
+      "testConnection": "Bağlantıyı Test Et",
+      "saved": "Ayarlar kaydedildi",
+      "testOk": "Bağlantı başarılı (örnek {{count}} ürün)",
+      "testFail": "Bağlantı başarısız",
+      "lastTest": "Son test",
+      "howTitle": "AI nasıl kullanır?",
+      "howDesc": "Müşteri WhatsApp’ta fiyat, stok, ürün adı, sipariş veya kargo sorduğunda sistem bağlı API’ye sorgu atar ve yanıtı AI’ya bağlam olarak verir."
+    },
+    "orderStatus": {
+      "title": "Sipariş Durumu Sorgulama",
+      "description": "Siparişleri kaydedin; müşteriler WhatsApp üzerinden sipariş numarasıyla durum sorgulayabilsin",
+      "add": "Sipariş Ekle",
+      "orderNumber": "Sipariş No",
+      "total": "Tutar",
+      "aiHint": "AI, müşteri sipariş numarası verdiğinde buradaki kayıtlardan yanıt üretir.",
+      "empty": "Henüz sipariş yok",
+      "emptyDesc": "Sipariş ekleyin veya mağaza entegrasyonu ile senkronize edin"
+    },
+    "shipping": {
+      "title": "Kargo Takibi",
+      "description": "Kargo takip numaralarını yönetin; müşteriler WhatsApp'tan kargo durumunu öğrensin",
+      "add": "Kargo Ekle",
+      "trackingNumber": "Takip No",
+      "carrier": "Kargo Firması",
+      "trackingUrl": "Takip Linki",
+      "lastEvent": "Son Olay",
+      "openTracking": "Takibi Aç",
+      "empty": "Henüz kargo kaydı yok",
+      "emptyDesc": "Takip numarası ekleyerek müşterilerinize kargo durumu sunun"
+    },
+    "cart": {
+      "title": "Sepet",
+      "description": "Terk edilen sepetleri takip edin ve hatırlatma durumlarını yönetin",
+      "add": "Sepet Ekle",
+      "total": "Sepet Tutarı",
+      "itemCount": "Ürün Adedi",
+      "items": "ürün",
+      "reminderHours": "Hatırlatma süresi (saat)",
+      "reminderHint": "Sepet terk edildikten kaç saat sonra hatırlatma yapılacağını ayarlayın",
+      "empty": "Terk edilen sepet yok",
+      "emptyDesc": "Mağazanızdan gelen terk edilmiş sepetler burada listelenir"
+    },
+    "returns": {
+      "title": "İade ve Değişim",
+      "description": "İade ve değişim taleplerini yönetin; politika metnini AI yanıtlarında kullanın",
+      "add": "Talep Ekle",
+      "requestType": "Talep Türü",
+      "reason": "Sebep",
+      "policyTitle": "İade / değişim politikası",
+      "policyHint": "Bu metin WhatsApp AI yanıtlarında kullanılır",
+      "policyPlaceholder": "Örn. 14 gün içinde kullanılmamış ürünlerde iade kabul edilir...",
+      "savePolicy": "Politikayı Kaydet",
+      "empty": "İade / değişim talebi yok",
+      "emptyDesc": "Müşteri taleplerini buradan takip edin"
+    },
+    "orderStatuses": {
+      "pending": "Beklemede",
+      "confirmed": "Onaylandı",
+      "processing": "Hazırlanıyor",
+      "shipped": "Kargoda",
+      "delivered": "Teslim Edildi",
+      "cancelled": "İptal",
+      "refunded": "İade Edildi"
+    },
+    "shipmentStatuses": {
+      "label_created": "Etiket Oluşturuldu",
+      "in_transit": "Yolda",
+      "out_for_delivery": "Dağıtımda",
+      "delivered": "Teslim Edildi",
+      "returned": "İade Yolda",
+      "exception": "Sorunlu"
+    },
+    "cartStatuses": {
+      "abandoned": "Terk Edildi",
+      "reminded": "Hatırlatıldı",
+      "recovered": "Kurtarıldı",
+      "expired": "Süresi Doldu"
+    },
+    "returnTypes": {
+      "return": "İade",
+      "exchange": "Değişim"
+    },
+    "returnStatuses": {
+      "requested": "Talep Alındı",
+      "approved": "Onaylandı",
+      "rejected": "Reddedildi",
+      "in_transit": "Yolda",
+      "received": "Teslim Alındı",
+      "refunded": "İade Edildi",
+      "completed": "Tamamlandı",
+      "cancelled": "İptal"
     }
   },
   "calendar": {

@@ -69,7 +69,7 @@ export function DashboardPage() {
         <StatCard
           title={t('dashboard.totalConversations')}
           value={stats?.total_conversations ?? 0}
-          trend={t('dashboard.conversationCountHint')}
+          hint={t('dashboard.conversationCountHint')}
           icon={MessageSquare}
           color="text-sky-600"
           bgColor="bg-sky-50"
@@ -78,7 +78,7 @@ export function DashboardPage() {
         <StatCard
           title={t('dashboard.todayConversations')}
           value={stats?.today_conversations ?? 0}
-          trend={t('dashboard.todayConversationCountHint')}
+          hint={t('dashboard.todayConversationCountHint')}
           icon={TrendingUp}
           color="text-emerald-600"
           bgColor="bg-emerald-50"

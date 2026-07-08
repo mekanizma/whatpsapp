@@ -501,8 +501,13 @@
       "unknownQuestions": "Unknown Questions",
       "tickets": "Support",
       "calendar": "Calendar",
+      "orderStatus": "Order Status Lookup",
+      "shippingTracking": "Shipping Tracking",
+      "cart": "Cart",
+      "returns": "Returns & Exchanges",
       "staff": "Staff",
       "whatsapp": "WhatsApp",
+      "website": "Website",
       "subscription": "Subscription",
       "platformSupport": "Platform Support",
       "settings": "Account Settings",
@@ -530,8 +535,13 @@
       "unknownQuestions": "Unknown Questions",
       "tickets": "Support Tickets",
       "calendar": "Appointment Calendar",
+      "orderStatus": "Order Status Lookup",
+      "shippingTracking": "Shipping Tracking",
+      "cart": "Cart",
+      "returns": "Returns & Exchanges",
       "staff": "Staff",
       "whatsapp": "WhatsApp",
+      "website": "Website",
       "subscription": "Subscription",
       "platformSupport": "Platform Support",
       "settings": "Account Settings"
@@ -669,6 +679,143 @@
       "resolved": "Resolved",
       "dismissed": "Dismissed",
       "added_to_kb": "Added to KB"
+    }
+  },
+  "ecommerce": {
+    "common": {
+      "phone": "Phone",
+      "customerName": "Customer Name",
+      "items": "Items",
+      "status": "Status",
+      "noCustomer": "No customer info"
+    },
+    "settings": {
+      "unnamedStore": "Store name not set"
+    },
+    "website": {
+      "title": "Website",
+      "description": "Connect your store API so AI can answer with live product, price, stock and shipment data",
+      "connected": "Connected",
+      "notConnected": "Not connected",
+      "storeSection": "Store details",
+      "storeSectionDesc": "Store name and site URL shown to customers",
+      "storeName": "Store name",
+      "storeUrl": "Website URL",
+      "provider": "Platform",
+      "providers": {
+        "custom": "Custom API",
+        "shopify": "Shopify",
+        "woocommerce": "WooCommerce",
+        "manual": "Manual"
+      },
+      "apiSection": "API connection",
+      "apiSectionDesc": "Endpoints for product search, stock, orders and shipping",
+      "apiBaseUrl": "API base URL",
+      "apiKey": "API key / token",
+      "authType": "Authentication",
+      "authTypes": {
+        "bearer": "Bearer token",
+        "api_key": "X-API-Key",
+        "header": "Custom header"
+      },
+      "authHeader": "Header name",
+      "enableApi": "Use live API for AI replies",
+      "productsPath": "Products path",
+      "searchPath": "Product search path",
+      "stockPath": "Stock path ({sku})",
+      "orderPath": "Order path ({orderNumber})",
+      "shippingPath": "Shipping path ({trackingNumber})",
+      "testConnection": "Test Connection",
+      "saved": "Settings saved",
+      "testOk": "Connection successful (sample {{count}} products)",
+      "testFail": "Connection failed",
+      "lastTest": "Last test",
+      "howTitle": "How AI uses this",
+      "howDesc": "When a customer asks about price, stock, products, orders or shipping on WhatsApp, the system queries your API and feeds the result to the AI."
+    },
+    "orderStatus": {
+      "title": "Order Status Lookup",
+      "description": "Save orders so customers can check status on WhatsApp with an order number",
+      "add": "Add Order",
+      "orderNumber": "Order No",
+      "total": "Total",
+      "aiHint": "When a customer shares an order number, the AI answers using these records.",
+      "empty": "No orders yet",
+      "emptyDesc": "Add orders manually or sync them from your store"
+    },
+    "shipping": {
+      "title": "Shipping Tracking",
+      "description": "Manage tracking numbers so customers can check shipment status on WhatsApp",
+      "add": "Add Shipment",
+      "trackingNumber": "Tracking No",
+      "carrier": "Carrier",
+      "trackingUrl": "Tracking URL",
+      "lastEvent": "Last Event",
+      "openTracking": "Open Tracking",
+      "empty": "No shipments yet",
+      "emptyDesc": "Add tracking numbers to share shipment status with customers"
+    },
+    "cart": {
+      "title": "Cart",
+      "description": "Track abandoned carts and manage reminder status",
+      "add": "Add Cart",
+      "total": "Cart Total",
+      "itemCount": "Item Count",
+      "items": "items",
+      "reminderHours": "Reminder delay (hours)",
+      "reminderHint": "How many hours after abandonment to send a reminder",
+      "empty": "No abandoned carts",
+      "emptyDesc": "Abandoned carts from your store will appear here"
+    },
+    "returns": {
+      "title": "Returns & Exchanges",
+      "description": "Manage return/exchange requests and use policy text in AI replies",
+      "add": "Add Request",
+      "requestType": "Request Type",
+      "reason": "Reason",
+      "policyTitle": "Return / exchange policy",
+      "policyHint": "This text is used in WhatsApp AI replies",
+      "policyPlaceholder": "e.g. Unused items can be returned within 14 days...",
+      "savePolicy": "Save Policy",
+      "empty": "No return / exchange requests",
+      "emptyDesc": "Track customer requests from here"
+    },
+    "orderStatuses": {
+      "pending": "Pending",
+      "confirmed": "Confirmed",
+      "processing": "Processing",
+      "shipped": "Shipped",
+      "delivered": "Delivered",
+      "cancelled": "Cancelled",
+      "refunded": "Refunded"
+    },
+    "shipmentStatuses": {
+      "label_created": "Label Created",
+      "in_transit": "In Transit",
+      "out_for_delivery": "Out for Delivery",
+      "delivered": "Delivered",
+      "returned": "Returned",
+      "exception": "Exception"
+    },
+    "cartStatuses": {
+      "abandoned": "Abandoned",
+      "reminded": "Reminded",
+      "recovered": "Recovered",
+      "expired": "Expired"
+    },
+    "returnTypes": {
+      "return": "Return",
+      "exchange": "Exchange"
+    },
+    "returnStatuses": {
+      "requested": "Requested",
+      "approved": "Approved",
+      "rejected": "Rejected",
+      "in_transit": "In Transit",
+      "received": "Received",
+      "refunded": "Refunded",
+      "completed": "Completed",
+      "cancelled": "Cancelled"
     }
   },
   "calendar": {

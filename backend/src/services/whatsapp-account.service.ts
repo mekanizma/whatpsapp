@@ -4,11 +4,14 @@
 
 import { adminClient } from '../database/supabase';
 import { SubscriptionPlanType, WhatsAppAccount, WhatsAppStatus, Department } from '../types';
+import { normalizePlanType } from './plan-capabilities.service';
 
-export const WHATSAPP_LINE_LIMITS: Record<SubscriptionPlanType, number> = {
+export const WHATSAPP_LINE_LIMITS: Record<string, number> = {
   starter: 1,
   business: 3,
   enterprise: 999,
+  e_ticaret: 2,
+  eticaret: 2,
 };
 
 export interface WhatsAppAccountView extends WhatsAppAccount {
@@ -28,7 +31,8 @@ export async function getCompanyPlanType(companyId: string): Promise<Subscriptio
 }
 
 export function getWhatsAppLineLimit(planType: SubscriptionPlanType): number {
-  return WHATSAPP_LINE_LIMITS[planType] ?? WHATSAPP_LINE_LIMITS.starter;
+  const normalized = normalizePlanType(String(planType || 'starter'));
+  return WHATSAPP_LINE_LIMITS[normalized] ?? WHATSAPP_LINE_LIMITS.starter;
 }
 
 export async function countWhatsAppAccounts(companyId: string): Promise<number> {

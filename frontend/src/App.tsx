@@ -31,6 +31,11 @@ import { CalendarPage } from '@/pages/CalendarPage';
 import { AiInsightsPage } from '@/pages/AiInsightsPage';
 import { CustomersPage } from '@/pages/CustomersPage';
 import { UnknownQuestionsPage } from '@/pages/UnknownQuestionsPage';
+import { OrderStatusPage } from '@/pages/OrderStatusPage';
+import { ShippingTrackingPage } from '@/pages/ShippingTrackingPage';
+import { CartPage } from '@/pages/CartPage';
+import { ReturnsPage } from '@/pages/ReturnsPage';
+import { WebsitePage } from '@/pages/WebsitePage';
 import { TodayActivityPage } from '@/pages/TodayActivityPage';
 import { PlatformSupportPage } from '@/pages/PlatformSupportPage';
 import { AdminPage } from '@/pages/AdminPage';
@@ -111,8 +116,13 @@ function AppRoutes() {
         <Route path="unknown-questions" element={<PlanModuleRoute module="unknown_questions"><AdminOnlyRoute><UnknownQuestionsPage /></AdminOnlyRoute></PlanModuleRoute>} />
         <Route path="tickets" element={<PlanModuleRoute module="tickets"><TicketsPage /></PlanModuleRoute>} />
         <Route path="calendar" element={<PlanModuleRoute module="calendar"><CalendarPage /></PlanModuleRoute>} />
+        <Route path="order-status" element={<PlanModuleRoute module="order_status"><AdminOnlyRoute><OrderStatusPage /></AdminOnlyRoute></PlanModuleRoute>} />
+        <Route path="shipping-tracking" element={<PlanModuleRoute module="shipping_tracking"><AdminOnlyRoute><ShippingTrackingPage /></AdminOnlyRoute></PlanModuleRoute>} />
+        <Route path="cart" element={<PlanModuleRoute module="cart"><AdminOnlyRoute><CartPage /></AdminOnlyRoute></PlanModuleRoute>} />
+        <Route path="returns" element={<PlanModuleRoute module="returns"><AdminOnlyRoute><ReturnsPage /></AdminOnlyRoute></PlanModuleRoute>} />
         <Route path="staff" element={<PlanModuleRoute module="staff"><AdminOnlyRoute><StaffPage /></AdminOnlyRoute></PlanModuleRoute>} />
         <Route path="whatsapp" element={<PlanModuleRoute module="whatsapp"><AdminOnlyRoute><WhatsAppPage /></AdminOnlyRoute></PlanModuleRoute>} />
+        <Route path="website" element={<PlanModuleRoute module="website"><AdminOnlyRoute><WebsitePage /></AdminOnlyRoute></PlanModuleRoute>} />
         <Route path="subscription" element={<PlanModuleRoute module="subscription"><AdminOnlyRoute><SubscriptionPage /></AdminOnlyRoute></PlanModuleRoute>} />
         <Route path="settings" element={<PlanModuleRoute module="settings"><SettingsPage /></PlanModuleRoute>} />
         <Route path="platform-support" element={<PlanModuleRoute module="settings"><AdminOnlyRoute><PlatformSupportPage /></AdminOnlyRoute></PlanModuleRoute>} />

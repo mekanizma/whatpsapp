@@ -363,6 +363,115 @@ export interface UnknownQuestion {
   updated_at: string;
 }
 
+export interface EcommerceSettings {
+  company_id: string;
+  store_name: string | null;
+  store_url: string | null;
+  provider: 'manual' | 'shopify' | 'woocommerce' | 'custom';
+  api_base_url: string | null;
+  api_key: string | null;
+  api_enabled?: boolean;
+  api_auth_type?: 'bearer' | 'api_key' | 'header';
+  api_auth_header_name?: string | null;
+  products_path?: string | null;
+  product_search_path?: string | null;
+  stock_path?: string | null;
+  order_status_path?: string | null;
+  shipping_path?: string | null;
+  api_connected_at?: string | null;
+  last_test_status?: 'ok' | 'failed' | 'untested' | null;
+  last_test_at?: string | null;
+  last_test_message?: string | null;
+  order_status_enabled: boolean;
+  shipping_tracking_enabled: boolean;
+  cart_abandonment_enabled: boolean;
+  returns_enabled: boolean;
+  return_policy_text: string | null;
+  cart_reminder_hours: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EcommerceOrder {
+  id: string;
+  company_id: string;
+  order_number: string;
+  customer_phone: string | null;
+  customer_name: string | null;
+  customer_email: string | null;
+  status: 'pending' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'cancelled' | 'refunded';
+  payment_status: 'unpaid' | 'paid' | 'partially_refunded' | 'refunded';
+  total_amount: number | null;
+  currency: string;
+  items_summary: string | null;
+  notes: string | null;
+  ordered_at: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EcommerceShipment {
+  id: string;
+  company_id: string;
+  order_id: string | null;
+  order_number: string | null;
+  tracking_number: string;
+  carrier: string | null;
+  status: 'label_created' | 'in_transit' | 'out_for_delivery' | 'delivered' | 'returned' | 'exception';
+  tracking_url: string | null;
+  customer_phone: string | null;
+  customer_name: string | null;
+  estimated_delivery: string | null;
+  last_event: string | null;
+  shipped_at: string | null;
+  delivered_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EcommerceCart {
+  id: string;
+  company_id: string;
+  customer_phone: string | null;
+  customer_name: string | null;
+  customer_email: string | null;
+  cart_total: number | null;
+  currency: string;
+  items_summary: string | null;
+  item_count: number;
+  status: 'abandoned' | 'reminded' | 'recovered' | 'expired';
+  external_cart_id: string | null;
+  abandoned_at: string;
+  reminded_at: string | null;
+  recovered_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EcommerceReturnRequest {
+  id: string;
+  company_id: string;
+  order_id: string | null;
+  order_number: string | null;
+  customer_phone: string | null;
+  customer_name: string | null;
+  request_type: 'return' | 'exchange';
+  reason: string | null;
+  items_summary: string | null;
+  status:
+    | 'requested'
+    | 'approved'
+    | 'rejected'
+    | 'in_transit'
+    | 'received'
+    | 'refunded'
+    | 'completed'
+    | 'cancelled';
+  staff_notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Ticket {
   id: string;
   customer_phone: string;

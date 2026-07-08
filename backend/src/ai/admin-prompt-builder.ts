@@ -25,6 +25,7 @@ export interface DynamicPromptContext {
   knowledgeTitles?: string[];
   appointmentContext?: string;
   collectedContext?: string;
+  ecommerceContext?: string;
   lang?: ConversationLang;
   languageBlock?: string;
 }
@@ -172,6 +173,11 @@ export function buildDynamicUserMessage(
   const appointmentContext = ctx.appointmentContext?.trim() || '';
   if (appointmentContext) {
     sections.push(`### Randevu Bağlamı\n${appointmentContext}`);
+  }
+
+  const ecommerceContext = ctx.ecommerceContext?.trim() || '';
+  if (ecommerceContext) {
+    sections.push(`### E-Ticaret Bağlamı\n${ecommerceContext}`);
   }
 
   const collectedContext = ctx.collectedContext?.trim() || '';

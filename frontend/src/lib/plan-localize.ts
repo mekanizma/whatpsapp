@@ -41,6 +41,19 @@ function planCatalogKey(planType: string): string {
 
 /** i18n plan_type anahtarı (e-ticaret → e_ticaret) */
 export function resolvePlanI18nKey(planType: string): string {
+  // plan-capabilities ile aynı mantık: "E-ticaret (5000...)" → e_ticaret
+  const stripped = planType
+    .trim()
+    .toLowerCase()
+    .replace(/\r?\n/g, ' ')
+    .replace(/\([^)]*\)/g, ' ');
+  if (/e[\s_-]*ticaret|e[\s_-]*commerce|eticaret|ecommerce/i.test(stripped)) {
+    return 'e_ticaret';
+  }
+  if (/^business\b/i.test(stripped.trim())) return 'business';
+  if (/^enterprise\b/i.test(stripped.trim())) return 'enterprise';
+  if (/^starter\b/i.test(stripped.trim())) return 'starter';
+
   const key = planCatalogKey(planType);
   const aliases: Record<string, string> = {
     eticaret: 'e_ticaret',

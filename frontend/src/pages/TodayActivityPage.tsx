@@ -5,7 +5,7 @@
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
-import { TrendingUp, Clock, ChevronLeft, MessageSquare } from 'lucide-react';
+import { TrendingUp, Clock, ChevronLeft, MessageSquare, Info } from 'lucide-react';
 import { api } from '@/services/api';
 import { PageHeader } from '@/components/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
@@ -60,14 +60,29 @@ export function TodayActivityPage() {
           <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white/15">
             <TrendingUp className="h-7 w-7" />
           </div>
-          <div>
+          <div className="min-w-0">
             <p className="text-3xl font-bold tabular-nums sm:text-4xl">
               {(stats?.today_conversations ?? 0).toLocaleString(locale)}
             </p>
-            <p className="mt-1 text-emerald-100">{t('dashboard.todayConversations')}</p>
-            <p className="mt-3 text-sm text-emerald-200">
-              {t('dashboard.conversationCountHint')}
-            </p>
+            <div className="mt-1 flex items-center gap-1.5">
+              <p className="text-emerald-100">{t('dashboard.todayConversations')}</p>
+              <span className="group/hint relative inline-flex shrink-0">
+                <button
+                  type="button"
+                  className="rounded-full p-0.5 text-emerald-200/80 transition hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                  aria-label={t('dashboard.conversationCountHint')}
+                  title={t('dashboard.conversationCountHint')}
+                >
+                  <Info className="h-3.5 w-3.5" aria-hidden />
+                </button>
+                <span
+                  role="tooltip"
+                  className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 w-56 -translate-x-1/2 rounded-lg bg-slate-900 px-3 py-2 text-left text-[11px] font-normal leading-relaxed text-white opacity-0 shadow-lg transition-opacity duration-150 group-hover/hint:opacity-100 group-focus-within/hint:opacity-100 sm:w-64"
+                >
+                  {t('dashboard.conversationCountHint')}
+                </span>
+              </span>
+            </div>
           </div>
         </div>
       </div>

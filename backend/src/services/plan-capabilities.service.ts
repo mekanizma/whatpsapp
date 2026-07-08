@@ -14,9 +14,32 @@ export const PLAN_MODULE_KEYS = [
   'whatsapp',
   'subscription',
   'settings',
+  'website',
+  'order_status',
+  'shipping_tracking',
+  'cart',
+  'returns',
 ] as const;
 
 export type PlanModuleKey = (typeof PLAN_MODULE_KEYS)[number];
+
+const ECOMMERCE_MODULES: PlanModuleKey[] = [
+  'dashboard',
+  'messages',
+  'customers',
+  'knowledge',
+  'unknown_questions',
+  'tickets',
+  'staff',
+  'whatsapp',
+  'subscription',
+  'settings',
+  'website',
+  'order_status',
+  'shipping_tracking',
+  'cart',
+  'returns',
+];
 
 const PLAN_MODULES: Record<string, PlanModuleKey[]> = {
   starter: ['dashboard', 'messages', 'knowledge', 'whatsapp', 'subscription', 'settings'],
@@ -34,7 +57,39 @@ const PLAN_MODULES: Record<string, PlanModuleKey[]> = {
     'settings',
   ],
   enterprise: [...PLAN_MODULE_KEYS],
+  e_ticaret: ECOMMERCE_MODULES,
+  eticaret: ECOMMERCE_MODULES,
 };
+
+/** DB'de plan_type bazen "E-ticaret (5000 ai görüşme)" gibi serbest metin olabilir */
+export function normalizePlanType(planType?: string | null): string {
+  if (!planType) return 'starter';
+  const raw = planType
+    .trim()
+    .toLowerCase()
+    .replace(/\r?\n/g, ' ')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/[\s-]+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '');
+
+  if (
+    raw === 'eticaret' ||
+    raw === 'e_ticaret' ||
+    raw === 'e_commerce' ||
+    raw === 'ecommerce' ||
+    raw.includes('e_ticaret') ||
+    raw.includes('eticaret') ||
+    raw.includes('e_commerce') ||
+    raw.includes('ecommerce')
+  ) {
+    return 'e_ticaret';
+  }
+  if (raw === 'business' || raw.startsWith('business_')) return 'business';
+  if (raw === 'enterprise' || raw.startsWith('enterprise_')) return 'enterprise';
+  if (raw === 'starter' || raw.startsWith('starter_')) return 'starter';
+  return raw || 'starter';
+}
 
 export interface CompanyPlanSnapshot {
   plan_type: string;
@@ -60,14 +115,18 @@ export const WHATSAPP_LINE_LIMITS = {
   starter: 1,
   business: 3,
   enterprise: 999,
+  e_ticaret: 2,
+  eticaret: 2,
 } as const;
 
 export function getWhatsAppLineLimit(planType: string): number {
-  return WHATSAPP_LINE_LIMITS[planType as keyof typeof WHATSAPP_LINE_LIMITS] ?? WHATSAPP_LINE_LIMITS.starter;
+  const normalized = normalizePlanType(planType);
+  return WHATSAPP_LINE_LIMITS[normalized as keyof typeof WHATSAPP_LINE_LIMITS] ?? WHATSAPP_LINE_LIMITS.starter;
 }
 
 export function getPlanModules(planType: string): PlanModuleKey[] {
-  return PLAN_MODULES[planType] || PLAN_MODULES.starter;
+  const normalized = normalizePlanType(planType);
+  return PLAN_MODULES[normalized] || PLAN_MODULES.starter;
 }
 
 export function planHasModule(planType: string, module: PlanModuleKey): boolean {

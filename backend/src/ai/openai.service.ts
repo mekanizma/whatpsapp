@@ -32,6 +32,20 @@ import {
   setCachedResponse,
   shouldCacheResponse,
 } from './ai-cache.service';
+import {
+  getEcommerceContextForAI,
+  getEcommerceSettings,
+  lookupOrderStatusForAI,
+  lookupShipmentForAI,
+  companyCanUseEcommerce,
+} from '../services/ecommerce.service';
+import {
+  buildWebsiteCatalogContext,
+  isProductCatalogIntent,
+  isWebsiteApiConfigured,
+} from '../services/website-api.client';
+
+const HISTORY_FETCH_EXTRA = 50;
 
 /** Test / override hooks (see webhookDeps pattern) */
 export interface GenerateAIContext {
@@ -39,6 +53,35 @@ export interface GenerateAIContext {
   company: Company;
   allKnowledge: KnowledgeItem[];
   appointmentContext: string;
+  ecommerceContext: string;
+  ecommerceReturnsEnabled: boolean;
+}
+
+const ORDER_NUMBER_RE = /(?:sipari[sş]\s*(?:no|numara(?:s[ıi])?|#)?|order\s*(?:no|#|number)?)\s*[:#]?\s*([A-Za-z0-9-]{4,})\b/i;
+const TRACKING_NUMBER_RE =
+  /(?:kargo|takip|tracking)\s*(?:no|numara(?:s[ıi])?|#)?\s*[:#]?\s*([A-Za-z0-9-]{6,})\b/i;
+
+async function buildEcommerceLookupContext(
+  companyId: string,
+  message: string,
+  customerPhone: string
+): Promise<string> {
+  const parts: string[] = [];
+  const orderMatch = message.match(ORDER_NUMBER_RE);
+  if (orderMatch?.[1]) {
+    const orderInfo = await lookupOrderStatusForAI(companyId, orderMatch[1], customerPhone).catch(
+      () => null
+    );
+    if (orderInfo) parts.push(`Bulunan sipariş:\n${orderInfo}`);
+  }
+
+  const trackingMatch = message.match(TRACKING_NUMBER_RE);
+  if (trackingMatch?.[1]) {
+    const shipInfo = await lookupShipmentForAI(companyId, trackingMatch[1]).catch(() => null);
+    if (shipInfo) parts.push(`Bulunan kargo:\n${shipInfo}`);
+  }
+
+  return parts.join('\n\n');
 }
 
 async function fetchGenerateAIContext(
@@ -46,23 +89,44 @@ async function fetchGenerateAIContext(
   customerPhone: string,
   trimmed: string
 ): Promise<GenerateAIContext> {
-  const [historyResult, company, knowledgeResult, appointmentContext] = await Promise.all([
-    adminClient
-      .from('messages')
-      .select('sender_type, message')
-      .eq('company_id', companyId)
-      .eq('customer_phone', customerPhone)
-      .order('created_at', { ascending: false })
-      .limit(config.ai.maxHistoryMessages + HISTORY_FETCH_EXTRA),
-    getCompany(companyId),
-    adminClient
-      .from('knowledge_base')
-      .select('title, content, category')
-      .eq('company_id', companyId)
-      .eq('is_active', true)
-      .limit(200),
-    getAppointmentContextForAI(companyId).catch(() => ''),
-  ]);
+  const [historyResult, company, knowledgeResult, appointmentContext, ecommerceBase] =
+    await Promise.all([
+      adminClient
+        .from('messages')
+        .select('sender_type, message')
+        .eq('company_id', companyId)
+        .eq('customer_phone', customerPhone)
+        .order('created_at', { ascending: false })
+        .limit(config.ai.maxHistoryMessages + HISTORY_FETCH_EXTRA),
+      getCompany(companyId),
+      adminClient
+        .from('knowledge_base')
+        .select('title, content, category')
+        .eq('company_id', companyId)
+        .eq('is_active', true)
+        .limit(200),
+      getAppointmentContextForAI(companyId).catch(() => ''),
+      (async () => {
+        const allowed = await companyCanUseEcommerce(companyId).catch(() => false);
+        if (!allowed) return { context: '', returnsEnabled: false };
+        const [base, settings, lookup] = await Promise.all([
+          getEcommerceContextForAI(companyId).catch(() => ''),
+          getEcommerceSettings(companyId).catch(() => null),
+          buildEcommerceLookupContext(companyId, trimmed, customerPhone).catch(() => ''),
+        ]);
+
+        let catalog = '';
+        if (settings && isWebsiteApiConfigured(settings) && isProductCatalogIntent(trimmed)) {
+          catalog = await buildWebsiteCatalogContext(settings, trimmed).catch(() => '');
+        }
+
+        const context = [base, lookup, catalog].filter(Boolean).join('\n\n');
+        return {
+          context,
+          returnsEnabled: Boolean(settings?.returns_enabled),
+        };
+      })(),
+    ]);
 
   const history = (historyResult.data || [])
     .reverse()
@@ -73,6 +137,8 @@ async function fetchGenerateAIContext(
     company,
     allKnowledge: (knowledgeResult.data || []) as KnowledgeItem[],
     appointmentContext,
+    ecommerceContext: ecommerceBase.context,
+    ecommerceReturnsEnabled: ecommerceBase.returnsEnabled,
   };
 }
 
@@ -120,8 +186,6 @@ async function getCompany(companyId: string): Promise<Company> {
   return company;
 }
 
-const HISTORY_FETCH_EXTRA = 50;
-
 export async function generateAIResponse(
   companyId: string,
   customerMessage: string,
@@ -130,7 +194,7 @@ export async function generateAIResponse(
 ): Promise<AIResponse> {
   const trimmed = customerMessage.trim();
 
-  const { history, company, allKnowledge, appointmentContext } =
+  const { history, company, allKnowledge, appointmentContext, ecommerceContext, ecommerceReturnsEnabled } =
     await generateAIResponseDeps.fetchGenerateAIContext(companyId, customerPhone, trimmed);
 
   const chatHistory = prepareConversationHistoryForChat(history, trimmed);
@@ -138,7 +202,9 @@ export async function generateAIResponse(
   const conversationLang = detectConversationLanguage(trimmed, history);
   const appointmentCtx = buildAppointmentCompanyContext(company.working_hours, company.timezone);
 
-  const gate = preAIGate(trimmed, history, conversationLang);
+  const gate = preAIGate(trimmed, history, conversationLang, {
+    ecommerceReturnsEnabled,
+  });
   if (gate.skipAI && gate.response) {
     await logAIUsage({
       companyId,
@@ -237,6 +303,7 @@ export async function generateAIResponse(
     knowledgeTitles: allKnowledge.map((k) => k.title),
     appointmentContext,
     collectedContext,
+    ecommerceContext,
     lang: conversationLang,
     languageBlock,
   });
