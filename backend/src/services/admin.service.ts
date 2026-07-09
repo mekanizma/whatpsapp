@@ -319,15 +319,24 @@ export async function createCompanyAdminUser(
   password: string,
   fullName: string
 ): Promise<string> {
+  const normalizedEmail = email.trim().toLowerCase();
   const { data: existing } = await adminClient.auth.admin.listUsers();
-  const found = existing?.users?.find((u) => u.email === email);
+  const found = existing?.users?.find(
+    (u) => u.email?.toLowerCase() === normalizedEmail
+  );
 
   let userId: string;
   if (found) {
     userId = found.id;
+    const { error: updateError } = await adminClient.auth.admin.updateUserById(userId, {
+      password,
+      email_confirm: true,
+      user_metadata: { full_name: fullName, role: 'company_admin' },
+    });
+    if (updateError) throw new Error(updateError.message);
   } else {
     const { data, error } = await adminClient.auth.admin.createUser({
-      email,
+      email: normalizedEmail,
       password,
       email_confirm: true,
       user_metadata: { full_name: fullName, role: 'company_admin' },

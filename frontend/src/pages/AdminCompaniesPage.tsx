@@ -71,11 +71,21 @@ export function AdminCompaniesPage() {
   const selectedPlan = activePlans.find((p) => p.plan_type === form.subscription_plan)
     || activePlans[0];
 
+  const [adminUserWarning, setAdminUserWarning] = useState<string | null>(null);
+
   const createMutation = useMutation({
-    mutationFn: (body: Record<string, string>) => api.post('/admin/companies', body),
-    onSuccess: () => {
+    mutationFn: (body: Record<string, string>) =>
+      api.post<{ admin_user_error?: string | null }>('/admin/companies', body),
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['admin-companies'] });
       queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
+
+      if (result?.admin_user_error) {
+        setAdminUserWarning(result.admin_user_error);
+        return;
+      }
+
+      setAdminUserWarning(null);
       setShowForm(false);
       setForm({
         company_name: '', category: 'diger', email: '', phone: '',
@@ -220,6 +230,11 @@ export function AdminCompaniesPage() {
               <Button variant="outline" onClick={() => setShowForm(false)}>{t('common.cancel')}</Button>
               {createMutation.isError && (
                 <p className="w-full text-sm text-rose-600">{(createMutation.error as Error).message}</p>
+              )}
+              {adminUserWarning && (
+                <p className="w-full rounded-lg bg-amber-50 p-3 text-sm text-amber-700">
+                  {t('admin.companies.adminUserWarning', { error: adminUserWarning })}
+                </p>
               )}
             </div>
           </CardContent>

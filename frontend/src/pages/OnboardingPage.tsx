@@ -16,6 +16,7 @@ import { LandingIndustriesSection } from '@/components/onboarding/LandingIndustr
 import { LandingTestimonialsSection } from '@/components/onboarding/LandingTestimonialsSection';
 import { LandingCtaSection } from '@/components/onboarding/LandingCtaSection';
 import { LandingChatBot } from '@/components/onboarding/LandingChatBot';
+import { LiveDemoButton } from '@/components/onboarding/LiveDemoButton';
 import { LandingFooter } from '@/components/onboarding/LandingFooter';
 import { LandingNav } from '@/components/onboarding/LandingNav';
 import { TerrariumBackground } from '@/components/onboarding/TerrariumBackground';
@@ -74,16 +75,17 @@ export function OnboardingPage() {
                 <p className="mt-5 max-w-lg text-base leading-relaxed text-slate-400 sm:text-lg">
                   {hero.description}
                 </p>
-                <div className="mt-8">
+                <div className="landing-hero-actions mt-8">
                   <Button
                     type="button"
                     size="lg"
                     onClick={() => navigate('/login')}
-                    className="landing-primary-btn group h-12 rounded-full px-8 text-sm font-semibold"
+                    className="landing-primary-btn group h-12 w-full rounded-full px-8 text-sm font-semibold sm:w-auto"
                   >
                     {t('auth.login')}
                     <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
                   </Button>
+                  <LiveDemoButton variant="card" className="w-full max-w-lg" />
                 </div>
               </div>
               <div className="flex justify-center lg:justify-end">

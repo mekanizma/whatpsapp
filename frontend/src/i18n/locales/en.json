@@ -396,6 +396,13 @@
       "description": "When customers message you on WhatsApp, AI replies in seconds. Your business stays available around the clock.",
       "buttonHint": "Sign in if you already have an account"
     },
+    "liveDemo": {
+      "button": "Live Demo",
+      "badge": "Live Experience",
+      "prefillMessage": "Hello",
+      "hintLead": "We don't just explain WAAI — we let you experience it.",
+      "hintBody": "Talk to a real AI customer representative now and see how it works in seconds."
+    },
     "chatBotAriaLabel": "Contact us on WhatsApp about Waai Systems",
     "chatBotMessage": "I would like to get information about Waai Systems.",
     "footer": {
@@ -1246,6 +1253,7 @@
       "companyEmail": "Company Email",
       "phone": "Phone",
       "adminOptional": "Company Admin (Optional)",
+      "adminUserWarning": "Company was created but the login user could not be created: {{error}}. Password must be at least 6 characters. Fix the details and try again.",
       "loginEmail": "Login Email",
       "create": "Create Company",
       "noResults": "No search results",

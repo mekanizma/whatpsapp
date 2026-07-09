@@ -171,6 +171,7 @@ type MessageKey =
   | 'ai_unavailable'
   | 'demo_welcome'
   | 'demo_welcome_default'
+  | 'live_demo_welcome'
   | 'voice_message'
   | 'appointment_validation_datetime_missing'
   | 'appointment_validation_datetime_invalid'
@@ -583,6 +584,113 @@ const MESSAGES: Record<MessageKey, Record<TemplateLang, string>> = {
     ru: 'Здравствуйте! Мы получили ваше сообщение. Чем можем помочь?',
     fr: 'Bonjour ! Nous avons reçu votre message. Comment pouvons-nous vous aider ?',
     es: '¡Hola! Recibimos su mensaje. ¿Cómo podemos ayudarle?',
+  },
+  live_demo_welcome: {
+    tr: `👋 Merhaba! Ben WAAI AI Müşteri Temsilcisiyim.
+
+İşletmenize özel olarak eğitilebilen bir yapay zekâyım.
+
+Aşağıdaki örneklerden birini deneyebilir veya kendi sorunuzu yazabilirsiniz.
+
+Örnek sorular:
+
+🏨 Otel rezervasyonu nasıl yapılır?
+🦷 Diş kliniğinde implant fiyatı hakkında bilgi alabilir miyim?
+🎓 Üniversite başvurusu için hangi belgeler gerekli?
+🚗 Araç kiralama şartları nelerdir?
+🏠 Bu daireyi görmek için randevu oluşturabilir miyim?
+💄 Cilt bakımı seansları ne kadar sürüyor?
+🍽️ Bugün müsait masa var mı?`,
+    en: `👋 Hello! I'm the WAAI AI Customer Representative.
+
+I'm an AI that can be trained specifically for your business.
+
+Try one of the examples below or write your own question.
+
+Example questions:
+
+🏨 How do I make a hotel reservation?
+🦷 Can I get information about dental implant prices?
+🎓 What documents are required for university application?
+🚗 What are the car rental terms?
+🏠 Can I schedule a viewing for this apartment?
+💄 How long do skincare sessions take?
+🍽️ Is there an available table today?`,
+    de: `👋 Hallo! Ich bin der WAAI KI-Kundenberater.
+
+Ich bin eine KI, die speziell für Ihr Unternehmen trainiert werden kann.
+
+Probieren Sie eines der Beispiele unten oder stellen Sie Ihre eigene Frage.
+
+Beispielfragen:
+
+🏨 Wie mache ich eine Hotelreservierung?
+🦷 Kann ich Informationen zu Zahnimplantat-Preisen erhalten?
+🎓 Welche Unterlagen werden für die Universitätsbewerbung benötigt?
+🚗 Was sind die Mietwagenbedingungen?
+🏠 Kann ich einen Besichtigungstermin für diese Wohnung vereinbaren?
+💄 Wie lange dauern Hautpflege-Sitzungen?
+🍽️ Gibt es heute einen freien Tisch?`,
+    ar: `👋 مرحباً! أنا ممثل خدمة العملاء بالذكاء الاصطناعي من WAAI.
+
+أنا ذكاء اصطناعي يمكن تدريبه خصيصاً لعملك.
+
+جرّب أحد الأمثلة أدناه أو اكتب سؤالك الخاص.
+
+أسئلة مثال:
+
+🏨 كيف أحجز في فندق؟
+🦷 هل يمكنني الحصول على معلومات عن أسعار زراعة الأسنان؟
+🎓 ما المستندات المطلوبة للتقديم للجامعة؟
+🚗 ما شروط تأجير السيارات؟
+🏠 هل يمكنني تحديد موعد لمعاينة هذا الشقة؟
+💄 كم تستغرق جلسات العناية بالبشرة؟
+🍽️ هل يوجد طاولة متاحة اليوم؟`,
+    ru: `👋 Здравствуйте! Я AI-представитель WAAI.
+
+Я искусственный интеллект, который можно обучить специально для вашего бизнеса.
+
+Попробуйте один из примеров ниже или задайте свой вопрос.
+
+Примеры вопросов:
+
+🏨 Как забронировать отель?
+🦷 Могу ли я узнать цены на импланты?
+🎓 Какие документы нужны для поступления в университет?
+🚗 Каковы условия аренды автомобиля?
+🏠 Могу ли я записаться на просмотр этой квартиры?
+💄 Сколько длятся сеансы ухода за кожей?
+🍽️ Есть ли свободный столик сегодня?`,
+    fr: `👋 Bonjour ! Je suis le représentant client IA de WAAI.
+
+Je suis une IA qui peut être formée spécifiquement pour votre entreprise.
+
+Essayez l'un des exemples ci-dessous ou posez votre propre question.
+
+Exemples de questions :
+
+🏨 Comment réserver un hôtel ?
+🦷 Puis-je obtenir des informations sur les prix des implants dentaires ?
+🎓 Quels documents sont nécessaires pour une candidature universitaire ?
+🚗 Quelles sont les conditions de location de voiture ?
+🏠 Puis-je prendre rendez-vous pour visiter cet appartement ?
+💄 Combien de temps durent les séances de soins de la peau ?
+🍽️ Y a-t-il une table disponible aujourd'hui ?`,
+    es: `👋 ¡Hola! Soy el representante de atención al cliente IA de WAAI.
+
+Soy una IA que puede entrenarse específicamente para su negocio.
+
+Pruebe uno de los ejemplos a continuación o escriba su propia pregunta.
+
+Preguntas de ejemplo:
+
+🏨 ¿Cómo hago una reserva de hotel?
+🦷 ¿Puedo obtener información sobre precios de implantes dentales?
+🎓 ¿Qué documentos se necesitan para la solicitud universitaria?
+🚗 ¿Cuáles son las condiciones de alquiler de coches?
+🏠 ¿Puedo programar una visita para este apartamento?
+💄 ¿Cuánto duran las sesiones de cuidado de la piel?
+🍽️ ¿Hay mesa disponible hoy?`,
   },
   voice_message: {
     tr: 'Ben bir AI destek asistanıyım, sesli mesajlarınıza cevap veremiyorum. Lütfen talebinizi yazılı olarak iletin.',

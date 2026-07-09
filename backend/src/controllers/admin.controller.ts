@@ -250,6 +250,7 @@ export async function createCompany(req: AuthRequest, res: Response): Promise<vo
   await adminClient.from('whatsapp_configs').insert({ company_id: company.id });
 
   let adminUserId: string | null = null;
+  let adminUserError: string | null = null;
   if (admin_email && admin_password && admin_full_name) {
     try {
       adminUserId = await createCompanyAdminUser(
@@ -259,6 +260,7 @@ export async function createCompany(req: AuthRequest, res: Response): Promise<vo
         admin_full_name
       );
     } catch (userErr) {
+      adminUserError = userErr instanceof Error ? userErr.message : 'Giriş kullanıcısı oluşturulamadı';
       console.error('Şirket admin kullanıcı hatası:', userErr);
     }
   }
@@ -268,10 +270,13 @@ export async function createCompany(req: AuthRequest, res: Response): Promise<vo
     action: 'company_created',
     entityType: 'company',
     entityId: company.id,
-    metadata: { company_name, admin_email, admin_user_id: adminUserId },
+    metadata: { company_name, admin_email, admin_user_id: adminUserId, admin_user_error: adminUserError },
   });
 
-  res.status(201).json({ success: true, data: { company, admin_user_id: adminUserId } });
+  res.status(201).json({
+    success: true,
+    data: { company, admin_user_id: adminUserId, admin_user_error: adminUserError },
+  });
 }
 
 export async function updateCompany(req: AuthRequest, res: Response): Promise<void> {

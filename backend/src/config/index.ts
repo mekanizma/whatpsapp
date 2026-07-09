@@ -147,6 +147,8 @@ export const config = {
   platform: {
     /** Başvuru bildirimi gönderilecek şirket (WhatsApp hattı) */
     companyId: process.env.PLATFORM_COMPANY_ID?.trim() || '',
+    /** Canlı demo WhatsApp hattının bağlı olduğu şirket — ilk mesajda özel karşılama */
+    liveDemoCompanyId: process.env.LIVE_DEMO_COMPANY_ID?.trim() || '',
     /** Virgülle ayrılmış bildirim telefonları (varsayılan: platform WhatsApp) */
     signupNotifyPhones: (process.env.PLATFORM_SIGNUP_NOTIFY_PHONES || '905338507761')
       .split(',')

@@ -396,6 +396,13 @@
       "description": "Müşterileriniz WhatsApp'tan yazdığında yapay zeka saniyeler içinde yanıt verir. Gece gündüz demeden işletmeniz müşterilerinize ulaşır.",
       "buttonHint": "Hesabınız varsa hemen giriş yapın"
     },
+    "liveDemo": {
+      "button": "Canlı Demo",
+      "badge": "Canlı Deneyim",
+      "prefillMessage": "Merhaba",
+      "hintLead": "WAAI'yi Anlatmıyoruz, Deneyimletiyoruz.",
+      "hintBody": "Gerçek AI müşteri temsilcisiyle şimdi konuşun ve saniyeler içinde nasıl çalıştığını görün."
+    },
     "chatBotAriaLabel": "WhatsApp üzerinden Waai Sistemleri hakkında bilgi alın",
     "chatBotMessage": "Waai Sistemleri Hakkında Bilgi Almak İstiyorum.",
     "footer": {
@@ -1246,6 +1253,7 @@
       "companyEmail": "Şirket E-posta",
       "phone": "Telefon",
       "adminOptional": "Şirket Yöneticisi (Opsiyonel)",
+      "adminUserWarning": "Şirket oluşturuldu ancak giriş kullanıcısı oluşturulamadı: {{error}}. Şifre en az 6 karakter olmalı. Bilgileri düzeltip tekrar deneyin.",
       "loginEmail": "Giriş E-posta",
       "create": "Şirketi Oluştur",
       "noResults": "Arama sonucu bulunamadı",

@@ -10,7 +10,11 @@ import { hasActiveTransferTicket } from '../ai/ai-quota.service';
 import { logActivity } from '../services/log.service';
 import { createTicketAndNotify } from '../services/ticket-notification.service';
 import { recordUnknownQuestion } from '../services/unknown-questions.service';
-import { shouldIncrementConversationUsage } from '../services/conversation-count.service';
+import {
+  shouldIncrementConversationUsage,
+  getCustomerMessageTimestamps,
+  isNewConversationUnit,
+} from '../services/conversation-count.service';
 import {
   getDepartmentsForWhatsAppAccount,
   listActiveDepartments,
@@ -463,16 +467,7 @@ export async function processInboundMessage(
 
   if (config.demoMode) {
     const lang = detectConversationLanguage(trimmed);
-    const { data: company } = await adminClient
-      .from('companies')
-      .select('company_name')
-      .eq('id', companyId)
-      .single();
-    const name = company?.company_name?.trim();
-    if (name) {
-      return t(lang, 'demo_welcome', { company: name });
-    }
-    return t(lang, 'demo_welcome_default');
+    return t(lang, 'live_demo_welcome');
   }
 
   return withCustomerLock(`${companyId}:${phone}`, async () => {
@@ -570,6 +565,25 @@ export async function processInboundMessage(
         status: 'open',
       });
       return retryPrompt;
+    }
+
+    if (config.platform.liveDemoCompanyId && companyId === config.platform.liveDemoCompanyId) {
+      const timestamps = await getCustomerMessageTimestamps(companyId, phone);
+      if (isNewConversationUnit(timestamps)) {
+        const lang = detectConversationLanguage(trimmed);
+        const welcome = t(lang, 'live_demo_welcome');
+
+        await adminClient.from('messages').insert({
+          company_id: companyId,
+          customer_phone: phone,
+          customer_name: customerName,
+          message: welcome,
+          sender_type: 'ai',
+          status: 'open',
+        });
+
+        return welcome;
+      }
     }
 
     let aiResponse;
