@@ -222,7 +222,7 @@ export async function createCompany(req: AuthRequest, res: Response): Promise<vo
       email: email || null,
       address: address || null,
       subscription_plan: planRow.plan_type,
-      status: 'trial',
+      status: 'active',
     })
     .select()
     .single();
@@ -237,7 +237,7 @@ export async function createCompany(req: AuthRequest, res: Response): Promise<vo
       companyId: company.id,
       plan: planRow,
       billingPeriod,
-      status: 'trial',
+      status: 'active',
     });
   } catch (subErr) {
     await adminClient.from('companies').delete().eq('id', company.id);

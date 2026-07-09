@@ -5,7 +5,7 @@
 import { useState, FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Shield, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { WaaiLogo } from '@/components/WaaiLogo';
 import { useAuthStore, getRedirectPath } from '@/store/authStore';
 import { isDemoMode } from '@/lib/env';
@@ -46,18 +46,7 @@ export function LoginPage() {
         onSubmit={handleSubmit}
         accent="teal"
         footer={
-          <div className="space-y-3 text-center text-sm">
-            <p className="flex flex-wrap items-center justify-center gap-x-1 gap-y-1">
-              <span>{t('auth.platformAdmin')}</span>
-              <Link
-                to="/admin/login"
-                className="inline-flex items-center gap-1 font-semibold text-teal-300 transition hover:text-teal-200"
-              >
-                <Shield className="h-3.5 w-3.5 shrink-0" />
-                {t('auth.adminLogin')}
-                <ArrowRight className="h-3.5 w-3.5 shrink-0" />
-              </Link>
-            </p>
+          <div className="text-center text-sm">
             <p className="flex flex-wrap items-center justify-center gap-x-1 gap-y-1">
               <span>{t('auth.noAccount')}</span>
               <Link to="/register" className="font-semibold text-teal-300 hover:text-teal-200 hover:underline">

@@ -2,7 +2,7 @@
  * Super admin — şirket listesi ve oluşturma
  */
 
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -58,7 +58,7 @@ export function AdminCompaniesPage() {
     category: 'diger',
     email: '',
     phone: '',
-    subscription_plan: 'starter',
+    subscription_plan_id: '',
     billing_period: 'monthly' as 'monthly' | 'yearly',
     admin_full_name: '',
     admin_email: '',
@@ -76,9 +76,21 @@ export function AdminCompaniesPage() {
     queryFn: () => api.get<SubscriptionPlan[]>('/admin/plans'),
   });
 
-  const activePlans = (plans || []).filter((p) => p.is_active);
-  const selectedPlan = activePlans.find((p) => p.plan_type === form.subscription_plan)
-    || activePlans[0];
+  const activePlans = useMemo(
+    () => (plans || []).filter((p) => p.is_active),
+    [plans]
+  );
+  const selectedPlan = activePlans.find((p) => p.id === form.subscription_plan_id) || activePlans[0];
+
+  useEffect(() => {
+    if (!activePlans.length) return;
+    setForm((prev) => {
+      if (prev.subscription_plan_id && activePlans.some((p) => p.id === prev.subscription_plan_id)) {
+        return prev;
+      }
+      return { ...prev, subscription_plan_id: activePlans[0].id };
+    });
+  }, [activePlans]);
 
   const [adminUserWarning, setAdminUserWarning] = useState<string | null>(null);
 
@@ -98,7 +110,7 @@ export function AdminCompaniesPage() {
       setShowForm(false);
       setForm({
         company_name: '', category: 'diger', email: '', phone: '',
-        subscription_plan: activePlans[0]?.plan_type || 'starter',
+        subscription_plan_id: activePlans[0]?.id || '',
         billing_period: 'monthly',
         admin_full_name: '', admin_email: '', admin_password: '',
       });
@@ -166,15 +178,20 @@ export function AdminCompaniesPage() {
                 <Label>{t('admin.companies.plan')}</Label>
                 <select
                   className="flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
-                  value={form.subscription_plan}
-                  onChange={(e) => setForm({ ...form, subscription_plan: e.target.value })}
+                  value={form.subscription_plan_id || selectedPlan?.id || ''}
+                  disabled={activePlans.length === 0}
+                  onChange={(e) => setForm({ ...form, subscription_plan_id: e.target.value })}
                 >
-                  {activePlans.map((plan) => {
-                    const label = localizePlan(plan, i18n.language).name;
-                    return (
-                      <option key={plan.id} value={plan.plan_type}>{label}</option>
-                    );
-                  })}
+                  {activePlans.length === 0 ? (
+                    <option value="">{t('auth.plansUnavailable')}</option>
+                  ) : (
+                    activePlans.map((plan) => {
+                      const label = localizePlan(plan, i18n.language).name;
+                      return (
+                        <option key={plan.id} value={plan.id}>{label}</option>
+                      );
+                    })
+                  )}
                 </select>
               </div>
               <div className="space-y-2">
@@ -242,7 +259,7 @@ export function AdminCompaniesPage() {
                   setAdminUserWarning(null);
                   createMutation.mutate(form);
                 }}
-                disabled={!form.company_name.trim() || createMutation.isPending}
+                disabled={!form.company_name.trim() || !form.subscription_plan_id || createMutation.isPending}
               >
                 {createMutation.isPending ? <Spinner /> : t('admin.companies.create')}
               </Button>

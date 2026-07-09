@@ -89,9 +89,9 @@ async function main() {
       companyId: null,
     },
     {
-      email: 'firma@demoklinik.com',
+      email: 'info@mekanizma.com',
       password: adminPassword,
-      fullName: 'Demo Klinik Yöneticisi',
+      fullName: 'MEKANİZMA Yöneticisi',
       role: 'company_admin',
       companyId: DEMO_COMPANY_ID,
     },
@@ -121,7 +121,7 @@ async function main() {
   console.log('─────────────────────────────────────');
   console.log(`Şirket    : ${company?.company_name || 'Demo Klinik KKTC'}`);
   console.log(`Admin     : ${adminEmail} / [şifreniz]`);
-  console.log(`Şirket    : firma@demoklinik.com / [şifreniz]`);
+  console.log(`Şirket    : info@mekanizma.com / [şifreniz]`);
   console.log(`Personel  : personel@demoklinik.com / [şifreniz]`);
   console.log('─────────────────────────────────────');
   console.log('Admin panel : http://localhost:5173/admin/login');

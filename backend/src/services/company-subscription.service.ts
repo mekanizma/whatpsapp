@@ -75,11 +75,40 @@ export async function getSubscriptionPlanByType(
   const { data, error } = await adminClient
     .from('subscription_plans')
     .select(PLAN_SELECT)
-    .eq('plan_type', normalized)
+    .eq('plan_type', planType.trim())
     .maybeSingle();
 
   if (error) throw new Error(error.message);
-  return data ? mapPlanRow(data as Record<string, unknown>) : null;
+  if (data) return mapPlanRow(data as Record<string, unknown>);
+
+  const { data: ilikeData, error: ilikeError } = await adminClient
+    .from('subscription_plans')
+    .select(PLAN_SELECT)
+    .ilike('plan_type', normalized)
+    .limit(1)
+    .maybeSingle();
+
+  if (ilikeError) throw new Error(ilikeError.message);
+  return ilikeData ? mapPlanRow(ilikeData as Record<string, unknown>) : null;
+}
+
+async function findSubscriptionPlanByLooseType(
+  planType: string
+): Promise<ResolvedSubscriptionPlan | null> {
+  const needle = planType.trim().toLowerCase();
+  if (!needle) return null;
+
+  const { data, error } = await adminClient.from('subscription_plans').select(PLAN_SELECT);
+  if (error) throw new Error(error.message);
+
+  const found = (data || []).find((row) =>
+    String(row.plan_type || '')
+      .trim()
+      .toLowerCase()
+      .includes(needle)
+  );
+
+  return found ? mapPlanRow(found as Record<string, unknown>) : null;
 }
 
 export async function resolveSubscriptionPlan(input: {
@@ -93,6 +122,9 @@ export async function resolveSubscriptionPlan(input: {
     plan = await getSubscriptionPlanById(input.plan_id.trim());
   } else if (input.plan_type?.trim()) {
     plan = await getSubscriptionPlanByType(input.plan_type);
+    if (!plan) {
+      plan = await findSubscriptionPlanByLooseType(input.plan_type);
+    }
   }
 
   if (!plan) {
