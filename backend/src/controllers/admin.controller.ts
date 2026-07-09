@@ -261,7 +261,7 @@ export async function createCompany(req: AuthRequest, res: Response): Promise<vo
         admin_full_name
       );
     } catch (userErr) {
-      adminUserError = formatServiceError(userErr);
+      adminUserError = formatServiceError(userErr, 'Giriş kullanıcısı oluşturulamadı');
       console.error('Şirket admin kullanıcı hatası:', userErr);
     }
   }
@@ -305,6 +305,21 @@ export async function createCompanyLoginUser(req: AuthRequest, res: Response): P
     return;
   }
 
+  const { data: existingAdmin } = await adminClient
+    .from('profiles')
+    .select('id')
+    .eq('company_id', companyId)
+    .eq('role', 'company_admin')
+    .maybeSingle();
+
+  if (existingAdmin) {
+    res.status(400).json({
+      success: false,
+      error: 'Bu şirketin zaten bir giriş hesabı var. Sayfayı yenileyip şifre değiştirin.',
+    });
+    return;
+  }
+
   try {
     const userId = await createCompanyAdminUser(
       companyId,
@@ -323,7 +338,9 @@ export async function createCompanyLoginUser(req: AuthRequest, res: Response): P
 
     res.status(201).json({ success: true, data: { user_id: userId } });
   } catch (err) {
-    res.status(400).json({ success: false, error: formatServiceError(err) });
+    const message = formatServiceError(err, 'Giriş kullanıcısı oluşturulamadı');
+    console.error('[login-user] Şirket giriş hesabı hatası:', err);
+    res.status(400).json({ success: false, error: message });
   }
 }
 

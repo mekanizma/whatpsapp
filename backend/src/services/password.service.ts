@@ -22,6 +22,52 @@ async function getAuthEmail(userId: string): Promise<string | null> {
   return data.user.email || null;
 }
 
+export async function applyAuthUserCredentials(
+  userId: string,
+  options: {
+    password: string;
+    email?: string;
+    fullName?: string;
+    role?: string;
+  }
+): Promise<void> {
+  validatePassword(options.password);
+
+  const payload: {
+    password: string;
+    email_confirm: boolean;
+    email?: string;
+    user_metadata?: Record<string, string>;
+  } = {
+    password: options.password,
+    email_confirm: true,
+  };
+
+  if (options.email) payload.email = options.email.trim().toLowerCase();
+  if (options.fullName || options.role) {
+    payload.user_metadata = {};
+    if (options.fullName) payload.user_metadata.full_name = options.fullName.trim();
+    if (options.role) payload.user_metadata.role = options.role;
+  }
+
+  const { error } = await adminClient.auth.admin.updateUserById(userId, payload);
+  if (error) throw new Error(error.message || 'Auth şifresi güncellenemedi');
+
+  const { data, error: readError } = await adminClient.auth.admin.getUserById(userId);
+  if (readError || !data.user) {
+    throw new Error('Auth kullanıcısı doğrulanamadı');
+  }
+
+  if (!data.user.email_confirmed_at) {
+    const { error: confirmError } = await adminClient.auth.admin.updateUserById(userId, {
+      email_confirm: true,
+    });
+    if (confirmError) {
+      throw new Error('E-posta onayı tamamlanamadı. Lütfen şifreyi tekrar kaydedin.');
+    }
+  }
+}
+
 export async function resetUserPasswordByProfileId(
   profileId: string,
   password: string
@@ -30,17 +76,18 @@ export async function resetUserPasswordByProfileId(
 
   const { data: profile, error } = await adminClient
     .from('profiles')
-    .select('id, user_id')
+    .select('id, user_id, full_name, role')
     .eq('id', profileId)
     .maybeSingle();
 
   if (error) throw new Error(error.message);
   if (!profile?.user_id) throw new Error('Kullanıcı bulunamadı');
 
-  const { error: authError } = await adminClient.auth.admin.updateUserById(profile.user_id, {
+  await applyAuthUserCredentials(profile.user_id, {
     password,
+    fullName: profile.full_name,
+    role: profile.role,
   });
-  if (authError) throw new Error(authError.message);
 
   return {
     profileId: profile.id,

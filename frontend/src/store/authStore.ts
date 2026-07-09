@@ -25,6 +25,19 @@ const DEMO_USERS: Record<string, { password: string; token: string; role: UserRo
   'personel@demo.com': { password: 'demo123', token: 'demo-staff-token', role: 'staff' },
 };
 
+function mapLoginError(error: { message?: string; code?: string }): string {
+  const code = error.code?.toLowerCase() ?? '';
+  const message = error.message?.toLowerCase() ?? '';
+  if (
+    code === 'invalid_credentials' ||
+    message.includes('invalid login credentials') ||
+    message.includes('invalid_credentials')
+  ) {
+    return i18n.t('auth.errors.invalidCredentials');
+  }
+  return error.message || i18n.t('errors.unknown');
+}
+
 interface AuthState {
   user: Profile | null;
   company: Company | null;
@@ -117,8 +130,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       throw new Error(i18n.t('auth.errors.supabaseNotConfiguredHint'));
     }
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw new Error(error.message);
+    const normalizedEmail = email.trim().toLowerCase();
+    const { error } = await supabase.auth.signInWithPassword({
+      email: normalizedEmail,
+      password,
+    });
+    if (error) throw new Error(mapLoginError(error));
 
     clearImpersonateToken();
     clearImpersonateCompanyId();

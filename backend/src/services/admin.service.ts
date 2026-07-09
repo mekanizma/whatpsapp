@@ -2,7 +2,6 @@
  * Platform admin service — şirket, kullanım ve AI istatistikleri
  */
 
-import { AuthError } from '@supabase/supabase-js';
 import { adminClient } from '../database/supabase';
 import { config } from '../config';
 import {
@@ -15,7 +14,7 @@ import { getPlatformConversationCount, getConversationCountsByCompany } from './
 import { mapSubscriptionToCompanyPlan } from './plan-capabilities.service';
 import { countOpenPlatformSupportTickets } from './platform-support.service';
 import { countPendingSignupApplications } from './signup-application.service';
-import { enrichProfilesWithEmail } from './password.service';
+import { enrichProfilesWithEmail, applyAuthUserCredentials, validatePassword } from './password.service';
 import {
   applyPlanToCompany,
   getSubscriptionPlanById,
@@ -23,7 +22,7 @@ import {
   normalizeBillingPeriod,
   type BillingPeriod,
 } from './company-subscription.service';
-import { findAuthUserByEmail, formatServiceError } from './staff.service';
+import { findAuthUserByEmail, formatServiceError, isDuplicateAuthEmailError } from './staff.service';
 
 export async function getExtendedPlatformStats() {
   const monthStart = getMonthStartISO();
@@ -315,28 +314,18 @@ export async function updateSubscriptionAdmin(
   };
 }
 
-function isDuplicateAuthEmailError(err: unknown): boolean {
-  if (!(err instanceof AuthError)) return false;
-  const message = err.message?.toLowerCase() || '';
-  return (
-    err.status === 422 ||
-    message.includes('already') ||
-    message.includes('registered') ||
-    message.includes('exists')
-  );
-}
-
 async function updateAuthCompanyAdminUser(
   userId: string,
   password: string,
-  fullName: string
+  fullName: string,
+  email?: string
 ): Promise<void> {
-  const { error } = await adminClient.auth.admin.updateUserById(userId, {
+  await applyAuthUserCredentials(userId, {
     password,
-    email_confirm: true,
-    user_metadata: { full_name: fullName, role: 'company_admin' },
+    fullName,
+    role: 'company_admin',
+    email,
   });
-  if (error) throw error;
 }
 
 async function ensureCompanyAdminProfile(
@@ -344,46 +333,32 @@ async function ensureCompanyAdminProfile(
   companyId: string,
   fullName: string
 ): Promise<void> {
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    const { data: existing, error: fetchError } = await adminClient
-      .from('profiles')
-      .select('id, role')
-      .eq('user_id', userId)
-      .maybeSingle();
+  const { data: existing, error: fetchError } = await adminClient
+    .from('profiles')
+    .select('id, role')
+    .eq('user_id', userId)
+    .maybeSingle();
 
-    if (fetchError) throw new Error(fetchError.message || 'Profil okunamadı');
+  if (fetchError) throw new Error(fetchError.message || 'Profil okunamadı');
 
-    if (existing?.id) {
-      if (existing.role === 'super_admin') {
-        throw new Error('Bu e-posta platform yöneticisine ait; şirket yöneticisi olarak atanamaz');
-      }
-
-      const { error: updateError } = await adminClient
-        .from('profiles')
-        .update({
-          company_id: companyId,
-          full_name: fullName,
-          role: 'company_admin',
-          is_active: true,
-        })
-        .eq('user_id', userId);
-
-      if (updateError) throw new Error(updateError.message || 'Profil güncellenemedi');
-      return;
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 150));
+  if (existing?.role === 'super_admin') {
+    throw new Error('Bu e-posta platform yöneticisine ait; şirket giriş hesabı olarak kullanılamaz');
   }
 
-  const { error: insertError } = await adminClient.from('profiles').insert({
-    user_id: userId,
-    company_id: companyId,
-    full_name: fullName,
-    role: 'company_admin',
-    is_active: true,
-  });
+  const { error: upsertError } = await adminClient.from('profiles').upsert(
+    {
+      user_id: userId,
+      company_id: companyId,
+      full_name: fullName,
+      role: 'company_admin',
+      is_active: true,
+    },
+    { onConflict: 'user_id' }
+  );
 
-  if (insertError) throw new Error(insertError.message || 'Profil oluşturulamadı');
+  if (upsertError) {
+    throw new Error(upsertError.message || upsertError.details || 'Profil kaydı güncellenemedi');
+  }
 }
 
 export async function createCompanyAdminUser(
@@ -397,30 +372,51 @@ export async function createCompanyAdminUser(
 
   if (!normalizedEmail) throw new Error('Giriş e-postası zorunludur');
   if (!trimmedName) throw new Error('Yönetici adı zorunludur');
-  if (!password || password.length < 6) {
-    throw new Error('Şifre en az 6 karakter olmalıdır');
-  }
+  validatePassword(password);
 
-  const { data, error } = await adminClient.auth.admin.createUser({
-    email: normalizedEmail,
-    password,
-    email_confirm: true,
-    user_metadata: { full_name: trimmedName, role: 'company_admin' },
-  });
-
+  const existingAuth = await findAuthUserByEmail(normalizedEmail);
   let userId: string;
 
-  if (!error) {
-    userId = data.user.id;
-  } else if (isDuplicateAuthEmailError(error)) {
-    const found = await findAuthUserByEmail(normalizedEmail);
-    if (!found) {
-      throw new Error('Bu e-posta kayıtlı ancak kullanıcı bilgisi alınamadı');
+  if (existingAuth) {
+    const { data: profile, error: profileError } = await adminClient
+      .from('profiles')
+      .select('id, role, company_id')
+      .eq('user_id', existingAuth.id)
+      .maybeSingle();
+
+    if (profileError) throw new Error(profileError.message || 'Profil okunamadı');
+    if (profile?.role === 'super_admin') {
+      throw new Error('Bu e-posta platform yöneticisine ait; şirket giriş hesabı olarak kullanılamaz');
     }
-    await updateAuthCompanyAdminUser(found.id, password, trimmedName);
-    userId = found.id;
+
+    await updateAuthCompanyAdminUser(existingAuth.id, password, trimmedName, normalizedEmail);
+    userId = existingAuth.id;
   } else {
-    throw error;
+    const { data, error } = await adminClient.auth.admin.createUser({
+      email: normalizedEmail,
+      password,
+      email_confirm: true,
+      user_metadata: { full_name: trimmedName, role: 'company_admin' },
+    });
+
+    if (!error) {
+      userId = data.user.id;
+      await applyAuthUserCredentials(userId, {
+        password,
+        email: normalizedEmail,
+        fullName: trimmedName,
+        role: 'company_admin',
+      });
+    } else if (isDuplicateAuthEmailError(error)) {
+      const found = await findAuthUserByEmail(normalizedEmail);
+      if (!found) {
+        throw new Error('Bu e-posta kayıtlı ancak kullanıcı bilgisi alınamadı');
+      }
+      await updateAuthCompanyAdminUser(found.id, password, trimmedName, normalizedEmail);
+      userId = found.id;
+    } else {
+      throw error;
+    }
   }
 
   await ensureCompanyAdminProfile(userId, companyId, trimmedName);

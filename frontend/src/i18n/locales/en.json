@@ -168,7 +168,9 @@
       "demoPasswordChangeDisabled": "Password cannot be changed in demo mode",
       "companyNotFound": "Company information not found",
       "sessionNotFound": "Could not retrieve session. Please sign in again.",
-      "wrongPassword": "Current password is incorrect"
+      "wrongPassword": "Current password is incorrect",
+      "invalidCredentials": "Invalid email or password.",
+      "invalidCredentialsHint": "Use the Customer Login Account email from the company detail page and the password set by your admin. If the issue persists, ask your admin to save the password again."
     }
   },
   "errors": {

@@ -76,7 +76,12 @@ export function LoginPage() {
 
         {error && (
           <div className="animate-fade-up rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
+            <p>{error}</p>
+            {error === t('auth.errors.invalidCredentials') && (
+              <p className="mt-2 text-xs leading-relaxed text-red-600/90">
+                {t('auth.errors.invalidCredentialsHint')}
+              </p>
+            )}
           </div>
         )}
 

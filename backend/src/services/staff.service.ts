@@ -11,33 +11,40 @@ function normalizeStaffPhone(phone?: string | null): string | null {
   return normalizePhoneNumber(phone.trim()) || phone.trim();
 }
 
-function formatServiceError(err: unknown): string {
+function formatServiceError(err: unknown, fallback = 'İşlem tamamlanamadı'): string {
   if (err instanceof AuthError) {
     const code = 'code' in err ? String((err as AuthError & { code?: string }).code || '') : '';
-    const base = err.message || 'Kimlik doğrulama hatası';
-    return code ? `${base} (${code})` : base;
+    const message = err.message?.trim();
+    if (message && code) return `${message} (${code})`;
+    if (message) return message;
+    if (code) return `Kimlik doğrulama hatası (${code})`;
+    return 'Kimlik doğrulama hatası';
   }
-  if (err instanceof Error && err.message) return err.message;
+  if (err instanceof Error && err.message?.trim()) return err.message.trim();
   if (err && typeof err === 'object') {
     const record = err as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown };
-    if (typeof record.message === 'string' && record.message.trim()) {
-      const extra = [record.details, record.hint, record.code]
-        .filter((v) => typeof v === 'string' && v.trim())
-        .join(' — ');
-      return extra ? `${record.message} (${extra})` : record.message;
-    }
+    const message = typeof record.message === 'string' ? record.message.trim() : '';
+    const details = typeof record.details === 'string' ? record.details.trim() : '';
+    const hint = typeof record.hint === 'string' ? record.hint.trim() : '';
+    const code = typeof record.code === 'string' ? record.code.trim() : '';
+    const parts = [message, details, hint, code].filter(Boolean);
+    if (parts.length) return parts.join(' — ');
   }
-  return 'Personel oluşturulamadı';
+  return fallback;
 }
 
 function isDuplicateAuthEmailError(err: unknown): boolean {
   if (!(err instanceof AuthError)) return false;
+  const code = String((err as AuthError & { code?: string }).code || '').toLowerCase();
   const message = err.message?.toLowerCase() || '';
   return (
     err.status === 422 ||
+    code === 'email_exists' ||
+    code === 'user_already_exists' ||
     message.includes('already') ||
     message.includes('registered') ||
-    message.includes('exists')
+    message.includes('exists') ||
+    message.includes('duplicate')
   );
 }
 
@@ -71,6 +78,7 @@ async function resolveAuthStaffUser(
 }
 
 export async function findAuthUserByEmail(email: string) {
+  const normalizedEmail = email.trim().toLowerCase();
   let page = 1;
   const perPage = 200;
 
@@ -78,7 +86,7 @@ export async function findAuthUserByEmail(email: string) {
     const { data, error } = await adminClient.auth.admin.listUsers({ page, perPage });
     if (error) throw new Error(error.message || 'Kullanıcı listesi alınamadı');
 
-    const found = data.users.find((u) => u.email?.toLowerCase() === email);
+    const found = data.users.find((u) => u.email?.toLowerCase() === normalizedEmail);
     if (found) return found;
 
     if (data.users.length < perPage) break;
@@ -426,4 +434,4 @@ export async function deleteStaffUser(staffId: string, companyId: string): Promi
   }
 }
 
-export { formatServiceError };
+export { formatServiceError, isDuplicateAuthEmailError };

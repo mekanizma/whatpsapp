@@ -168,7 +168,9 @@
       "demoPasswordChangeDisabled": "Demo modda şifre değiştirilemez",
       "companyNotFound": "Şirket bilgisi bulunamadı",
       "sessionNotFound": "Oturum bilgisi alınamadı. Lütfen tekrar giriş yapın.",
-      "wrongPassword": "Mevcut şifre hatalı"
+      "wrongPassword": "Mevcut şifre hatalı",
+      "invalidCredentials": "E-posta veya şifre hatalı.",
+      "invalidCredentialsHint": "Şirket detayındaki Müşteri Giriş Hesabı e-postasını ve admin tarafından belirlenen şifreyi kullanın. Sorun devam ederse admin panelinden şifreyi yeniden kaydedin."
     }
   },
   "errors": {
