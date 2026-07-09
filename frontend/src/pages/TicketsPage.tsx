@@ -13,6 +13,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
 import { TransferTicketControl } from '@/components/TransferTicketControl';
 import { getTicketAssigneeLabel } from '@/lib/ticket-assignee';
+import { getTicketPriorityLabel, getTicketSubjectLabel } from '@/lib/ticket-labels';
 import { Card, CardContent, Badge, Spinner, Button } from '@/components/ui';
 import type { Ticket as TicketType } from '@/types';
 
@@ -97,8 +98,8 @@ export function TicketsPage() {
                     </div>
                     <div className="min-w-0 space-y-1.5">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-semibold text-slate-900">{ticket.subject}</h3>
-                        <Badge variant={priorityVariant[ticket.priority]}>{ticket.priority}</Badge>
+                        <h3 className="font-semibold text-slate-900">{getTicketSubjectLabel(t, ticket.subject)}</h3>
+                        <Badge variant={priorityVariant[ticket.priority]}>{getTicketPriorityLabel(t, ticket.priority)}</Badge>
                         <Badge variant={statusBadge[ticket.status] || 'default'}>
                           {t(`common.status.${ticket.status}`, { defaultValue: ticket.status })}
                         </Badge>

@@ -670,7 +670,24 @@
     "transferLabel": "Başka departmana aktar",
     "transferSelect": "Departman seçin",
     "transferSuccess": "Talep {{name}} departmanına aktarıldı",
-    "transferFailed": "Transfer başarısız"
+    "transferFailed": "Transfer başarısız",
+    "priority": {
+      "low": "Düşük",
+      "medium": "Orta",
+      "high": "Yüksek",
+      "urgent": "Acil"
+    },
+    "subjectCustomer": "Müşteri: {{preview}}",
+    "subjects": {
+      "human_transfer_request": "Canlı temsilci talebi",
+      "transfer_confirmed": "Aktarım onaylandı",
+      "customer_frustration": "Memnuniyetsiz müşteri",
+      "prompt_injection": "Güvenlik — prompt enjeksiyonu",
+      "sensitive_data": "Güvenlik — hassas veri",
+      "opt_out": "Vazgeçme talebi",
+      "ai_transfer": "Yapay zekadan temsilciye aktarım",
+      "live_support_request": "Canlı destek talebi"
+    }
   },
   "unknownQuestions": {
     "title": "Bilinmeyen Sorular",

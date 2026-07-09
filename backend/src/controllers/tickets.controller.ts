@@ -8,7 +8,12 @@ import { AuthRequest, isDemoSession } from '../middleware/auth.middleware';
 import { logActivity } from '../services/log.service';
 import { clearTransferState, normalizePhoneNumber } from '../whatsapp/message.handler';
 import { createTicketAndNotify, notifyTicketRecipients } from '../services/ticket-notification.service';
-import { getStaffDepartmentId, getStaffRecord, validateDepartmentBelongsToCompany } from '../services/department-access.service';
+import {
+  getStaffDepartmentId,
+  getStaffRecord,
+  resolveStaffIdForProfile,
+  validateDepartmentBelongsToCompany,
+} from '../services/department-access.service';
 import { mapTicketRow } from '../utils/supabase-join';
 
 const TICKET_SELECT =
@@ -26,14 +31,8 @@ async function getStaffIdForProfile(
   companyId: string,
   profileId?: string
 ): Promise<string | null> {
-  if (!profileId) return null;
-  const { data } = await adminClient
-    .from('staff')
-    .select('id')
-    .eq('profile_id', profileId)
-    .eq('company_id', companyId)
-    .single();
-  return data?.id || null;
+  const staff = await getStaffRecord(companyId, profileId);
+  return staff?.id || null;
 }
 
 async function canUserTransferTicket(
@@ -197,7 +196,16 @@ export async function updateTicket(req: AuthRequest, res: Response): Promise<voi
 
 /** Ticket'ı mevcut kullanıcıya ata ve işleme al */
 export async function claimTicket(req: AuthRequest, res: Response): Promise<void> {
-  const staffId = await getStaffIdForProfile(req.companyId!, req.profile?.id);
+  const staffId = await resolveStaffIdForProfile(
+    req.companyId!,
+    req.profile?.id,
+    req.userId
+  );
+  if (!staffId) {
+    res.status(400).json({ success: false, error: 'Personel kaydı oluşturulamadı' });
+    return;
+  }
+
   const staffDeptId = await getStaffDepartmentId(req.companyId!, req.profile?.id);
 
   let claimQuery = adminClient
@@ -309,12 +317,19 @@ export async function transferTicket(req: AuthRequest, res: Response): Promise<v
     return;
   }
 
+  const actorStaffId = await resolveStaffIdForProfile(
+    companyId,
+    req.profile?.id,
+    req.userId
+  );
+
   const { data, error } = await adminClient
     .from('tickets')
     .update({
       department_id: targetDepartmentId,
       assigned_staff: null,
-      last_assigned_staff: ticket.assigned_staff || ticket.last_assigned_staff,
+      last_assigned_staff:
+        ticket.assigned_staff || ticket.last_assigned_staff || actorStaffId,
       status: 'open',
     })
     .eq('id', ticketId)

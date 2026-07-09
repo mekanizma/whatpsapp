@@ -670,7 +670,24 @@
     "transferLabel": "Transfer to another department",
     "transferSelect": "Select department",
     "transferSuccess": "Ticket transferred to {{name}}",
-    "transferFailed": "Transfer failed"
+    "transferFailed": "Transfer failed",
+    "priority": {
+      "low": "Low",
+      "medium": "Medium",
+      "high": "High",
+      "urgent": "Urgent"
+    },
+    "subjectCustomer": "Customer: {{preview}}",
+    "subjects": {
+      "human_transfer_request": "Live agent request",
+      "transfer_confirmed": "Transfer confirmed",
+      "customer_frustration": "Frustrated customer",
+      "prompt_injection": "Security — prompt injection",
+      "sensitive_data": "Security — sensitive data",
+      "opt_out": "Opt-out request",
+      "ai_transfer": "AI handoff to agent",
+      "live_support_request": "Live support request"
+    }
   },
   "unknownQuestions": {
     "title": "Unknown Questions",

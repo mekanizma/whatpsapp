@@ -37,6 +37,68 @@ export async function getStaffRecord(
   return data || null;
 }
 
+/** Profile'a bağlı staff kaydını bulur; yoksa profilden otomatik oluşturur (claim/atama için). */
+export async function resolveStaffIdForProfile(
+  companyId: string,
+  profileId?: string,
+  userId?: string
+): Promise<string | null> {
+  if (!profileId) return null;
+
+  const existing = await getStaffRecord(companyId, profileId);
+  if (existing) return existing.id;
+
+  if (!userId) return null;
+
+  const { data: profile } = await adminClient
+    .from('profiles')
+    .select('full_name, role')
+    .eq('id', profileId)
+    .eq('company_id', companyId)
+    .maybeSingle();
+
+  if (!profile) return null;
+
+  const { data: authData, error: authError } = await adminClient.auth.admin.getUserById(userId);
+  const email = authData?.user?.email?.trim().toLowerCase();
+  if (authError || !email) return null;
+
+  const { data: byEmail } = await adminClient
+    .from('staff')
+    .select('id, profile_id')
+    .eq('company_id', companyId)
+    .ilike('email', email)
+    .maybeSingle();
+
+  if (byEmail) {
+    if (!byEmail.profile_id) {
+      await adminClient.from('staff').update({ profile_id: profileId }).eq('id', byEmail.id);
+    }
+    return byEmail.id;
+  }
+
+  const staffRole = profile.role === 'company_admin' ? 'admin' : 'agent';
+  const { data: created, error: insertError } = await adminClient
+    .from('staff')
+    .insert({
+      company_id: companyId,
+      profile_id: profileId,
+      name: profile.full_name?.trim() || email,
+      email,
+      role: staffRole,
+      is_active: true,
+    })
+    .select('id')
+    .single();
+
+  if (insertError) {
+    console.warn(`[Staff] Auto-link failed for profile ${profileId}:`, insertError.message);
+    return null;
+  }
+
+  return created.id;
+}
+
 export async function companyHasActiveDepartments(companyId: string): Promise<boolean> {
   const { count } = await adminClient
     .from('departments')

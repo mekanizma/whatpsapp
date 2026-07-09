@@ -14,6 +14,7 @@ import { Button, Input, Spinner, Badge } from '@/components/ui';
 import { EmptyState } from '@/components/EmptyState';
 import { TransferTicketControl } from '@/components/TransferTicketControl';
 import { getTicketAssigneeLabel } from '@/lib/ticket-assignee';
+import { getTicketSubjectLabel } from '@/lib/ticket-labels';
 import { MessageImage } from '@/components/MessageImage';
 import { cn } from '@/lib/utils';
 import type { Conversation, Message, Ticket } from '@/types';
@@ -279,7 +280,7 @@ export function MessagesPage() {
                 <div className="border-t border-amber-100 bg-amber-50/80 px-4 py-3 space-y-3">
                   <div className="flex flex-wrap items-center gap-2 text-xs text-amber-900">
                     <Headphones className="h-4 w-4 shrink-0 text-amber-600" />
-                    <span className="truncate font-medium">{activeTicket.subject}</span>
+                    <span className="truncate font-medium">{getTicketSubjectLabel(t, activeTicket.subject)}</span>
                     {activeTicket.department?.name && (
                       <span className="hidden truncate text-amber-700/80 sm:inline">
                         · {activeTicket.department.name}
