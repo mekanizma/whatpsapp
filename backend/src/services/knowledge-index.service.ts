@@ -114,6 +114,11 @@ export async function indexKnowledgeItem(
     }
 
     if (!kb.is_active) {
+      await adminClient
+        .from('knowledge_chunks')
+        .delete()
+        .eq('knowledge_base_id', knowledgeBaseId)
+        .eq('company_id', companyId);
       await setIndexStatus(knowledgeBaseId, companyId, 'ready', {
         chunk_count: 0,
         index_error: null,
@@ -188,6 +193,38 @@ export async function indexKnowledgeItem(
   } finally {
     inFlight.delete(key);
   }
+}
+
+/** Aktif/pasif durumu — pasifte chunk'ları temizler, aktifte yeniden indeksler */
+export async function setKnowledgeItemActive(
+  knowledgeBaseId: string,
+  companyId: string,
+  isActive: boolean
+): Promise<void> {
+  const { error } = await adminClient
+    .from('knowledge_base')
+    .update({ is_active: isActive })
+    .eq('id', knowledgeBaseId)
+    .eq('company_id', companyId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!isActive) {
+    await adminClient
+      .from('knowledge_chunks')
+      .delete()
+      .eq('knowledge_base_id', knowledgeBaseId)
+      .eq('company_id', companyId);
+    await setIndexStatus(knowledgeBaseId, companyId, 'ready', {
+      chunk_count: 0,
+      index_error: null,
+    });
+    return;
+  }
+
+  await indexKnowledgeWithRetry(knowledgeBaseId, companyId);
 }
 
 /** Debounced async indexing — non-blocking for API responses */

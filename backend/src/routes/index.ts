@@ -163,6 +163,7 @@ router.post(
 );
 router.post('/knowledge', authenticate, requireRole('company_admin', 'staff'), requireCompany, requireKnowledgeAccess, knowledgeCtrl.createKnowledgeItem);
 router.put('/knowledge/:id', authenticate, requireRole('company_admin', 'staff'), requireCompany, requireKnowledgeAccess, knowledgeCtrl.updateKnowledgeItem);
+router.patch('/knowledge/:id/active', authenticate, requireRole('company_admin', 'staff'), requireCompany, requireKnowledgeAccess, knowledgeCtrl.patchKnowledgeItemActive);
 router.delete('/knowledge/:id', authenticate, requireRole('company_admin', 'staff'), requireCompany, requireKnowledgeAccess, knowledgeCtrl.deleteKnowledgeItem);
 router.get('/knowledge/:id/index-status', authenticate, requireCompany, requireKnowledgeAccess, knowledgeCtrl.getKnowledgeIndexStatus);
 router.get('/knowledge/:id/chunks', authenticate, requireRole('company_admin', 'staff'), requireCompany, requireKnowledgeAccess, knowledgeCtrl.getKnowledgeChunks);

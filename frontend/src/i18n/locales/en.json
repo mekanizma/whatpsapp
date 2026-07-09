@@ -660,6 +660,7 @@
     "empty": "No open support tickets",
     "emptyDesc": "Tickets appear here when customers request a human agent",
     "assigned": "Assigned: {{name}}",
+    "lastAssigned": "Last assigned: {{name}}",
     "unassigned": "Not assigned to staff yet",
     "department": "Department: {{name}}",
     "claim": "Assign to Me",
@@ -936,6 +937,9 @@
     "chunkEstimate": "~{{count}} chunks",
     "chunks": "{{count}} chunks",
     "reindex": "Re-index",
+    "inactive": "Inactive",
+    "setActive": "Activate",
+    "setInactive": "Deactivate",
     "indexStatus": {
       "pending": "Pending",
       "indexing": "Indexing",

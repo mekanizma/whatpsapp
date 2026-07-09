@@ -5,7 +5,7 @@
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Pencil, Trash2, Upload, FileText, X, RefreshCw, Eye, PenLine } from 'lucide-react';
+import { Plus, Pencil, Trash2, Upload, FileText, X, RefreshCw, Eye, PenLine, Power } from 'lucide-react';
 import { api } from '@/services/api';
 import { MarkdownPreview } from '@/components/MarkdownPreview';
 import {
@@ -126,6 +126,12 @@ export function KnowledgePage() {
 
   const reindexMutation = useMutation({
     mutationFn: (id: string) => api.post(`/knowledge/${id}/reindex`, {}),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['knowledge'] }),
+  });
+
+  const toggleActiveMutation = useMutation({
+    mutationFn: ({ id, is_active }: { id: string; is_active: boolean }) =>
+      api.patch<KnowledgeItem>(`/knowledge/${id}/active`, { is_active }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['knowledge'] }),
   });
 
@@ -371,17 +377,29 @@ export function KnowledgePage() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {items?.map((item) => (
-            <Card key={item.id}>
+            <Card key={item.id} className={cn(!item.is_active && 'opacity-75')}>
               <CardContent className="p-4">
                 <div className="mb-2 flex items-start justify-between gap-2">
                   <h3 className="font-semibold leading-snug">{item.title}</h3>
                   <div className="flex shrink-0 gap-1">
                     <button
                       type="button"
+                      onClick={() =>
+                        toggleActiveMutation.mutate({ id: item.id, is_active: !item.is_active })
+                      }
+                      className="rounded p-1 hover:bg-gray-100"
+                      title={item.is_active ? t('knowledge.setInactive') : t('knowledge.setActive')}
+                      disabled={toggleActiveMutation.isPending}
+                      aria-label={item.is_active ? t('knowledge.setInactive') : t('knowledge.setActive')}
+                    >
+                      <Power className={cn('h-4 w-4', item.is_active ? 'text-emerald-600' : 'text-gray-400')} />
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => reindexMutation.mutate(item.id)}
                       className="rounded p-1 hover:bg-gray-100"
                       title={t('knowledge.reindex')}
-                      disabled={reindexMutation.isPending}
+                      disabled={reindexMutation.isPending || !item.is_active}
                     >
                       <RefreshCw className={`h-4 w-4 text-gray-500 ${item.index_status === 'indexing' ? 'animate-spin' : ''}`} />
                     </button>
@@ -394,6 +412,12 @@ export function KnowledgePage() {
                   </div>
                 </div>
                 <div className="mb-2 flex flex-wrap gap-1.5">
+                  {!item.is_active && (
+                    <Badge variant="warning">
+                      <Power className="mr-1 h-3 w-3" />
+                      {t('knowledge.inactive')}
+                    </Badge>
+                  )}
                   {item.category && <Badge variant="info">{item.category}</Badge>}
                   {item.department?.name && <Badge variant="default">{item.department.name}</Badge>}
                   {item.index_status && (

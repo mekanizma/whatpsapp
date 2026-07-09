@@ -480,9 +480,11 @@ export interface Ticket {
   priority: string;
   status: string;
   assigned_staff: string | null;
+  last_assigned_staff?: string | null;
   department_id?: string | null;
   department?: { id: string; name: string } | null;
   staff?: { name: string; email?: string } | null;
+  last_staff?: { name: string; email?: string } | null;
   created_at: string;
 }
 

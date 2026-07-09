@@ -11,6 +11,17 @@ import { createTicketAndNotify, notifyTicketRecipients } from '../services/ticke
 import { getStaffDepartmentId, getStaffRecord, validateDepartmentBelongsToCompany } from '../services/department-access.service';
 import { mapTicketRow } from '../utils/supabase-join';
 
+const TICKET_SELECT =
+  '*, staff:assigned_staff(name, email), last_staff:last_assigned_staff(name, email), department:department_id(id, name)';
+
+function withLastAssignedStaff(updates: Record<string, unknown>): Record<string, unknown> {
+  const staffId = updates.assigned_staff;
+  if (typeof staffId === 'string' && staffId) {
+    return { ...updates, last_assigned_staff: staffId };
+  }
+  return updates;
+}
+
 async function getStaffIdForProfile(
   companyId: string,
   profileId?: string
@@ -54,7 +65,7 @@ export async function getTickets(req: AuthRequest, res: Response): Promise<void>
   const status = req.query.status as string;
   let query = adminClient
     .from('tickets')
-    .select('*, staff:assigned_staff(name, email), department:department_id(id, name)')
+    .select(TICKET_SELECT)
     .eq('company_id', req.companyId)
     .order('created_at', { ascending: false });
 
@@ -94,7 +105,7 @@ export async function getActiveTicketByPhone(req: AuthRequest, res: Response): P
 
   const { data, error } = await adminClient
     .from('tickets')
-    .select('*, staff:assigned_staff(name, email), department:department_id(id, name)')
+    .select(TICKET_SELECT)
     .eq('company_id', req.companyId)
     .eq('customer_phone', phone)
     .in('status', ['open', 'in_progress'])
@@ -129,7 +140,7 @@ export async function createTicket(req: AuthRequest, res: Response): Promise<voi
 
     const { data, error } = await adminClient
       .from('tickets')
-      .select('*, staff:assigned_staff(name, email), department:department_id(id, name)')
+      .select(TICKET_SELECT)
       .eq('id', ticket!.id)
       .single();
 
@@ -153,12 +164,14 @@ export async function updateTicket(req: AuthRequest, res: Response): Promise<voi
   if (assigned_staff !== undefined) updates.assigned_staff = assigned_staff;
   if (status === 'closed' || status === 'resolved') updates.closed_at = new Date().toISOString();
 
+  const patch = withLastAssignedStaff(updates);
+
   const { data, error } = await adminClient
     .from('tickets')
-    .update(updates)
+    .update(patch)
     .eq('id', req.params.id)
     .eq('company_id', req.companyId)
-    .select('*, staff:assigned_staff(name, email), department:department_id(id, name)')
+    .select(TICKET_SELECT)
     .single();
 
   if (error) {
@@ -176,7 +189,7 @@ export async function updateTicket(req: AuthRequest, res: Response): Promise<voi
     action: 'ticket_updated',
     entityType: 'ticket',
     entityId: data.id,
-    metadata: updates,
+    metadata: patch,
   });
 
   res.json({ success: true, data: mapTicketRow(data) });
@@ -189,10 +202,12 @@ export async function claimTicket(req: AuthRequest, res: Response): Promise<void
 
   let claimQuery = adminClient
     .from('tickets')
-    .update({
-      status: 'in_progress',
-      assigned_staff: staffId,
-    })
+    .update(
+      withLastAssignedStaff({
+        status: 'in_progress',
+        assigned_staff: staffId,
+      })
+    )
     .eq('id', req.params.id)
     .eq('company_id', req.companyId)
     .in('status', ['open', 'in_progress']);
@@ -202,7 +217,7 @@ export async function claimTicket(req: AuthRequest, res: Response): Promise<void
   }
 
   const { data, error } = await claimQuery
-    .select('*, staff:assigned_staff(name, email), department:department_id(id, name)')
+    .select(TICKET_SELECT)
     .single();
 
   if (error) {
@@ -227,10 +242,15 @@ export async function assignTicket(req: AuthRequest, res: Response): Promise<voi
 
   const { data, error } = await adminClient
     .from('tickets')
-    .update({ assigned_staff: staff_id, status: 'in_progress' })
+    .update(
+      withLastAssignedStaff({
+        assigned_staff: staff_id,
+        status: 'in_progress',
+      })
+    )
     .eq('id', req.params.id)
     .eq('company_id', req.companyId)
-    .select('*, staff:assigned_staff(name, email), department:department_id(id, name)')
+    .select(TICKET_SELECT)
     .single();
 
   if (error) {
@@ -260,7 +280,7 @@ export async function transferTicket(req: AuthRequest, res: Response): Promise<v
 
   const { data: ticket, error: fetchError } = await adminClient
     .from('tickets')
-    .select('id, status, assigned_staff, department_id, customer_phone, customer_name, subject, priority')
+    .select('id, status, assigned_staff, last_assigned_staff, department_id, customer_phone, customer_name, subject, priority')
     .eq('id', ticketId)
     .eq('company_id', companyId)
     .single();
@@ -294,11 +314,12 @@ export async function transferTicket(req: AuthRequest, res: Response): Promise<v
     .update({
       department_id: targetDepartmentId,
       assigned_staff: null,
+      last_assigned_staff: ticket.assigned_staff || ticket.last_assigned_staff,
       status: 'open',
     })
     .eq('id', ticketId)
     .eq('company_id', companyId)
-    .select('*, staff:assigned_staff(name, email), department:department_id(id, name)')
+    .select(TICKET_SELECT)
     .single();
 
   if (error) {

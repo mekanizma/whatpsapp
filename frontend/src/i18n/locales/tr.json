@@ -660,6 +660,7 @@
     "empty": "Açık destek talebi yok",
     "emptyDesc": "Müşteriler insan temsilcisi istediğinde talepler burada listelenir",
     "assigned": "Atanan: {{name}}",
+    "lastAssigned": "Son atanan: {{name}}",
     "unassigned": "Henüz personele atanmadı",
     "department": "Departman: {{name}}",
     "claim": "Bana Ata",
@@ -936,6 +937,9 @@
     "chunkEstimate": "~{{count}} parça",
     "chunks": "{{count}} parça",
     "reindex": "Yeniden indeksle",
+    "inactive": "Pasif",
+    "setActive": "Aktif Yap",
+    "setInactive": "Pasif Yap",
     "indexStatus": {
       "pending": "Bekliyor",
       "indexing": "İndeksleniyor",

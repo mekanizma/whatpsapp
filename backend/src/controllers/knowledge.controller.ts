@@ -11,6 +11,7 @@ import {
   scheduleKnowledgeIndexing,
   indexKnowledgeItem,
   indexKnowledgeWithRetry,
+  setKnowledgeItemActive,
 } from '../services/knowledge-index.service';
 import { getKnowledgeChunkPreviews } from '../services/knowledge-retrieval.service';
 import { clearCompanyCache } from '../ai/ai-cache.service';
@@ -175,10 +176,10 @@ export async function updateKnowledgeItem(req: AuthRequest, res: Response): Prom
 
   const charCount = typeof content === 'string' ? content.length : undefined;
   const updates: Record<string, unknown> = {
-    title,
-    content,
-    category,
-    is_active,
+    ...(title !== undefined ? { title } : {}),
+    ...(content !== undefined ? { content } : {}),
+    ...(category !== undefined ? { category } : {}),
+    ...(is_active !== undefined ? { is_active } : {}),
     index_status: 'pending',
     index_error: null,
     ...(source_filename !== undefined ? { source_filename } : {}),
@@ -211,6 +212,62 @@ export async function updateKnowledgeItem(req: AuthRequest, res: Response): Prom
 
   await indexKnowledgeWithRetry(data.id, req.companyId!);
   await clearCompanyCache(req.companyId!);
+
+  res.json({ success: true, data });
+}
+
+export async function patchKnowledgeItemActive(req: AuthRequest, res: Response): Promise<void> {
+  const id = paramId(req.params.id);
+  const { is_active } = req.body;
+
+  if (typeof is_active !== 'boolean') {
+    res.status(400).json({ success: false, error: 'is_active alanı zorunludur' });
+    return;
+  }
+
+  const access = await assertStaffCanAccessKnowledge(req, id);
+  if (!access.ok) {
+    res.status(403).json({ success: false, error: access.error });
+    return;
+  }
+
+  const { data: existing } = await adminClient
+    .from('knowledge_base')
+    .select('id, is_active')
+    .eq('id', id)
+    .eq('company_id', req.companyId)
+    .maybeSingle();
+
+  if (!existing) {
+    res.status(404).json({ success: false, error: 'Kayıt bulunamadı' });
+    return;
+  }
+
+  if (existing.is_active === is_active) {
+    const { data } = await adminClient
+      .from('knowledge_base')
+      .select('*, department:department_id(id, name)')
+      .eq('id', id)
+      .eq('company_id', req.companyId)
+      .single();
+    res.json({ success: true, data });
+    return;
+  }
+
+  await setKnowledgeItemActive(id, req.companyId!, is_active);
+  await clearCompanyCache(req.companyId!);
+
+  const { data, error } = await adminClient
+    .from('knowledge_base')
+    .select('*, department:department_id(id, name)')
+    .eq('id', id)
+    .eq('company_id', req.companyId)
+    .single();
+
+  if (error || !data) {
+    res.status(400).json({ success: false, error: error?.message || 'Güncelleme başarısız' });
+    return;
+  }
 
   res.json({ success: true, data });
 }

@@ -12,6 +12,7 @@ import { useAuthStore } from '@/store/authStore';
 import { PageHeader } from '@/components/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
 import { TransferTicketControl } from '@/components/TransferTicketControl';
+import { getTicketAssigneeLabel } from '@/lib/ticket-assignee';
 import { Card, CardContent, Badge, Spinner, Button } from '@/components/ui';
 import type { Ticket as TicketType } from '@/types';
 
@@ -80,7 +81,9 @@ export function TicketsPage() {
         />
       ) : (
         <div className="space-y-3">
-          {tickets?.map((ticket) => (
+          {tickets?.map((ticket) => {
+            const assignee = getTicketAssigneeLabel(ticket);
+            return (
             <Card
               key={ticket.id}
               className="cursor-pointer overflow-hidden transition-shadow hover:shadow-md"
@@ -104,10 +107,12 @@ export function TicketsPage() {
                         {ticket.customer_name || ticket.customer_phone}
                       </p>
                       <div className="flex flex-wrap items-center gap-2">
-                        {ticket.staff?.name ? (
+                        {assignee ? (
                           <span className="inline-flex min-h-[28px] items-center gap-1.5 rounded-full bg-violet-50 px-2.5 py-1 text-xs font-medium text-violet-800 ring-1 ring-violet-100">
                             <UserCheck className="h-3.5 w-3.5" />
-                            {t('tickets.assigned', { name: ticket.staff.name })}
+                            {assignee.isLast
+                              ? t('tickets.lastAssigned', { name: assignee.name })
+                              : t('tickets.assigned', { name: assignee.name })}
                           </span>
                         ) : ticket.status === 'in_progress' ? (
                           <span className="text-xs text-slate-400">{t('tickets.unassigned')}</span>
@@ -166,7 +171,8 @@ export function TicketsPage() {
                 </div>
               </CardContent>
             </Card>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

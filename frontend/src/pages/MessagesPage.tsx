@@ -13,6 +13,7 @@ import { useAuthStore } from '@/store/authStore';
 import { Button, Input, Spinner, Badge } from '@/components/ui';
 import { EmptyState } from '@/components/EmptyState';
 import { TransferTicketControl } from '@/components/TransferTicketControl';
+import { getTicketAssigneeLabel } from '@/lib/ticket-assignee';
 import { MessageImage } from '@/components/MessageImage';
 import { cn } from '@/lib/utils';
 import type { Conversation, Message, Ticket } from '@/types';
@@ -284,12 +285,18 @@ export function MessagesPage() {
                         · {activeTicket.department.name}
                       </span>
                     )}
-                    {activeTicket.staff?.name && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-900">
-                        <User className="h-3 w-3" />
-                        {t('tickets.assigned', { name: activeTicket.staff.name })}
-                      </span>
-                    )}
+                    {(() => {
+                      const assignee = activeTicket ? getTicketAssigneeLabel(activeTicket) : null;
+                      if (!assignee) return null;
+                      return (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-900">
+                          <User className="h-3 w-3" />
+                          {assignee.isLast
+                            ? t('tickets.lastAssigned', { name: assignee.name })
+                            : t('tickets.assigned', { name: assignee.name })}
+                        </span>
+                      );
+                    })()}
                     <Badge variant="warning" className="ml-auto shrink-0">{t('messages.liveSupport')}</Badge>
                   </div>
                   <TransferTicketControl
