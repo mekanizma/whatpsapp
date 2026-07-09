@@ -80,7 +80,7 @@ export function AdminCompanyLoginAccount({ companyId, users }: AdminCompanyLogin
     }
     createMutation.mutate({
       full_name: createForm.full_name.trim(),
-      email: createForm.email.trim(),
+      email: createForm.email.trim().toLowerCase(),
       password: createForm.password,
     });
   };

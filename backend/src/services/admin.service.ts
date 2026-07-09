@@ -388,6 +388,9 @@ export async function createCompanyAdminUser(
     if (profile?.role === 'super_admin') {
       throw new Error('Bu e-posta platform yöneticisine ait; şirket giriş hesabı olarak kullanılamaz');
     }
+    if (profile?.company_id && profile.company_id !== companyId) {
+      throw new Error('Bu e-posta başka bir şirkete bağlı. Farklı bir giriş e-postası kullanın.');
+    }
 
     await updateAuthCompanyAdminUser(existingAuth.id, password, trimmedName, normalizedEmail);
     userId = existingAuth.id;
@@ -415,7 +418,7 @@ export async function createCompanyAdminUser(
       await updateAuthCompanyAdminUser(found.id, password, trimmedName, normalizedEmail);
       userId = found.id;
     } else {
-      throw error;
+      throw new Error(formatServiceError(error, 'Auth kullanıcısı oluşturulamadı'));
     }
   }
 
