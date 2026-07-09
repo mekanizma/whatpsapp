@@ -43,6 +43,7 @@ router.post('/admin/companies/:id/impersonate', authenticate, requireRole('super
 router.get('/admin/companies/:id/invoice', authenticate, requireRole('super_admin'), adminCtrl.downloadCompanyInvoice);
 router.post('/admin/companies', authenticate, requireRole('super_admin'), adminCtrl.createCompany);
 router.put('/admin/companies/:id', authenticate, requireRole('super_admin'), adminCtrl.updateCompany);
+router.post('/admin/companies/:id/login-user', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.createCompanyLoginUser));
 router.patch('/admin/companies/:id/status', authenticate, requireRole('super_admin'), adminCtrl.updateCompanyStatus);
 router.patch('/admin/companies/:id/subscription', authenticate, requireRole('super_admin'), adminCtrl.updateCompanySubscription);
 router.get('/admin/whatsapp-health', authenticate, requireRole('super_admin'), asyncHandler(adminCtrl.getWhatsAppHealth));

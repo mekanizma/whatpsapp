@@ -39,6 +39,15 @@ function UsageBar({ used, limit }: { used: number; limit: number }) {
   );
 }
 
+function formatAdminUserError(error: unknown): string {
+  if (typeof error === 'string' && error.trim()) return error;
+  if (error && typeof error === 'object' && 'message' in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === 'string' && message.trim()) return message;
+  }
+  return 'Bilinmeyen hata';
+}
+
 export function AdminCompaniesPage() {
   const { t, i18n } = useTranslation();
   const locale = i18n.language?.startsWith('en') ? 'en-US' : 'tr-TR';
@@ -75,13 +84,13 @@ export function AdminCompaniesPage() {
 
   const createMutation = useMutation({
     mutationFn: (body: Record<string, string>) =>
-      api.post<{ admin_user_error?: string | null }>('/admin/companies', body),
+      api.post<{ admin_user_error?: string | Record<string, unknown> | null }>('/admin/companies', body),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['admin-companies'] });
       queryClient.invalidateQueries({ queryKey: ['admin-stats'] });
 
       if (result?.admin_user_error) {
-        setAdminUserWarning(result.admin_user_error);
+        setAdminUserWarning(formatAdminUserError(result.admin_user_error));
         return;
       }
 
@@ -218,13 +227,23 @@ export function AdminCompaniesPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>{t('common.password')}</Label>
-                  <Input type="password" value={form.admin_password} onChange={(e) => setForm({ ...form, admin_password: e.target.value })} />
+                  <Input type="password" value={form.admin_password} onChange={(e) => setForm({ ...form, admin_password: e.target.value })} minLength={6} />
                 </div>
               </div>
             </div>
 
             <div className="flex flex-wrap gap-2">
-              <Button onClick={() => createMutation.mutate(form)} disabled={!form.company_name.trim() || createMutation.isPending}>
+              <Button
+                onClick={() => {
+                  if (form.admin_email && form.admin_password && form.admin_password.length < 6) {
+                    setAdminUserWarning(t('admin.companies.passwordTooShort'));
+                    return;
+                  }
+                  setAdminUserWarning(null);
+                  createMutation.mutate(form);
+                }}
+                disabled={!form.company_name.trim() || createMutation.isPending}
+              >
                 {createMutation.isPending ? <Spinner /> : t('admin.companies.create')}
               </Button>
               <Button variant="outline" onClick={() => setShowForm(false)}>{t('common.cancel')}</Button>

@@ -70,7 +70,7 @@ async function resolveAuthStaffUser(
   return { userId: found.id, created: false };
 }
 
-async function findAuthUserByEmail(email: string) {
+export async function findAuthUserByEmail(email: string) {
   let page = 1;
   const perPage = 200;
 

@@ -26,6 +26,7 @@ import {
   deleteCompanyAdminNote,
   listSuperAdmins,
 } from '../services/admin.service';
+import { formatServiceError } from '../services/staff.service';
 import {
   createCompanySubscription,
   normalizeBillingPeriod,
@@ -260,7 +261,7 @@ export async function createCompany(req: AuthRequest, res: Response): Promise<vo
         admin_full_name
       );
     } catch (userErr) {
-      adminUserError = userErr instanceof Error ? userErr.message : 'Giriş kullanıcısı oluşturulamadı';
+      adminUserError = formatServiceError(userErr);
       console.error('Şirket admin kullanıcı hatası:', userErr);
     }
   }
@@ -277,6 +278,53 @@ export async function createCompany(req: AuthRequest, res: Response): Promise<vo
     success: true,
     data: { company, admin_user_id: adminUserId, admin_user_error: adminUserError },
   });
+}
+
+export async function createCompanyLoginUser(req: AuthRequest, res: Response): Promise<void> {
+  const companyId = req.params.id as string;
+  const { email, password, full_name } = req.body;
+
+  if (!email?.trim() || !password || !full_name?.trim()) {
+    res.status(400).json({ success: false, error: 'E-posta, ad soyad ve şifre zorunludur' });
+    return;
+  }
+
+  if (isDemoSession(req)) {
+    res.status(400).json({ success: false, error: 'Demo modda giriş kullanıcısı oluşturulamaz' });
+    return;
+  }
+
+  const { data: company, error: companyError } = await adminClient
+    .from('companies')
+    .select('id, company_name')
+    .eq('id', companyId)
+    .single();
+
+  if (companyError || !company) {
+    res.status(404).json({ success: false, error: 'Şirket bulunamadı' });
+    return;
+  }
+
+  try {
+    const userId = await createCompanyAdminUser(
+      companyId,
+      email,
+      password,
+      full_name
+    );
+
+    await logActivity({
+      userId: req.userId,
+      action: 'company_login_user_created',
+      entityType: 'company',
+      entityId: companyId,
+      metadata: { company_name: company.company_name, admin_email: email, admin_user_id: userId },
+    });
+
+    res.status(201).json({ success: true, data: { user_id: userId } });
+  } catch (err) {
+    res.status(400).json({ success: false, error: formatServiceError(err) });
+  }
 }
 
 export async function updateCompany(req: AuthRequest, res: Response): Promise<void> {

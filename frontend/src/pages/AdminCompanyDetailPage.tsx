@@ -19,6 +19,7 @@ import {
   Spinner, Badge,
 } from '@/components/ui';
 import { AdminCompanyNotes } from '@/components/admin/AdminCompanyNotes';
+import { AdminCompanyLoginAccount } from '@/components/admin/AdminCompanyLoginAccount';
 import { CompanyPlanFeatures } from '@/components/CompanyPlanFeatures';
 import type { CompanyDetail, SubscriptionPlan } from '@/types';
 import { localizePlan } from '@/lib/plan-localize';
@@ -260,44 +261,48 @@ export function AdminCompanyDetailPage() {
       </div>
 
       {tab === 'genel' && (
-        <Card>
-          <CardHeader><CardTitle>{t('admin.companyDetail.companyInfo')}</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>{t('admin.companyDetail.companyName')}</Label>
-                <Input value={companyForm.company_name} onChange={(e) => setForm({ ...form, company_name: e.target.value })} />
+        <div className="space-y-4">
+          <Card>
+            <CardHeader><CardTitle>{t('admin.companyDetail.companyInfo')}</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>{t('admin.companyDetail.companyName')}</Label>
+                  <Input value={companyForm.company_name} onChange={(e) => setForm({ ...form, company_name: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>{t('admin.companyDetail.status')}</Label>
+                  <select
+                    className="flex h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
+                    value={companyForm.status}
+                    onChange={(e) => setForm({ ...form, status: e.target.value })}
+                  >
+                    {STATUS_VALUES.map((value) => (
+                      <option key={value} value={value}>{t(`common.status.${value}`)}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label>{t('common.email')}</Label>
+                  <Input type="email" value={companyForm.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>{t('settings.phone')}</Label>
+                  <Input value={companyForm.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>{t('admin.companyDetail.address')}</Label>
+                  <Input value={companyForm.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>{t('admin.companyDetail.status')}</Label>
-                <select
-                  className="flex h-10 w-full rounded-lg border border-slate-200 px-3 text-sm"
-                  value={companyForm.status}
-                  onChange={(e) => setForm({ ...form, status: e.target.value })}
-                >
-                  {STATUS_VALUES.map((value) => (
-                    <option key={value} value={value}>{t(`common.status.${value}`)}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-2">
-                <Label>{t('common.email')}</Label>
-                <Input type="email" value={companyForm.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label>{t('settings.phone')}</Label>
-                <Input value={companyForm.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-              </div>
-              <div className="space-y-2 sm:col-span-2">
-                <Label>{t('admin.companyDetail.address')}</Label>
-                <Input value={companyForm.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
-              </div>
-            </div>
-            <Button onClick={() => updateMutation.mutate(companyForm)} disabled={updateMutation.isPending}>
-              {updateMutation.isPending ? <Spinner /> : <><Save className="h-4 w-4" /> {t('common.save')}</>}
-            </Button>
-          </CardContent>
-        </Card>
+              <Button onClick={() => updateMutation.mutate(companyForm)} disabled={updateMutation.isPending}>
+                {updateMutation.isPending ? <Spinner /> : <><Save className="h-4 w-4" /> {t('common.save')}</>}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {id && <AdminCompanyLoginAccount companyId={id} users={users} />}
+        </div>
       )}
 
       {tab === 'notlar' && id && <AdminCompanyNotes companyId={id} />}

@@ -1254,6 +1254,7 @@
       "phone": "Phone",
       "adminOptional": "Company Admin (Optional)",
       "adminUserWarning": "Company was created but the login user could not be created: {{error}}. Password must be at least 6 characters. Fix the details and try again.",
+      "passwordTooShort": "Password must be at least 6 characters.",
       "loginEmail": "Login Email",
       "create": "Create Company",
       "noResults": "No search results",
@@ -1571,7 +1572,16 @@
       "setupFee": "Setup Fee (excl. VAT)",
       "setupFeeHint": "One-time fee for this invoice only. Leave empty to omit.",
       "setupFeeDescription": "Setup Line Item Description",
-      "setupFeeDescriptionPlaceholder": "e.g. Setup Fee (one-time)"
+      "setupFeeDescriptionPlaceholder": "e.g. Setup Fee (one-time)",
+      "loginAccount": {
+        "title": "Customer Login Account",
+        "description": "Manage the company admin account and password used to sign in to the customer panel.",
+        "changePassword": "Change Password",
+        "createTitle": "Create login account",
+        "create": "Create Login Account",
+        "created": "Login account created.",
+        "requiredFields": "Full name and email are required."
+      }
     },
     "supportTickets": {
       "title": "Platform Support Tickets",

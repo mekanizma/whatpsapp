@@ -1254,6 +1254,7 @@
       "phone": "Telefon",
       "adminOptional": "Şirket Yöneticisi (Opsiyonel)",
       "adminUserWarning": "Şirket oluşturuldu ancak giriş kullanıcısı oluşturulamadı: {{error}}. Şifre en az 6 karakter olmalı. Bilgileri düzeltip tekrar deneyin.",
+      "passwordTooShort": "Şifre en az 6 karakter olmalıdır.",
       "loginEmail": "Giriş E-posta",
       "create": "Şirketi Oluştur",
       "noResults": "Arama sonucu bulunamadı",
@@ -1571,7 +1572,16 @@
       "setupFee": "Kurulum Ücreti (KDV Hariç)",
       "setupFeeHint": "Bu faturaya özel tek seferlik ücret. Boş bırakırsanız eklenmez.",
       "setupFeeDescription": "Kurulum Kalemi Açıklaması",
-      "setupFeeDescriptionPlaceholder": "Örn: Kurulum Ücreti (tek seferlik)"
+      "setupFeeDescriptionPlaceholder": "Örn: Kurulum Ücreti (tek seferlik)",
+      "loginAccount": {
+        "title": "Müşteri Giriş Hesabı",
+        "description": "Müşteri paneline giriş yapan şirket yöneticisinin hesabı ve şifresi buradan yönetilir.",
+        "changePassword": "Şifre Değiştir",
+        "createTitle": "Giriş hesabı oluştur",
+        "create": "Giriş Hesabı Oluştur",
+        "created": "Giriş hesabı oluşturuldu.",
+        "requiredFields": "Ad soyad ve e-posta zorunludur."
+      }
     },
     "supportTickets": {
       "title": "Platform Destek Talepleri",
