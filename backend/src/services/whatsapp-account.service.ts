@@ -173,6 +173,7 @@ export async function updateWhatsAppAccount(
     phone_number?: string;
     business_account_id?: string;
     access_token?: string;
+    app_secret?: string | null;
     webhook_verify_token?: string;
     status?: WhatsAppStatus;
     profile_name?: string | null;
@@ -188,6 +189,7 @@ export async function updateWhatsAppAccount(
   if (updates.phone_number !== undefined) patch.phone_number = updates.phone_number;
   if (updates.business_account_id !== undefined) patch.business_account_id = updates.business_account_id;
   if (updates.access_token !== undefined) patch.access_token = updates.access_token;
+  if (updates.app_secret !== undefined) patch.app_secret = updates.app_secret;
   if (updates.webhook_verify_token !== undefined) patch.webhook_verify_token = updates.webhook_verify_token;
   if (updates.status !== undefined) patch.status = updates.status;
   if (updates.profile_name !== undefined) patch.profile_name = updates.profile_name;

@@ -309,7 +309,7 @@ export async function disconnectAccountHandler(req: AuthRequest, res: Response):
 export async function updateAccountCloudConfig(req: AuthRequest, res: Response): Promise<void> {
   const accountId = req.params.accountId as string;
   const companyId = req.companyId!;
-  const { phone_number, business_account_id, access_token, webhook_verify_token } = req.body;
+  const { phone_number, business_account_id, access_token, app_secret, webhook_verify_token } = req.body;
 
   const existing = await getWhatsAppAccount(companyId, accountId);
   if (!existing) {
@@ -321,9 +321,14 @@ export async function updateAccountCloudConfig(req: AuthRequest, res: Response):
   const trimmedPhoneNumberId =
     typeof business_account_id === 'string' ? business_account_id.trim() : '';
   const trimmedToken = typeof access_token === 'string' ? access_token.trim() : '';
+  const trimmedAppSecret = typeof app_secret === 'string' ? app_secret.trim() : '';
 
   if (!trimmedToken) {
     res.status(400).json({ success: false, error: 'Access Token gerekli' });
+    return;
+  }
+  if (!trimmedAppSecret) {
+    res.status(400).json({ success: false, error: 'Meta App Secret gerekli' });
     return;
   }
   if (!trimmedPhoneNumberId) {
@@ -344,6 +349,7 @@ export async function updateAccountCloudConfig(req: AuthRequest, res: Response):
       phone_number: trimmedPhone,
       business_account_id: trimmedPhoneNumberId,
       access_token: trimmedToken,
+      app_secret: trimmedAppSecret,
       webhook_verify_token,
       status: 'connected',
     });
@@ -356,7 +362,7 @@ export async function updateAccountCloudConfig(req: AuthRequest, res: Response):
       entityId: accountId,
     });
 
-    const { access_token: _, webhook_verify_token: __, ...safe } = account;
+    const { access_token: _, app_secret: __, webhook_verify_token: ___, ...safe } = account;
     res.json({ success: true, data: safe });
   } catch (err) {
     res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'Güncellenemedi' });
@@ -435,7 +441,7 @@ export async function getWhatsAppConfig(req: AuthRequest, res: Response): Promis
   }
 
   const account = await ensureDefaultAccount(req.companyId!);
-  const { access_token: _, webhook_verify_token: __, ...safe } = account;
+  const { access_token: _, app_secret: __, webhook_verify_token: ___, ...safe } = account;
 
   res.json({
     success: true,
@@ -453,12 +459,13 @@ export async function getWhatsAppConfig(req: AuthRequest, res: Response): Promis
 
 export async function updateWhatsAppConfig(req: AuthRequest, res: Response): Promise<void> {
   const account = await ensureDefaultAccount(req.companyId!);
-  const { phone_number, business_account_id, access_token, webhook_verify_token } = req.body;
+  const { phone_number, business_account_id, access_token, app_secret, webhook_verify_token } = req.body;
 
   const updated = await updateWhatsAppAccount(req.companyId!, account.id, {
     phone_number,
     business_account_id,
     access_token,
+    app_secret,
     webhook_verify_token,
     status: access_token ? 'connected' : 'disconnected',
   });
@@ -471,7 +478,7 @@ export async function updateWhatsAppConfig(req: AuthRequest, res: Response): Pro
     entityId: updated.id,
   });
 
-  const { access_token: _, webhook_verify_token: __, ...safe } = updated;
+  const { access_token: _, app_secret: __, webhook_verify_token: ___, ...safe } = updated;
   res.json({ success: true, data: safe });
 }
 

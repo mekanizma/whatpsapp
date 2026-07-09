@@ -16,11 +16,8 @@ import { api } from '@/services/api';
 import { isHighlightedPlan } from '@/lib/plan-format';
 import type { BillingPeriod } from '@/lib/plan-format';
 import type { SubscriptionPlan } from '@/types';
-
-const CATEGORY_KEYS = [
-  'restoran', 'otel', 'rent_a_car', 'guzellik_merkezi', 'klinik',
-  'dis_hekimi', 'emlak', 'universite', 'kurs', 'diger',
-] as const;
+import { CompanyCategorySelect } from '@/components/CompanyCategorySelect';
+import { DEFAULT_COMPANY_CATEGORY } from '@/lib/company-categories';
 
 interface Captcha {
   token: string;
@@ -31,7 +28,7 @@ export function RegisterPage() {
   const { t } = useTranslation();
   const [fullName, setFullName] = useState('');
   const [companyName, setCompanyName] = useState('');
-  const [category, setCategory] = useState<string>('restoran');
+  const [category, setCategory] = useState<string>(DEFAULT_COMPANY_CATEGORY);
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
@@ -171,18 +168,12 @@ export function RegisterPage() {
 
             <div className="space-y-2">
               <Label htmlFor="category">{t('auth.category')}</Label>
-              <select
+              <CompanyCategorySelect
                 id="category"
                 value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="flex h-10 w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary/20"
-              >
-                {CATEGORY_KEYS.map((key) => (
-                  <option key={key} value={key}>
-                    {t(`auth.categories.${key}`)}
-                  </option>
-                ))}
-              </select>
+                onChange={setCategory}
+                className="rounded-md border-slate-300 bg-slate-50 focus:ring-primary/20"
+              />
             </div>
 
             <div className="space-y-2">

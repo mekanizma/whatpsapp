@@ -7,6 +7,11 @@ import { adminClient } from '../database/supabase';
 import { sendMessageToCustomer } from '../whatsapp/whatsapp.service';
 import { normalizePhoneNumber } from '../whatsapp/message.handler';
 import { createCompanySubscription, resolveSubscriptionPlan } from './company-subscription.service';
+import {
+  validateCompanyCategoryForWrite,
+  DEFAULT_COMPANY_CATEGORY,
+  companyCategoryLabelsRecord,
+} from '../constants/company-categories';
 
 export type SignupApplicationStatus = 'pending' | 'reviewed' | 'approved' | 'rejected';
 
@@ -50,18 +55,7 @@ export interface CreateSignupApplicationInput {
   billing_period?: SignupBillingPeriod;
 }
 
-const CATEGORY_LABELS: Record<string, string> = {
-  restoran: 'Kafe & Restoran',
-  otel: 'Otel & Konaklama',
-  rent_a_car: 'Rent a Car',
-  guzellik_merkezi: 'Güzellik Merkezi',
-  klinik: 'Klinik & Sağlık',
-  dis_hekimi: 'Diş Hekimi',
-  emlak: 'Emlak',
-  universite: 'Üniversite & Eğitim',
-  kurs: 'Kurs & Dershane',
-  diger: 'Diğer',
-};
+const CATEGORY_LABELS = companyCategoryLabelsRecord('tr');
 
 function categoryLabel(category: string): string {
   return CATEGORY_LABELS[category] || category;
@@ -189,7 +183,9 @@ export async function createSignupApplication(
   const phone = input.phone?.trim()
     ? normalizePhoneNumber(input.phone.trim()) || input.phone.trim()
     : null;
-  const category = input.category?.trim() || 'diger';
+  const categoryValidated = validateCompanyCategoryForWrite(input.category?.trim() || DEFAULT_COMPANY_CATEGORY);
+  if (!categoryValidated.ok) throw new Error(categoryValidated.error);
+  const category = categoryValidated.category;
   const planId = input.subscription_plan_id?.trim();
   if (!planId) throw new Error('Paket seçimi zorunludur');
 

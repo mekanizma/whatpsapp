@@ -24,6 +24,7 @@ import { CompanyPlanFeatures } from '@/components/CompanyPlanFeatures';
 import type { CompanyDetail, SubscriptionPlan } from '@/types';
 import { localizePlan } from '@/lib/plan-localize';
 import { cn } from '@/lib/utils';
+import { CompanyCategorySelect } from '@/components/CompanyCategorySelect';
 
 const STATUS_VALUES = ['trial', 'active', 'suspended', 'inactive', 'cancelled'];
 
@@ -269,6 +270,13 @@ export function AdminCompanyDetailPage() {
                 <div className="space-y-2">
                   <Label>{t('admin.companyDetail.companyName')}</Label>
                   <Input value={companyForm.company_name} onChange={(e) => setForm({ ...form, company_name: e.target.value })} />
+                </div>
+                <div className="space-y-2">
+                  <Label>{t('admin.companies.category')}</Label>
+                  <CompanyCategorySelect
+                    value={companyForm.category}
+                    onChange={(category) => setForm({ ...form, category })}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>{t('admin.companyDetail.status')}</Label>

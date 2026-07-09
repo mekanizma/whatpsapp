@@ -5,13 +5,69 @@
 
 import { Request, Response } from 'express';
 import { config } from '../config';
+import { adminClient } from '../database/supabase';
 import { processWebhook as defaultProcessWebhook } from '../whatsapp/whatsapp.service';
 import { verifyMetaWebhookSignature } from '../whatsapp/webhook-signature';
 
 /** Overridable in tests */
 export const webhookDeps = {
   processWebhook: defaultProcessWebhook,
+  resolveAppSecret: resolveWebhookAppSecret,
 };
+
+type WebhookPayloadCandidate = {
+  entry?: Array<{
+    changes?: Array<{
+      value?: {
+        metadata?: {
+          phone_number_id?: unknown;
+        };
+      };
+    }>;
+  }>;
+};
+
+function getGlobalAppSecret(): string | undefined {
+  return config.whatsapp.appSecret || process.env.WHATSAPP_APP_SECRET?.trim() || undefined;
+}
+
+function extractPhoneNumberIds(payload: unknown): string[] {
+  const ids = new Set<string>();
+  const candidate = payload as WebhookPayloadCandidate;
+
+  for (const entry of candidate.entry || []) {
+    for (const change of entry.changes || []) {
+      const phoneNumberId = change.value?.metadata?.phone_number_id;
+      if (typeof phoneNumberId === 'string' && phoneNumberId.trim()) {
+        ids.add(phoneNumberId.trim());
+      }
+    }
+  }
+
+  return [...ids];
+}
+
+async function resolveWebhookAppSecret(payload: unknown): Promise<string | undefined> {
+  const phoneNumberIds = extractPhoneNumberIds(payload);
+  if (!phoneNumberIds.length) return getGlobalAppSecret();
+
+  const { data, error } = await adminClient
+    .from('whatsapp_configs')
+    .select('app_secret')
+    .in('business_account_id', phoneNumberIds)
+    .eq('status', 'connected');
+
+  if (error) {
+    console.warn(`[Webhook] App secret lookup failed: ${error.message}`);
+    return getGlobalAppSecret();
+  }
+
+  const accountSecret = (data || [])
+    .map((row) => (row.app_secret as string | null | undefined)?.trim())
+    .find(Boolean);
+
+  return accountSecret || getGlobalAppSecret();
+}
 
 export function verifyWebhook(req: Request, res: Response): void {
   const mode = req.query['hub.mode'];
@@ -29,10 +85,7 @@ export function verifyWebhook(req: Request, res: Response): void {
 
 export async function handleWebhook(req: Request, res: Response): Promise<void> {
   const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
-  const appSecret =
-    config.whatsapp.appSecret ||
-    process.env.WHATSAPP_APP_SECRET?.trim() ||
-    undefined;
+  const appSecret = await webhookDeps.resolveAppSecret(req.body);
   const verification = verifyMetaWebhookSignature(
     req.rawBody,
     req.headers['x-hub-signature-256'],

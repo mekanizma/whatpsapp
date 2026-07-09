@@ -8,6 +8,7 @@ import { adminClient } from '../database/supabase';
 import { demoCompany, demoPlans, demoAiConversationAddons } from '../demo/mockData';
 import { AuthRequest, isDemoSession } from '../middleware/auth.middleware';
 import { logActivity } from '../services/log.service';
+import { DEFAULT_COMPANY_CATEGORY, validateCompanyCategoryForWrite } from '../constants/company-categories';
 import { createImpersonationToken } from '../services/impersonation.service';
 import {
   getExtendedPlatformStats,
@@ -213,11 +214,17 @@ export async function createCompany(req: AuthRequest, res: Response): Promise<vo
 
   const billingPeriod = normalizeBillingPeriod(billing_period);
 
+  const categoryValidated = validateCompanyCategoryForWrite(category || DEFAULT_COMPANY_CATEGORY);
+  if (!categoryValidated.ok) {
+    res.status(400).json({ success: false, error: categoryValidated.error });
+    return;
+  }
+
   const { data: company, error } = await adminClient
     .from('companies')
     .insert({
       company_name: company_name.trim(),
-      category: category || 'diger',
+      category: categoryValidated.category,
       phone: phone || null,
       email: email || null,
       address: address || null,

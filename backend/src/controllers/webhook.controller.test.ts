@@ -14,6 +14,7 @@ const APP_SECRET = 'test-webhook-app-secret';
 
 let processWebhookCalls = 0;
 const originalProcessWebhook = webhookDeps.processWebhook;
+const originalResolveAppSecret = webhookDeps.resolveAppSecret;
 
 function stubProcessWebhook() {
   processWebhookCalls = 0;
@@ -24,6 +25,10 @@ function stubProcessWebhook() {
 
 function restoreProcessWebhookStub() {
   webhookDeps.processWebhook = originalProcessWebhook;
+}
+
+function restoreResolveAppSecretStub() {
+  webhookDeps.resolveAppSecret = originalResolveAppSecret;
 }
 
 function signBody(body: Buffer, secret = APP_SECRET): string {
@@ -119,6 +124,7 @@ describe('handleWebhook', () => {
 
   afterEach(() => {
     restoreProcessWebhookStub();
+    restoreResolveAppSecretStub();
   });
 
   it('returns 200 and calls processWebhook once for a valid signature', async () => {
@@ -176,6 +182,31 @@ describe('handleWebhook', () => {
 
     assert.equal(statusCode(), 401);
     assert.equal(processWebhookCalls, 0);
+  });
+
+  it('uses the account-specific app secret when resolving webhook signatures', async () => {
+    const accountSecret = 'second-company-app-secret';
+    const rawBody = Buffer.from(
+      JSON.stringify({
+        object: 'whatsapp_business_account',
+        entry: [{
+          changes: [{
+            value: { metadata: { phone_number_id: '1234567890' }, messages: [] },
+          }],
+        }],
+      }),
+      'utf8'
+    );
+    webhookDeps.resolveAppSecret = async () => accountSecret;
+    const { req, res, statusCode } = createMockReqRes({
+      rawBody,
+      signature: signBody(rawBody, accountSecret),
+    });
+
+    await handleWebhook(req, res);
+
+    assert.equal(statusCode(), 200);
+    assert.equal(processWebhookCalls, 1);
   });
 });
 

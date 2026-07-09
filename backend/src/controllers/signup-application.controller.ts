@@ -5,6 +5,7 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth.middleware';
 import { logActivity } from '../services/log.service';
+import { validateCompanyCategoryForWrite, DEFAULT_COMPANY_CATEGORY } from '../constants/company-categories';
 import {
   createSignupApplication,
   listSignupApplicationsAdmin,
@@ -25,7 +26,13 @@ export async function submitSignupApplication(req: Request, res: Response): Prom
   const full_name = String(req.body?.full_name || '').trim();
   const email = String(req.body?.email || '').trim();
   const phone = String(req.body?.phone || '').trim();
-  const category = String(req.body?.category || 'diger').trim();
+  const categoryRaw = String(req.body?.category || DEFAULT_COMPANY_CATEGORY).trim();
+  const categoryValidated = validateCompanyCategoryForWrite(categoryRaw);
+  if (!categoryValidated.ok) {
+    res.status(400).json({ success: false, error: categoryValidated.error });
+    return;
+  }
+  const category = categoryValidated.category;
   const subscription_plan_id = String(req.body?.subscription_plan_id || '').trim();
   const billing_period = String(req.body?.billing_period || 'monthly').trim();
   const captcha_token = String(req.body?.captcha_token || '');

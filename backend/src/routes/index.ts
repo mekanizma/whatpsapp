@@ -23,6 +23,7 @@ import * as ecommerceCtrl from '../controllers/ecommerce.controller';
 import * as platformSupportCtrl from '../controllers/platform-support.controller';
 import * as referenceLogosCtrl from '../controllers/reference-logos.controller';
 import * as signupApplicationCtrl from '../controllers/signup-application.controller';
+import { getPublicCompanyCategories } from '../controllers/public-company-categories.controller';
 import { companyLogoUpload, knowledgeFileUpload, messageImageUpload, referenceLogoUpload } from '../middleware/upload.middleware';
 
 const router = Router();
@@ -297,6 +298,7 @@ router.delete('/appointments/:id', authenticate, requireRole('company_admin', 's
 
 // Public (kimlik doğrulama gerektirmeyen) uç noktalar
 router.get('/public/plans', asyncHandler(subscriptionCtrl.getPublicPlans));
+router.get('/public/company-categories', asyncHandler(getPublicCompanyCategories));
 router.get('/public/reference-logos', asyncHandler(referenceLogosCtrl.getPublicReferenceLogos));
 router.get('/public/signup-captcha', asyncHandler(signupApplicationCtrl.getSignupCaptcha));
 router.post('/public/signup-applications', asyncHandler(signupApplicationCtrl.submitSignupApplication));

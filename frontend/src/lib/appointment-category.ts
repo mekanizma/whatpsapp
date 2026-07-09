@@ -2,15 +2,14 @@
  * Randevu sağlayıcı alanı — işletme kategorisine göre (takvim UI)
  */
 
-export type CompanyCategory =
-  | 'universite' | 'klinik' | 'dis_hekimi' | 'guzellik_merkezi'
-  | 'emlak' | 'rent_a_car' | 'otel' | 'restoran' | 'kurs' | 'diger';
-
-const MEDICAL_CATEGORIES: CompanyCategory[] = ['klinik', 'dis_hekimi'];
+import {
+  MEDICAL_PROVIDER_CATEGORIES,
+  type CompanyCategory,
+} from './company-categories';
 
 export function shouldAskAppointmentProvider(category?: string | null): boolean {
   if (!category) return false;
-  return MEDICAL_CATEGORIES.includes(category as CompanyCategory);
+  return MEDICAL_PROVIDER_CATEGORIES.includes(category as CompanyCategory);
 }
 
 export function getCalendarProviderLabelKey(category?: string | null): string | null {
@@ -34,3 +33,5 @@ export function isGenericAppointmentTitle(title?: string | null): boolean {
   const trimmed = title?.trim().toLowerCase() || '';
   return !trimmed || GENERIC_TITLES.has(trimmed);
 }
+
+export type { CompanyCategory } from './company-categories';

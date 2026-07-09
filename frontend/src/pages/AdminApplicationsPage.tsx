@@ -16,6 +16,7 @@ import {
   Button, Input, Label, Textarea, Card, CardContent, CardHeader, CardTitle,
   Spinner, Badge,
 } from '@/components/ui';
+import { CompanyCategoryBadge, useCompanyCategoryLabel } from '@/components/CompanyCategoryBadge';
 import type { PlatformStats, SignupApplication } from '@/types';
 import { cn } from '@/lib/utils';
 import { localizePlan } from '@/lib/plan-localize';
@@ -57,6 +58,7 @@ export function AdminApplicationsPage() {
 
   const applications = data?.data || [];
   const selected = applications.find((a) => a.id === selectedId) || null;
+  const selectedCategoryLabel = useCompanyCategoryLabel(selected?.category);
 
   const [provisionMsg, setProvisionMsg] = useState<{ type: 'ok' | 'err'; text: string; companyId?: string } | null>(null);
 
@@ -208,6 +210,7 @@ export function AdminApplicationsPage() {
                       <div className="min-w-0">
                         <p className="truncate font-semibold text-slate-900">{app.company_name}</p>
                         <p className="truncate text-xs text-slate-500">{app.full_name}</p>
+                        <CompanyCategoryBadge category={app.category} className="mt-1" />
                       </div>
                       <Badge variant={statusBadge[app.status] || 'default'}>
                         {t(`admin.applications.status.${app.status}`)}
@@ -247,7 +250,7 @@ export function AdminApplicationsPage() {
                     <InfoRow
                       icon={Building2}
                       label={t('auth.category')}
-                      value={t(`auth.categories.${selected.category}`, { defaultValue: selected.category })}
+                      value={selectedCategoryLabel || '—'}
                     />
                     <InfoRow icon={User} label={t('auth.fullName')} value={selected.full_name} />
                     <InfoRow icon={Package} label={t('admin.applications.selectedPlan')} value={selectedPlanLabel} />

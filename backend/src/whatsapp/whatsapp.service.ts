@@ -523,6 +523,7 @@ export async function disconnectAccount(
       .update({
         status: 'disconnected',
         access_token: null,
+        app_secret: null,
         phone_number: null,
         business_account_id: null,
         profile_name: null,

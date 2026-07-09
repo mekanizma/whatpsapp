@@ -23,16 +23,12 @@ import {
 } from '@/components/ui';
 import { useAuthStore } from '@/store/authStore';
 import { supabase, supabaseConfigured } from '@/services/supabase';
-import { api } from '@/services/api';
+import { CompanyCategorySelect } from '@/components/CompanyCategorySelect';
+import { DEFAULT_COMPANY_CATEGORY } from '@/lib/company-categories';
 import { isDemoMode } from '@/lib/env';
 import type { Company, NotificationUser } from '@/types';
 
 const CUSTOM_INSTRUCTIONS_MAX_LENGTH = 1500;
-
-const CATEGORY_VALUES = [
-  'universite', 'klinik', 'dis_hekimi', 'guzellik_merkezi', 'emlak',
-  'rent_a_car', 'otel', 'restoran', 'kurs', 'diger',
-];
 
 export function SettingsPage() {
   const { t } = useTranslation();
@@ -46,7 +42,7 @@ export function SettingsPage() {
   const [companyPhone, setCompanyPhone] = useState(company?.phone || '');
   const [companyEmail, setCompanyEmail] = useState(company?.email || '');
   const [companyAddress, setCompanyAddress] = useState(company?.address || '');
-  const [companyCategory, setCompanyCategory] = useState(company?.category || 'diger');
+  const [companyCategory, setCompanyCategory] = useState(company?.category || DEFAULT_COMPANY_CATEGORY);
   const [customInstructions, setCustomInstructions] = useState(company?.custom_instructions || '');
 
   const customInstructionsTrimmed = customInstructions.trim();
@@ -78,7 +74,7 @@ export function SettingsPage() {
     setCompanyPhone(company?.phone || '');
     setCompanyEmail(company?.email || '');
     setCompanyAddress(company?.address || '');
-    setCompanyCategory(company?.category || 'diger');
+    setCompanyCategory(company?.category || DEFAULT_COMPANY_CATEGORY);
     setCustomInstructions(company?.custom_instructions || '');
   }, [company]);
 
@@ -441,16 +437,12 @@ export function SettingsPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="companyCategory">{t('settings.category')}</Label>
-                <select
+                <CompanyCategorySelect
                   id="companyCategory"
                   value={companyCategory}
-                  onChange={(e) => setCompanyCategory(e.target.value)}
-                  className="flex h-10 w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm shadow-sm focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/25"
-                >
-                  {CATEGORY_VALUES.map((value) => (
-                    <option key={value} value={value}>{t(`common.categories.${value}`)}</option>
-                  ))}
-                </select>
+                  onChange={setCompanyCategory}
+                  className="rounded-xl border-slate-200 px-3.5 shadow-sm focus:border-primary/40 focus:ring-primary/25"
+                />
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">

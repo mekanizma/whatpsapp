@@ -23,6 +23,12 @@ import {
   type BillingPeriod,
 } from './company-subscription.service';
 import { findAuthUserByEmail, formatServiceError, isDuplicateAuthEmailError } from './staff.service';
+import {
+  validateCompanyCategoryForWrite,
+} from '../constants/company-categories';
+import { invalidateStaticSystemPromptCache } from '../ai/admin-prompt-builder';
+import { invalidateCompanyCache } from '../ai/openai.service';
+import { clearCompanyCache } from '../ai/ai-cache.service';
 
 export async function getExtendedPlatformStats() {
   const monthStart = getMonthStartISO();
@@ -208,14 +214,53 @@ export async function updateCompanyAdmin(
     status?: string;
   }
 ) {
+  const patch: Record<string, unknown> = {};
+  let categoryChanged = false;
+
+  if (updates.company_name !== undefined) {
+    patch.company_name = updates.company_name.trim();
+  }
+  if (updates.category !== undefined) {
+    const validated = validateCompanyCategoryForWrite(updates.category);
+    if (!validated.ok) throw new Error(validated.error);
+    patch.category = validated.category;
+    categoryChanged = true;
+  }
+  if (updates.phone !== undefined) {
+    patch.phone = updates.phone?.trim() || null;
+  }
+  if (updates.email !== undefined) {
+    patch.email = updates.email?.trim() || null;
+  }
+  if (updates.address !== undefined) {
+    patch.address = updates.address?.trim() || null;
+  }
+  if (updates.subscription_plan !== undefined) {
+    patch.subscription_plan = updates.subscription_plan;
+  }
+  if (updates.status !== undefined) {
+    patch.status = updates.status;
+  }
+
+  if (!Object.keys(patch).length) {
+    throw new Error('Güncellenecek alan bulunamadı');
+  }
+
   const { data, error } = await adminClient
     .from('companies')
-    .update(updates)
+    .update(patch)
     .eq('id', companyId)
     .select()
     .single();
 
   if (error) throw new Error(error.message);
+
+  if (categoryChanged) {
+    invalidateStaticSystemPromptCache(companyId);
+    invalidateCompanyCache(companyId);
+    await clearCompanyCache(companyId);
+  }
+
   return data;
 }
 

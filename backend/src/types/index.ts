@@ -3,10 +3,10 @@
  * Shared types for database entities and API responses
  */
 
+import type { CompanyCategory as CompanyCategorySlug } from '../constants/company-categories';
+
 export type UserRole = 'super_admin' | 'company_admin' | 'staff';
-export type CompanyCategory =
-  | 'universite' | 'klinik' | 'dis_hekimi' | 'guzellik_merkezi'
-  | 'emlak' | 'rent_a_car' | 'otel' | 'restoran' | 'kurs' | 'diger';
+export type CompanyCategory = CompanyCategorySlug;
 export type CompanyStatus = 'active' | 'inactive' | 'suspended' | 'trial';
 export type SubscriptionPlanType = string;
 export type WhatsAppStatus = 'connected' | 'disconnected' | 'pending' | 'error';
@@ -57,6 +57,7 @@ export interface WhatsAppConfig {
   profile_name?: string | null;
   business_account_id: string | null;
   access_token: string | null;
+  app_secret: string | null;
   webhook_verify_token: string | null;
   status: WhatsAppStatus;
   is_active?: boolean;

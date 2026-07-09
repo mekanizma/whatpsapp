@@ -2,11 +2,9 @@
  * Randevu sağlayıcı (doktor/hekim) — işletme kategorisine göre
  */
 
-import type { CompanyCategory } from '../types';
+import type { CompanyCategory } from '../constants/company-categories';
+import { MEDICAL_PROVIDER_CATEGORIES } from '../constants/company-categories';
 import type { ConversationLang } from '../ai/language.service';
-
-/** Klinik / hastane / diş hekimi — doktor tercihi sorulur */
-const MEDICAL_PROVIDER_CATEGORIES: CompanyCategory[] = ['klinik', 'dis_hekimi'];
 
 export function shouldAskAppointmentProvider(category?: string | null): boolean {
   if (!category) return false;

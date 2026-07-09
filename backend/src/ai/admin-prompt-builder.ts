@@ -9,6 +9,7 @@ import {
   getActivePromptsVersionKey,
   renderPromptTemplate,
 } from '../services/prompt.service';
+import { getCompanyCategoryLabel } from '../constants/company-categories';
 import { ConversationLang, DEFAULT_LANGUAGE_BLOCK_FALLBACK, getLanguageHintName } from './language.service';
 import { TRANSFER_MARKER } from './system-prompt';
 
@@ -89,9 +90,10 @@ export function invalidateStaticSystemPromptCache(companyId?: string): void {
 }
 
 function buildStaticTemplateVars(company: Company): Record<string, string> {
+  const categorySlug = company.category || '';
   return {
     companyName: company.company_name,
-    category: company.category || '',
+    category: getCompanyCategoryLabel(categorySlug, 'tr') || categorySlug,
     transferMarker: TRANSFER_MARKER,
     ...STATIC_DYNAMIC_PLACEHOLDERS,
   };

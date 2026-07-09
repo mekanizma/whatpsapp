@@ -61,6 +61,13 @@ interface AccountsResponse {
   webhook_verify_token?: string | null;
 }
 
+interface CloudApiFormState {
+  phone_number: string;
+  business_account_id: string;
+  access_token: string;
+  app_secret: string;
+}
+
 export function WhatsAppPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -68,7 +75,7 @@ export function WhatsAppPage() {
   const [expandedAccount, setExpandedAccount] = useState<string | null>(null);
   const [newDeptName, setNewDeptName] = useState('');
   const [testState, setTestState] = useState<Record<string, { phone: string; message: string; feedback?: { type: 'success' | 'error'; text: string } }>>({});
-  const [cloudForms, setCloudForms] = useState<Record<string, { phone_number: string; business_account_id: string; access_token: string }>>({});
+  const [cloudForms, setCloudForms] = useState<Record<string, CloudApiFormState>>({});
   const [connectionModes, setConnectionModes] = useState<Record<string, 'qr' | 'api'>>({});
   const [cloudFeedback, setCloudFeedback] = useState<Record<string, { type: 'success' | 'error'; text: string }>>({});
   const [copied, setCopied] = useState<'url' | 'token' | null>(null);
@@ -148,7 +155,7 @@ export function WhatsAppPage() {
   });
 
   const cloudConnectMutation = useMutation({
-    mutationFn: ({ accountId, form }: { accountId: string; form: { phone_number: string; business_account_id: string; access_token: string } }) =>
+    mutationFn: ({ accountId, form }: { accountId: string; form: CloudApiFormState }) =>
       api.put(`/whatsapp/accounts/${accountId}/config`, form),
     onSuccess: (_data, { accountId }) => {
       setCloudFeedback((f) => ({
@@ -431,10 +438,10 @@ interface AccountCardProps {
   supportsCloudApi: boolean;
   onConnectionModeChange: (mode: 'qr' | 'api') => void;
   activeQr: QrSession | null;
-  cloudForm?: { phone_number: string; business_account_id: string; access_token: string };
+  cloudForm?: CloudApiFormState;
   cloudFeedback?: { type: 'success' | 'error'; text: string };
   testState?: { phone: string; message: string; feedback?: { type: 'success' | 'error'; text: string } };
-  onCloudFormChange: (form: { phone_number: string; business_account_id: string; access_token: string }) => void;
+  onCloudFormChange: (form: CloudApiFormState) => void;
   onTestChange: (state: { phone: string; message: string }) => void;
   onStartQr: () => void;
   onDisconnect: () => void;
@@ -442,7 +449,7 @@ interface AccountCardProps {
   onToggleActive: (active: boolean) => void;
   onSetDefault: () => void;
   onDepartmentsChange: (ids: string[]) => void;
-  onCloudConnect: (form: { phone_number: string; business_account_id: string; access_token: string }) => void;
+  onCloudConnect: (form: CloudApiFormState) => void;
   onCancelQr: () => void;
   onRefreshQr: () => void;
   isQrPending: boolean;
@@ -652,6 +659,7 @@ function AccountCard({
                     ? account.business_account_id
                     : '',
                 access_token: '',
+                app_secret: '',
               }}
               onChange={onCloudFormChange}
               onConnect={onCloudConnect}
@@ -774,9 +782,9 @@ function CloudApiForm({
   account, form, onChange, onConnect, onDisconnect, isDisconnecting, isPending, feedback,
 }: {
   account: WhatsAppAccount;
-  form: { phone_number: string; business_account_id: string; access_token: string };
-  onChange: (f: { phone_number: string; business_account_id: string; access_token: string }) => void;
-  onConnect: (f: { phone_number: string; business_account_id: string; access_token: string }) => void;
+  form: CloudApiFormState;
+  onChange: (f: CloudApiFormState) => void;
+  onConnect: (f: CloudApiFormState) => void;
   onDisconnect: () => void;
   isDisconnecting: boolean;
   isPending?: boolean;
@@ -787,7 +795,8 @@ function CloudApiForm({
   const canSubmit =
     form.phone_number.trim() &&
     form.business_account_id.trim() &&
-    form.access_token.trim();
+    form.access_token.trim() &&
+    form.app_secret.trim();
 
   return (
     <div className="space-y-3 rounded-lg border p-4">
@@ -809,6 +818,11 @@ function CloudApiForm({
         {isConnected && (
           <p className="text-xs text-gray-500">{t('whatsapp.accessTokenKeepHint')}</p>
         )}
+      </div>
+      <div className="space-y-2">
+        <Label>{t('whatsapp.appSecret')}</Label>
+        <Input type="password" value={form.app_secret} onChange={(e) => onChange({ ...form, app_secret: e.target.value })} placeholder={t('whatsapp.appSecretPlaceholder')} />
+        <p className="text-xs text-gray-500">{t('whatsapp.appSecretHint')}</p>
       </div>
       {feedback && (
         <div className={cn('rounded-lg p-2 text-sm', feedback.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600')}>

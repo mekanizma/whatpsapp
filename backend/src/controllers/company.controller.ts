@@ -24,6 +24,41 @@ import {
   deleteCompanyLogoFiles,
   uploadCompanyLogoFile,
 } from '../services/company-logo.service';
+import { validateCompanyCategoryForWrite } from '../constants/company-categories';
+
+function buildCompanyUpdatePayload(body: Record<string, unknown>): {
+  payload: Record<string, unknown>;
+  categoryChanged: boolean;
+} {
+  const payload: Record<string, unknown> = {};
+  let categoryChanged = false;
+
+  if (body.company_name !== undefined) {
+    payload.company_name = String(body.company_name).trim();
+  }
+  if (body.category !== undefined) {
+    const validated = validateCompanyCategoryForWrite(body.category);
+    if (!validated.ok) {
+      throw new Error(validated.error);
+    }
+    payload.category = validated.category;
+    categoryChanged = true;
+  }
+  if (body.phone !== undefined) {
+    payload.phone = body.phone ? String(body.phone).trim() : null;
+  }
+  if (body.email !== undefined) {
+    payload.email = body.email ? String(body.email).trim() : null;
+  }
+  if (body.address !== undefined) {
+    payload.address = body.address ? String(body.address).trim() : null;
+  }
+  if (body.logo !== undefined) {
+    payload.logo = body.logo ?? null;
+  }
+
+  return { payload, categoryChanged };
+}
 
 export async function getCompany(req: AuthRequest, res: Response): Promise<void> {
   const companyId = resolveAuthorizedCompanyId(req, req.params.id as string | undefined);
@@ -46,7 +81,7 @@ export async function getCompany(req: AuthRequest, res: Response): Promise<void>
 export async function updateCompany(req: AuthRequest, res: Response): Promise<void> {
   const companyId = resolveAuthorizedCompanyId(req, req.params.id as string | undefined);
   if (!denyUnlessCompanyAccess(req, res, companyId)) return;
-  const { company_name, category, phone, email, address, working_hours, timezone, logo, custom_instructions } = req.body;
+  const { working_hours, timezone, custom_instructions } = req.body;
 
   let validatedWorkingHours: Record<string, unknown> | undefined;
   if (working_hours !== undefined) {
@@ -82,31 +117,52 @@ export async function updateCompany(req: AuthRequest, res: Response): Promise<vo
     }
   }
 
+  let updatePayload: Record<string, unknown>;
+  let categoryChanged = false;
+  try {
+    const built = buildCompanyUpdatePayload(req.body as Record<string, unknown>);
+    updatePayload = built.payload;
+    categoryChanged = built.categoryChanged;
+  } catch (err) {
+    res.status(400).json({
+      success: false,
+      error: err instanceof Error ? err.message : 'Geçersiz şirket bilgisi',
+    });
+    return;
+  }
+
   if (isDemoSession(req)) {
-    if (company_name !== undefined) demoCompany.company_name = company_name;
-    if (category !== undefined) demoCompany.category = category;
-    if (phone !== undefined) demoCompany.phone = phone;
-    if (email !== undefined) demoCompany.email = email;
-    if (address !== undefined) demoCompany.address = address;
+    if (updatePayload.company_name !== undefined) {
+      demoCompany.company_name = String(updatePayload.company_name);
+    }
+    if (updatePayload.category !== undefined) {
+      demoCompany.category = updatePayload.category as typeof demoCompany.category;
+    }
+    if (updatePayload.phone !== undefined) {
+      demoCompany.phone = updatePayload.phone as string | null;
+    }
+    if (updatePayload.email !== undefined) {
+      demoCompany.email = updatePayload.email as string | null;
+    }
+    if (updatePayload.address !== undefined) {
+      demoCompany.address = updatePayload.address as string | null;
+    }
     if (validatedWorkingHours !== undefined) demoCompany.working_hours = validatedWorkingHours;
     if (validatedTimezone !== undefined) demoCompany.timezone = validatedTimezone;
-    if (logo !== undefined) demoCompany.logo = logo;
+    if (updatePayload.logo !== undefined) demoCompany.logo = updatePayload.logo as string | null;
     if (customInstructionsProvided) demoCompany.custom_instructions = validatedCustomInstructions ?? null;
     res.json({ success: true, data: demoCompany });
     return;
   }
 
-  const updatePayload: Record<string, unknown> = {
-    company_name,
-    category,
-    phone,
-    email,
-    address,
-    logo,
-  };
   if (validatedWorkingHours !== undefined) updatePayload.working_hours = validatedWorkingHours;
   if (validatedTimezone !== undefined) updatePayload.timezone = validatedTimezone;
   if (customInstructionsProvided) updatePayload.custom_instructions = validatedCustomInstructions;
+
+  if (!Object.keys(updatePayload).length) {
+    res.status(400).json({ success: false, error: 'Güncellenecek alan bulunamadı' });
+    return;
+  }
 
   const { data, error } = await adminClient
     .from('companies')
@@ -120,7 +176,7 @@ export async function updateCompany(req: AuthRequest, res: Response): Promise<vo
     return;
   }
 
-  if (customInstructionsProvided) {
+  if (customInstructionsProvided || categoryChanged) {
     invalidateStaticSystemPromptCache(companyId as string);
     invalidateCompanyCache(companyId as string);
     await clearCompanyCache(companyId as string);

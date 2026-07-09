@@ -8,6 +8,9 @@ import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Search, ChevronRight, Pause, Play, Smartphone } from 'lucide-react';
 import { api } from '@/services/api';
+import { CompanyCategorySelect } from '@/components/CompanyCategorySelect';
+import { CompanyCategoryBadge } from '@/components/CompanyCategoryBadge';
+import { DEFAULT_COMPANY_CATEGORY } from '@/lib/company-categories';
 import { CompanyPlanFeatures } from '@/components/CompanyPlanFeatures';
 import { PageHeader } from '@/components/PageHeader';
 import {
@@ -17,11 +20,6 @@ import {
 import type { AdminCompany, SubscriptionPlan } from '@/types';
 import { localizePlan } from '@/lib/plan-localize';
 import { cn } from '@/lib/utils';
-
-const CATEGORY_VALUES = [
-  'universite', 'klinik', 'dis_hekimi', 'guzellik_merkezi', 'emlak',
-  'rent_a_car', 'otel', 'restoran', 'kurs', 'diger',
-];
 
 function UsageBar({ used, limit }: { used: number; limit: number }) {
   const pct = limit > 0 ? Math.min(100, Math.round((used / limit) * 100)) : 0;
@@ -55,7 +53,7 @@ export function AdminCompaniesPage() {
   const [search, setSearch] = useState('');
   const [form, setForm] = useState({
     company_name: '',
-    category: 'diger',
+    category: DEFAULT_COMPANY_CATEGORY,
     email: '',
     phone: '',
     subscription_plan_id: '',
@@ -109,7 +107,7 @@ export function AdminCompaniesPage() {
       setAdminUserWarning(null);
       setShowForm(false);
       setForm({
-        company_name: '', category: 'diger', email: '', phone: '',
+        company_name: '', category: DEFAULT_COMPANY_CATEGORY, email: '', phone: '',
         subscription_plan_id: activePlans[0]?.id || '',
         billing_period: 'monthly',
         admin_full_name: '', admin_email: '', admin_password: '',
@@ -164,15 +162,10 @@ export function AdminCompaniesPage() {
               </div>
               <div className="space-y-2">
                 <Label>{t('admin.companies.category')}</Label>
-                <select
-                  className="flex h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm"
+                <CompanyCategorySelect
                   value={form.category}
-                  onChange={(e) => setForm({ ...form, category: e.target.value })}
-                >
-                  {CATEGORY_VALUES.map((value) => (
-                    <option key={value} value={value}>{t(`common.categories.${value}`)}</option>
-                  ))}
-                </select>
+                  onChange={(category) => setForm({ ...form, category })}
+                />
               </div>
               <div className="space-y-2">
                 <Label>{t('admin.companies.plan')}</Label>
@@ -301,7 +294,7 @@ export function AdminCompaniesPage() {
                         <Link to={`/admin/companies/${company.id}`} className="text-lg font-semibold text-slate-900 hover:text-teal-600">
                           {company.company_name}
                         </Link>
-                        <Badge variant="info">{t(`common.categories.${company.category}`, { defaultValue: company.category })}</Badge>
+                        <CompanyCategoryBadge category={company.category} />
                         <Badge variant={company.status === 'active' || company.status === 'trial' ? 'success' : 'warning'}>
                           {t(`common.status.${company.status}`, { defaultValue: company.status })}
                         </Badge>
