@@ -165,7 +165,7 @@ ADMIN_EMAIL=admin@example.com ADMIN_PASSWORD=xxx npx tsx src/scripts/setup-supab
 | Log boş / entrypoint hatası | Storages → `/data/sessions` mount; entrypoint chown uyarısı normal olabilir |
 | Migration sonrası restart | `035`, `036`, `037` migration'larını Supabase'de çalıştırın |
 | Build'de VITE hatası | `VITE_*` Build Variable olarak işaretli mi |
-| Build OOM / exit 255 | Sunucuda en az 2 GB RAM; Dockerfile `NODE_OPTIONS` kullanır |
+| Build OOM / exit 255 | Build tamamlanıp `exporting to image` aşamasında düşüyorsa **disk dolu** olabilir; sunucuda `docker system prune -af` çalıştırın, en az 5 GB boş alan bırakın. RAM için en az 2 GB. `NODE_ENV` değişkenini yalnızca **Runtime** olarak işaretleyin (Build Variable kapalı). |
 | Frontend build düşüyor | Logda `heap out of memory` — Coolify build kaynaklarını artırın |
 
 ---

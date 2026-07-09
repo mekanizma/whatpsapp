@@ -1,42 +1,51 @@
 # syntax=docker/dockerfile:1
 # Coolify — tek konteyner: frontend (static) + backend API + WhatsApp QR (Baileys)
 
-FROM node:20-bookworm-slim AS builder
+FROM node:20-bookworm-slim AS backend-builder
 
-WORKDIR /app
+WORKDIR /app/backend
 
-# Coolify build-time NODE_ENV=production devDependencies'ı (tsc, vite) atlar
+# Coolify build-time NODE_ENV=production uyarısını geçersiz kıl
 ENV NODE_ENV=development
-
-# Küçük VPS / Coolify build sunucularında OOM önleme
-ENV NODE_OPTIONS=--max-old-space-size=2048
+ENV NODE_OPTIONS=--max-old-space-size=1536
 
 RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ \
   && rm -rf /var/lib/apt/lists/*
 
-COPY package.json package-lock.json ./
-COPY backend/package.json backend/package-lock.json ./backend/
-COPY frontend/package.json frontend/package-lock.json ./frontend/
-
+COPY backend/package.json backend/package-lock.json ./
 RUN npm ci
 
-COPY backend ./backend
-COPY frontend ./frontend
+COPY backend ./
+RUN npm run build \
+  && npm ci --omit=dev \
+  && npm cache clean --force \
+  && rm -rf src tsconfig.json
+
+FROM node:20-bookworm-slim AS frontend-builder
+
+WORKDIR /app/frontend
+
+ENV NODE_ENV=development
+ENV NODE_OPTIONS=--max-old-space-size=1536
+
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+
+COPY frontend ./
 
 ARG VITE_SUPABASE_URL
 ARG VITE_SUPABASE_ANON_KEY
 ARG VITE_DEMO_MODE=false
+ARG VITE_LIVE_DEMO_WHATSAPP_PHONE
 ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
 ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
 ENV VITE_DEMO_MODE=$VITE_DEMO_MODE
+ENV VITE_LIVE_DEMO_WHATSAPP_PHONE=$VITE_LIVE_DEMO_WHATSAPP_PHONE
 
-# Sıralı build — bellek zirvesini düşürür (tsc + vite aynı anda değil)
-RUN npm run build --prefix backend
-RUN npm run build --prefix frontend
-
-# Runner aşamasında paralel npm ci yapma (build ile RAM yarışmasını önler)
-RUN cd backend && npm ci --omit=dev && npm cache clean --force
+RUN npm run build \
+  && rm -rf node_modules src public \
+  && npm cache clean --force
 
 FROM node:20-bookworm-slim AS runner
 
@@ -58,10 +67,10 @@ RUN apt-get update \
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-COPY --from=builder /app/backend/package.json /app/backend/package-lock.json ./backend/
-COPY --from=builder /app/backend/node_modules ./backend/node_modules
-COPY --from=builder /app/backend/dist ./backend/dist
-COPY --from=builder /app/frontend/dist ./frontend/dist
+COPY --from=backend-builder /app/backend/package.json /app/backend/package-lock.json ./backend/
+COPY --from=backend-builder /app/backend/node_modules ./backend/node_modules
+COPY --from=backend-builder /app/backend/dist ./backend/dist
+COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
 
 EXPOSE 3001
 
