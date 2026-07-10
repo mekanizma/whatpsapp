@@ -3,7 +3,7 @@
  */
 
 import { create } from 'zustand';
-import { supabase, supabaseConfigured } from '@/services/supabase';
+import { supabase, supabaseConfigured, syncSupabaseRealtimeAuth } from '@/services/supabase';
 import { isDemoMode } from '@/lib/env';
 import { api, setDemoToken, clearDemoToken, setImpersonateToken, clearImpersonateToken, clearImpersonateCompanyId } from '@/services/api';
 import i18n from '@/i18n';
@@ -136,6 +136,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       password,
     });
     if (error) throw new Error(mapLoginError(error));
+
+    await syncSupabaseRealtimeAuth();
 
     clearImpersonateToken();
     clearImpersonateCompanyId();
@@ -327,6 +329,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
+        await syncSupabaseRealtimeAuth();
         await get().fetchProfile();
       } else {
         set({ isLoading: false });

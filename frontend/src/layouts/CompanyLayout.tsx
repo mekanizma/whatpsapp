@@ -40,8 +40,8 @@ const navGroups: { sectionKey: string; items: NavItem[] }[] = [
     sectionKey: 'layout.navSections.communication',
     items: [
       { to: '/panel/messages', icon: MessageSquare, labelKey: 'layout.nav.messages', roles: ['company_admin', 'staff'], module: 'messages', staffNav: 'messages' },
+      { to: '/panel/tickets', icon: Ticket, labelKey: 'layout.nav.tickets', roles: ['company_admin', 'staff'], module: 'tickets', staffNav: 'tickets' },
       { to: '/panel/customers', icon: UserRound, labelKey: 'layout.nav.customers', roles: ['company_admin'], module: 'customers' },
-      { to: '/panel/whatsapp', icon: Smartphone, labelKey: 'layout.nav.whatsapp', roles: ['company_admin'], module: 'whatsapp' },
       { to: '/panel/website', icon: Globe, labelKey: 'layout.nav.website', roles: ['company_admin'], module: 'website' },
     ],
   },
@@ -50,7 +50,6 @@ const navGroups: { sectionKey: string; items: NavItem[] }[] = [
     items: [
       { to: '/panel/knowledge', icon: BookOpen, labelKey: 'layout.nav.knowledge', roles: ['company_admin', 'staff'], module: 'knowledge', staffNav: 'knowledge' },
       { to: '/panel/unknown-questions', icon: HelpCircle, labelKey: 'layout.nav.unknownQuestions', roles: ['company_admin'], module: 'unknown_questions' },
-      { to: '/panel/tickets', icon: Ticket, labelKey: 'layout.nav.tickets', roles: ['company_admin', 'staff'], module: 'tickets', staffNav: 'tickets' },
       { to: '/panel/calendar', icon: CalendarDays, labelKey: 'layout.nav.calendar', roles: ['company_admin', 'staff'], module: 'calendar', staffNav: 'calendar' },
       { to: '/panel/order-status', icon: PackageSearch, labelKey: 'layout.nav.orderStatus', roles: ['company_admin'], module: 'order_status' },
       { to: '/panel/shipping-tracking', icon: Truck, labelKey: 'layout.nav.shippingTracking', roles: ['company_admin'], module: 'shipping_tracking' },
@@ -62,6 +61,7 @@ const navGroups: { sectionKey: string; items: NavItem[] }[] = [
     sectionKey: 'layout.navSections.management',
     items: [
       { to: '/panel/staff', icon: Users, labelKey: 'layout.nav.staff', roles: ['company_admin'], module: 'staff' },
+      { to: '/panel/whatsapp', icon: Smartphone, labelKey: 'layout.nav.whatsapp', roles: ['company_admin'], module: 'whatsapp' },
       { to: '/panel/subscription', icon: CreditCard, labelKey: 'layout.nav.subscription', roles: ['company_admin'], module: 'subscription' },
       { to: '/panel/platform-support', icon: Headphones, labelKey: 'layout.nav.platformSupport', roles: ['company_admin'], module: 'settings' },
     ],

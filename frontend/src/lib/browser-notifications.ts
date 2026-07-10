@@ -41,6 +41,7 @@ export function showBrowserNotification(payload: BrowserNotificationPayload): vo
     icon: '/waai-logo.png',
     badge: '/favicon.svg',
     silent: false,
+    requireInteraction: false,
   });
 
   notification.onclick = () => {

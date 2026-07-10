@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { supabase, supabaseConfigured } from '@/services/supabase';
+import { supabase, supabaseConfigured, syncSupabaseRealtimeAuth } from '@/services/supabase';
 import { api } from '@/services/api';
 import { showBrowserNotification } from '@/lib/browser-notifications';
 import { getTicketSubjectLabel } from '@/lib/ticket-labels';
@@ -32,6 +32,12 @@ interface UsePanelRealtimeNotificationsOptions {
   enabled: boolean;
 }
 
+const POLL_INTERVAL_MS = 12_000;
+
+function normalizePhone(phone: string): string {
+  return phone.replace(/\D/g, '');
+}
+
 export function usePanelRealtimeNotifications({
   companyId,
   enabled,
@@ -40,20 +46,27 @@ export function usePanelRealtimeNotifications({
   const location = useLocation();
   const queryClient = useQueryClient();
   const seenIdsRef = useRef(new Set<string>());
-  const pollSnapshotRef = useRef<{ messageIds: Set<string>; ticketIds: Set<string> } | null>(null);
+  const pollSnapshotRef = useRef<{
+    conversations: Map<string, string>;
+    ticketIds: Set<string>;
+  } | null>(null);
+  const locationRef = useRef(location);
+  locationRef.current = location;
 
   useEffect(() => {
     if (!enabled || !companyId) return;
 
-    const selectedPhone = new URLSearchParams(location.search).get('phone');
-    const isMessagesPage = location.pathname === '/panel/messages';
-
-    const shouldSkipMessageNotification = (phone: string) =>
-      !document.hidden && isMessagesPage && selectedPhone === phone;
+    const shouldSkipMessageNotification = (phone: string) => {
+      const { pathname, search } = locationRef.current;
+      const selectedPhone = new URLSearchParams(search).get('phone');
+      if (document.hidden) return false;
+      if (pathname !== '/panel/messages' || !selectedPhone) return false;
+      return normalizePhone(selectedPhone) === normalizePhone(phone);
+    };
 
     const markSeen = (id: string) => {
       seenIdsRef.current.add(id);
-      if (seenIdsRef.current.size > 500) {
+      if (seenIdsRef.current.size > 1000) {
         const oldest = seenIdsRef.current.values().next().value;
         if (oldest) seenIdsRef.current.delete(oldest);
       }
@@ -68,12 +81,14 @@ export function usePanelRealtimeNotifications({
       const title = row.customer_name?.trim() || row.customer_phone;
       const body =
         row.message?.trim() ||
-        (row.media_type?.startsWith('image/') ? t('browserNotifications.imageMessage') : t('browserNotifications.newMessage'));
+        (row.media_type?.startsWith('image/')
+          ? t('browserNotifications.imageMessage')
+          : t('browserNotifications.newMessage'));
 
       showBrowserNotification({
         title,
         body: body.slice(0, 160),
-        tag: `message-${row.customer_phone}`,
+        tag: `message-${row.id}`,
         url: `/panel/messages?phone=${encodeURIComponent(row.customer_phone)}`,
       });
 
@@ -102,8 +117,73 @@ export function usePanelRealtimeNotifications({
       queryClient.invalidateQueries({ queryKey: ['active-ticket', row.customer_phone] });
     };
 
-    if (supabaseConfigured) {
-      const channel = supabase
+    const poll = async () => {
+      try {
+        const [conversations, tickets] = await Promise.all([
+          api.get<Conversation[]>('/messages'),
+          api.get<Ticket[]>('/tickets'),
+        ]);
+
+        const nextConversations = new Map<string, string>();
+        for (const conv of conversations) {
+          const key = normalizePhone(conv.customer_phone);
+          nextConversations.set(key, conv.last_message_at);
+
+          if (!pollSnapshotRef.current) continue;
+
+          const prevAt = pollSnapshotRef.current.conversations.get(key);
+          if (prevAt === conv.last_message_at) continue;
+          if (shouldSkipMessageNotification(conv.customer_phone)) continue;
+
+          showBrowserNotification({
+            title: conv.customer_name?.trim() || conv.customer_phone,
+            body: (conv.last_message || t('browserNotifications.newMessage')).slice(0, 160),
+            tag: `poll-message-${key}-${conv.last_message_at}`,
+            url: `/panel/messages?phone=${encodeURIComponent(conv.customer_phone)}`,
+          });
+          queryClient.invalidateQueries({ queryKey: ['conversations'] });
+        }
+
+        const nextTicketIds = new Set(
+          tickets.filter((ticket) => ticket.status === 'open').map((ticket) => ticket.id)
+        );
+
+        if (pollSnapshotRef.current) {
+          for (const ticket of tickets) {
+            if (ticket.status !== 'open') continue;
+            if (pollSnapshotRef.current.ticketIds.has(ticket.id)) continue;
+
+            notifyNewTicket({
+              id: ticket.id,
+              company_id: companyId,
+              customer_phone: ticket.customer_phone,
+              customer_name: ticket.customer_name,
+              subject: ticket.subject,
+              status: ticket.status,
+            });
+          }
+        }
+
+        pollSnapshotRef.current = {
+          conversations: nextConversations,
+          ticketIds: nextTicketIds,
+        };
+      } catch {
+        /* polling sessiz */
+      }
+    };
+
+    void poll();
+    const pollTimer = setInterval(poll, POLL_INTERVAL_MS);
+
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    const setupRealtime = async () => {
+      if (!supabaseConfigured) return;
+
+      await syncSupabaseRealtimeAuth();
+
+      channel = supabase
         .channel(`panel-notify-${companyId}`)
         .on(
           'postgres_changes',
@@ -125,65 +205,21 @@ export function usePanelRealtimeNotifications({
           },
           (payload) => notifyNewTicket(payload.new as TicketRow)
         )
-        .subscribe();
-
-      return () => {
-        supabase.removeChannel(channel);
-      };
-    }
-
-    const poll = async () => {
-      try {
-        const [conversations, tickets] = await Promise.all([
-          api.get<Conversation[]>('/messages'),
-          api.get<Ticket[]>('/tickets'),
-        ]);
-
-        const messageIds = new Set<string>();
-        for (const conv of conversations) {
-          const syntheticId = `conv-${conv.customer_phone}-${conv.last_message_at}`;
-          messageIds.add(syntheticId);
-          if (!pollSnapshotRef.current) continue;
-          if (pollSnapshotRef.current.messageIds.has(syntheticId)) continue;
-          if (conv.unread_count <= 0) continue;
-          if (shouldSkipMessageNotification(conv.customer_phone)) continue;
-
-          showBrowserNotification({
-            title: conv.customer_name?.trim() || conv.customer_phone,
-            body: (conv.last_message || t('browserNotifications.newMessage')).slice(0, 160),
-            tag: `message-${conv.customer_phone}`,
-            url: `/panel/messages?phone=${encodeURIComponent(conv.customer_phone)}`,
-          });
-          queryClient.invalidateQueries({ queryKey: ['conversations'] });
-        }
-
-        for (const ticket of tickets) {
-          if (ticket.status !== 'open') continue;
-          messageIds.add(`ticket-${ticket.id}`);
-          if (!pollSnapshotRef.current) continue;
-          if (pollSnapshotRef.current.ticketIds.has(ticket.id)) continue;
-
-          notifyNewTicket({
-            id: ticket.id,
-            company_id: companyId,
-            customer_phone: ticket.customer_phone,
-            customer_name: ticket.customer_name,
-            subject: ticket.subject,
-            status: ticket.status,
-          });
-        }
-
-        pollSnapshotRef.current = {
-          messageIds,
-          ticketIds: new Set(tickets.filter((tk) => tk.status === 'open').map((tk) => tk.id)),
-        };
-      } catch {
-        /* polling sessiz */
-      }
+        .subscribe((status) => {
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.warn(`[Notifications] Realtime durumu: ${status}`);
+          }
+        });
     };
 
-    void poll();
-    const interval = setInterval(poll, 20000);
-    return () => clearInterval(interval);
-  }, [companyId, enabled, location.pathname, location.search, queryClient, t]);
+    void setupRealtime();
+
+    return () => {
+      clearInterval(pollTimer);
+      pollSnapshotRef.current = null;
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
+  }, [companyId, enabled, queryClient, t]);
 }
