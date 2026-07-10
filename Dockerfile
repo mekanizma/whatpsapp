@@ -18,9 +18,11 @@ RUN npm ci
 
 COPY backend ./
 RUN npm run build \
-  && npm ci --omit=dev \
+  && npm prune --omit=dev \
   && npm cache clean --force \
-  && rm -rf src tsconfig.json
+  && rm -rf src tsconfig.json \
+  && find node_modules -type f \( -name "*.md" -o -name "*.map" -o -name "LICENSE*" -o -name "CHANGELOG*" \) -delete \
+  && find node_modules -type d \( -name "test" -o -name "tests" -o -name "__tests__" -o -name "docs" -o -name ".github" \) -prune -exec rm -rf {} +
 
 FROM node:20-bookworm-slim AS frontend-builder
 
@@ -67,10 +69,9 @@ RUN apt-get update \
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-COPY --from=backend-builder /app/backend/package.json /app/backend/package-lock.json ./backend/
-COPY --from=backend-builder /app/backend/node_modules ./backend/node_modules
-COPY --from=backend-builder /app/backend/dist ./backend/dist
-COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
+# Tek katman: export sırasında disk/IO yükünü azaltır (src/tsconfig builder'da silinmiş)
+COPY --from=backend-builder --chown=node:node /app/backend/ ./backend/
+COPY --from=frontend-builder --chown=node:node /app/frontend/dist ./frontend/dist
 
 EXPOSE 3001
 
