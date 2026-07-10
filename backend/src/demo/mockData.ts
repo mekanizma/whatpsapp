@@ -75,6 +75,7 @@ export const demoCompany: Company = {
   logo: null,
   subscription_plan: 'business',
   status: 'active',
+  ai_enabled: true,
   created_at: new Date().toISOString(),
   updated_at: new Date().toISOString(),
 };

@@ -5,10 +5,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { User, Building2, Lock, Save, Eye, EyeOff, Bell, ImagePlus, Trash2 } from 'lucide-react';
+import { User, Building2, Lock, Save, Eye, EyeOff, Bell, ImagePlus, Trash2, Bot } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
 import { CompanyLogo } from '@/components/CompanyLogo';
-import { SettingsTabNav, type SettingsTabId } from '@/components/settings/SettingsTabNav';
+import { SettingsTabNav, type SettingsTabId, type SettingsTabItem } from '@/components/settings/SettingsTabNav';
 import { SettingsFeedback } from '@/components/settings/SettingsFeedback';
 import {
   Button,
@@ -65,14 +65,15 @@ export function SettingsPage() {
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [notificationMsg, setNotificationMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const [notificationUsers, setNotificationUsers] = useState<NotificationUser[]>([]);
+  const [aiToggleMsg, setAiToggleMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
 
   const isAdmin = user?.role === 'company_admin';
   const roleLabel = user?.role ? t(`common.roles.${user.role}`, { defaultValue: user.role }) : '';
 
   const tabs = useMemo(() => {
-    const items = [
-      { id: 'profile' as const, label: t('settings.tabs.profile'), icon: User },
-      { id: 'security' as const, label: t('settings.tabs.security'), icon: Lock },
+    const items: SettingsTabItem[] = [
+      { id: 'profile', label: t('settings.tabs.profile'), icon: User },
+      { id: 'security', label: t('settings.tabs.security'), icon: Lock },
     ];
 
     if (isAdmin && company) {
@@ -150,6 +151,30 @@ export function SettingsPage() {
     },
     onError: (err: Error) => {
       setCompanyMsg({ type: 'err', text: err.message });
+    },
+  });
+
+  const aiEnabledMutation = useMutation({
+    mutationFn: (enabled: boolean) => updateCompany({ ai_enabled: enabled } as Partial<Company>),
+    onMutate: (enabled) => {
+      const current = useAuthStore.getState().company;
+      if (current) {
+        useAuthStore.setState({ company: { ...current, ai_enabled: enabled } });
+      }
+      return { previousEnabled: current?.ai_enabled !== false };
+    },
+    onSuccess: (_data, enabled) => {
+      setAiToggleMsg({
+        type: 'ok',
+        text: enabled ? t('settings.aiEnabledOn') : t('settings.aiEnabledOff'),
+      });
+    },
+    onError: (err: Error, _enabled, context) => {
+      const current = useAuthStore.getState().company;
+      if (current && context) {
+        useAuthStore.setState({ company: { ...current, ai_enabled: context.previousEnabled } });
+      }
+      setAiToggleMsg({ type: 'err', text: err.message });
     },
   });
 
@@ -533,6 +558,56 @@ export function SettingsPage() {
                   <h3 className="text-sm font-semibold text-slate-900">{t('settings.sections.aiAssistant')}</h3>
                   <p className="mt-1 text-sm text-slate-500">{t('settings.customInstructionsHint')}</p>
                 </div>
+
+                <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white ring-1 ring-slate-200">
+                        <Bot className="h-5 w-5 text-primary" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-medium text-slate-900">{t('settings.aiEnabledTitle')}</p>
+                        <p className="mt-1 text-sm text-slate-500">
+                          {company.ai_enabled !== false
+                            ? t('settings.aiEnabledDescOn')
+                            : t('settings.aiEnabledDescOff')}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={company.ai_enabled !== false}
+                      disabled={aiEnabledMutation.isPending}
+                      onClick={() => {
+                        setAiToggleMsg(null);
+                        const nextEnabled = company.ai_enabled === false;
+                        aiEnabledMutation.mutate(nextEnabled);
+                      }}
+                      className={`relative inline-flex h-11 w-[3.25rem] shrink-0 cursor-pointer items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${
+                        company.ai_enabled !== false ? 'bg-primary' : 'bg-slate-300'
+                      }`}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-9 w-9 transform rounded-full bg-white shadow-sm ring-1 ring-slate-200/60 transition-transform ${
+                          company.ai_enabled !== false ? 'translate-x-[1.35rem]' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+                  {aiEnabledMutation.isPending && (
+                    <p className="mt-3 flex items-center gap-2 text-xs text-slate-500">
+                      <Spinner className="h-4 w-4" />
+                      {t('settings.updating')}
+                    </p>
+                  )}
+                  {aiToggleMsg && !aiEnabledMutation.isPending && (
+                    <div className="mt-3">
+                      <SettingsFeedback type={aiToggleMsg.type} text={aiToggleMsg.text} />
+                    </div>
+                  )}
+                </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="customInstructions">{t('settings.customInstructions')}</Label>
                   <Textarea

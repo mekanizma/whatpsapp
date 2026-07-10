@@ -11,7 +11,6 @@ interface LiveDemoButtonProps {
   className?: string;
   variant?: LiveDemoVariant;
   showHint?: boolean;
-  hintClassName?: string;
 }
 
 function WhatsAppIcon({ className }: { className?: string }) {
@@ -31,7 +30,6 @@ export function LiveDemoButton({
   className,
   variant = 'card',
   showHint = true,
-  hintClassName,
 }: LiveDemoButtonProps) {
   const { t } = useTranslation();
   const href = buildLiveDemoWhatsAppUrl(t('onboarding.liveDemo.prefillMessage'));

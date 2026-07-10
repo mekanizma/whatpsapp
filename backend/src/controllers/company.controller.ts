@@ -25,6 +25,7 @@ import {
   uploadCompanyLogoFile,
 } from '../services/company-logo.service';
 import { validateCompanyCategoryForWrite } from '../constants/company-categories';
+import { invalidateCompanyAiSettingsCache } from '../services/company-ai-settings.service';
 
 function buildCompanyUpdatePayload(body: Record<string, unknown>): {
   payload: Record<string, unknown>;
@@ -55,6 +56,12 @@ function buildCompanyUpdatePayload(body: Record<string, unknown>): {
   }
   if (body.logo !== undefined) {
     payload.logo = body.logo ?? null;
+  }
+  if (body.ai_enabled !== undefined) {
+    if (typeof body.ai_enabled !== 'boolean') {
+      throw new Error('ai_enabled geçersiz');
+    }
+    payload.ai_enabled = body.ai_enabled;
   }
 
   return { payload, categoryChanged };
@@ -151,6 +158,9 @@ export async function updateCompany(req: AuthRequest, res: Response): Promise<vo
     if (validatedTimezone !== undefined) demoCompany.timezone = validatedTimezone;
     if (updatePayload.logo !== undefined) demoCompany.logo = updatePayload.logo as string | null;
     if (customInstructionsProvided) demoCompany.custom_instructions = validatedCustomInstructions ?? null;
+    if (updatePayload.ai_enabled !== undefined) {
+      demoCompany.ai_enabled = updatePayload.ai_enabled as boolean;
+    }
     res.json({ success: true, data: demoCompany });
     return;
   }
@@ -180,6 +190,11 @@ export async function updateCompany(req: AuthRequest, res: Response): Promise<vo
     invalidateStaticSystemPromptCache(companyId as string);
     invalidateCompanyCache(companyId as string);
     await clearCompanyCache(companyId as string);
+  }
+
+  if (updatePayload.ai_enabled !== undefined) {
+    invalidateCompanyAiSettingsCache(companyId as string);
+    invalidateCompanyCache(companyId as string);
   }
 
   await logActivity({

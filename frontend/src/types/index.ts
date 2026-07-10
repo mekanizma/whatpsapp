@@ -25,6 +25,7 @@ export interface Company {
   email: string | null;
   address: string | null;
   custom_instructions?: string | null;
+  ai_enabled?: boolean;
   logo: string | null;
   subscription_plan: string;
   status: string;

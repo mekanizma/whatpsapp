@@ -29,6 +29,7 @@ import {
 } from '../ai/department-routing.service';
 import { detectConversationLanguage, t, type ConversationLang } from '../ai/language.service';
 import { uploadMessageMedia } from '../services/message-media.service';
+import { isCompanyAiEnabled } from '../services/company-ai-settings.service';
 import crypto from 'crypto';
 
 const DEBOUNCE_MS = 3000;
@@ -215,6 +216,61 @@ function markTransferReply(companyId: string, phone: string): void {
   recentTransferReplies.set(`${companyId}:${phone}`, Date.now());
 }
 
+async function handleAiDisabledInbound(
+  companyId: string,
+  phone: string,
+  customerName: string | null,
+  messageText: string,
+  lang: ConversationLang,
+  options?: { imageAck?: boolean }
+): Promise<string> {
+  if (await hasActiveTransferTicket(companyId, phone)) {
+    console.log(`[WhatsApp] AI kapalı — aktif ticket, yanıt yok → ${phone}`);
+    return '';
+  }
+
+  if (shouldSkipTransferReply(companyId, phone)) {
+    return '';
+  }
+
+  const subject = buildTransferTicketSubject(messageText, 'ai_disabled');
+  await ensureOpenTransferTicket(companyId, phone, customerName, subject);
+
+  const replyMessage = options?.imageAck ? t(lang, 'photo_received') : t(lang, 'transfer_connect');
+
+  await adminClient
+    .from('messages')
+    .update({ status: 'transferred' })
+    .eq('company_id', companyId)
+    .eq('customer_phone', phone)
+    .eq('status', 'open');
+
+  markTransferReply(companyId, phone);
+
+  await adminClient.from('messages').insert({
+    company_id: companyId,
+    customer_phone: phone,
+    customer_name: customerName,
+    message: replyMessage,
+    sender_type: 'ai',
+    status: 'transferred',
+  });
+
+  await logActivity({
+    companyId,
+    action: 'conversation_transferred',
+    entityType: 'ticket',
+    metadata: {
+      customer_phone: phone,
+      skip_reason: 'ai_disabled',
+      skipped_ai: true,
+    },
+  });
+
+  console.log(`[WhatsApp] AI kapalı — otomatik talep açıldı → ${phone}`);
+  return replyMessage;
+}
+
 export function clearTransferState(companyId: string, customerPhone: string): void {
   const phone = resolveCustomerPhone(customerPhone);
   recentTransferReplies.delete(`${companyId}:${phone}`);
@@ -307,6 +363,13 @@ export async function processInboundImage(
 
     if (await shouldIncrementConversationUsage(companyId, phone)) {
       await incrementConversationUsage(companyId);
+    }
+
+    if (!(await isCompanyAiEnabled(companyId))) {
+      const lang = detectConversationLanguage(caption);
+      return handleAiDisabledInbound(companyId, phone, customerName, caption, lang, {
+        imageAck: true,
+      });
     }
 
     if (await hasActiveTransferTicket(companyId, phone)) {
@@ -508,6 +571,11 @@ export async function processInboundMessage(
 
     if (await shouldIncrementConversationUsage(companyId, phone)) {
       await incrementConversationUsage(companyId);
+    }
+
+    if (!(await isCompanyAiEnabled(companyId))) {
+      const lang = detectConversationLanguage(trimmed);
+      return handleAiDisabledInbound(companyId, phone, customerName, trimmed, lang);
     }
 
     if (await hasActiveTransferTicket(companyId, phone)) {

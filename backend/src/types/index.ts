@@ -42,6 +42,7 @@ export interface Company {
   working_hours: Record<string, unknown>;
   timezone?: string | null;
   custom_instructions?: string | null;
+  ai_enabled?: boolean;
   logo: string | null;
   subscription_plan: SubscriptionPlanType;
   status: CompanyStatus;

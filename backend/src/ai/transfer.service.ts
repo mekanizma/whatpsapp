@@ -33,6 +33,7 @@ const SUBJECT_LABELS: Record<string, string> = {
   sensitive_data: 'Security — sensitive data',
   opt_out: 'Opt-out request',
   ai_transfer: 'AI handoff to agent',
+  ai_disabled: 'AI off — customer message',
 };
 
 export function buildTransferTicketSubject(
