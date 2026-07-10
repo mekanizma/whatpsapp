@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Bell, BellOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import {
   getBrowserNotificationsEnabled,
@@ -9,6 +10,9 @@ import {
   setBrowserNotificationsEnabled,
 } from '@/lib/browser-notifications';
 import { usePanelRealtimeNotifications } from '@/hooks/usePanelRealtimeNotifications';
+import { useAuthStore } from '@/store/authStore';
+import { api } from '@/services/api';
+import type { StaffMember } from '@/types';
 
 interface PanelNotificationBellProps {
   companyId?: string;
@@ -16,6 +20,7 @@ interface PanelNotificationBellProps {
 
 export function PanelNotificationBell({ companyId }: PanelNotificationBellProps) {
   const { t } = useTranslation();
+  const user = useAuthStore((state) => state.user);
   const supported = isBrowserNotificationSupported();
   const [enabled, setEnabled] = useState(() => getBrowserNotificationsEnabled());
   const [permission, setPermission] = useState<NotificationPermission>(
@@ -44,7 +49,22 @@ export function PanelNotificationBell({ companyId }: PanelNotificationBellProps)
     })();
   }, [companyId, supported]);
 
-  usePanelRealtimeNotifications({ companyId, enabled: enabled && permission === 'granted' });
+  const { data: staffId } = useQuery({
+    queryKey: ['my-staff-id', companyId, user?.id],
+    enabled: !!companyId && !!user && user.role === 'staff',
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const staff = await api.get<StaffMember[]>('/staff');
+      return staff.find((member) => member.profile_id === user?.id)?.id ?? null;
+    },
+  });
+
+  usePanelRealtimeNotifications({
+    companyId,
+    enabled: enabled && permission === 'granted',
+    userRole: user?.role,
+    staffId: staffId ?? null,
+  });
 
   const handleToggle = useCallback(async () => {
     if (!supported) return;

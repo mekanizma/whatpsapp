@@ -12,6 +12,7 @@ import {
 } from './whatsapp/qr.service';
 import { recoverPendingKnowledgeIndexing } from './services/knowledge-index.service';
 import { startResponseCacheCleanupSchedule } from './ai/ai-cache.service';
+import { startActionCenterEmailSchedule } from './services/admin-action-center-email.service';
 
 process.on('unhandledRejection', (reason) => {
   console.error('[FATAL] Unhandled rejection:', reason);
@@ -29,6 +30,7 @@ const server = app.listen(config.port, '0.0.0.0', () => {
   if (config.isCoolify) console.log('☁️  Platform: Coolify');
 
   startResponseCacheCleanupSchedule();
+  startActionCenterEmailSchedule();
 
   // Ağır işleri health check sonrasına ertele (OOM / restart döngüsünü önler)
   setTimeout(() => {

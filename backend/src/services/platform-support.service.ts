@@ -3,6 +3,7 @@
  */
 
 import { adminClient } from '../database/supabase';
+import { notifyAdminsNewPlatformSupportTicket } from './admin-email-notification.service';
 
 export type PlatformSupportCategory =
   | 'general'
@@ -299,7 +300,13 @@ export async function createPlatformSupportTicket(
 
   if (msgError) throw new Error(msgError.message);
 
-  return getPlatformSupportTicketForCompany(companyId, ticket.id);
+  const createdTicket = await getPlatformSupportTicketForCompany(companyId, ticket.id);
+
+  void notifyAdminsNewPlatformSupportTicket(createdTicket).catch((err) => {
+    console.error('[PlatformSupport] Admin e-posta bildirimi hatası:', err);
+  });
+
+  return createdTicket;
 }
 
 export async function addPlatformSupportCustomerMessage(

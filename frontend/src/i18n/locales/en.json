@@ -637,7 +637,9 @@
     "newMessage": "New customer message",
     "imageMessage": "New photo message",
     "newTicketTitle": "New support ticket",
-    "newTicketBody": "{{customer}} — {{subject}}"
+    "newTicketBody": "{{customer}} — {{subject}}",
+    "ticketMessageTitle": "Ticket message",
+    "ticketMessageBody": "{{customer}} — {{subject}}"
   },
   "messages": {
     "title": "Conversations",

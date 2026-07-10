@@ -156,6 +156,24 @@ export const config = {
       .filter(Boolean),
   },
 
+  smtp: {
+    host: process.env.SMTP_HOST?.trim() || '',
+    port: parseInt(process.env.SMTP_PORT || '465', 10),
+    secure: process.env.SMTP_SECURE !== 'false',
+    user: process.env.SMTP_USER?.trim() || '',
+    pass: process.env.SMTP_PASS || '',
+    from: process.env.SMTP_FROM?.trim() || process.env.SMTP_USER?.trim() || '',
+    fromName: process.env.SMTP_FROM_NAME?.trim() || 'Waai Sistem',
+    /** Admin bildirim e-postaları (virgülle ayrılmış, varsayılan: info@mekanizma.com) */
+    adminNotifyEmails: (process.env.ADMIN_NOTIFY_EMAILS || 'info@mekanizma.com')
+      .split(',')
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean),
+    get enabled(): boolean {
+      return !!(this.host && this.user && this.pass && this.from);
+    },
+  },
+
   cors: {
     origins: getCorsOrigins(),
   },

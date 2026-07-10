@@ -12,6 +12,7 @@ import {
   DEFAULT_COMPANY_CATEGORY,
   companyCategoryLabelsRecord,
 } from '../constants/company-categories';
+import { notifyAdminsNewSignupApplication } from './admin-email-notification.service';
 
 export type SignupApplicationStatus = 'pending' | 'reviewed' | 'approved' | 'rejected';
 
@@ -219,6 +220,10 @@ export async function createSignupApplication(
       .eq('id', app.id);
     app.whatsapp_sent = true;
   }
+
+  void notifyAdminsNewSignupApplication(app).catch((err) => {
+    console.error('[SignupApplication] Admin e-posta bildirimi hatası:', err);
+  });
 
   return app;
 }

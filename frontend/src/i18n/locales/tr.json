@@ -637,7 +637,9 @@
     "newMessage": "Yeni müşteri mesajı",
     "imageMessage": "Yeni fotoğraf mesajı",
     "newTicketTitle": "Yeni destek talebi",
-    "newTicketBody": "{{customer}} — {{subject}}"
+    "newTicketBody": "{{customer}} — {{subject}}",
+    "ticketMessageTitle": "Talep mesajı",
+    "ticketMessageBody": "{{customer}} — {{subject}}"
   },
   "messages": {
     "title": "Konuşmalar",

@@ -571,6 +571,7 @@ export interface Appointment {
 
 export interface StaffMember {
   id: string;
+  profile_id?: string | null;
   name: string;
   email: string;
   phone: string | null;
