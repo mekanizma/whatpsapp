@@ -7,9 +7,10 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   LayoutDashboard, MessageSquare, BookOpen, Users, Ticket,
-  CreditCard, Smartphone, Bell, Settings, CalendarDays, UserRound, HelpCircle, Headphones,
+  CreditCard, Smartphone, Settings, CalendarDays, UserRound, HelpCircle, Headphones,
   Sparkles, UserCog, PackageSearch, Truck, ShoppingCart, RefreshCcw, Globe,
 } from 'lucide-react';
+import { PanelNotificationBell } from '@/components/PanelNotificationBell';
 import { useAuthStore } from '@/store/authStore';
 import { planHasModule, type PlanModuleKey } from '@/lib/plan-capabilities';
 import { canSeeNavItem } from '@/lib/staff-permissions';
@@ -172,12 +173,7 @@ export function CompanyLayout() {
           <span className="hidden rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700 ring-1 ring-emerald-200/60 sm:inline">
             {company?.company_name}
           </span>
-          <button
-            className="rounded-xl p-2 text-slate-500 transition-colors hover:bg-slate-100"
-            aria-label={t('layout.notifications')}
-          >
-            <Bell className="h-5 w-5" />
-          </button>
+          <PanelNotificationBell companyId={company?.id} />
         </>
       }
       sidebar={

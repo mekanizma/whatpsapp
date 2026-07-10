@@ -500,6 +500,10 @@
     "staffPanel": "Personel Paneli",
     "accountSettings": "Hesap ayarları →",
     "notifications": "Bildirimler",
+    "browserNotificationsOn": "Tarayıcı bildirimleri açık",
+    "browserNotificationsOff": "Tarayıcı bildirimlerini aç",
+    "browserNotificationsDenied": "Tarayıcı bildirimleri engellendi — tarayıcı ayarlarından izin verin",
+    "browserNotificationsUnsupported": "Bu tarayıcı masaüstü bildirimlerini desteklemiyor",
     "platformManagement": "Platform Yönetimi",
     "panel": "Panel",
     "navSections": {
@@ -628,6 +632,12 @@
     "emptyDesc": "Yeni mesajlar geldikçe burada görünür",
     "recentChats": "Bugünkü konuşmalar",
     "allMessages": "Tüm konuşmalar"
+  },
+  "browserNotifications": {
+    "newMessage": "Yeni müşteri mesajı",
+    "imageMessage": "Yeni fotoğraf mesajı",
+    "newTicketTitle": "Yeni destek talebi",
+    "newTicketBody": "{{customer}} — {{subject}}"
   },
   "messages": {
     "title": "Konuşmalar",

@@ -500,6 +500,10 @@
     "staffPanel": "Staff Panel",
     "accountSettings": "Account settings →",
     "notifications": "Notifications",
+    "browserNotificationsOn": "Browser notifications on",
+    "browserNotificationsOff": "Turn on browser notifications",
+    "browserNotificationsDenied": "Browser notifications blocked — allow them in browser settings",
+    "browserNotificationsUnsupported": "This browser does not support desktop notifications",
     "platformManagement": "Platform Management",
     "panel": "Panel",
     "navSections": {
@@ -628,6 +632,12 @@
     "emptyDesc": "New messages will appear here as they arrive",
     "recentChats": "Today's conversations",
     "allMessages": "All conversations"
+  },
+  "browserNotifications": {
+    "newMessage": "New customer message",
+    "imageMessage": "New photo message",
+    "newTicketTitle": "New support ticket",
+    "newTicketBody": "{{customer}} — {{subject}}"
   },
   "messages": {
     "title": "Conversations",
