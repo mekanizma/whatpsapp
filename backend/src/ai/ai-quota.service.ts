@@ -6,6 +6,7 @@ import { adminClient } from '../database/supabase';
 import { config } from '../config';
 import { normalizePhoneNumber } from '../whatsapp/message.handler';
 import { getMonthStartISO } from '../utils/date';
+import { AI_DISABLED_TICKET_SUBJECT } from './transfer.service';
 
 export interface QuotaStatus {
   allowed: boolean;
@@ -54,18 +55,25 @@ export async function checkAIQuota(companyId: string): Promise<QuotaStatus> {
 
 export async function hasActiveTransferTicket(
   companyId: string,
-  customerPhone: string
+  customerPhone: string,
+  options?: { excludeAiDisabled?: boolean }
 ): Promise<boolean> {
   if (config.demoMode) return false;
 
   const phone = normalizePhoneNumber(customerPhone) || customerPhone.replace(/\D/g, '');
 
-  const { count } = await adminClient
+  let query = adminClient
     .from('tickets')
     .select('id', { count: 'exact', head: true })
     .eq('company_id', companyId)
     .eq('customer_phone', phone)
     .in('status', ['open', 'in_progress']);
+
+  if (options?.excludeAiDisabled) {
+    query = query.neq('subject', AI_DISABLED_TICKET_SUBJECT);
+  }
+
+  const { count } = await query;
 
   return (count || 0) > 0;
 }

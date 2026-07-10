@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+Allow: /pricing
+Allow: /welcome
+
+Disallow: /panel/
+Disallow: /admin/
+Disallow: /login
+Disallow: /register
+Disallow: /admin/login
+
+Sitemap: https://waai.mekanizma.com/sitemap.xml

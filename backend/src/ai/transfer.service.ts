@@ -36,6 +36,8 @@ const SUBJECT_LABELS: Record<string, string> = {
   ai_disabled: 'AI off — customer message',
 };
 
+export const AI_DISABLED_TICKET_SUBJECT = SUBJECT_LABELS.ai_disabled;
+
 export function buildTransferTicketSubject(
   customerMessage: string,
   skipReason?: string

@@ -408,7 +408,7 @@ export async function processInboundImage(
       );
     }
 
-    if (await hasActiveTransferTicket(companyId, phone)) {
+    if (await hasActiveTransferTicket(companyId, phone, { excludeAiDisabled: true })) {
       console.log(`[WhatsApp] Aktif ticket — resim kaydedildi, yanıt yok → ${phone}`);
       return '';
     }
@@ -616,7 +616,7 @@ export async function processInboundMessage(
       return handleAiDisabledInbound(companyId, phone, customerName, trimmed);
     }
 
-    if (await hasActiveTransferTicket(companyId, phone)) {
+    if (await hasActiveTransferTicket(companyId, phone, { excludeAiDisabled: true })) {
       console.log(`[WhatsApp] Aktif ticket — AI yanıt atlandı → ${phone}`);
       return '';
     }

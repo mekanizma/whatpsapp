@@ -6,6 +6,7 @@
 import { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { RouteSeo } from '@/seo/RouteSeo';
 import { useAuthStore } from '@/store/authStore';
 import { AuthQuerySync } from '@/components/AuthQuerySync';
 import { RoleRoute } from '@/components/RoleRoute';
@@ -143,6 +144,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <AuthQuerySync />
       <BrowserRouter>
+        <RouteSeo />
         <div className="app-shell min-h-[100dvh]">
           <AppRoutes />
         </div>

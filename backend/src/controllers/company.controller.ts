@@ -25,7 +25,7 @@ import {
   uploadCompanyLogoFile,
 } from '../services/company-logo.service';
 import { validateCompanyCategoryForWrite } from '../constants/company-categories';
-import { invalidateCompanyAiSettingsCache } from '../services/company-ai-settings.service';
+import { invalidateCompanyAiSettingsCache, closeOpenAiDisabledTickets } from '../services/company-ai-settings.service';
 
 function buildCompanyUpdatePayload(body: Record<string, unknown>): {
   payload: Record<string, unknown>;
@@ -195,6 +195,9 @@ export async function updateCompany(req: AuthRequest, res: Response): Promise<vo
   if (updatePayload.ai_enabled !== undefined) {
     invalidateCompanyAiSettingsCache(companyId as string);
     invalidateCompanyCache(companyId as string);
+    if (updatePayload.ai_enabled === true) {
+      await closeOpenAiDisabledTickets(companyId as string);
+    }
   }
 
   await logActivity({
