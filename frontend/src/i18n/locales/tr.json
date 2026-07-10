@@ -1102,7 +1102,21 @@
   },
   "settings": {
     "title": "Hesap Ayarları",
-    "description": "Kişisel bilgilerinizi ve şifrenizi güncelleyin.",
+    "description": "Profil ve güvenlik ayarlarınızı buradan yönetin.",
+    "descriptionAdmin": "Profil, güvenlik, şirket ve bildirim ayarlarınızı yönetin.",
+    "tabs": {
+      "profile": "Profil",
+      "security": "Güvenlik",
+      "company": "Şirket",
+      "notifications": "Bildirimler"
+    },
+    "sections": {
+      "branding": "Marka & Logo",
+      "general": "Genel Bilgiler",
+      "contact": "İletişim Bilgileri",
+      "aiAssistant": "AI Asistan"
+    },
+    "roleLabel": "Hesap rolü",
     "personalInfo": "Kişisel Bilgiler",
     "personalDesc": "Adınız ve profil bilgileriniz",
     "fullName": "Ad Soyad",
