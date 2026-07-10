@@ -86,7 +86,8 @@ export type ActionCenterItemType =
   | 'trial_expired'
   | 'trial_ending'
   | 'inactive_messaging'
-  | 'open_ticket';
+  | 'open_ticket'
+  | 'open_platform_support';
 
 export interface ActionCenterItem {
   id: string;

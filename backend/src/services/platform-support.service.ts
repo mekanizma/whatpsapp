@@ -3,7 +3,10 @@
  */
 
 import { adminClient } from '../database/supabase';
-import { notifyAdminsNewPlatformSupportTicket } from './admin-email-notification.service';
+import {
+  notifyAdminsNewPlatformSupportTicket,
+  notifyAdminsPlatformSupportReply,
+} from './admin-email-notification.service';
 
 export type PlatformSupportCategory =
   | 'general'
@@ -337,7 +340,13 @@ export async function addPlatformSupportCustomerMessage(
     await adminClient.from('platform_support_tickets').update({ status: 'open' }).eq('id', ticketId);
   }
 
-  return getPlatformSupportTicketForCompany(companyId, ticketId);
+  const updatedTicket = await getPlatformSupportTicketForCompany(companyId, ticketId);
+
+  void notifyAdminsPlatformSupportReply(updatedTicket, trimmed, author.name).catch((err) => {
+    console.error('[PlatformSupport] Admin yanıt e-posta bildirimi hatası:', err);
+  });
+
+  return updatedTicket;
 }
 
 export async function countOpenPlatformSupportTickets(): Promise<number> {

@@ -650,7 +650,8 @@ export type ActionCenterItemType =
   | 'trial_expired'
   | 'trial_ending'
   | 'inactive_messaging'
-  | 'open_ticket';
+  | 'open_ticket'
+  | 'open_platform_support';
 
 export interface ActionCenterItem {
   id: string;
@@ -698,6 +699,49 @@ function severityRank(severity: ActionCenterSeverity): number {
   return 2;
 }
 
+function platformSupportSeverity(priority: string): ActionCenterSeverity {
+  return priority === 'high' || priority === 'urgent' ? 'critical' : 'warning';
+}
+
+function mapPlatformSupportTicketsToActionItems(
+  tickets: Array<{
+    id: string;
+    company_id: string;
+    subject: string;
+    priority: string;
+  }>,
+  companyMap: Map<string, { company_name: string }>
+): ActionCenterItem[] {
+  return tickets
+    .map((ticket) => {
+      const company = companyMap.get(ticket.company_id);
+      if (!company) return null;
+      return {
+        id: `open_platform_support-${ticket.id}`,
+        type: 'open_platform_support' as const,
+        category: 'tickets' as const,
+        severity: platformSupportSeverity(ticket.priority),
+        company_id: ticket.company_id,
+        company_name: company.company_name,
+        meta: {
+          ticket_id: ticket.id,
+          ticket_subject: ticket.subject,
+          ticket_priority: ticket.priority,
+        },
+      };
+    })
+    .filter(Boolean) as ActionCenterItem[];
+}
+
+function summarizeActionCenter(items: ActionCenterItem[]): ActionCenterData {
+  return {
+    total: items.length,
+    critical_count: items.filter((i) => i.severity === 'critical').length,
+    warning_count: items.filter((i) => i.severity === 'warning').length,
+    items,
+  };
+}
+
 export async function getAdminActionCenter(): Promise<ActionCenterData> {
   const dayAgo = new Date(Date.now() - INACTIVE_HOURS * 60 * 60 * 1000).toISOString();
 
@@ -713,14 +757,23 @@ export async function getAdminActionCenter(): Promise<ActionCenterData> {
   const companyMap = new Map(allCompanies.map((c) => [c.id, c]));
 
   if (companyIds.length === 0) {
-    const ticketsOnly = await adminClient
-      .from('tickets')
-      .select('id, company_id, subject, priority, status, created_at')
-      .in('status', ['open', 'in_progress'])
-      .order('created_at', { ascending: false })
-      .limit(30);
+    const [ticketsOnly, platformSupportRes] = await Promise.all([
+      adminClient
+        .from('tickets')
+        .select('id, company_id, subject, priority, status, created_at')
+        .in('status', ['open', 'in_progress'])
+        .order('created_at', { ascending: false })
+        .limit(30),
+      adminClient
+        .from('platform_support_tickets')
+        .select('id, company_id, subject, priority, status, created_at')
+        .in('status', ['open', 'in_progress'])
+        .order('created_at', { ascending: false })
+        .limit(30),
+    ]);
 
     if (ticketsOnly.error) throw new Error(ticketsOnly.error.message);
+    if (platformSupportRes.error) throw new Error(platformSupportRes.error.message);
 
     const ticketItems: ActionCenterItem[] = (ticketsOnly.data || [])
       .map((ticket) => {
@@ -745,15 +798,15 @@ export async function getAdminActionCenter(): Promise<ActionCenterData> {
       })
       .filter(Boolean) as ActionCenterItem[];
 
-    return {
-      total: ticketItems.length,
-      critical_count: ticketItems.filter((i) => i.severity === 'critical').length,
-      warning_count: ticketItems.filter((i) => i.severity === 'warning').length,
-      items: ticketItems,
-    };
+    const platformSupportItems = mapPlatformSupportTicketsToActionItems(
+      platformSupportRes.data || [],
+      companyMap
+    );
+
+    return summarizeActionCenter([...ticketItems, ...platformSupportItems]);
   }
 
-  const [subsRes, waRes, recentMsgRes, ticketsRes] = await Promise.all([
+  const [subsRes, waRes, recentMsgRes, ticketsRes, platformSupportRes] = await Promise.all([
     adminClient
       .from('subscriptions')
       .select('company_id, messages_used, messages_limit, status, ends_at, starts_at')
@@ -773,12 +826,19 @@ export async function getAdminActionCenter(): Promise<ActionCenterData> {
       .in('status', ['open', 'in_progress'])
       .order('created_at', { ascending: false })
       .limit(30),
+    adminClient
+      .from('platform_support_tickets')
+      .select('id, company_id, subject, priority, status, created_at')
+      .in('status', ['open', 'in_progress'])
+      .order('created_at', { ascending: false })
+      .limit(30),
   ]);
 
   if (subsRes.error) throw new Error(subsRes.error.message);
   if (waRes.error) throw new Error(waRes.error.message);
   if (recentMsgRes.error) throw new Error(recentMsgRes.error.message);
   if (ticketsRes.error) throw new Error(ticketsRes.error.message);
+  if (platformSupportRes.error) throw new Error(platformSupportRes.error.message);
 
   const subMap = new Map((subsRes.data || []).map((s) => [s.company_id, s]));
   const waByCompany = new Map<string, { status: string; is_default: boolean | null }[]>();
@@ -899,18 +959,17 @@ export async function getAdminActionCenter(): Promise<ActionCenterData> {
     });
   }
 
+  items.push(
+    ...mapPlatformSupportTicketsToActionItems(platformSupportRes.data || [], companyMap)
+  );
+
   items.sort((a, b) => {
     const sev = severityRank(a.severity) - severityRank(b.severity);
     if (sev !== 0) return sev;
     return a.company_name.localeCompare(b.company_name, 'tr');
   });
 
-  return {
-    total: items.length,
-    critical_count: items.filter((i) => i.severity === 'critical').length,
-    warning_count: items.filter((i) => i.severity === 'warning').length,
-    items,
-  };
+  return summarizeActionCenter(items);
 }
 
 export type WhatsAppHealthStatus =

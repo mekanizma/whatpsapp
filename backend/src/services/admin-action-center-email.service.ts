@@ -31,6 +31,7 @@ const ALERT_TYPE_LABELS: Record<string, string> = {
   trial_ending: 'Deneme süresi bitiyor',
   inactive_messaging: 'Mesajlaşma inaktif',
   open_ticket: 'Açık destek talebi',
+  open_platform_support: 'Platform destek talebi',
 };
 
 const SEVERITY_LABELS: Record<ActionCenterSeverity, string> = {

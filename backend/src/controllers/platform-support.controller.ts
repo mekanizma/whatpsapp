@@ -5,6 +5,7 @@
 import { Response } from 'express';
 import { demoCompany } from '../demo/mockData';
 import { AuthRequest, isDemoSession } from '../middleware/auth.middleware';
+import { adminClient } from '../database/supabase';
 import { logActivity } from '../services/log.service';
 import {
   listPlatformSupportTicketsAdmin,
@@ -18,6 +19,13 @@ import {
 } from '../services/platform-support.service';
 
 const DEMO_TICKET_ID = 'demo-platform-support-1';
+
+async function resolveAuthEmail(userId?: string): Promise<string | undefined> {
+  if (!userId) return undefined;
+  const { data, error } = await adminClient.auth.admin.getUserById(userId);
+  if (error || !data.user) return undefined;
+  return data.user.email || undefined;
+}
 
 function demoTickets() {
   const now = new Date().toISOString();
@@ -205,13 +213,14 @@ export async function createMySupportTicket(req: AuthRequest, res: Response): Pr
   }
 
   try {
+    const email = await resolveAuthEmail(req.userId);
     const data = await createPlatformSupportTicket(
       req.companyId!,
       { subject, message, category, priority },
       {
         profileId: req.profile?.id,
         name: req.profile?.full_name,
-        email: undefined,
+        email,
       }
     );
 

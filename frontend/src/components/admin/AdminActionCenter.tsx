@@ -126,7 +126,11 @@ export function AdminActionCenter() {
                     {items.map((item) => (
                       <li key={item.id}>
                         <Link
-                          to={`/admin/companies/${item.company_id}`}
+                          to={
+                            item.type === 'open_platform_support'
+                              ? '/admin/support-tickets'
+                              : `/admin/companies/${item.company_id}`
+                          }
                           className="group flex items-start gap-3 rounded-xl border border-slate-100 bg-white p-3 transition hover:border-amber-200 hover:bg-amber-50/30 sm:items-center"
                         >
                           <span

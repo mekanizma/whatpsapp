@@ -1250,7 +1250,8 @@
         "trial_expired": "Trial period has expired",
         "trial_ending": "Trial ends in {{days}} days",
         "inactive_messaging": "No messages in the last {{hours}} hours",
-        "open_ticket": "Open ticket: {{subject}}"
+        "open_ticket": "Open ticket: {{subject}}",
+        "open_platform_support": "Platform support ticket: {{subject}}"
       }
     },
     "whatsappHealth": {

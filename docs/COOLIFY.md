@@ -49,6 +49,15 @@ https://your-domain.example.com/health          → Health check
 | `DEMO_MODE` | — | ✅ | `false` |
 | `SESSIONS_DIR` | — | ✅ | `/data/sessions` |
 | `NODE_ENV` | — | ✅ | `production` |
+| `SMTP_HOST` | — | ✅ | SMTP sunucu (admin e-posta bildirimleri) |
+| `SMTP_PORT` | — | ✅ | `465` (varsayılan) |
+| `SMTP_SECURE` | — | ✅ | `true` (465 için) |
+| `SMTP_USER` | — | ✅ | SMTP kullanıcı adı |
+| `SMTP_PASS` | — | ✅ | SMTP şifre |
+| `SMTP_FROM` | — | ✅ | Gönderen adresi (boşsa `SMTP_USER`) |
+| `SMTP_FROM_NAME` | — | ✅ | `Waai Sistem` |
+| `ADMIN_NOTIFY_EMAILS` | — | ✅ | Virgülle ayrılmış ek alıcılar; aktif süper admin e-postaları otomatik eklenir |
+| `APP_URL` | — | ✅ | E-posta linkleri için tam domain (ör. `https://waai.example.com`) |
 
 Coolify otomatik ekler: `PORT`, `COOLIFY_URL`, `COOLIFY_FQDN`, `HOST`
 

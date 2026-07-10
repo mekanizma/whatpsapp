@@ -20,6 +20,10 @@ function getTransporter(): nodemailer.Transporter | null {
         user: config.smtp.user,
         pass: config.smtp.pass,
       },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
+      tls: config.smtp.host ? { servername: config.smtp.host } : undefined,
     });
   }
 

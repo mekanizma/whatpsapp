@@ -3,7 +3,9 @@
  */
 
 import { config } from '../config';
+import { adminClient } from '../database/supabase';
 import { buildMobileEmailHtml, sendEmail } from './email.service';
+import { enrichProfilesWithEmail } from './password.service';
 import type { SignupApplication } from './signup-application.service';
 import type { PlatformSupportTicket } from './platform-support.service';
 import { companyCategoryLabelsRecord } from '../constants/company-categories';
@@ -16,7 +18,25 @@ function adminBaseUrl(): string {
 }
 
 export async function resolveAdminNotifyEmails(): Promise<string[]> {
-  return [...new Set(config.smtp.adminNotifyEmails)];
+  const emails = new Set(config.smtp.adminNotifyEmails);
+
+  const { data: profiles, error } = await adminClient
+    .from('profiles')
+    .select('id, user_id')
+    .eq('role', 'super_admin')
+    .eq('is_active', true);
+
+  if (!error && profiles?.length) {
+    const enriched = await enrichProfilesWithEmail(profiles);
+    for (const profile of enriched) {
+      const email = profile.email?.trim().toLowerCase();
+      if (email) emails.add(email);
+    }
+  } else if (error) {
+    console.error('[AdminEmail] Süper admin e-postaları alınamadı:', error.message);
+  }
+
+  return [...emails];
 }
 
 async function notifyAdmins(options: {
@@ -131,6 +151,46 @@ export async function notifyAdminsNewPlatformSupportTicket(ticket: PlatformSuppo
     html: buildMobileEmailHtml({
       title: 'Yeni Platform Destek Talebi',
       intro: 'Bir müşteri şirketinden yeni destek talebi oluşturuldu.',
+      rows,
+      ctaLabel: 'Destek Taleplerini Görüntüle',
+      ctaUrl: adminUrl,
+    }),
+    text,
+  });
+}
+
+export async function notifyAdminsPlatformSupportReply(
+  ticket: PlatformSupportTicket,
+  message: string,
+  senderName?: string
+): Promise<void> {
+  const preview = message.length > 280 ? `${message.slice(0, 277)}...` : message;
+  const createdAt = new Date().toLocaleString('tr-TR');
+  const adminUrl = `${adminBaseUrl()}/admin/support-tickets`;
+
+  const rows = [
+    { label: 'Konu', value: ticket.subject },
+    { label: 'Şirket', value: ticket.company_name || '—' },
+    { label: 'Kategori', value: SUPPORT_CATEGORY_LABELS[ticket.category] || ticket.category },
+    { label: 'Öncelik', value: PRIORITY_LABELS[ticket.priority] || ticket.priority },
+    { label: 'Gönderen', value: senderName?.trim() || ticket.created_by_name || 'Kullanıcı' },
+    { label: 'Yeni Mesaj', value: preview },
+    { label: 'Tarih', value: createdAt },
+  ];
+
+  const text = [
+    'Platform destek talebine yeni yanıt',
+    '',
+    ...rows.map((r) => `${r.label}: ${r.value}`),
+    '',
+    `Yönetim paneli: ${adminUrl}`,
+  ].join('\n');
+
+  await notifyAdmins({
+    subject: `Destek talebine yanıt: ${ticket.subject}`,
+    html: buildMobileEmailHtml({
+      title: 'Destek Talebine Yeni Yanıt',
+      intro: 'Mevcut bir platform destek talebine müşteri tarafından yeni mesaj eklendi.',
       rows,
       ctaLabel: 'Destek Taleplerini Görüntüle',
       ctaUrl: adminUrl,

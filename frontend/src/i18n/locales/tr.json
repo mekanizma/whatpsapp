@@ -1250,7 +1250,8 @@
         "trial_expired": "Deneme süresi sona erdi",
         "trial_ending": "Deneme süresi {{days}} gün içinde bitiyor",
         "inactive_messaging": "Son {{hours}} saatte mesaj yok",
-        "open_ticket": "Açık talep: {{subject}}"
+        "open_ticket": "Açık talep: {{subject}}",
+        "open_platform_support": "Platform destek talebi: {{subject}}"
       }
     },
     "whatsappHealth": {
