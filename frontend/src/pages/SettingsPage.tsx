@@ -10,16 +10,12 @@ import { PageHeader } from '@/components/PageHeader';
 import { CompanyLogo } from '@/components/CompanyLogo';
 import { SettingsTabNav, type SettingsTabId, type SettingsTabItem } from '@/components/settings/SettingsTabNav';
 import { SettingsFeedback } from '@/components/settings/SettingsFeedback';
+import { SettingsSection, SettingsActionBar } from '@/components/settings/SettingsSection';
 import {
   Button,
   Input,
   Label,
   Textarea,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
   Badge,
   Spinner,
 } from '@/components/ui';
@@ -69,6 +65,8 @@ export function SettingsPage() {
 
   const isAdmin = user?.role === 'company_admin';
   const roleLabel = user?.role ? t(`common.roles.${user.role}`, { defaultValue: user.role }) : '';
+  const profileInitials = getInitials(fullName || user?.full_name || email || '?');
+  const notifyEnabledCount = notificationUsers.filter((u) => u.notify_enabled).length;
 
   const tabs = useMemo(() => {
     const items: SettingsTabItem[] = [
@@ -274,179 +272,183 @@ export function SettingsPage() {
   };
 
   return (
-    <div className="space-y-6 pb-8">
+    <div className="space-y-8 pb-8">
       <PageHeader
         title={t('settings.title')}
         description={isAdmin ? t('settings.descriptionAdmin') : t('settings.description')}
+        action={
+          isAdmin && company ? (
+            <Badge variant="info" className="self-start px-3 py-1.5 text-sm capitalize">
+              {roleLabel}
+            </Badge>
+          ) : undefined
+        }
       />
 
-      <SettingsTabNav tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
+      <div className="grid gap-6 lg:grid-cols-[minmax(200px,240px)_minmax(0,1fr)] lg:items-start lg:gap-8">
+        <aside className="lg:sticky lg:top-6">
+          <SettingsTabNav tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
+        </aside>
 
-      {activeTab === 'profile' && (
-        <div className="mx-auto w-full max-w-3xl space-y-4">
-          {!isAdmin && (
-            <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600 ring-1 ring-slate-200/60">
-              {t('settings.staffCompanyHint')}
-            </p>
-          )}
+        <main className="min-w-0 space-y-6">
+          {activeTab === 'profile' && (
+            <div className="space-y-6">
+              {!isAdmin && (
+                <p className="rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600 ring-1 ring-slate-200/60">
+                  {t('settings.staffCompanyHint')}
+                  {company?.company_name && (
+                    <span className="mt-1 block font-medium text-slate-800">
+                      {t('settings.currentCompany')} {company.company_name}
+                    </span>
+                  )}
+                </p>
+              )}
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <User className="h-5 w-5 text-primary" />
-                {t('settings.personalInfo')}
-              </CardTitle>
-              <CardDescription>{t('settings.personalDesc')}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="fullName">{t('settings.fullName')}</Label>
-                  <Input
-                    id="fullName"
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    placeholder={t('settings.fullNamePlaceholder')}
-                    autoComplete="name"
-                  />
+              <div className="flex flex-col gap-4 rounded-2xl border border-slate-200/80 bg-gradient-to-br from-white to-slate-50/80 p-5 ring-1 ring-slate-100 sm:flex-row sm:items-center">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-lg font-bold text-primary ring-1 ring-primary/10">
+                  {profileInitials}
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">{t('common.email')}</Label>
-                  <Input id="email" value={email} disabled className="bg-slate-50" />
-                  <p className="text-xs text-slate-500">{t('settings.emailChangeHint')}</p>
-                </div>
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="personalPhone">{t('settings.personalPhone')}</Label>
-                  <Input
-                    id="personalPhone"
-                    value={personalPhone}
-                    onChange={(e) => setPersonalPhone(e.target.value)}
-                    type="tel"
-                    placeholder="905551234567"
-                    autoComplete="tel"
-                  />
-                  <p className="text-xs text-slate-500">{t('settings.personalPhoneHint')}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-lg font-semibold text-slate-900">{fullName || t('settings.fullName')}</p>
+                  <p className="truncate text-sm text-slate-500">{email || '—'}</p>
+                  <Badge variant="info" className="mt-2 capitalize">{roleLabel}</Badge>
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-3 border-t border-slate-100 pt-4">
-                <span className="text-sm text-slate-500">{t('settings.roleLabel')}</span>
-                <Badge variant="info" className="capitalize">{roleLabel}</Badge>
-              </div>
-
-              <div className="flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-h-[1.25rem]">
-                  {profileMsg && <SettingsFeedback type={profileMsg.type} text={profileMsg.text} />}
+              <SettingsSection
+                title={t('settings.personalInfo')}
+                description={t('settings.personalDesc')}
+                icon={User}
+              >
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="fullName">{t('settings.fullName')}</Label>
+                    <Input
+                      id="fullName"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      placeholder={t('settings.fullNamePlaceholder')}
+                      autoComplete="name"
+                      className="h-11"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">{t('common.email')}</Label>
+                    <Input id="email" value={email} disabled className="h-11 bg-slate-50" />
+                    <p className="text-xs text-slate-500">{t('settings.emailChangeHint')}</p>
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label htmlFor="personalPhone">{t('settings.personalPhone')}</Label>
+                    <Input
+                      id="personalPhone"
+                      value={personalPhone}
+                      onChange={(e) => setPersonalPhone(e.target.value)}
+                      type="tel"
+                      placeholder="905551234567"
+                      autoComplete="tel"
+                      className="h-11"
+                    />
+                    <p className="text-xs text-slate-500">{t('settings.personalPhoneHint')}</p>
+                  </div>
                 </div>
+              </SettingsSection>
+
+              <SettingsActionBar feedback={profileMsg ? <SettingsFeedback type={profileMsg.type} text={profileMsg.text} /> : null}>
                 <Button
                   onClick={() => {
                     setProfileMsg(null);
                     profileMutation.mutate();
                   }}
                   disabled={profileMutation.isPending || !fullName.trim()}
-                  className="w-full sm:w-auto"
+                  className="h-11 w-full sm:w-auto"
                 >
                   <Save className="h-4 w-4" />
                   {profileMutation.isPending ? t('common.saving') : t('settings.saveProfile')}
                 </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+              </SettingsActionBar>
+            </div>
+          )}
 
-      {activeTab === 'security' && (
-        <div className="mx-auto w-full max-w-xl">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Lock className="h-5 w-5 text-primary" />
-                {t('settings.changePassword')}
-              </CardTitle>
-              <CardDescription>{t('settings.passwordDesc')}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isDemoMode ? (
-                <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800 ring-1 ring-amber-200/60">
-                  {t('settings.demoPassword')}
-                </p>
-              ) : (
-                <form onSubmit={handlePasswordSubmit} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="currentPassword">{t('settings.currentPassword')}</Label>
-                    <Input
-                      id="currentPassword"
-                      type={showPasswords ? 'text' : 'password'}
-                      value={currentPassword}
-                      onChange={(e) => setCurrentPassword(e.target.value)}
-                      autoComplete="current-password"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="newPassword">{t('settings.newPassword')}</Label>
-                    <Input
-                      id="newPassword"
-                      type={showPasswords ? 'text' : 'password'}
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      autoComplete="new-password"
-                      minLength={6}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="confirmPassword">{t('settings.confirmPassword')}</Label>
-                    <Input
-                      id="confirmPassword"
-                      type={showPasswords ? 'text' : 'password'}
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      autoComplete="new-password"
-                      required
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    className="flex min-h-[44px] items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700"
-                    onClick={() => setShowPasswords((v) => !v)}
-                  >
-                    {showPasswords ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                    {showPasswords ? t('settings.hidePasswords') : t('settings.showPasswords')}
-                  </button>
-
-                  <div className="flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="min-h-[1.25rem]">
-                      {passwordMsg && <SettingsFeedback type={passwordMsg.type} text={passwordMsg.text} />}
+          {activeTab === 'security' && (
+            <div className="space-y-6">
+              <SettingsSection
+                title={t('settings.changePassword')}
+                description={t('settings.passwordDesc')}
+                icon={Lock}
+              >
+                {isDemoMode ? (
+                  <p className="rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-800 ring-1 ring-amber-200/60">
+                    {t('settings.demoPassword')}
+                  </p>
+                ) : (
+                  <form onSubmit={handlePasswordSubmit} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="currentPassword">{t('settings.currentPassword')}</Label>
+                      <Input
+                        id="currentPassword"
+                        type={showPasswords ? 'text' : 'password'}
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        autoComplete="current-password"
+                        required
+                        className="h-11"
+                      />
                     </div>
-                    <Button type="submit" disabled={passwordMutation.isPending} className="w-full sm:w-auto">
-                      {passwordMutation.isPending ? t('settings.updating') : t('settings.updatePassword')}
-                    </Button>
-                  </div>
-                </form>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      )}
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor="newPassword">{t('settings.newPassword')}</Label>
+                        <Input
+                          id="newPassword"
+                          type={showPasswords ? 'text' : 'password'}
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          autoComplete="new-password"
+                          minLength={6}
+                          required
+                          className="h-11"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="confirmPassword">{t('settings.confirmPassword')}</Label>
+                        <Input
+                          id="confirmPassword"
+                          type={showPasswords ? 'text' : 'password'}
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          autoComplete="new-password"
+                          required
+                          className="h-11"
+                        />
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      className="flex min-h-[44px] items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700"
+                      onClick={() => setShowPasswords((v) => !v)}
+                    >
+                      {showPasswords ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      {showPasswords ? t('settings.hidePasswords') : t('settings.showPasswords')}
+                    </button>
 
-      {activeTab === 'company' && isAdmin && company && (
-        <div className="mx-auto w-full max-w-3xl">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Building2 className="h-5 w-5 text-primary" />
-                {t('settings.companyInfo')}
-              </CardTitle>
-              <CardDescription>{t('settings.companyDesc')}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-8">
-              <section className="space-y-4">
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-900">{t('settings.sections.branding')}</h3>
-                  <p className="mt-1 text-sm text-slate-500">{t('settings.companyLogoDesc')}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4">
+                    <SettingsActionBar feedback={passwordMsg ? <SettingsFeedback type={passwordMsg.type} text={passwordMsg.text} /> : null}>
+                      <Button type="submit" disabled={passwordMutation.isPending} className="h-11 w-full sm:w-auto">
+                        {passwordMutation.isPending ? t('settings.updating') : t('settings.updatePassword')}
+                      </Button>
+                    </SettingsActionBar>
+                  </form>
+                )}
+              </SettingsSection>
+            </div>
+          )}
+
+          {activeTab === 'company' && isAdmin && company && (
+            <div className="space-y-6">
+              <SettingsSection
+                title={t('settings.sections.branding')}
+                description={t('settings.companyLogoDesc')}
+                icon={Building2}
+              >
+                <div className="rounded-2xl border border-slate-200/80 bg-slate-50/50 p-4">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                     <CompanyLogo
                       logo={company.logo}
@@ -496,32 +498,33 @@ export function SettingsPage() {
                     </div>
                   </div>
                 </div>
-              </section>
+              </SettingsSection>
 
-              <section className="space-y-4 border-t border-slate-100 pt-8">
-                <h3 className="text-sm font-semibold text-slate-900">{t('settings.sections.general')}</h3>
-                <div className="space-y-2">
-                  <Label htmlFor="companyName">{t('settings.companyName')}</Label>
-                  <Input
-                    id="companyName"
-                    value={companyName}
-                    onChange={(e) => setCompanyName(e.target.value)}
-                    required
-                  />
+              <SettingsSection title={t('settings.sections.general')} icon={Building2}>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label htmlFor="companyName">{t('settings.companyName')}</Label>
+                    <Input
+                      id="companyName"
+                      value={companyName}
+                      onChange={(e) => setCompanyName(e.target.value)}
+                      required
+                      className="h-11"
+                    />
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label htmlFor="companyCategory">{t('settings.category')}</Label>
+                    <CompanyCategorySelect
+                      id="companyCategory"
+                      value={companyCategory}
+                      onChange={setCompanyCategory}
+                      className="h-11 rounded-xl border-slate-200 px-3.5 shadow-sm focus:border-primary/40 focus:ring-primary/25"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="companyCategory">{t('settings.category')}</Label>
-                  <CompanyCategorySelect
-                    id="companyCategory"
-                    value={companyCategory}
-                    onChange={setCompanyCategory}
-                    className="rounded-xl border-slate-200 px-3.5 shadow-sm focus:border-primary/40 focus:ring-primary/25"
-                  />
-                </div>
-              </section>
+              </SettingsSection>
 
-              <section className="space-y-4 border-t border-slate-100 pt-8">
-                <h3 className="text-sm font-semibold text-slate-900">{t('settings.sections.contact')}</h3>
+              <SettingsSection title={t('settings.sections.contact')} icon={Building2}>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-2">
                     <Label htmlFor="companyPhone">{t('settings.phone')}</Label>
@@ -531,6 +534,7 @@ export function SettingsPage() {
                       onChange={(e) => setCompanyPhone(e.target.value)}
                       type="tel"
                       placeholder="+90..."
+                      className="h-11"
                     />
                   </div>
                   <div className="space-y-2">
@@ -540,26 +544,27 @@ export function SettingsPage() {
                       value={companyEmail}
                       onChange={(e) => setCompanyEmail(e.target.value)}
                       type="email"
+                      className="h-11"
+                    />
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label htmlFor="companyAddress">{t('settings.address')}</Label>
+                    <Input
+                      id="companyAddress"
+                      value={companyAddress}
+                      onChange={(e) => setCompanyAddress(e.target.value)}
+                      className="h-11"
                     />
                   </div>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="companyAddress">{t('settings.address')}</Label>
-                  <Input
-                    id="companyAddress"
-                    value={companyAddress}
-                    onChange={(e) => setCompanyAddress(e.target.value)}
-                  />
-                </div>
-              </section>
+              </SettingsSection>
 
-              <section className="space-y-4 border-t border-slate-100 pt-8">
-                <div>
-                  <h3 className="text-sm font-semibold text-slate-900">{t('settings.sections.aiAssistant')}</h3>
-                  <p className="mt-1 text-sm text-slate-500">{t('settings.customInstructionsHint')}</p>
-                </div>
-
-                <div className="rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4">
+              <SettingsSection
+                title={t('settings.sections.aiAssistant')}
+                description={t('settings.customInstructionsHint')}
+                icon={Bot}
+              >
+                <div className="mb-5 rounded-2xl border border-slate-200/80 bg-slate-50/80 p-4">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex min-w-0 items-start gap-3">
                       <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white ring-1 ring-slate-200">
@@ -626,132 +631,138 @@ export function SettingsPage() {
                     {customInstructionsTrimmed.length}/{CUSTOM_INSTRUCTIONS_MAX_LENGTH}
                   </p>
                 </div>
-              </section>
+              </SettingsSection>
 
-              <div className="flex flex-col gap-3 border-t border-slate-100 pt-6 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-h-[1.25rem]">
-                  {companyMsg && <SettingsFeedback type={companyMsg.type} text={companyMsg.text} />}
-                </div>
+              <SettingsActionBar feedback={companyMsg ? <SettingsFeedback type={companyMsg.type} text={companyMsg.text} /> : null}>
                 <Button
                   onClick={() => {
                     setCompanyMsg(null);
                     companyMutation.mutate();
                   }}
                   disabled={companyMutation.isPending || !companyName.trim() || customInstructionsOverLimit}
-                  className="w-full sm:w-auto"
+                  className="h-11 w-full sm:w-auto"
                 >
                   <Save className="h-4 w-4" />
                   {companyMutation.isPending ? t('common.saving') : t('settings.saveCompany')}
                 </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+              </SettingsActionBar>
+            </div>
+          )}
 
-      {activeTab === 'notifications' && isAdmin && company && (
-        <div className="mx-auto w-full max-w-4xl">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Bell className="h-5 w-5 text-primary" />
-                {t('settings.notifications')}
-              </CardTitle>
-              <CardDescription>{t('settings.notificationsDesc')}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600 ring-1 ring-slate-200/60">
-                {t('settings.notificationsHint')}
-              </p>
+          {activeTab === 'notifications' && isAdmin && company && (
+            <div className="space-y-6">
+              <SettingsSection
+                title={t('settings.notifications')}
+                description={t('settings.notificationsDesc')}
+                icon={Bell}
+              >
+                <p className="mb-4 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600 ring-1 ring-slate-200/60">
+                  {t('settings.notificationsHint')}
+                </p>
 
-              {notificationsLoading ? (
-                <div className="flex justify-center py-8">
-                  <Spinner className="h-8 w-8" />
-                </div>
-              ) : notificationUsers.length === 0 ? (
-                <p className="text-sm text-slate-500">{t('settings.noUsersForNotifications')}</p>
-              ) : (
-                <div className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
-                  {notificationUsers.map((member) => {
-                    const roleText = t(`common.roles.${member.role}`, { defaultValue: member.role });
-                    const missingPhone = member.notify_enabled && !member.phone?.trim();
+                {notificationsLoading ? (
+                  <div className="flex justify-center py-10">
+                    <Spinner className="h-8 w-8" />
+                  </div>
+                ) : notificationUsers.length === 0 ? (
+                  <p className="rounded-xl bg-slate-50 px-4 py-6 text-center text-sm text-slate-500 ring-1 ring-slate-200/60">
+                    {t('settings.noUsersForNotifications')}
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {notificationUsers.map((member) => {
+                      const roleText = t(`common.roles.${member.role}`, { defaultValue: member.role });
+                      const missingPhone = member.notify_enabled && !member.phone?.trim();
 
-                    return (
-                      <div key={member.id} className="p-4 sm:p-5">
-                        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                          <label className="flex min-h-[44px] min-w-0 flex-1 cursor-pointer items-start gap-3">
-                            <input
-                              type="checkbox"
-                              checked={member.notify_enabled}
-                              onChange={(e) => {
-                                const checked = e.target.checked;
-                                setNotificationUsers((prev) =>
-                                  prev.map((u) =>
-                                    u.id === member.id ? { ...u, notify_enabled: checked } : u
-                                  )
-                                );
-                              }}
-                              className="mt-1 h-5 w-5 shrink-0 rounded border-slate-300 text-primary focus:ring-primary/30"
-                            />
-                            <div className="min-w-0">
-                              <p className="font-medium text-slate-900">{member.full_name}</p>
-                              <p className="truncate text-sm text-slate-500">{member.email || '—'}</p>
-                              <Badge variant="info" className="mt-1.5 capitalize">{roleText}</Badge>
+                      return (
+                        <div
+                          key={member.id}
+                          className="rounded-2xl border border-slate-200/80 bg-slate-50/40 p-4 ring-1 ring-slate-100"
+                        >
+                          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                            <label className="flex min-h-[44px] min-w-0 flex-1 cursor-pointer items-start gap-3">
+                              <input
+                                type="checkbox"
+                                checked={member.notify_enabled}
+                                onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  setNotificationUsers((prev) =>
+                                    prev.map((u) =>
+                                      u.id === member.id ? { ...u, notify_enabled: checked } : u
+                                    )
+                                  );
+                                }}
+                                className="mt-1 h-5 w-5 shrink-0 rounded border-slate-300 text-primary focus:ring-primary/30"
+                              />
+                              <div className="min-w-0">
+                                <p className="font-medium text-slate-900">{member.full_name}</p>
+                                <p className="truncate text-sm text-slate-500">{member.email || '—'}</p>
+                                <Badge variant="info" className="mt-1.5 capitalize">{roleText}</Badge>
+                              </div>
+                            </label>
+
+                            <div className="w-full space-y-1 lg:max-w-xs lg:shrink-0">
+                              <Label htmlFor={`notify-phone-${member.id}`} className="text-xs">
+                                {t('settings.phone')}
+                              </Label>
+                              <Input
+                                id={`notify-phone-${member.id}`}
+                                value={member.phone || ''}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  setNotificationUsers((prev) =>
+                                    prev.map((u) =>
+                                      u.id === member.id ? { ...u, phone: value } : u
+                                    )
+                                  );
+                                }}
+                                type="tel"
+                                placeholder="905551234567"
+                                className="h-11"
+                              />
+                              {missingPhone && (
+                                <p className="text-xs text-amber-600">{t('settings.noPhoneWarning')}</p>
+                              )}
                             </div>
-                          </label>
-
-                          <div className="w-full space-y-1 lg:max-w-xs lg:shrink-0">
-                            <Label htmlFor={`notify-phone-${member.id}`} className="text-xs">
-                              {t('settings.phone')}
-                            </Label>
-                            <Input
-                              id={`notify-phone-${member.id}`}
-                              value={member.phone || ''}
-                              onChange={(e) => {
-                                const value = e.target.value;
-                                setNotificationUsers((prev) =>
-                                  prev.map((u) =>
-                                    u.id === member.id ? { ...u, phone: value } : u
-                                  )
-                                );
-                              }}
-                              type="tel"
-                              placeholder="905551234567"
-                              className="h-11"
-                            />
-                            {missingPhone && (
-                              <p className="text-xs text-amber-600">{t('settings.noPhoneWarning')}</p>
-                            )}
                           </div>
                         </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
+                      );
+                    })}
+                  </div>
+                )}
+              </SettingsSection>
 
-              <div className="flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-between">
-                <div className="min-h-[1.25rem]">
-                  {notificationMsg && (
-                    <SettingsFeedback type={notificationMsg.type} text={notificationMsg.text} />
-                  )}
-                </div>
+              <SettingsActionBar
+                feedback={notificationMsg ? <SettingsFeedback type={notificationMsg.type} text={notificationMsg.text} /> : null}
+              >
+                {notificationUsers.length > 0 && (
+                  <Badge variant="default" className="hidden self-center px-3 py-1.5 sm:inline-flex">
+                    {t('settings.notifyUser')}: {notifyEnabledCount}/{notificationUsers.length}
+                  </Badge>
+                )}
                 <Button
                   onClick={() => {
                     setNotificationMsg(null);
                     notificationsMutation.mutate();
                   }}
                   disabled={notificationsMutation.isPending || notificationsLoading || notificationUsers.length === 0}
-                  className="w-full sm:w-auto"
+                  className="h-11 w-full sm:w-auto"
                 >
                   <Save className="h-4 w-4" />
                   {notificationsMutation.isPending ? t('common.saving') : t('settings.saveNotifications')}
                 </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+              </SettingsActionBar>
+            </div>
+          )}
+        </main>
+      </div>
     </div>
   );
+}
+
+function getInitials(value: string): string {
+  const parts = value.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
 }

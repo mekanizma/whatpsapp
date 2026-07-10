@@ -24,6 +24,10 @@ import {
   processInboundImage,
   processInboundVoiceMessage,
   extractPhoneFromMessage,
+  extractTextFromBaileysMessage,
+  shouldIgnoreBaileysInboundMessage,
+  getBaileysMessageTimestampSec,
+  isRecentInboundMessage,
   jidToPhone,
   normalizePhoneNumber,
   cacheCustomerJid,
@@ -631,10 +635,25 @@ async function connectBaileysSocket(
 
       for (const msg of messages) {
         if (msg.key.fromMe) continue;
+        if (shouldIgnoreBaileysInboundMessage(msg)) continue;
         if (!msg.message) continue;
+        if (!msg.key.id) {
+          console.log(`[Baileys] ID'siz mesaj atlandı (${accountId})`);
+          continue;
+        }
+
+        const messageTs = getBaileysMessageTimestampSec(msg);
+        if (!isRecentInboundMessage(messageTs)) {
+          const ageSec =
+            messageTs != null ? Math.floor(Date.now() / 1000) - messageTs : -1;
+          console.log(
+            `[Baileys] Eski mesaj atlandı (${accountId}, yaş: ${ageSec}s, id: ${msg.key.id})`
+          );
+          continue;
+        }
 
         const customerPhone = extractPhoneFromMessage(msg.key);
-        if (!customerPhone || msg.key.remoteJid?.endsWith('@g.us')) continue;
+        if (!customerPhone) continue;
 
         const customerName = msg.pushName || null;
         const replyJid = msg.key.remoteJid;
@@ -703,10 +722,7 @@ async function connectBaileysSocket(
           continue;
         }
 
-        const text =
-          msg.message.conversation ||
-          msg.message.extendedTextMessage?.text;
-
+        const text = extractTextFromBaileysMessage(msg);
         if (!text) continue;
 
         try {

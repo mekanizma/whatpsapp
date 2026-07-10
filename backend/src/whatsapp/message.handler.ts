@@ -30,10 +30,15 @@ import {
 import { detectConversationLanguage, t, type ConversationLang } from '../ai/language.service';
 import { uploadMessageMedia } from '../services/message-media.service';
 import { isCompanyAiEnabled } from '../services/company-ai-settings.service';
+import type { WAMessage } from '@whiskeysockets/baileys';
 import crypto from 'crypto';
 
 const DEBOUNCE_MS = 3000;
 const TRANSFER_REPLY_COOLDOWN_MS = 60_000;
+/** Yalnızca bu süre içindeki gelen mesajlara yanıt ver (eski sohbet senkronunu atlar) */
+export const INBOUND_MAX_AGE_SEC = 600;
+const INBOUND_CLOCK_SKEW_SEC = 120;
+const DUPLICATE_AI_REPLY_COOLDOWN_MS = 60 * 60 * 1000;
 
 const recentMessages = new Map<string, { text: string; time: number }>();
 const processedWaIds = new Set<string>();
@@ -100,6 +105,52 @@ function markProcessedWaId(companyId: string, messageId: string): void {
     const oldest = processedWaIds.values().next().value;
     if (oldest) processedWaIds.delete(oldest);
   }
+}
+
+export function getBaileysMessageTimestampSec(msg: WAMessage): number | null {
+  const raw = msg.messageTimestamp;
+  if (raw == null) return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n > 1e12 ? Math.floor(n / 1000) : Math.floor(n);
+}
+
+export function parseWebhookMessageTimestampSec(timestamp?: string): number | null {
+  if (!timestamp) return null;
+  const n = Number(timestamp);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n > 1e12 ? Math.floor(n / 1000) : Math.floor(n);
+}
+
+export function isRecentInboundMessage(
+  timestampSec: number | null,
+  maxAgeSec = INBOUND_MAX_AGE_SEC
+): boolean {
+  if (timestampSec == null) return false;
+  const nowSec = Math.floor(Date.now() / 1000);
+  const ageSec = nowSec - timestampSec;
+  if (ageSec < -INBOUND_CLOCK_SKEW_SEC) return false;
+  return ageSec >= 0 && ageSec <= maxAgeSec;
+}
+
+async function shouldSkipDuplicateAiReply(
+  companyId: string,
+  phone: string,
+  replyText: string
+): Promise<boolean> {
+  const { data } = await adminClient
+    .from('messages')
+    .select('created_at')
+    .eq('company_id', companyId)
+    .eq('customer_phone', phone)
+    .eq('sender_type', 'ai')
+    .eq('message', replyText)
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  const last = data?.[0];
+  if (!last?.created_at) return false;
+  return Date.now() - new Date(last.created_at).getTime() < DUPLICATE_AI_REPLY_COOLDOWN_MS;
 }
 
 async function isMessageAlreadyStored(companyId: string, messageId: string): Promise<boolean> {
@@ -220,23 +271,15 @@ async function handleAiDisabledInbound(
   companyId: string,
   phone: string,
   customerName: string | null,
-  messageText: string,
-  lang: ConversationLang,
-  options?: { imageAck?: boolean }
+  messageText: string
 ): Promise<string> {
   if (await hasActiveTransferTicket(companyId, phone)) {
-    console.log(`[WhatsApp] AI kapalı — aktif ticket, yanıt yok → ${phone}`);
-    return '';
-  }
-
-  if (shouldSkipTransferReply(companyId, phone)) {
+    console.log(`[WhatsApp] AI kapalı — aktif ticket, sessiz kayıt → ${phone}`);
     return '';
   }
 
   const subject = buildTransferTicketSubject(messageText, 'ai_disabled');
   await ensureOpenTransferTicket(companyId, phone, customerName, subject);
-
-  const replyMessage = options?.imageAck ? t(lang, 'photo_received') : t(lang, 'transfer_connect');
 
   await adminClient
     .from('messages')
@@ -244,17 +287,6 @@ async function handleAiDisabledInbound(
     .eq('company_id', companyId)
     .eq('customer_phone', phone)
     .eq('status', 'open');
-
-  markTransferReply(companyId, phone);
-
-  await adminClient.from('messages').insert({
-    company_id: companyId,
-    customer_phone: phone,
-    customer_name: customerName,
-    message: replyMessage,
-    sender_type: 'ai',
-    status: 'transferred',
-  });
 
   await logActivity({
     companyId,
@@ -264,11 +296,12 @@ async function handleAiDisabledInbound(
       customer_phone: phone,
       skip_reason: 'ai_disabled',
       skipped_ai: true,
+      silent_handoff: true,
     },
   });
 
-  console.log(`[WhatsApp] AI kapalı — otomatik talep açıldı → ${phone}`);
-  return replyMessage;
+  console.log(`[WhatsApp] AI kapalı — otomatik talep açıldı (yanıt yok) → ${phone}`);
+  return '';
 }
 
 export function clearTransferState(companyId: string, customerPhone: string): void {
@@ -367,9 +400,12 @@ export async function processInboundImage(
 
     if (!(await isCompanyAiEnabled(companyId))) {
       const lang = detectConversationLanguage(caption);
-      return handleAiDisabledInbound(companyId, phone, customerName, caption, lang, {
-        imageAck: true,
-      });
+      return handleAiDisabledInbound(
+        companyId,
+        phone,
+        customerName,
+        caption || buildImageTransferSubject(undefined, lang)
+      );
     }
 
     if (await hasActiveTransferTicket(companyId, phone)) {
@@ -507,7 +543,10 @@ export async function processInboundVoiceMessage(
       return '';
     }
 
-    if (whatsappMessageId) markProcessedWaId(companyId, whatsappMessageId);
+    if (!(await isCompanyAiEnabled(companyId))) {
+      if (whatsappMessageId) markProcessedWaId(companyId, whatsappMessageId);
+      return '';
+    }
 
     const history = await fetchRecentHistory(companyId, phone);
     const lang = detectConversationLanguage('', history);
@@ -574,8 +613,7 @@ export async function processInboundMessage(
     }
 
     if (!(await isCompanyAiEnabled(companyId))) {
-      const lang = detectConversationLanguage(trimmed);
-      return handleAiDisabledInbound(companyId, phone, customerName, trimmed, lang);
+      return handleAiDisabledInbound(companyId, phone, customerName, trimmed);
     }
 
     if (await hasActiveTransferTicket(companyId, phone)) {
@@ -665,6 +703,11 @@ export async function processInboundMessage(
 
     let replyMessage = aiResponse.message;
     if (!replyMessage) return '';
+
+    if (await shouldSkipDuplicateAiReply(companyId, phone, replyMessage)) {
+      console.log(`[WhatsApp] Yinelenen AI yanıtı atlandı → ${phone}`);
+      return '';
+    }
 
     let messageStatus: 'open' | 'transferred' = 'open';
 
@@ -780,6 +823,53 @@ export function formatPhoneToJid(phone: string): string {
 
 export function jidToPhone(jid: string): string {
   return jid.replace('@s.whatsapp.net', '').replace('@c.us', '').replace(/:\d+$/, '').replace('@lid', '');
+}
+
+function unwrapBaileysMessageContent(content: NonNullable<WAMessage['message']>) {
+  return (
+    content.ephemeralMessage?.message ||
+    content.viewOnceMessage?.message ||
+    content.viewOnceMessageV2?.message ||
+    content.documentWithCaptionMessage?.message ||
+    content
+  );
+}
+
+/** Baileys sistem / senkron mesajlarını filtrele — yanlış otomatik yanıtları önler */
+export function shouldIgnoreBaileysInboundMessage(msg: WAMessage): boolean {
+  const jid = msg.key.remoteJid;
+  if (!jid) return true;
+  if (jid === 'status@broadcast' || jid.endsWith('@broadcast')) return true;
+  if (jid.endsWith('@newsletter')) return true;
+  if (jid.endsWith('@g.us')) return true;
+
+  const content = msg.message;
+  if (!content) return true;
+
+  const inner = unwrapBaileysMessageContent(content);
+  if (inner.protocolMessage) return true;
+  if (inner.reactionMessage) return true;
+  if (inner.pollUpdateMessage) return true;
+  if (inner.keepInChatMessage) return true;
+  if (inner.senderKeyDistributionMessage) return true;
+
+  return false;
+}
+
+export function extractTextFromBaileysMessage(msg: WAMessage): string | null {
+  const content = msg.message;
+  if (!content) return null;
+
+  const inner = unwrapBaileysMessageContent(content);
+  const text =
+    inner.conversation ||
+    inner.extendedTextMessage?.text ||
+    inner.buttonsResponseMessage?.selectedDisplayText ||
+    inner.listResponseMessage?.title ||
+    inner.listResponseMessage?.singleSelectReply?.selectedRowId;
+
+  const trimmed = text?.trim();
+  return trimmed || null;
 }
 
 /** Baileys mesajından müşteri telefonu çıkar (LID desteği) */

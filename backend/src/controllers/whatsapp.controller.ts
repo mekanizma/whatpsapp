@@ -352,6 +352,7 @@ export async function updateAccountCloudConfig(req: AuthRequest, res: Response):
       app_secret: trimmedAppSecret,
       webhook_verify_token,
       status: 'connected',
+      last_synced_at: new Date().toISOString(),
     });
 
     await logActivity({
@@ -383,6 +384,10 @@ export async function sendAccountTest(req: AuthRequest, res: Response): Promise<
     res.status(400).json({ success: false, error: result.error || 'Mesaj gönderilemedi' });
     return;
   }
+
+  await updateWhatsAppAccount(req.companyId!, accountId, {
+    last_synced_at: new Date().toISOString(),
+  });
 
   res.json({ success: true, data: { sent: true }, message: 'Test mesajı gönderildi' });
 }
@@ -468,6 +473,7 @@ export async function updateWhatsAppConfig(req: AuthRequest, res: Response): Pro
     app_secret,
     webhook_verify_token,
     status: access_token ? 'connected' : 'disconnected',
+    last_synced_at: access_token ? new Date().toISOString() : undefined,
   });
 
   await logActivity({

@@ -4,7 +4,7 @@
 
 import { config } from '../config';
 import { adminClient } from '../database/supabase';
-import { processInboundMessage, processInboundImage, processInboundVoiceMessage } from './message.handler';
+import { processInboundMessage, processInboundImage, processInboundVoiceMessage, parseWebhookMessageTimestampSec, isRecentInboundMessage } from './message.handler';
 import {
   sendBaileysMessage,
   sendBaileysImage,
@@ -21,6 +21,7 @@ import {
 interface WebhookImageMessage {
   from: string;
   id: string;
+  timestamp?: string;
   type: 'image';
   image?: {
     id?: string;
@@ -33,6 +34,7 @@ interface WebhookImageMessage {
 interface WebhookTextMessage {
   from: string;
   id: string;
+  timestamp?: string;
   type: 'text';
   text?: { body: string };
 }
@@ -40,6 +42,7 @@ interface WebhookTextMessage {
 interface WebhookAudioMessage {
   from: string;
   id: string;
+  timestamp?: string;
   type: 'audio';
   audio?: {
     id?: string;
@@ -271,6 +274,16 @@ export async function processWebhook(payload: WebhookPayload): Promise<void> {
       if (!waConfig || waConfig.is_active === false) continue;
 
       for (const msg of messages) {
+        const messageTs = parseWebhookMessageTimestampSec(msg.timestamp);
+        if (!isRecentInboundMessage(messageTs)) {
+          const ageSec =
+            messageTs != null ? Math.floor(Date.now() / 1000) - messageTs : -1;
+          console.log(
+            `[Cloud API] Eski mesaj atlandı (yaş: ${ageSec}s, id: ${msg.id})`
+          );
+          continue;
+        }
+
         const customerName = contacts?.[0]?.profile?.name || null;
 
         if (msg.type === 'image' && msg.image?.id && waConfig.access_token) {

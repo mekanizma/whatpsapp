@@ -27,7 +27,12 @@ export async function isCompanyAiEnabled(companyId: string): Promise<boolean> {
     .eq('id', companyId)
     .single();
 
-  if (error || !data) {
+  if (error) {
+    console.error(`[AI Settings] ai_enabled okunamadı (${companyId}):`, error.message);
+    return true;
+  }
+
+  if (!data) {
     return true;
   }
 

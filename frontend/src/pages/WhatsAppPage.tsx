@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Smartphone, Wifi, WifiOff, QrCode, Send, Unplug, Cloud, Copy, Check,
-  Plus, Trash2, RefreshCw, Building2, Star, Power, ChevronDown, Link2,
+  Plus, Trash2, RefreshCw, Building2, Star, Power, ChevronDown, Link2, Save,
 } from 'lucide-react';
 import { api } from '@/services/api';
 import {
@@ -46,6 +46,7 @@ interface WhatsAppAccount {
   is_active: boolean;
   is_default: boolean;
   last_synced_at: string | null;
+  updated_at?: string | null;
   connection_type: 'qr' | 'api' | null;
   departments: Department[];
   live_connected?: boolean;
@@ -354,6 +355,7 @@ export function WhatsAppPage() {
                   if (window.confirm(t('whatsapp.deleteConfirm'))) deleteAccountMutation.mutate(account.id);
                 }}
                 onToggleActive={(active) => updateAccountMutation.mutate({ id: account.id, is_active: active })}
+                onSaveLabel={(label) => updateAccountMutation.mutate({ id: account.id, label })}
                 onSetDefault={() => updateAccountMutation.mutate({ id: account.id, is_default: true })}
                 onDepartmentsChange={(ids) => updateAccountMutation.mutate({ id: account.id, department_ids: ids })}
                 onCloudConnect={(form) => cloudConnectMutation.mutate({ accountId: account.id, form })}
@@ -362,6 +364,7 @@ export function WhatsAppPage() {
                 isQrPending={startQrMutation.isPending && startQrMutation.variables === account.id}
                 isCloudPending={cloudConnectMutation.isPending && cloudConnectMutation.variables?.accountId === account.id}
                 isDisconnecting={disconnectMutation.isPending && disconnectMutation.variables === account.id}
+                isSavingLabel={updateAccountMutation.isPending && updateAccountMutation.variables?.id === account.id && updateAccountMutation.variables?.label !== undefined}
                 onSendTest={() => sendTest(account.id)}
               />
             ))}
@@ -483,6 +486,7 @@ interface AccountCardProps {
   onDisconnect: () => void;
   onDelete: () => void;
   onToggleActive: (active: boolean) => void;
+  onSaveLabel: (label: string) => void;
   onSetDefault: () => void;
   onDepartmentsChange: (ids: string[]) => void;
   onCloudConnect: (form: CloudApiFormState) => void;
@@ -491,6 +495,7 @@ interface AccountCardProps {
   isQrPending: boolean;
   isCloudPending: boolean;
   isDisconnecting: boolean;
+  isSavingLabel: boolean;
   onSendTest: () => void;
 }
 
@@ -500,9 +505,10 @@ function AccountCard({
   activeQr, cloudForm, cloudFeedback, testState, onCloudFormChange, onTestChange,
   onStartQr, onDisconnect, onDelete, onToggleActive, onSetDefault,
   onDepartmentsChange, onCloudConnect, onCancelQr, onRefreshQr,
-  isQrPending, isCloudPending, isDisconnecting, onSendTest,
+  isQrPending, isCloudPending, isDisconnecting, isSavingLabel, onSaveLabel, onSendTest,
 }: AccountCardProps) {
   const { t } = useTranslation();
+  const [labelDraft, setLabelDraft] = useState(account.label || '');
   const isConnected = account.status === 'connected';
   const isReconnecting = account.status === 'reconnecting' || account.reconnecting;
   const isCloudConnected = isConnected && account.connection_type === 'api';
@@ -511,6 +517,12 @@ function AccountCard({
   const showModeTabs = supportsQr && supportsCloudApi;
   const useQrPanel = connectionMode === 'qr' && supportsQr;
   const useCloudPanel = connectionMode === 'api' && supportsCloudApi;
+  const lastSyncValue = account.last_synced_at || account.updated_at || null;
+  const labelChanged = labelDraft.trim() !== (account.label || '').trim();
+
+  useEffect(() => {
+    setLabelDraft(account.label || '');
+  }, [account.id, account.label]);
 
   const statusBadge = isConnected ? (
     <Badge variant="success"><Wifi className="mr-1 h-3 w-3" /> {t('whatsapp.connected')}</Badge>
@@ -580,12 +592,35 @@ function AccountCard({
       {isExpanded && (
         <CardContent className="space-y-6 border-t border-slate-100 bg-slate-50/40 pt-6">
           <SectionPanel title={t('whatsapp.sectionOverview')}>
+            <div className="mb-4 space-y-2">
+              <Label htmlFor={`wa-label-${account.id}`}>{t('whatsapp.profileName')}</Label>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Input
+                  id={`wa-label-${account.id}`}
+                  value={labelDraft}
+                  onChange={(e) => setLabelDraft(e.target.value)}
+                  placeholder={t('whatsapp.profileNamePlaceholder')}
+                  className="h-11 flex-1"
+                />
+                <Button
+                  type="button"
+                  className="h-11 w-full sm:w-auto"
+                  disabled={!labelDraft.trim() || !labelChanged || isSavingLabel}
+                  onClick={() => onSaveLabel(labelDraft)}
+                >
+                  {isSavingLabel ? <Spinner /> : <Save className="h-4 w-4" />}
+                  {t('common.save')}
+                </Button>
+              </div>
+              <p className="text-xs text-slate-500">{t('whatsapp.profileNameHint')}</p>
+            </div>
+
             <div className="grid gap-4 sm:grid-cols-2">
-              <InfoRow label={t('whatsapp.profileName')} value={account.profile_name || '—'} />
+              <InfoRow label={t('whatsapp.whatsappProfileName')} value={account.profile_name || '—'} />
               <InfoRow label={t('whatsapp.phoneNumber')} value={account.phone_number || '—'} />
               <InfoRow
                 label={t('whatsapp.lastSync')}
-                value={account.last_synced_at ? new Date(account.last_synced_at).toLocaleString() : '—'}
+                value={lastSyncValue ? new Date(lastSyncValue).toLocaleString() : '—'}
               />
               <InfoRow
                 label={t('whatsapp.linkedDepartments')}
