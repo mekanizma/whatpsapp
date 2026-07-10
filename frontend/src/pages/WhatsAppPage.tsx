@@ -3,17 +3,19 @@
  * QR (Baileys) locally | Meta Cloud API on Vercel
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Smartphone, Wifi, WifiOff, QrCode, Send, Unplug, Cloud, Copy, Check,
-  Plus, Trash2, RefreshCw, Building2, Star, Power,
+  Plus, Trash2, RefreshCw, Building2, Star, Power, ChevronDown, Link2,
 } from 'lucide-react';
 import { api } from '@/services/api';
 import {
-  Button, Input, Label, Card, CardContent, CardHeader, CardTitle, Spinner, Badge,
+  Button, Input, Label, Card, CardContent, CardHeader, CardTitle, CardDescription, Spinner, Badge,
 } from '@/components/ui';
+import { PageHeader } from '@/components/PageHeader';
+import { EmptyState } from '@/components/EmptyState';
 import { cn } from '@/lib/utils';
 import { getWhatsAppLineLimit } from '@/lib/plan-capabilities';
 
@@ -243,187 +245,221 @@ export function WhatsAppPage() {
   };
 
   const connectedCount = accounts.filter((a) => a.status === 'connected').length;
+  const limitLabel = limit >= 999 ? t('whatsapp.unlimited') : String(limit);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">{t('whatsapp.title')}</h1>
-          <p className="text-gray-500">{t('whatsapp.multiDesc')}</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 self-start">
-          <Badge variant="default" className="px-3 py-1.5 text-sm">
-            {t('whatsapp.lineUsage', { used, limit: limit >= 999 ? '∞' : limit })}
-          </Badge>
-          {connectedCount > 0 && (
-            <Badge variant="success" className="px-3 py-1.5 text-sm">
-              <Wifi className="mr-1 h-4 w-4" /> {connectedCount} {t('whatsapp.connected')}
-            </Badge>
-          )}
-        </div>
-      </div>
+    <div className="space-y-8">
+      <PageHeader
+        title={t('whatsapp.title')}
+        description={t('whatsapp.multiDesc')}
+        action={
+          <Button
+            className="w-full sm:w-auto"
+            onClick={() => createAccountMutation.mutate()}
+            disabled={!canAdd || createAccountMutation.isPending}
+          >
+            {createAccountMutation.isPending ? <Spinner /> : <Plus className="h-4 w-4" />}
+            {t('whatsapp.addAccount')}
+          </Button>
+        }
+      />
 
-      {/* Add account */}
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-sm text-gray-500">{t('whatsapp.planLimitHint', { limit: limit >= 999 ? t('whatsapp.unlimited') : limit })}</p>
-        <Button
-          className="w-full sm:w-auto"
-          onClick={() => createAccountMutation.mutate()}
-          disabled={!canAdd || createAccountMutation.isPending}
-        >
-          {createAccountMutation.isPending ? <Spinner /> : <Plus className="h-4 w-4" />}
-          {t('whatsapp.addAccount')}
-        </Button>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <StatCard
+          icon={Smartphone}
+          label={t('whatsapp.statLines')}
+          value={`${used} / ${limitLabel}`}
+          hint={t('whatsapp.planLimitHint', { limit: limitLabel })}
+        />
+        <StatCard
+          icon={Wifi}
+          label={t('whatsapp.statConnected')}
+          value={String(connectedCount)}
+          hint={connectedCount > 0 ? t('whatsapp.connected') : t('whatsapp.disconnected')}
+          accent={connectedCount > 0 ? 'success' : 'default'}
+        />
+        <StatCard
+          icon={Building2}
+          label={t('whatsapp.statDepartments')}
+          value={String(departments.length)}
+          hint={departments.length > 0 ? t('whatsapp.departmentsDesc') : t('whatsapp.noDepartments')}
+        />
       </div>
 
       {createAccountMutation.isError && (
-        <div className="rounded-lg bg-red-50 p-3 text-sm text-red-600">
+        <div className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600 ring-1 ring-red-100">
           {(createAccountMutation.error as Error).message}
         </div>
       )}
 
-      {isLoading ? (
-        <div className="flex justify-center py-12"><Spinner /></div>
-      ) : accounts.length === 0 ? (
-        <Card>
-          <CardContent className="p-8 text-center text-gray-500">
-            <Smartphone className="mx-auto mb-3 h-12 w-12 text-gray-300" />
-            <p>{t('whatsapp.noAccounts')}</p>
-            <Button className="mt-4" onClick={() => createAccountMutation.mutate()} disabled={createAccountMutation.isPending}>
-              <Plus className="h-4 w-4" /> {t('whatsapp.addFirstAccount')}
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-4">
-          {accounts.map((account) => (
-            <AccountCard
-              key={account.id}
-              account={account}
-              departments={departments}
-              isExpanded={expandedAccount === account.id}
-              onToggle={() => setExpandedAccount(expandedAccount === account.id ? null : account.id)}
-              connectionMode={getConnectionMode(account)}
-              supportsQr={supportsQr}
-              supportsCloudApi={supportsCloudApi}
-              onConnectionModeChange={(mode) => {
-                setConnectionModes((m) => ({ ...m, [account.id]: mode }));
-                setCloudFeedback((f) => {
-                  const next = { ...f };
-                  delete next[account.id];
-                  return next;
-                });
-              }}
-              activeQr={activeQr?.accountId === account.id ? activeQr.session : null}
-              cloudForm={cloudForms[account.id]}
-              cloudFeedback={cloudFeedback[account.id]}
-              testState={testState[account.id]}
-              onCloudFormChange={(form) => setCloudForms((f) => ({ ...f, [account.id]: form }))}
-              onTestChange={(state) => setTestState((s) => ({ ...s, [account.id]: state }))}
-              onStartQr={() => startQrMutation.mutate(account.id)}
-              onDisconnect={() => disconnectMutation.mutate(account.id)}
-              onDelete={() => {
-                if (window.confirm(t('whatsapp.deleteConfirm'))) deleteAccountMutation.mutate(account.id);
-              }}
-              onToggleActive={(active) => updateAccountMutation.mutate({ id: account.id, is_active: active })}
-              onSetDefault={() => updateAccountMutation.mutate({ id: account.id, is_default: true })}
-              onDepartmentsChange={(ids) => updateAccountMutation.mutate({ id: account.id, department_ids: ids })}
-              onCloudConnect={(form) => cloudConnectMutation.mutate({ accountId: account.id, form })}
-              onCancelQr={cancelQr}
-              onRefreshQr={() => startQrMutation.mutate(account.id)}
-              isQrPending={startQrMutation.isPending && startQrMutation.variables === account.id}
-              isCloudPending={cloudConnectMutation.isPending && cloudConnectMutation.variables?.accountId === account.id}
-              isDisconnecting={disconnectMutation.isPending && disconnectMutation.variables === account.id}
-              onSendTest={() => sendTest(account.id)}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* Departments */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Building2 className="h-5 w-5" />
-            {t('whatsapp.departments')}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm text-gray-500">{t('whatsapp.departmentsDesc')}</p>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Input
-              value={newDeptName}
-              onChange={(e) => setNewDeptName(e.target.value)}
-              placeholder={t('whatsapp.deptNamePlaceholder')}
-              className="flex-1"
-            />
-            <Button
-              className="w-full sm:w-auto"
-              onClick={() => createDeptMutation.mutate(newDeptName)}
-              disabled={!newDeptName.trim() || createDeptMutation.isPending}
-            >
-              <Plus className="h-4 w-4" /> {t('whatsapp.addDepartment')}
-            </Button>
+      <section className="space-y-4">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900">{t('whatsapp.sectionAccounts')}</h2>
+            <p className="text-sm text-slate-500">{t('whatsapp.sectionAccountsDesc')}</p>
           </div>
-          {departments.length > 0 ? (
-            <div className="flex flex-wrap gap-2">
-              {departments.map((dept) => (
-                <Badge key={dept.id} variant="default" className="gap-1 px-3 py-1.5">
-                  {dept.name}
-                  <button
-                    type="button"
-                    className="ml-1 text-gray-400 hover:text-red-500"
-                    onClick={() => {
-                      if (window.confirm(t('whatsapp.deleteDeptConfirm'))) deleteDeptMutation.mutate(dept.id);
-                    }}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </button>
-                </Badge>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-gray-400">{t('whatsapp.noDepartments')}</p>
+          {!canAdd && (
+            <Badge variant="warning" className="self-start px-3 py-1.5 text-sm">
+              {t('whatsapp.lineUsage', { used, limit: limitLabel })}
+            </Badge>
           )}
-        </CardContent>
-      </Card>
+        </div>
 
-      {/* Webhook info for Meta Cloud API */}
-      {supportsCloudApi && (
-        <Card>
-          <CardHeader><CardTitle>{t('whatsapp.webhookTitle')}</CardTitle></CardHeader>
-          <CardContent className="space-y-4 text-sm text-gray-600">
-            <p>{t('whatsapp.webhookDesc')}</p>
-            <div className="space-y-2">
-              <Label>{t('whatsapp.callbackUrl')}</Label>
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <Input readOnly value={webhookUrl} className="text-xs" />
-                <Button type="button" variant="outline" className="shrink-0 w-full sm:w-auto" onClick={() => copyToClipboard(webhookUrl, 'url')}>
-                  {copied === 'url' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                  {copied === 'url' ? t('common.copied') : t('common.copy')}
+        {isLoading ? (
+          <div className="flex justify-center py-12"><Spinner className="h-8 w-8" /></div>
+        ) : accounts.length === 0 ? (
+          <Card>
+            <CardContent className="p-6">
+              <EmptyState
+                icon={Smartphone}
+                title={t('whatsapp.noAccounts')}
+                description={t('whatsapp.planLimitHint', { limit: limitLabel })}
+              />
+              <div className="mt-4 flex justify-center">
+                <Button onClick={() => createAccountMutation.mutate()} disabled={createAccountMutation.isPending}>
+                  <Plus className="h-4 w-4" /> {t('whatsapp.addFirstAccount')}
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-3">
+            {accounts.map((account) => (
+              <AccountCard
+                key={account.id}
+                account={account}
+                departments={departments}
+                isExpanded={expandedAccount === account.id}
+                onToggle={() => setExpandedAccount(expandedAccount === account.id ? null : account.id)}
+                connectionMode={getConnectionMode(account)}
+                supportsQr={supportsQr}
+                supportsCloudApi={supportsCloudApi}
+                onConnectionModeChange={(mode) => {
+                  setConnectionModes((m) => ({ ...m, [account.id]: mode }));
+                  setCloudFeedback((f) => {
+                    const next = { ...f };
+                    delete next[account.id];
+                    return next;
+                  });
+                }}
+                activeQr={activeQr?.accountId === account.id ? activeQr.session : null}
+                cloudForm={cloudForms[account.id]}
+                cloudFeedback={cloudFeedback[account.id]}
+                testState={testState[account.id]}
+                onCloudFormChange={(form) => setCloudForms((f) => ({ ...f, [account.id]: form }))}
+                onTestChange={(state) => setTestState((s) => ({ ...s, [account.id]: state }))}
+                onStartQr={() => startQrMutation.mutate(account.id)}
+                onDisconnect={() => disconnectMutation.mutate(account.id)}
+                onDelete={() => {
+                  if (window.confirm(t('whatsapp.deleteConfirm'))) deleteAccountMutation.mutate(account.id);
+                }}
+                onToggleActive={(active) => updateAccountMutation.mutate({ id: account.id, is_active: active })}
+                onSetDefault={() => updateAccountMutation.mutate({ id: account.id, is_default: true })}
+                onDepartmentsChange={(ids) => updateAccountMutation.mutate({ id: account.id, department_ids: ids })}
+                onCloudConnect={(form) => cloudConnectMutation.mutate({ accountId: account.id, form })}
+                onCancelQr={cancelQr}
+                onRefreshQr={() => startQrMutation.mutate(account.id)}
+                isQrPending={startQrMutation.isPending && startQrMutation.variables === account.id}
+                isCloudPending={cloudConnectMutation.isPending && cloudConnectMutation.variables?.accountId === account.id}
+                isDisconnecting={disconnectMutation.isPending && disconnectMutation.variables === account.id}
+                onSendTest={() => sendTest(account.id)}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <div className={cn('grid gap-6', supportsCloudApi ? 'lg:grid-cols-2' : 'lg:grid-cols-1')}>
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Building2 className="h-5 w-5 text-primary" />
+              {t('whatsapp.departments')}
+            </CardTitle>
+            <CardDescription>{t('whatsapp.departmentsDesc')}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4 pt-0">
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Input
+                value={newDeptName}
+                onChange={(e) => setNewDeptName(e.target.value)}
+                placeholder={t('whatsapp.deptNamePlaceholder')}
+                className="h-11 flex-1"
+              />
+              <Button
+                className="h-11 w-full sm:w-auto"
+                onClick={() => createDeptMutation.mutate(newDeptName)}
+                disabled={!newDeptName.trim() || createDeptMutation.isPending}
+              >
+                <Plus className="h-4 w-4" /> {t('whatsapp.addDepartment')}
+              </Button>
             </div>
-            {webhookVerifyToken && (
-              <div className="space-y-2">
-                <Label>{t('whatsapp.verifyToken')}</Label>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Input readOnly value={webhookVerifyToken} className="text-xs font-mono" />
-                  <Button type="button" variant="outline" className="shrink-0 w-full sm:w-auto" onClick={() => copyToClipboard(webhookVerifyToken, 'token')}>
-                    {copied === 'token' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                    {copied === 'token' ? t('common.copied') : t('common.copy')}
-                  </Button>
-                </div>
-                <p className="text-xs text-gray-500">{t('whatsapp.webhookHint')}</p>
+            {departments.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {departments.map((dept) => (
+                  <Badge key={dept.id} variant="default" className="gap-1.5 px-3 py-1.5 text-sm">
+                    {dept.name}
+                    <button
+                      type="button"
+                      className="rounded-full p-0.5 text-slate-400 transition hover:bg-red-50 hover:text-red-500"
+                      onClick={() => {
+                        if (window.confirm(t('whatsapp.deleteDeptConfirm'))) deleteDeptMutation.mutate(dept.id);
+                      }}
+                      aria-label={t('common.delete')}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </Badge>
+                ))}
               </div>
+            ) : (
+              <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500 ring-1 ring-slate-200/60">
+                {t('whatsapp.noDepartments')}
+              </p>
             )}
-            <ol className="list-inside list-decimal space-y-1">
-              {webhookSteps.map((step) => <li key={step}>{step}</li>)}
-            </ol>
           </CardContent>
         </Card>
-      )}
+
+        {supportsCloudApi && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Cloud className="h-5 w-5 text-primary" />
+                {t('whatsapp.webhookTitle')}
+              </CardTitle>
+              <CardDescription>{t('whatsapp.webhookDesc')}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-0 text-sm text-slate-600">
+              <div className="space-y-2">
+                <Label>{t('whatsapp.callbackUrl')}</Label>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Input readOnly value={webhookUrl} className="h-11 text-xs" />
+                  <Button type="button" variant="outline" className="h-11 shrink-0 w-full sm:w-auto" onClick={() => copyToClipboard(webhookUrl, 'url')}>
+                    {copied === 'url' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    {copied === 'url' ? t('common.copied') : t('common.copy')}
+                  </Button>
+                </div>
+              </div>
+              {webhookVerifyToken && (
+                <div className="space-y-2">
+                  <Label>{t('whatsapp.verifyToken')}</Label>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Input readOnly value={webhookVerifyToken} className="h-11 text-xs font-mono" />
+                    <Button type="button" variant="outline" className="h-11 shrink-0 w-full sm:w-auto" onClick={() => copyToClipboard(webhookVerifyToken, 'token')}>
+                      {copied === 'token' ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                      {copied === 'token' ? t('common.copied') : t('common.copy')}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-slate-500">{t('whatsapp.webhookHint')}</p>
+                </div>
+              )}
+              <ol className="list-inside list-decimal space-y-1.5 rounded-xl bg-slate-50 px-4 py-3 text-slate-600 ring-1 ring-slate-200/60">
+                {webhookSteps.map((step) => <li key={step}>{step}</li>)}
+              </ol>
+            </CardContent>
+          </Card>
+        )}
+      </div>
     </div>
   );
 }
@@ -487,92 +523,111 @@ function AccountCard({
   );
 
   return (
-    <Card className={cn(!account.is_active && 'opacity-75')}>
+    <Card className={cn('overflow-hidden', !account.is_active && 'opacity-80')}>
       <button
         type="button"
-        className="w-full text-left"
+        className="w-full text-left transition-colors hover:bg-slate-50/80"
         onClick={onToggle}
+        aria-expanded={isExpanded}
       >
-        <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+        <CardContent className="flex items-start gap-3 p-4 sm:items-center sm:justify-between sm:gap-4">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/10">
               <Smartphone className="h-5 w-5 text-primary" />
             </div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <p className="font-semibold truncate">{account.label || t('whatsapp.unnamed')}</p>
+                <p className="truncate font-semibold text-slate-900">{account.label || t('whatsapp.unnamed')}</p>
                 {account.is_default && (
-                  <Star className="h-4 w-4 text-amber-500 fill-amber-500 shrink-0" />
+                  <Star className="h-4 w-4 shrink-0 fill-amber-500 text-amber-500" aria-hidden />
                 )}
               </div>
-              <p className="text-sm text-gray-500 truncate">
+              <p className="truncate text-sm text-slate-500">
                 {account.phone_number || account.profile_name || t('whatsapp.notConnected')}
               </p>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
-            {account.connection_type === 'api' && (
-              <Badge variant="default"><Cloud className="mr-1 h-3 w-3" /> {t('whatsapp.badgeCloud')}</Badge>
-            )}
-            {account.connection_type === 'qr' && isConnected && (
-              <Badge variant="default"><QrCode className="mr-1 h-3 w-3" /> {t('whatsapp.badgeQr')}</Badge>
-            )}
-            {statusBadge}
+          <div className="flex shrink-0 items-center gap-2">
+            <div className="hidden flex-wrap items-center justify-end gap-2 sm:flex">
+              {account.connection_type === 'api' && (
+                <Badge variant="default"><Cloud className="mr-1 h-3 w-3" /> {t('whatsapp.badgeCloud')}</Badge>
+              )}
+              {account.connection_type === 'qr' && isConnected && (
+                <Badge variant="default"><QrCode className="mr-1 h-3 w-3" /> {t('whatsapp.badgeQr')}</Badge>
+              )}
+              {statusBadge}
+            </div>
+            <ChevronDown
+              className={cn(
+                'h-5 w-5 shrink-0 text-slate-400 transition-transform',
+                isExpanded && 'rotate-180'
+              )}
+              aria-hidden
+            />
           </div>
         </CardContent>
+        <div className="flex flex-wrap gap-2 px-4 pb-4 sm:hidden">
+          {account.connection_type === 'api' && (
+            <Badge variant="default"><Cloud className="mr-1 h-3 w-3" /> {t('whatsapp.badgeCloud')}</Badge>
+          )}
+          {account.connection_type === 'qr' && isConnected && (
+            <Badge variant="default"><QrCode className="mr-1 h-3 w-3" /> {t('whatsapp.badgeQr')}</Badge>
+          )}
+          {statusBadge}
+        </div>
       </button>
 
       {isExpanded && (
-        <CardContent className="border-t pt-4 space-y-4">
-          {/* Meta info */}
-          <div className="grid gap-3 text-sm sm:grid-cols-2">
-            <InfoRow label={t('whatsapp.profileName')} value={account.profile_name || '—'} />
-            <InfoRow label={t('whatsapp.phoneNumber')} value={account.phone_number || '—'} />
-            <InfoRow
-              label={t('whatsapp.lastSync')}
-              value={account.last_synced_at ? new Date(account.last_synced_at).toLocaleString() : '—'}
-            />
-            <InfoRow
-              label={t('whatsapp.linkedDepartments')}
-              value={
-                account.departments.length
-                  ? account.departments.map((d) => d.name).join(', ')
-                  : t('whatsapp.noLinkedDepartments')
-              }
-            />
-          </div>
+        <CardContent className="space-y-6 border-t border-slate-100 bg-slate-50/40 pt-6">
+          <SectionPanel title={t('whatsapp.sectionOverview')}>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <InfoRow label={t('whatsapp.profileName')} value={account.profile_name || '—'} />
+              <InfoRow label={t('whatsapp.phoneNumber')} value={account.phone_number || '—'} />
+              <InfoRow
+                label={t('whatsapp.lastSync')}
+                value={account.last_synced_at ? new Date(account.last_synced_at).toLocaleString() : '—'}
+              />
+              <InfoRow
+                label={t('whatsapp.linkedDepartments')}
+                value={
+                  account.departments.length
+                    ? account.departments.map((d) => d.name).join(', ')
+                    : t('whatsapp.noLinkedDepartments')
+                }
+              />
+            </div>
+          </SectionPanel>
 
-          {/* Active toggle + default */}
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <Button
-              variant={account.is_active ? 'outline' : 'default'}
-              size="sm"
-              className="w-full sm:w-auto"
-              onClick={() => onToggleActive(!account.is_active)}
-            >
-              <Power className="h-4 w-4" />
-              {account.is_active ? t('whatsapp.setInactive') : t('whatsapp.setActive')}
-            </Button>
-            {!account.is_default && (
-              <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={onSetDefault}>
-                <Star className="h-4 w-4" /> {t('whatsapp.setDefault')}
+          <SectionPanel title={t('whatsapp.sectionManage')}>
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              <Button
+                variant={account.is_active ? 'outline' : 'default'}
+                size="sm"
+                className="h-10 w-full sm:w-auto"
+                onClick={() => onToggleActive(!account.is_active)}
+              >
+                <Power className="h-4 w-4" />
+                {account.is_active ? t('whatsapp.setInactive') : t('whatsapp.setActive')}
               </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              className="w-full text-red-600 hover:text-red-700 sm:ml-auto sm:w-auto"
-              onClick={onDelete}
-            >
-              <Trash2 className="h-4 w-4" /> {t('whatsapp.deleteAccount')}
-            </Button>
-          </div>
+              {!account.is_default && (
+                <Button variant="outline" size="sm" className="h-10 w-full sm:w-auto" onClick={onSetDefault}>
+                  <Star className="h-4 w-4" /> {t('whatsapp.setDefault')}
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-10 w-full text-red-600 hover:bg-red-50 hover:text-red-700 sm:ml-auto sm:w-auto"
+                onClick={onDelete}
+              >
+                <Trash2 className="h-4 w-4" /> {t('whatsapp.deleteAccount')}
+              </Button>
+            </div>
+          </SectionPanel>
 
-          {/* Department linking */}
           {departments.length > 0 && (
-            <div className="space-y-2">
-              <Label>{t('whatsapp.linkDepartments')}</Label>
-              <p className="text-xs text-gray-500">{t('whatsapp.linkDepartmentsHint')}</p>
+            <SectionPanel title={t('whatsapp.linkDepartments')} icon={Link2}>
+              <p className="mb-3 text-xs text-slate-500">{t('whatsapp.linkDepartmentsHint')}</p>
               <div className="flex flex-wrap gap-2">
                 {departments.map((dept) => {
                   const selected = selectedDeptIds.includes(dept.id);
@@ -581,8 +636,10 @@ function AccountCard({
                       key={dept.id}
                       type="button"
                       className={cn(
-                        'rounded-full border px-3 py-1 text-sm transition-colors',
-                        selected ? 'border-primary bg-primary/10 text-primary' : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                        'min-h-[40px] rounded-full border px-3.5 py-1.5 text-sm font-medium transition-colors',
+                        selected
+                          ? 'border-primary bg-primary/10 text-primary'
+                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
                       )}
                       onClick={() => {
                         const next = selected
@@ -596,124 +653,133 @@ function AccountCard({
                   );
                 })}
               </div>
-            </div>
+            </SectionPanel>
           )}
 
-          {/* Connection method */}
-          {showModeTabs && (
-            <div className="space-y-2">
-              <Label>{t('whatsapp.connectionMethod')}</Label>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <button
-                  type="button"
-                  className={cn(
-                    'rounded-lg border p-3 text-left transition-colors',
-                    connectionMode === 'qr'
-                      ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                      : 'border-gray-200 hover:border-gray-300'
-                  )}
-                  onClick={() => onConnectionModeChange('qr')}
-                >
-                  <div className="flex items-center gap-2 font-medium">
-                    <QrCode className="h-4 w-4 shrink-0" />
-                    {t('whatsapp.connectionQr')}
-                  </div>
-                  <p className="mt-1 text-xs text-gray-500">{t('whatsapp.connectionQrDesc')}</p>
-                </button>
-                <button
-                  type="button"
-                  className={cn(
-                    'rounded-lg border p-3 text-left transition-colors',
-                    connectionMode === 'api'
-                      ? 'border-primary bg-primary/5 ring-1 ring-primary'
-                      : 'border-gray-200 hover:border-gray-300'
-                  )}
-                  onClick={() => onConnectionModeChange('api')}
-                >
-                  <div className="flex items-center gap-2 font-medium">
-                    <Cloud className="h-4 w-4 shrink-0" />
-                    {t('whatsapp.connectionCloud')}
-                  </div>
-                  <p className="mt-1 text-xs text-gray-500">{t('whatsapp.connectionCloudDesc')}</p>
-                </button>
+          <SectionPanel title={t('whatsapp.sectionConnection')}>
+            {showModeTabs && (
+              <div className="mb-4 space-y-2">
+                <Label>{t('whatsapp.connectionMethod')}</Label>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <button
+                    type="button"
+                    className={cn(
+                      'rounded-xl border p-3 text-left transition-colors',
+                      connectionMode === 'qr'
+                        ? 'border-primary bg-white ring-1 ring-primary'
+                        : 'border-slate-200 bg-white hover:border-slate-300'
+                    )}
+                    onClick={() => onConnectionModeChange('qr')}
+                  >
+                    <div className="flex items-center gap-2 font-medium text-slate-900">
+                      <QrCode className="h-4 w-4 shrink-0" />
+                      {t('whatsapp.connectionQr')}
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">{t('whatsapp.connectionQrDesc')}</p>
+                  </button>
+                  <button
+                    type="button"
+                    className={cn(
+                      'rounded-xl border p-3 text-left transition-colors',
+                      connectionMode === 'api'
+                        ? 'border-primary bg-white ring-1 ring-primary'
+                        : 'border-slate-200 bg-white hover:border-slate-300'
+                    )}
+                    onClick={() => onConnectionModeChange('api')}
+                  >
+                    <div className="flex items-center gap-2 font-medium text-slate-900">
+                      <Cloud className="h-4 w-4 shrink-0" />
+                      {t('whatsapp.connectionCloud')}
+                    </div>
+                    <p className="mt-1 text-xs text-slate-500">{t('whatsapp.connectionCloudDesc')}</p>
+                  </button>
+                </div>
+                {isCloudConnected && connectionMode === 'qr' && (
+                  <p className="text-xs text-amber-700">{t('whatsapp.disconnectCloudFirst')}</p>
+                )}
+                {isQrConnected && connectionMode === 'api' && (
+                  <p className="text-xs text-amber-700">{t('whatsapp.disconnectQrFirst')}</p>
+                )}
               </div>
-              {isCloudConnected && connectionMode === 'qr' && (
-                <p className="text-xs text-amber-700">{t('whatsapp.disconnectCloudFirst')}</p>
-              )}
-              {isQrConnected && connectionMode === 'api' && (
-                <p className="text-xs text-amber-700">{t('whatsapp.disconnectQrFirst')}</p>
-              )}
-            </div>
-          )}
+            )}
 
-          {/* Connection */}
-          {useCloudPanel ? (
-            <CloudApiForm
-              account={account}
-              form={cloudForm || {
-                phone_number: account.phone_number || '',
-                business_account_id:
-                  account.connection_type === 'api' &&
-                  account.business_account_id &&
-                  !account.business_account_id.startsWith('baileys:')
-                    ? account.business_account_id
-                    : '',
-                access_token: '',
-                app_secret: '',
-              }}
-              onChange={onCloudFormChange}
-              onConnect={onCloudConnect}
-              onDisconnect={onDisconnect}
-              isDisconnecting={isDisconnecting}
-              isPending={isCloudPending}
-              feedback={cloudFeedback}
-            />
-          ) : useQrPanel ? (
-            isQrConnected ? (
-              <div className="flex flex-col gap-2 sm:flex-row">
-                <Button variant="outline" className="w-full sm:w-auto" onClick={onDisconnect} disabled={isDisconnecting}>
-                  <Unplug className="h-4 w-4" /> {t('whatsapp.disconnect')}
-                </Button>
-                <Button variant="outline" className="w-full sm:w-auto" onClick={onStartQr}>
-                  <RefreshCw className="h-4 w-4" /> {t('whatsapp.reconnectWithQr')}
-                </Button>
-              </div>
-            ) : (
-              <QrPanel
-                activeQr={activeQr}
-                isReconnecting={!!isReconnecting}
-                isPending={isQrPending}
-                onStart={onStartQr}
-                onRefresh={onRefreshQr}
-                onCancel={onCancelQr}
+            {useCloudPanel ? (
+              <CloudApiForm
+                account={account}
+                form={cloudForm || {
+                  phone_number: account.phone_number || '',
+                  business_account_id:
+                    account.connection_type === 'api' &&
+                    account.business_account_id &&
+                    !account.business_account_id.startsWith('baileys:')
+                      ? account.business_account_id
+                      : '',
+                  access_token: '',
+                  app_secret: '',
+                }}
+                onChange={onCloudFormChange}
+                onConnect={onCloudConnect}
+                onDisconnect={onDisconnect}
+                isDisconnecting={isDisconnecting}
+                isPending={isCloudPending}
+                feedback={cloudFeedback}
               />
-            )
-          ) : null}
+            ) : useQrPanel ? (
+              isQrConnected ? (
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button variant="outline" className="h-10 w-full sm:w-auto" onClick={onDisconnect} disabled={isDisconnecting}>
+                    <Unplug className="h-4 w-4" /> {t('whatsapp.disconnect')}
+                  </Button>
+                  <Button variant="outline" className="h-10 w-full sm:w-auto" onClick={onStartQr}>
+                    <RefreshCw className="h-4 w-4" /> {t('whatsapp.reconnectWithQr')}
+                  </Button>
+                </div>
+              ) : (
+                <QrPanel
+                  activeQr={activeQr}
+                  isReconnecting={!!isReconnecting}
+                  isPending={isQrPending}
+                  onStart={onStartQr}
+                  onRefresh={onRefreshQr}
+                  onCancel={onCancelQr}
+                />
+              )
+            ) : null}
+          </SectionPanel>
 
-          {/* Test message */}
           {isConnected && (
-            <div className="space-y-3 rounded-lg border p-4">
-              <p className="text-sm font-medium">{t('whatsapp.testMessage')}</p>
+            <SectionPanel title={t('whatsapp.sectionTest')}>
               <div className="grid gap-3 sm:grid-cols-2">
-                <Input
-                  value={testState?.phone || ''}
-                  onChange={(e) => onTestChange({ phone: e.target.value, message: testState?.message || '' })}
-                  placeholder="905551234567"
-                />
-                <Input
-                  value={testState?.message || t('whatsapp.defaultTestMsg')}
-                  onChange={(e) => onTestChange({ phone: testState?.phone || '', message: e.target.value })}
-                />
+                <div className="space-y-2">
+                  <Label>{t('whatsapp.phoneNumber')}</Label>
+                  <Input
+                    value={testState?.phone || ''}
+                    onChange={(e) => onTestChange({ phone: e.target.value, message: testState?.message || '' })}
+                    placeholder="905551234567"
+                    className="h-11"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>{t('whatsapp.testMessage')}</Label>
+                  <Input
+                    value={testState?.message || t('whatsapp.defaultTestMsg')}
+                    onChange={(e) => onTestChange({ phone: testState?.phone || '', message: e.target.value })}
+                    className="h-11"
+                  />
+                </div>
               </div>
               {testState?.feedback && (
-                <div className={cn('rounded-lg p-2 text-sm', testState.feedback.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600')}>
+                <div className={cn(
+                  'mt-3 rounded-xl px-3 py-2 text-sm',
+                  testState.feedback.type === 'success' ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100' : 'bg-red-50 text-red-600 ring-1 ring-red-100'
+                )}>
                   {testState.feedback.text}
                 </div>
               )}
-              <Button size="sm" className="w-full sm:w-auto" onClick={onSendTest} disabled={!testState?.phone}>
+              <Button size="sm" className="mt-3 h-10 w-full sm:w-auto" onClick={onSendTest} disabled={!testState?.phone}>
                 <Send className="h-4 w-4" /> {t('whatsapp.sendTest')}
               </Button>
-            </div>
+            </SectionPanel>
           )}
         </CardContent>
       )}
@@ -723,10 +789,62 @@ function AccountCard({
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <div>
-      <p className="text-xs text-gray-400">{label}</p>
-      <p className="font-medium">{value}</p>
+    <div className="rounded-xl bg-white px-3 py-2.5 ring-1 ring-slate-200/80">
+      <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="mt-1 text-sm font-medium text-slate-900">{value}</p>
     </div>
+  );
+}
+
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  hint,
+  accent = 'default',
+}: {
+  icon: typeof Smartphone;
+  label: string;
+  value: string;
+  hint: string;
+  accent?: 'default' | 'success';
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[var(--shadow-card)]">
+      <div className="flex items-start gap-3">
+        <div className={cn(
+          'flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ring-1',
+          accent === 'success' ? 'bg-emerald-50 text-emerald-600 ring-emerald-100' : 'bg-slate-50 text-slate-600 ring-slate-200'
+        )}>
+          <Icon className="h-5 w-5" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-xs font-medium text-slate-500">{label}</p>
+          <p className="mt-0.5 text-xl font-bold text-slate-900">{value}</p>
+          <p className="mt-1 line-clamp-2 text-xs text-slate-500">{hint}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SectionPanel({
+  title,
+  icon: Icon,
+  children,
+}: {
+  title: string;
+  icon?: typeof Link2;
+  children: ReactNode;
+}) {
+  return (
+    <section className="rounded-2xl border border-slate-200/80 bg-white p-4 ring-1 ring-slate-100">
+      <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-900">
+        {Icon && <Icon className="h-4 w-4 text-primary" />}
+        {title}
+      </h3>
+      {children}
+    </section>
   );
 }
 
@@ -744,10 +862,10 @@ function QrPanel({
 
   if (isReconnecting && !activeQr) {
     return (
-      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3">
+      <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-3">
         <p className="text-sm font-medium text-amber-800">{t('whatsapp.reconnectingTitle')}</p>
         <p className="text-sm text-amber-700">{t('whatsapp.reconnectingDesc')}</p>
-        <Button className="w-full sm:w-auto" onClick={onStart} disabled={isPending}>
+        <Button className="h-10 w-full sm:w-auto" onClick={onStart} disabled={isPending}>
           {isPending ? <Spinner /> : <QrCode className="h-4 w-4" />}
           {t('whatsapp.reconnectWithQr')}
         </Button>
@@ -757,9 +875,9 @@ function QrPanel({
 
   if (!activeQr) {
     return (
-      <div className="flex flex-col items-center gap-4 rounded-lg border border-dashed p-6">
-        <QrCode className="h-12 w-12 text-gray-300" />
-        <Button className="w-full max-w-xs" onClick={onStart} disabled={isPending}>
+      <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-slate-200 bg-slate-50/50 p-6">
+        <QrCode className="h-12 w-12 text-slate-300" />
+        <Button className="h-11 w-full max-w-xs" onClick={onStart} disabled={isPending}>
           {isPending ? <span className="flex items-center gap-2"><Spinner /> {t('whatsapp.generatingQr')}</span> : t('whatsapp.generateQr')}
         </Button>
       </div>
@@ -767,12 +885,12 @@ function QrPanel({
   }
 
   return (
-    <div className="flex flex-col items-center gap-3">
-      <img src={activeQr.qr_data_url} alt="WhatsApp QR" className="h-52 w-52 rounded-2xl border-2 p-3 sm:h-56 sm:w-56" />
+    <div className="flex flex-col items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+      <img src={activeQr.qr_data_url} alt="WhatsApp QR" className="h-52 w-52 rounded-2xl border-2 border-white bg-white p-3 shadow-sm sm:h-56 sm:w-56" />
       <StatusLabel status={activeQr.status} />
       <div className="flex w-full max-w-xs gap-2">
-        <Button variant="outline" className="flex-1" onClick={onRefresh}>{t('whatsapp.refresh')}</Button>
-        <Button variant="ghost" className="flex-1" onClick={onCancel}>{t('common.cancel')}</Button>
+        <Button variant="outline" className="h-10 flex-1" onClick={onRefresh}>{t('whatsapp.refresh')}</Button>
+        <Button variant="ghost" className="h-10 flex-1" onClick={onCancel}>{t('common.cancel')}</Button>
       </div>
     </div>
   );
@@ -799,43 +917,47 @@ function CloudApiForm({
     form.app_secret.trim();
 
   return (
-    <div className="space-y-3 rounded-lg border p-4">
-      <p className="flex items-center gap-2 text-sm font-medium">
-        <Cloud className="h-4 w-4" /> {t('whatsapp.cloudApi')}
-      </p>
-      <p className="text-xs text-gray-500">{t('whatsapp.cloudApiDesc')}</p>
-      <div className="space-y-2">
-        <Label>{t('whatsapp.businessPhone')}</Label>
-        <Input value={form.phone_number} onChange={(e) => onChange({ ...form, phone_number: e.target.value })} placeholder={t('whatsapp.phonePlaceholder')} />
+    <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50/50 p-4">
+      <div>
+        <p className="flex items-center gap-2 text-sm font-medium text-slate-900">
+          <Cloud className="h-4 w-4 text-primary" /> {t('whatsapp.cloudApi')}
+        </p>
+        <p className="mt-1 text-xs text-slate-500">{t('whatsapp.cloudApiDesc')}</p>
       </div>
-      <div className="space-y-2">
-        <Label>{t('whatsapp.phoneNumberId')}</Label>
-        <Input value={form.business_account_id} onChange={(e) => onChange({ ...form, business_account_id: e.target.value })} placeholder={t('whatsapp.phoneNumberIdPlaceholder')} />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label>{t('whatsapp.businessPhone')}</Label>
+          <Input value={form.phone_number} onChange={(e) => onChange({ ...form, phone_number: e.target.value })} placeholder={t('whatsapp.phonePlaceholder')} className="h-11" />
+        </div>
+        <div className="space-y-2">
+          <Label>{t('whatsapp.phoneNumberId')}</Label>
+          <Input value={form.business_account_id} onChange={(e) => onChange({ ...form, business_account_id: e.target.value })} placeholder={t('whatsapp.phoneNumberIdPlaceholder')} className="h-11" />
+        </div>
       </div>
       <div className="space-y-2">
         <Label>{t('whatsapp.accessToken')}</Label>
-        <Input type="password" value={form.access_token} onChange={(e) => onChange({ ...form, access_token: e.target.value })} placeholder={t('whatsapp.accessTokenPlaceholder')} />
+        <Input type="password" value={form.access_token} onChange={(e) => onChange({ ...form, access_token: e.target.value })} placeholder={t('whatsapp.accessTokenPlaceholder')} className="h-11" />
         {isConnected && (
-          <p className="text-xs text-gray-500">{t('whatsapp.accessTokenKeepHint')}</p>
+          <p className="text-xs text-slate-500">{t('whatsapp.accessTokenKeepHint')}</p>
         )}
       </div>
       <div className="space-y-2">
         <Label>{t('whatsapp.appSecret')}</Label>
-        <Input type="password" value={form.app_secret} onChange={(e) => onChange({ ...form, app_secret: e.target.value })} placeholder={t('whatsapp.appSecretPlaceholder')} />
-        <p className="text-xs text-gray-500">{t('whatsapp.appSecretHint')}</p>
+        <Input type="password" value={form.app_secret} onChange={(e) => onChange({ ...form, app_secret: e.target.value })} placeholder={t('whatsapp.appSecretPlaceholder')} className="h-11" />
+        <p className="text-xs text-slate-500">{t('whatsapp.appSecretHint')}</p>
       </div>
       {feedback && (
-        <div className={cn('rounded-lg p-2 text-sm', feedback.type === 'success' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600')}>
+        <div className={cn('rounded-xl px-3 py-2 text-sm', feedback.type === 'success' ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100' : 'bg-red-50 text-red-600 ring-1 ring-red-100')}>
           {feedback.text}
         </div>
       )}
       <div className="flex flex-col gap-2 sm:flex-row">
-        <Button className="w-full sm:w-auto" onClick={() => onConnect(form)} disabled={!canSubmit || isPending}>
+        <Button className="h-10 w-full sm:w-auto" onClick={() => onConnect(form)} disabled={!canSubmit || isPending}>
           {isPending ? <Spinner /> : null}
           {isConnected ? t('whatsapp.updateCloud') : t('whatsapp.connectCloud')}
         </Button>
         {isConnected && (
-          <Button variant="outline" className="w-full sm:w-auto" onClick={onDisconnect} disabled={isDisconnecting}>
+          <Button variant="outline" className="h-10 w-full sm:w-auto" onClick={onDisconnect} disabled={isDisconnecting}>
             <Unplug className="h-4 w-4" /> {t('whatsapp.disconnect')}
           </Button>
         )}
@@ -854,9 +976,9 @@ function StatusLabel({ status }: { status: string }) {
     failed: 'whatsapp.qrFailed',
   };
   const colorMap: Record<string, string> = {
-    pending: 'text-gray-600',
+    pending: 'text-slate-600',
     scanned: 'text-primary',
-    connected: 'text-green-600',
+    connected: 'text-emerald-600',
     expired: 'text-red-600',
     failed: 'text-red-600',
   };
