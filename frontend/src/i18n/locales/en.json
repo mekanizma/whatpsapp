@@ -1102,7 +1102,21 @@
   },
   "settings": {
     "title": "Account Settings",
-    "description": "Update your personal information and password.",
+    "description": "Manage your profile and security settings here.",
+    "descriptionAdmin": "Manage your profile, security, company, and notification settings.",
+    "tabs": {
+      "profile": "Profile",
+      "security": "Security",
+      "company": "Company",
+      "notifications": "Notifications"
+    },
+    "sections": {
+      "branding": "Brand & Logo",
+      "general": "General Information",
+      "contact": "Contact Details",
+      "aiAssistant": "AI Assistant"
+    },
+    "roleLabel": "Account role",
     "personalInfo": "Personal Information",
     "personalDesc": "Your name and profile details",
     "fullName": "Full Name",
