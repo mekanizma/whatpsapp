@@ -24,7 +24,7 @@ import {
   localToUtcInTimezone,
 } from './appointment-slot.service';
 import { ConversationLang, t, localeForLang } from './language.service';
-import { hasDateTimeIntent, hasAvailabilityQuery } from './appointment-datetime-tokens';
+import { hasDateTimeIntent, hasAvailabilityQuery, normalizeAppointmentDateText, weekdayInText } from './appointment-datetime-tokens';
 import {
   type AppointmentCompanyContext,
   DEFAULT_APPOINTMENT_CONTEXT,
@@ -41,7 +41,7 @@ const DATE_QUESTION_RE =
   /tarih.*ne|hangi\s+tarih|gün\s+ne|hangi\s+gün|what.*date|tell.*date|tarihi\s+söyle|tarihi\s+soyle|tarihi\s+yaz/i;
 
 const VAGUE_DATE_RE =
-  /\b(\d{1,3}\s*)?(gün\s*sonra|gun\s*sonra|days?\s*later|yarın|yarin|tomorrow|ertesi\s*gün|ertesi\s*gun|öbür\s*gün|obur\s*gun|gelecek\s*hafta|next\s*week)\b/i;
+  /\b(\d{1,3}\s*)?(gün\s*sonra|gun\s*sonra|days?\s*later|yarın|yarin|tomorrow|ertesi\s*gün|ertesi\s*gun|öbür\s*gün|obur\s*gun|oburgun|gelecek\s*hafta|haftaya|next\s*week|\d{1,2}\s*hafta\s*sonra|\d{1,2}\s*ay\s*sonra)\b/i;
 
 const WRONG_DAY_RE =
   /pazar.*kapalı|pazar.*kapali|sunday.*closed|pazar günü|pazar gunu/i;
@@ -98,6 +98,11 @@ function formatAvailabilitySlots(
     .join('\n');
 }
 
+function isNextWeekRangeQuery(message: string): boolean {
+  const normalized = normalizeAppointmentDateText(message);
+  return /gelecek\s*hafta|haftaya/.test(normalized) && weekdayInText(message) === null;
+}
+
 async function buildAvailabilityResponse(
   companyId: string,
   latestMessage: string,
@@ -105,10 +110,35 @@ async function buildAvailabilityResponse(
   ctx: AppointmentCompanyContext
 ): Promise<string | null> {
   const options = slotParseOptions(ctx);
+  const { findAvailableSlotsOnDate, findAvailableSlots } = await import(
+    '../services/appointment.service'
+  );
+
+  if (isNextWeekRangeQuery(latestMessage)) {
+    const ref = options.ref ?? new Date();
+    const weekAfter = new Date(ref.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const slots = await findAvailableSlots(companyId, ctx, {
+      count: 12,
+      daysAhead: 7,
+      after: weekAfter,
+    });
+    if (slots.length === 0) {
+      const fallback = await findAvailableSlots(companyId, ctx, { count: 5, daysAhead: 30 });
+      if (fallback.length === 0) {
+        return t(lang, 'appointment_availability_none', { date: 'gelecek hafta' });
+      }
+      return t(lang, 'appointment_availability_none_with_alts', {
+        date: 'gelecek hafta',
+        alternatives: formatAvailabilitySlots(fallback, lang, ctx.timezone),
+      });
+    }
+    return t(lang, 'appointment_availability_week_list', {
+      slots: formatAvailabilitySlots(slots, lang, ctx.timezone),
+    });
+  }
+
   const dateParts = parseDateFromText(latestMessage, options);
   if (!dateParts) return null;
-
-  const { findAvailableSlotsOnDate } = await import('../services/appointment.service');
 
   const dateLabel = formatDateLabel(dateParts, lang, ctx.timezone);
   const wd = localToUtcInTimezone(
@@ -122,11 +152,37 @@ async function buildAvailabilityResponse(
   const daySchedule = ctx.schedule[weekdayToDayKey(wd)];
 
   if (!daySchedule) {
+    const alternatives = await findAvailableSlots(companyId, ctx, { count: 5, daysAhead: 30 });
+    if (alternatives.length > 0) {
+      return t(lang, 'appointment_availability_none_with_alts', {
+        date: dateLabel,
+        alternatives: formatAvailabilitySlots(alternatives, lang, ctx.timezone),
+      });
+    }
     return t(lang, 'appointment_availability_day_closed', { date: dateLabel });
   }
 
   const slots = await findAvailableSlotsOnDate(companyId, dateParts, ctx);
   if (slots.length === 0) {
+    const dayEnd = localToUtcInTimezone(
+      dateParts.year,
+      dateParts.month,
+      dateParts.day,
+      23,
+      59,
+      ctx.timezone
+    );
+    const alternatives = await findAvailableSlots(companyId, ctx, {
+      count: 5,
+      daysAhead: 30,
+      after: dayEnd,
+    });
+    if (alternatives.length > 0) {
+      return t(lang, 'appointment_availability_none_with_alts', {
+        date: dateLabel,
+        alternatives: formatAvailabilitySlots(alternatives, lang, ctx.timezone),
+      });
+    }
     return t(lang, 'appointment_availability_none', { date: dateLabel });
   }
 
@@ -300,9 +356,7 @@ export async function reconcileAppointmentAiResponse(
 }
 
 function weekdayInCustomerMessage(message: string): boolean {
-  return /\b(pazartesi|salı|sali|çarşamba|carsamba|perşembe|persembe|cuma|cumartesi|pazar|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i.test(
-    message
-  );
+  return weekdayInText(message) !== null;
 }
 
 /** Prompt'a eklenecek parse edilmiş slot ipucu */

@@ -121,7 +121,14 @@ export const WEEKDAY_TOKENS: Record<string, number> = {
   persembe: 4,
   cuma: 5,
   cumartesi: 6,
-  // English
+  // Turkish abbreviations (ASCII keyboards)
+  pzt: 1,
+  sal: 2,
+  car: 3,
+  per: 4,
+  cum: 5,
+  cmt: 6,
+  paz: 0,
   sunday: 0,
   sun: 0,
   monday: 1,
@@ -201,20 +208,60 @@ export const RELATIVE_DATE_TOKENS = {
     /\bغداً\b/i,
   ],
   dayAfterTomorrow: [
-    /\böbür gün\b/i,
-    /\bobur\s+gün\b/i,
-    /\bobur\s+gun\b/i,
+    /\böbür\s*gün\b/i,
+    /\böbürgün\b/i,
+    /\bobur\s*gün\b/i,
+    /\bobur\s*gun\b/i,
+    /\boburgun\b/i,
+    /\bobergun\b/i,
     /\bday after tomorrow\b/i,
     /\bübermorgen\b/i,
     /\bubermorgen\b/i,
     /\bpasado mañana\b/i,
     /\bpasado manana\b/i,
   ],
-  nextWeek: [/\bgelecek\s+hafta\b/i, /\bnext\s+week\b/i, /\bnächste\s+woche\b/i, /\bnaechste\s+woche\b/i, /\bsemaine\s+prochaine\b/i, /\bpróxima\s+semana\b/i, /\bproxima\s+semana\b/i],
+  nextWeek: [
+    /\bgelecek\s+hafta\b/i,
+    /\bgelecek\s+haftaya\b/i,
+    /\bhaftaya\b/i,
+    /\bnext\s+week\b/i,
+    /\bnächste\s+woche\b/i,
+    /\bnaechste\s+woche\b/i,
+    /\bsemaine\s+prochaine\b/i,
+    /\bpróxima\s+semana\b/i,
+    /\bproxima\s+semana\b/i,
+  ],
 } as const;
+
+export const WEEKS_LATER_RE =
+  /\b(\d{1,2})\s*hafta\s*sonra\b/i;
+
+export const MONTHS_LATER_RE =
+  /\b(\d{1,2})\s*ay\s*sonra\b/i;
 
 export const DAYS_LATER_RE =
   /\b(\d{1,3})\s*(?:gün\s*sonra|gun\s*sonra|days?\s*later|tage?\s*später|tage?\s*spaeter|jours?\s*plus\s*tard|días?\s*después|dias?\s*despues)\b/i;
+
+/** WhatsApp yazımı: Türkçe karakter olmadan gönderilen tarih ifadelerini normalize et */
+export function normalizeAppointmentDateText(text: string): string {
+  return text
+    .toLocaleLowerCase('tr')
+    .replace(/öbürgün|öbür\s*gün|oburgun|obergun|obur\s*gün|obur\s*gun/g, 'öbür gün')
+    .replace(/gelecek\s*haftaya/g, 'gelecek hafta')
+    .replace(/\bhaftaya\b/g, 'gelecek hafta')
+    .replace(/ertesi\s*gun/g, 'ertesi gün')
+    .replace(/bugun/g, 'bugün')
+    .replace(/yarin/g, 'yarın')
+    .replace(/carsamba/g, 'çarşamba')
+    .replace(/persembe/g, 'perşembe')
+    .replace(/\bsali\b/g, 'salı')
+    .replace(/mayis/g, 'mayıs')
+    .replace(/agustos/g, 'ağustos')
+    .replace(/eylul/g, 'eylül')
+    .replace(/kasim/g, 'kasım')
+    .replace(/aralik/g, 'aralık')
+    .replace(/subat/g, 'şubat');
+}
 
 export function escapeRegexToken(token: string): string {
   return token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -244,9 +291,13 @@ export function buildDateTimeIntentPattern(): RegExp {
 
   const parts = [
     'yarın|yarin|tomorrow|morgen|demain|mañana|manana|завтра|غدا',
-    'today|bugün|bugun|heute|aujourd.hui|hoy|сегодня',
+    'öbür\\s*gün|obur\\s*gun|oburgun',
+    'bugün|bugun|today|heute|aujourd.hui|hoy|сегодня',
     'ertesi\\s+gün|ertesi\\s+gun',
+    'gelecek\\s+hafta|haftaya',
     '\\d{1,3}\\s*(gün\\s*sonra|gun\\s*sonra|days?\\s*later|tage?\\s*später|tage?\\s*spaeter)',
+    '\\d{1,2}\\s*hafta\\s*sonra',
+    '\\d{1,2}\\s*ay\\s*sonra',
     'saat\\s*\\d|at\\s+\\d|um\\s+\\d|à\\s+\\d|a\\s+las\\s+\\d',
     ...Object.keys(WEEKDAY_TOKENS).map(escapeRegexToken),
     '\\d{1,2}[:.]\\d{2}',
@@ -268,17 +319,25 @@ export function hasDateTimeIntent(message: string): boolean {
 }
 
 const AVAILABILITY_QUERY_RE =
-  /boş\s*saat|bos\s*saat|müsait\s*saat|musait\s*saat|hangi\s*saatler|hangi\s*saat|ne\s*zaman\s*müsait|ne\s*zaman\s*musait|müsait\s*mi|musait\s*mi|müsait\s*misin|musait\s*misin|uygun\s*saat|saat\s*var\s*m[ıi]|var\s*m[ıi]\s*boş|var\s*m[ıi]\s*bos|available\s*times?|available\s*slots?|free\s*times?|free\s*slots?|open\s*slots?|what\s*times?\s*(are\s*)?available|any\s*(free\s*)?(slots?|times?)|which\s*times?\s*(are\s*)?(available|free)|freie\s*termine?|freie\s*zeiten?|verfügbare\s*zeiten?|verfugbare\s*zeiten?|créneaux?\s*disponibles?|creneaux?\s*disponibles?|horarios?\s*(libres?|disponibles?)|quels?\s*horaires?|welche\s*zeiten?|какие\s*времена|свободн\w*\s*слот|свободн\w*\s*время/i;
+  /boş\s*saat|bos\s*saat|müsait\s*saat|musait\s*saat|hangi\s*saatler|hangi\s*saat|ne\s*zaman\s*müsait|ne\s*zaman\s*musait|müsait\s*mi|musait\s*mi|müsait\s*misin|musait\s*misin|müsait\s*mi\s*acaba|musait\s*mi\s*acaba|uygun\s*saat|uygun\s*mu|uygunmu|boş\s*mu|bos\s*mu|dolu\s*mu|dolumu|saat\s*var\s*m[ıi]|var\s*m[ıi]\s*boş|var\s*m[ıi]\s*bos|müsaitlik|musaitlik|available\s*times?|available\s*slots?|free\s*times?|free\s*slots?|open\s*slots?|what\s*times?\s*(are\s*)?available|any\s*(free\s*)?(slots?|times?)|which\s*times?\s*(are\s*)?(available|free)|freie\s*termine?|freie\s*zeiten?|verfügbare\s*zeiten?|verfugbare\s*zeiten?|créneaux?\s*disponibles?|creneaux?\s*disponibles?|horarios?\s*(libres?|disponibles?)|quels?\s*horaires?|welche\s*zeiten?|какие\s*времена|свободн\w*\s*слот|свободн\w*\s*время/i;
+
+const WEEKDAY_AVAILABILITY_RE =
+  /(?:pazartesi|pazar|salı|sali|çarşamba|carsamba|perşembe|persembe|cuma|cumartesi|pzt|sal|car|per|cum|cmt|paz|yarın|yarin|öbür\s*gün|obur\s*gun|oburgun|gelecek\s*hafta|haftaya).{0,40}(?:müsait|musait|boş|bos|uygun|dolu|saat|randevu)|(?:müsait|musait|boş|bos|uygun|dolu).{0,40}(?:pazartesi|pazar|salı|sali|çarşamba|carsamba|perşembe|persembe|cuma|cumartesi|pzt|sal|car|per|cum|cmt|paz|yarın|yarin|öbür\s*gün|obur\s*gun|oburgun|gelecek\s*hafta|haftaya)/i;
 
 /** Müşteri belirli bir gün için müsait saat listesi soruyor mu */
 export function hasAvailabilityQuery(message: string): boolean {
-  return AVAILABILITY_QUERY_RE.test(message);
+  const normalized = normalizeAppointmentDateText(message);
+  return (
+    AVAILABILITY_QUERY_RE.test(normalized) || WEEKDAY_AVAILABILITY_RE.test(normalized)
+  );
 }
 
 export function weekdayInText(text: string): number | null {
-  const variants = [text.toLocaleLowerCase('tr'), text.toLocaleLowerCase('en')];
+  const normalized = normalizeAppointmentDateText(text);
+  const variants = [normalized, text.toLocaleLowerCase('tr'), text.toLocaleLowerCase('en')];
+  const sorted = Object.entries(WEEKDAY_TOKENS).sort((a, b) => b[0].length - a[0].length);
   for (const lower of variants) {
-    for (const [name, wd] of Object.entries(WEEKDAY_TOKENS)) {
+    for (const [name, wd] of sorted) {
       if (containsWordToken(lower, name)) return wd;
     }
   }

@@ -10,6 +10,7 @@ import {
   parseSlotFromText,
   parseDateFromText,
   hasDateOnlyIntent,
+  localToUtcInTimezone,
 } from './appointment-slot.service';
 
 const REF = new Date('2026-06-30T10:00:00.000Z'); // 30 Haziran 2026 TR öğlen
@@ -215,5 +216,53 @@ describe('appointment-slot.service', () => {
     assert.ok(date);
     assert.equal(date!.day, 14);
     assert.equal(date!.month, 7);
+  });
+
+  it('oburgun ifadesini öbür gün olarak parse eder', () => {
+    const date = parseDateFromText('oburgun musait mi', {
+      ref: REF,
+      timezone: 'Europe/Istanbul',
+    });
+    assert.ok(date);
+    assert.match(
+      formatSlotTurkish(
+        localToUtcInTimezone(date!.year, date!.month, date!.day, 12, 0, 'Europe/Istanbul').toISOString(),
+        localToUtcInTimezone(date!.year, date!.month, date!.day, 12, 30, 'Europe/Istanbul').toISOString()
+      ),
+      /02\.07\.2026/
+    );
+  });
+
+  it('haftaya ifadesini gelecek hafta olarak parse eder', () => {
+    const date = parseDateFromText('haftaya randevu', {
+      ref: REF,
+      timezone: 'Europe/Istanbul',
+    });
+    assert.ok(date);
+    assert.match(
+      formatSlotTurkish(
+        localToUtcInTimezone(date!.year, date!.month, date!.day, 12, 0, 'Europe/Istanbul').toISOString(),
+        localToUtcInTimezone(date!.year, date!.month, date!.day, 12, 30, 'Europe/Istanbul').toISOString()
+      ),
+      /07\.07\.2026/
+    );
+  });
+
+  it('1 ay sonra ifadesini parse eder', () => {
+    const date = parseDateFromText('1 ay sonra', {
+      ref: REF,
+      timezone: 'Europe/Istanbul',
+    });
+    assert.ok(date);
+    assert.equal(date!.month, 7);
+    assert.equal(date!.day, 30);
+  });
+
+  it('ASCII sali ve carsamba gün adlarını tanır', () => {
+    const sali = parseDateFromText('sali musait mi', { ref: REF, timezone: 'Europe/Istanbul' });
+    const cars = parseDateFromText('carsamba uygun mu', { ref: REF, timezone: 'Europe/Istanbul' });
+    assert.ok(sali);
+    assert.ok(cars);
+    assert.notEqual(sali!.day, cars!.day);
   });
 });

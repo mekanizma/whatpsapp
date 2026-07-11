@@ -36,4 +36,16 @@ describe('appointment multilingual tokens', () => {
     assert.equal(weekdayInText('Dienstag available times'), 2);
     assert.equal(weekdayInText('mardi créneaux disponibles'), 2);
   });
+
+  it('Türkçe göreli tarih ve ASCII gün adlarını algılar', () => {
+    assert.equal(hasDateTimeIntent('yarın saat 10'), true);
+    assert.equal(hasDateTimeIntent('oburgun musait'), true);
+    assert.equal(hasDateTimeIntent('haftaya randevu'), true);
+    assert.equal(hasDateTimeIntent('1 ay sonra'), true);
+    assert.equal(hasDateTimeIntent('2 hafta sonra'), true);
+    assert.equal(hasAvailabilityQuery('pazartesi musait mi'), true);
+    assert.equal(hasAvailabilityQuery('sali hangi saatler bos'), true);
+    assert.equal(weekdayInText('persembe uygun mu'), 4);
+    assert.equal(weekdayInText('carsamba'), 3);
+  });
 });

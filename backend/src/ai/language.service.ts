@@ -192,6 +192,8 @@ type MessageKey =
   | 'appointment_availability_list'
   | 'appointment_availability_none'
   | 'appointment_availability_day_closed'
+  | 'appointment_availability_none_with_alts'
+  | 'appointment_availability_week_list'
   | 'kb_miss_instruction'
   | 'kb_topics_header'
   | 'history_photo'
@@ -865,6 +867,24 @@ Preguntas de ejemplo:
     ru: 'На {date} нет свободных слотов. Предложите другой день или время.',
     fr: 'Aucun créneau disponible le {date}. Proposez un autre jour ou horaire.',
     es: 'No hay horarios disponibles el {date}. Proponga otro día u hora.',
+  },
+  appointment_availability_none_with_alts: {
+    tr: '{date} tarihinde müsait saat yok. Yakın tarihlerde şu saatler müsait:\n{alternatives}\nHangisini tercih edersiniz?',
+    en: 'No times available on {date}. These nearby slots are open:\n{alternatives}\nWhich would you prefer?',
+    de: 'Am {date} keine freien Zeiten. Diese nahen Termine sind verfügbar:\n{alternatives}\nWelchen bevorzugen Sie?',
+    ar: 'لا توجد أوقات في {date}. الأوقات القريبة المتاحة:\n{alternatives}\nأيها تفضل؟',
+    ru: 'На {date} нет слотов. Ближайшие свободные:\n{alternatives}\nЧто выберете?',
+    fr: 'Aucun créneau le {date}. Créneaux proches disponibles :\n{alternatives}\nLequel préférez-vous ?',
+    es: 'Sin horarios el {date}. Estos huecos cercanos están libres:\n{alternatives}\n¿Cuál prefiere?',
+  },
+  appointment_availability_week_list: {
+    tr: 'Gelecek hafta müsait saatler:\n{slots}\nHangisini tercih edersiniz? Lütfen saati yazın.',
+    en: 'Available times next week:\n{slots}\nWhich would you prefer? Please reply with a time.',
+    de: 'Verfügbare Zeiten nächste Woche:\n{slots}\nWelche bevorzugen Sie? Bitte Uhrzeit nennen.',
+    ar: 'الأوقات المتاحة الأسبوع القادم:\n{slots}\nأيها تفضل؟',
+    ru: 'Свободные слоты на следующей неделе:\n{slots}\nКакой выберете?',
+    fr: 'Créneaux disponibles la semaine prochaine :\n{slots}\nLequel préférez-vous ?',
+    es: 'Horarios disponibles la próxima semana:\n{slots}\n¿Cuál prefiere?',
   },
   appointment_availability_day_closed: {
     tr: '{date} günü randevu verilmemektedir. Lütfen başka bir gün seçin.',

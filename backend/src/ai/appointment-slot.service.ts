@@ -26,6 +26,9 @@ import {
   DAYS_LATER_RE,
   WEEKDAY_TOKENS,
   weekdayInText,
+  normalizeAppointmentDateText,
+  WEEKS_LATER_RE,
+  MONTHS_LATER_RE,
 } from './appointment-datetime-tokens';
 import { CONFIRM_ONLY_PATTERN } from './appointment-confirm-tokens';
 
@@ -452,13 +455,24 @@ export function slotMatchesRequestedDate(
   return true;
 }
 
+function addMonthsToParts(
+  parts: { year: number; month: number; day: number },
+  months: number,
+  timeZone: string
+) {
+  const d = localToUtcInTimezone(parts.year, parts.month, parts.day, 12, 0, timeZone);
+  d.setUTCMonth(d.getUTCMonth() + months);
+  return companyDateParts(d, timeZone);
+}
+
 function extractDateParts(
   text: string,
   ref: Date,
   timeZone: string
 ): { year: number; month: number; day: number } | null {
-  const dateText = stripTimeFromText(text);
-  const lower = dateText.toLocaleLowerCase('tr');
+  const normalized = normalizeAppointmentDateText(text);
+  const dateText = stripTimeFromText(normalized);
+  const lower = dateText;
   const localNow = companyDateParts(ref, timeZone);
   let { year, month, day } = localNow;
 
@@ -474,7 +488,10 @@ function extractDateParts(
   if (RELATIVE_DATE_TOKENS.nextWeek.some((re) => re.test(lower))) {
     return addDays(localNow, 7, timeZone);
   }
-  if (RELATIVE_DATE_TOKENS.tomorrow.some((re) => re.test(lower))) {
+  if (/öbür\s*gün|obur\s*gun|oburgun|obergun/.test(lower)) {
+    return addDays(localNow, 2, timeZone);
+  }
+  if (RELATIVE_DATE_TOKENS.tomorrow.some((re) => re.test(lower)) || /ertesi\s*gün|ertesi\s*gun/.test(lower)) {
     return addDays(localNow, 1, timeZone);
   }
   if (RELATIVE_DATE_TOKENS.dayAfterTomorrow.some((re) => re.test(lower))) {
@@ -492,6 +509,22 @@ function extractDateParts(
     }
   }
 
+  const weeksLaterMatch = lower.match(WEEKS_LATER_RE);
+  if (weeksLaterMatch) {
+    const offset = parseInt(weeksLaterMatch[1], 10);
+    if (offset >= 1 && offset <= 52) {
+      return addDays(localNow, offset * 7, timeZone);
+    }
+  }
+
+  const monthsLaterMatch = lower.match(MONTHS_LATER_RE);
+  if (monthsLaterMatch) {
+    const offset = parseInt(monthsLaterMatch[1], 10);
+    if (offset >= 1 && offset <= 24) {
+      return addMonthsToParts(localNow, offset, timeZone);
+    }
+  }
+
   const weekdayFromText = weekdayInText(text);
   if (weekdayFromText !== null) {
     return resolveNextWeekday(weekdayFromText, localNow, timeZone, /\bnext\b/i.test(lower));
@@ -505,8 +538,8 @@ function extractDateParts(
   );
   if (monthDayMatch) {
     day = parseInt(monthDayMatch[1], 10);
-    month = MONTH_TOKENS[monthDayMatch[2].toLocaleLowerCase('tr')] ??
-      MONTH_TOKENS[monthDayMatch[2].toLocaleLowerCase('en')];
+    const monthKey = normalizeAppointmentDateText(monthDayMatch[2]);
+    month = MONTH_TOKENS[monthKey] ?? MONTH_TOKENS[monthDayMatch[2].toLocaleLowerCase('en')];
     if (monthDayMatch[3]) year = normalizeYear(parseInt(monthDayMatch[3], 10));
     if (day >= 1 && day <= daysInMonth(year, month)) {
       return { year, month, day };
@@ -521,8 +554,8 @@ function extractDateParts(
     )
   );
   if (dayMonthMatch) {
-    month = MONTH_TOKENS[dayMonthMatch[1].toLocaleLowerCase('tr')] ??
-      MONTH_TOKENS[dayMonthMatch[1].toLocaleLowerCase('en')];
+    const monthKey = normalizeAppointmentDateText(dayMonthMatch[1]);
+    month = MONTH_TOKENS[monthKey] ?? MONTH_TOKENS[dayMonthMatch[1].toLocaleLowerCase('en')];
     day = parseInt(dayMonthMatch[2], 10);
     if (dayMonthMatch[3]) year = normalizeYear(parseInt(dayMonthMatch[3], 10));
     if (day >= 1 && day <= daysInMonth(year, month)) {
