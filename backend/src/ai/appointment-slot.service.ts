@@ -27,6 +27,7 @@ import {
   WEEKDAY_TOKENS,
   weekdayInText,
 } from './appointment-datetime-tokens';
+import { CONFIRM_ONLY_PATTERN } from './appointment-confirm-tokens';
 
 export const DEFAULT_COMPANY_TIMEZONE_EXPORT = DEFAULT_COMPANY_TIMEZONE;
 /** @deprecated Use DEFAULT_COMPANY_TIMEZONE or company.timezone */
@@ -217,11 +218,8 @@ export function buildWorkingHoursRejectionMessage(
 
 export { weekdayInText };
 
-const CONFIRM_ONLY_RE =
-  /^(evet|onayl?[iıİI]yorum|onaylıyorum|onayliyorum|onay|tamam|uygun|olur|kabul|ok|yes|[123])\s*$/iu;
-
 function isConfirmationOnlyMessage(message: string): boolean {
-  return CONFIRM_ONLY_RE.test(message.trim());
+  return CONFIRM_ONLY_PATTERN.test(message.trim());
 }
 
 const MONTH_NAME_RE = new RegExp(MONTH_NAME_PATTERN, 'i');
@@ -313,6 +311,30 @@ function extractTimeFromText(text: string): { hour: number; minute: number } | n
     if (ampm === 'pm' && hour < 12) hour += 12;
     if (ampm === 'am' && hour === 12) hour = 0;
     else if (!ampm) hour = normalizeSpokenHour(hour, text);
+    if (hour <= 23 && minute <= 59) return { hour, minute };
+  }
+
+  const umTime = text.match(/\bum\s+(\d{1,2})(?:[:.](\d{2}))?\s*(?:uhr)?\b/i);
+  if (umTime) {
+    hour = parseInt(umTime[1], 10);
+    minute = umTime[2] ? parseInt(umTime[2], 10) : 0;
+    hour = normalizeSpokenHour(hour, text);
+    if (hour <= 23 && minute <= 59) return { hour, minute };
+  }
+
+  const aLasTime = text.match(/\ba\s+las\s+(\d{1,2})(?:[:.](\d{2}))?\b/i);
+  if (aLasTime) {
+    hour = parseInt(aLasTime[1], 10);
+    minute = aLasTime[2] ? parseInt(aLasTime[2], 10) : 0;
+    hour = normalizeSpokenHour(hour, text);
+    if (hour <= 23 && minute <= 59) return { hour, minute };
+  }
+
+  const aTime = text.match(/\bà\s+(\d{1,2})(?:[:.](\d{2}))?\s*h?\b/i);
+  if (aTime) {
+    hour = parseInt(aTime[1], 10);
+    minute = aTime[2] ? parseInt(aTime[2], 10) : 0;
+    hour = normalizeSpokenHour(hour, text);
     if (hour <= 23 && minute <= 59) return { hour, minute };
   }
 
@@ -483,7 +505,8 @@ function extractDateParts(
   );
   if (monthDayMatch) {
     day = parseInt(monthDayMatch[1], 10);
-    month = MONTH_TOKENS[monthDayMatch[2].toLocaleLowerCase('tr')];
+    month = MONTH_TOKENS[monthDayMatch[2].toLocaleLowerCase('tr')] ??
+      MONTH_TOKENS[monthDayMatch[2].toLocaleLowerCase('en')];
     if (monthDayMatch[3]) year = normalizeYear(parseInt(monthDayMatch[3], 10));
     if (day >= 1 && day <= daysInMonth(year, month)) {
       return { year, month, day };
@@ -498,7 +521,8 @@ function extractDateParts(
     )
   );
   if (dayMonthMatch) {
-    month = MONTH_TOKENS[dayMonthMatch[1].toLocaleLowerCase('tr')];
+    month = MONTH_TOKENS[dayMonthMatch[1].toLocaleLowerCase('tr')] ??
+      MONTH_TOKENS[dayMonthMatch[1].toLocaleLowerCase('en')];
     day = parseInt(dayMonthMatch[2], 10);
     if (dayMonthMatch[3]) year = normalizeYear(parseInt(dayMonthMatch[3], 10));
     if (day >= 1 && day <= daysInMonth(year, month)) {

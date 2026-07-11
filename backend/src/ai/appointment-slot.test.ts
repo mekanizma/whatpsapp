@@ -178,4 +178,42 @@ describe('appointment-slot.service', () => {
     });
     assert.equal(slot, null);
   });
+
+  it('July 14 ifadesinden tarih çıkarır', () => {
+    const date = parseDateFromText('any free slots on July 14', {
+      ref: REF,
+      timezone: 'Europe/Istanbul',
+    });
+    assert.ok(date);
+    assert.equal(date!.day, 14);
+    assert.equal(date!.month, 7);
+  });
+
+  it('tomorrow at 10 ifadesini parse eder', () => {
+    const slot = parseSlotFromText('tomorrow at 10', {
+      ref: REF,
+      timezone: 'Europe/Istanbul',
+    });
+    assert.ok(slot);
+    assert.match(formatSlotTurkish(slot!.starts_at, slot!.ends_at), /01\.07\.2026 10:00/);
+  });
+
+  it('morgen um 10 ifadesini parse eder', () => {
+    const slot = parseSlotFromText('morgen um 10', {
+      ref: REF,
+      timezone: 'Europe/Istanbul',
+    });
+    assert.ok(slot);
+    assert.match(formatSlotTurkish(slot!.starts_at, slot!.ends_at), /01\.07\.2026 10:00/);
+  });
+
+  it('14 juillet ifadesinden tarih çıkarır', () => {
+    const date = parseDateFromText('14 juillet créneaux disponibles', {
+      ref: REF,
+      timezone: 'Europe/Istanbul',
+    });
+    assert.ok(date);
+    assert.equal(date!.day, 14);
+    assert.equal(date!.month, 7);
+  });
 });

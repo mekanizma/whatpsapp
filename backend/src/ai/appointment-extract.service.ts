@@ -40,24 +40,25 @@ function customerProvidedTimeInHistory(history: HistoryMsg[], ctx: AppointmentCo
   );
 }
 
-const STRONG_CONFIRM_RE = /^(evet|onayl?[iıİI]yorum|onaylıyorum|onayliyorum|onay|yes)\b/iu;
-const WEAK_CONFIRM_RE = /^(tamam|uygun|olur|kabul|ok)\s*$/iu;
-const PENDING_CONFIRM_RE =
-  /onaylıyor musunuz|onayliyor musunuz|randevu özeti|onaylıyor musun|do you confirm/i;
+import {
+  STRONG_CONFIRM_PATTERN,
+  WEAK_CONFIRM_PATTERN,
+  PENDING_CONFIRM_PATTERN,
+} from './appointment-confirm-tokens';
 
 export function hasPendingAppointmentConfirmation(history: HistoryMsg[]): boolean {
   for (let i = history.length - 1; i >= 0; i--) {
     const m = history[i];
     if (m.sender_type !== 'ai' && m.sender_type !== 'assistant') continue;
-    if (PENDING_CONFIRM_RE.test(m.message)) return true;
+    if (PENDING_CONFIRM_PATTERN.test(m.message)) return true;
   }
   return false;
 }
 
 export function isAppointmentConfirmation(message: string, history: HistoryMsg[] = []): boolean {
   const trimmed = message.trim();
-  if (STRONG_CONFIRM_RE.test(trimmed)) return true;
-  if (WEAK_CONFIRM_RE.test(trimmed) && hasPendingAppointmentConfirmation(history)) return true;
+  if (STRONG_CONFIRM_PATTERN.test(trimmed)) return true;
+  if (WEAK_CONFIRM_PATTERN.test(trimmed) && hasPendingAppointmentConfirmation(history)) return true;
   return false;
 }
 
@@ -193,7 +194,7 @@ async function persistAppointment(
       );
       return { message: altMsg, appointment: null };
     }
-    return { message: `Randevu kaydedilemedi: ${errMsg}`, appointment: null };
+    return { message: t(lang, 'appointment_booking_failed', { error: errMsg }), appointment: null };
   }
 }
 
@@ -262,7 +263,7 @@ export async function bookFromConfirmation(
   try {
     return await persistAppointment(companyId, merged, lang);
   } catch (e) {
-    return { message: `Randevu kaydedilemedi: ${(e as Error).message}`, appointment: null };
+    return { message: t(lang, 'appointment_booking_failed', { error: (e as Error).message }), appointment: null };
   }
 }
 
@@ -295,10 +296,22 @@ export async function tryStructuredAppointmentBooking(
   const err = validateAppointmentAction(merged, customerPhone, lang);
   if (err) return { message: err, appointment: null };
 
+  const hours = validateSlotWorkingHours(
+    { starts_at: merged.starts_at, ends_at: merged.ends_at },
+    ctx,
+    lang
+  );
+  if (!hours.valid) {
+    return {
+      message: buildWorkingHoursRejectionMessage(hours, ctx, lang),
+      appointment: null,
+    };
+  }
+
   try {
     return await persistAppointment(companyId, merged, lang);
   } catch (e) {
-    return { message: `Randevu kaydedilemedi: ${(e as Error).message}`, appointment: null };
+    return { message: t(lang, 'appointment_booking_failed', { error: (e as Error).message }), appointment: null };
   }
 }
 

@@ -4,6 +4,8 @@
 
 import { KnowledgeItem } from '../types';
 import { config } from '../config';
+import { hasDateTimeIntent } from './appointment-datetime-tokens';
+import { CONFIRM_WORDS_PATTERN } from './appointment-confirm-tokens';
 import { isComplaintOrCorrectionMessage } from './appointment-collect.service';
 
 const STOP_WORDS = new Set([
@@ -119,7 +121,7 @@ function looksLikeQuestion(message: string): boolean {
 
 function hasAppointmentSignals(message: string): boolean {
   const msg = message.toLowerCase();
-  return /randevu|rezervasyon|appointment|müsait|musait|uygun saat|boş saat|bos saat|tarih al|saat al|görüşme|gorusme|alabilir\s*miyim|alabilirmiyim|almak istiyorum/.test(
+  return /randevu|rezervasyon|appointment|termin|rendez-vous|cita|reserva|booking|book\s+an?\s+appointment|müsait|musait|available|frei|disponible|uygun saat|boş saat|bos saat|free\s+slot|tarih al|saat al|görüşme|gorusme|alabilir\s*miyim|alabilirmiyim|almak istiyorum|make\s+an?\s+appointment/.test(
     msg
   );
 }
@@ -319,10 +321,7 @@ export function buildMandatoryKnowledgeContext(
     : full;
 }
 
-const APPOINTMENT_CONFIRM_RE =
-  /^(evet|onayl?[iıİI]yorum|onaylıyorum|onayliyorum|onay|tamam|uygun|olur|kabul|ok|yes|hayır|hayir)$/iu;
-const APPOINTMENT_TIME_RE =
-  /\b\d{1,2}[\.\:]\d{2}\b|\b\d{1,2}\s*(ocak|şubat|subat|mart|nisan|mayıs|mayis|haziran|temmuz|ağustos|agustos|eylül|eylul|ekim|kasım|kasim|aralık|aralik)\b/i;
+const APPOINTMENT_CONFIRM_RE = CONFIRM_WORDS_PATTERN;
 const APPOINTMENT_PHONE_RE = /(?:\+?90|0)?[\s-]?5\d{2}[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}/;
 
 /** Randevu süreci — bilgi bankası eşleşmesi olmasa da AI devreye girebilir */
@@ -355,7 +354,7 @@ export function isAppointmentIntent(
   const aiAskedAppointment = recent.some(
     (m) =>
       (m.sender_type === 'ai' || m.sender_type === 'assistant') &&
-      /randevu|ad.{0,5}soyad|cep telefon|telefon numara|hangi (konu|işlem|islem|hizmet)|konu\/hizmet|konu için|konu icin|işlem için|islem icin|hizmet için|hizmet icin|ne için randevu|tarih|saat|onaylıyor|onaylıyor musunuz|uygun saat/.test(
+      /randevu|appointment|termin|rendez-vous|cita|ad.{0,5}soyad|name|full name|cep telefon|telefon numara|phone|mobile|hangi (konu|işlem|islem|hizmet)|which (service|topic)|konu\/hizmet|konu için|konu icin|işlem için|islem icin|hizmet için|hizmet icin|ne için randevu|tarih|saat|date|time|onaylıyor|onaylıyor musunuz|do you confirm|confirm|bestätigen|confirmez/.test(
         m.message.toLowerCase()
       )
   );
@@ -364,7 +363,7 @@ export function isAppointmentIntent(
 
   if (APPOINTMENT_CONFIRM_RE.test(trimmed)) return true;
   if (APPOINTMENT_PHONE_RE.test(trimmed)) return true;
-  if (APPOINTMENT_TIME_RE.test(trimmed)) return true;
+  if (hasDateTimeIntent(trimmed)) return true;
 
   const nameParts = trimmed.split(/\s+/).filter(Boolean);
   if (

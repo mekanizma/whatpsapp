@@ -153,6 +153,29 @@ function shouldUseDeterministicSummary(
   return false;
 }
 
+async function buildConfirmationIfSlotFree(
+  companyId: string | undefined,
+  collected: CollectedAppointmentFields,
+  slot: ParsedSlot,
+  lang: ConversationLang,
+  ctx: AppointmentCompanyContext
+): Promise<string | null> {
+  const hours = validateSlotWorkingHours(slot, ctx, lang);
+  if (!hours.valid) return null;
+
+  if (companyId) {
+    const { hasConflict, buildConflictMessageWithAlternatives } = await import(
+      '../services/appointment.service'
+    );
+    const conflict = await hasConflict(companyId, slot.starts_at, slot.ends_at);
+    if (conflict) {
+      return buildConflictMessageWithAlternatives(companyId, slot.starts_at, slot.ends_at, lang);
+    }
+  }
+
+  return buildAppointmentConfirmationPrompt(collected, slot, lang, ctx.timezone);
+}
+
 /**
  * AI randevu yanıtını düzelt: doğru tarihli onay metni veya geçerli saat reddini engelle
  */
@@ -164,11 +187,6 @@ export async function reconcileAppointmentAiResponse(
   ctx: AppointmentCompanyContext = DEFAULT_APPOINTMENT_CONTEXT,
   companyId?: string
 ): Promise<string> {
-  const collected = parseCollectedFields(history, latestMessage);
-  if (getMissingRequiredFields(collected).length > 0) {
-    return rawAiResponse;
-  }
-
   if (companyId && isAvailabilityQuestion(latestMessage, ctx)) {
     const availabilityResponse = await buildAvailabilityResponse(
       companyId,
@@ -179,37 +197,28 @@ export async function reconcileAppointmentAiResponse(
     if (availabilityResponse) return availabilityResponse;
   }
 
+  const collected = parseCollectedFields(history, latestMessage);
+  if (getMissingRequiredFields(collected).length > 0) {
+    if (
+      isAvailabilityQuestion(latestMessage, ctx) &&
+      (CONFIRMATION_RE.test(rawAiResponse) || /randevu özeti|appointment summary/i.test(rawAiResponse))
+    ) {
+      return t(lang, 'appointment_time_unclear');
+    }
+    return rawAiResponse;
+  }
+
   const slotFromConversation = resolveRequestedSlot(history, latestMessage, ctx);
 
-  if (
-    shouldUseDeterministicSummary(rawAiResponse, latestMessage, slotFromConversation, ctx)
-  ) {
-    const hours = validateSlotWorkingHours(slotFromConversation!, ctx, lang);
-    if (hours.valid) {
-      if (companyId) {
-        const { hasConflict } = await import('../services/appointment.service');
-        const conflict = await hasConflict(
-          companyId,
-          slotFromConversation!.starts_at,
-          slotFromConversation!.ends_at
-        );
-        if (!conflict) {
-          return buildAppointmentConfirmationPrompt(
-            collected,
-            slotFromConversation!,
-            lang,
-            ctx.timezone
-          );
-        }
-      } else {
-        return buildAppointmentConfirmationPrompt(
-          collected,
-          slotFromConversation!,
-          lang,
-          ctx.timezone
-        );
-      }
-    }
+  if (shouldUseDeterministicSummary(rawAiResponse, latestMessage, slotFromConversation, ctx)) {
+    const confirmation = await buildConfirmationIfSlotFree(
+      companyId,
+      collected,
+      slotFromConversation!,
+      lang,
+      ctx
+    );
+    if (confirmation) return confirmation;
   }
 
   const customerGaveTime = hasDateTimeIntent(latestMessage);
@@ -221,13 +230,20 @@ export async function reconcileAppointmentAiResponse(
 
   if (!slot && slotFromConversation && VAGUE_DATE_RE.test(rawAiResponse)) {
     if (slotMatchesRequestedDate(slotFromConversation, latestMessage, options)) {
-      return buildAppointmentConfirmationPrompt(collected, slotFromConversation, lang, ctx.timezone);
+      const confirmation = await buildConfirmationIfSlotFree(
+        companyId,
+        collected,
+        slotFromConversation,
+        lang,
+        ctx
+      );
+      if (confirmation) return confirmation;
     }
   }
   if (!slot) {
     if (
       isAvailabilityQuestion(latestMessage, ctx) &&
-      (CONFIRMATION_RE.test(rawAiResponse) || /randevu özeti/i.test(rawAiResponse))
+      (CONFIRMATION_RE.test(rawAiResponse) || /randevu özeti|appointment summary/i.test(rawAiResponse))
     ) {
       return t(lang, 'appointment_time_unclear');
     }
@@ -247,11 +263,8 @@ export async function reconcileAppointmentAiResponse(
   const aiConfirming = CONFIRMATION_RE.test(rawAiResponse);
 
   if (companyId && aiRejected && customerGaveTime) {
-    const { hasConflict } = await import('../services/appointment.service');
-    const conflict = await hasConflict(companyId, slot.starts_at, slot.ends_at);
-    if (!conflict) {
-      return buildAppointmentConfirmationPrompt(collected, slot, lang, ctx.timezone);
-    }
+    const confirmation = await buildConfirmationIfSlotFree(companyId, collected, slot, lang, ctx);
+    if (confirmation) return confirmation;
   }
 
   if (
@@ -259,7 +272,8 @@ export async function reconcileAppointmentAiResponse(
     slotMatchesRequestedDate(slot, latestMessage, options) &&
     (aiRejected || aiConfirming || /randevu özeti|tarih.*saat|appointment summary/i.test(rawAiResponse))
   ) {
-    return buildAppointmentConfirmationPrompt(collected, slot, lang, ctx.timezone);
+    const confirmation = await buildConfirmationIfSlotFree(companyId, collected, slot, lang, ctx);
+    if (confirmation) return confirmation;
   }
 
   if (
@@ -267,11 +281,19 @@ export async function reconcileAppointmentAiResponse(
     slotFromConversation &&
     slotMatchesRequestedDate(slotFromConversation, latestMessage, options)
   ) {
-    return buildAppointmentConfirmationPrompt(collected, slot, lang, ctx.timezone);
+    const confirmation = await buildConfirmationIfSlotFree(
+      companyId,
+      collected,
+      slot,
+      lang,
+      ctx
+    );
+    if (confirmation) return confirmation;
   }
 
   if (aiRejected && customerGaveTime && slotMatchesRequestedDate(slot, latestMessage, options)) {
-    return buildAppointmentConfirmationPrompt(collected, slot, lang, ctx.timezone);
+    const confirmation = await buildConfirmationIfSlotFree(companyId, collected, slot, lang, ctx);
+    if (confirmation) return confirmation;
   }
 
   return rawAiResponse;
@@ -288,7 +310,8 @@ export function buildParsedSlotHint(
   history: HistoryMsg[],
   latestMessage: string,
   collected: CollectedAppointmentFields,
-  ctx: AppointmentCompanyContext = DEFAULT_APPOINTMENT_CONTEXT
+  ctx: AppointmentCompanyContext = DEFAULT_APPOINTMENT_CONTEXT,
+  lang: ConversationLang = 'tr'
 ): string {
   if (!collected.customer_name || !collected.customer_phone || !collected.title) {
     return '';
@@ -300,11 +323,11 @@ export function buildParsedSlotHint(
   const slot = resolveRequestedSlot(history, latestMessage, ctx);
   if (!slot) return '';
 
-  const label = formatSlotLocalized(slot.starts_at, slot.ends_at, 'tr', ctx.timezone);
-  const hours = validateSlotWorkingHours(slot, ctx, 'tr');
+  const label = formatSlotLocalized(slot.starts_at, slot.ends_at, lang, ctx.timezone);
+  const hours = validateSlotWorkingHours(slot, ctx, lang);
   if (!hours.valid) {
-    return `\nMÜŞTERİ SAAT İSTEĞİ (sistem): ${label} — UYGUN DEĞİL (${hours.reason}). Alternatif saat öner.`;
+    return `\nPARSED CUSTOMER TIME (system): ${label} — NOT VALID (${hours.reason}). Suggest alternatives from AVAILABLE SLOTS only.`;
   }
 
-  return `\nMÜŞTERİ SAAT İSTEĞİ (sistem parse — onayda AYNEN bunu kullan): ${label}. Başka tarih yazma.`;
+  return `\nPARSED CUSTOMER TIME (system — use EXACTLY in confirmation): ${label}. Do not write a different date.`;
 }

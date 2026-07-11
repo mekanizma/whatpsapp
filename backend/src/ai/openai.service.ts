@@ -89,15 +89,21 @@ async function fetchGenerateAIContext(
   customerPhone: string,
   trimmed: string
 ): Promise<GenerateAIContext> {
-  const [historyResult, company, knowledgeResult, appointmentContext, ecommerceBase] =
-    await Promise.all([
-      adminClient
-        .from('messages')
-        .select('sender_type, message')
-        .eq('company_id', companyId)
-        .eq('customer_phone', customerPhone)
-        .order('created_at', { ascending: false })
-        .limit(config.ai.maxHistoryMessages + HISTORY_FETCH_EXTRA),
+  const historyResult = await adminClient
+    .from('messages')
+    .select('sender_type, message')
+    .eq('company_id', companyId)
+    .eq('customer_phone', customerPhone)
+    .order('created_at', { ascending: false })
+    .limit(config.ai.maxHistoryMessages + HISTORY_FETCH_EXTRA);
+
+  const history = (historyResult.data || [])
+    .reverse()
+    .filter((m) => m.message !== trimmed);
+
+  const conversationLang = detectConversationLanguage(trimmed, history);
+
+  const [company, knowledgeResult, appointmentContext, ecommerceBase] = await Promise.all([
       getCompany(companyId),
       adminClient
         .from('knowledge_base')
@@ -105,7 +111,7 @@ async function fetchGenerateAIContext(
         .eq('company_id', companyId)
         .eq('is_active', true)
         .limit(200),
-      getAppointmentContextForAI(companyId).catch(() => ''),
+      getAppointmentContextForAI(companyId, conversationLang).catch(() => ''),
       (async () => {
         const allowed = await companyCanUseEcommerce(companyId).catch(() => false);
         if (!allowed) return { context: '', returnsEnabled: false };
@@ -127,10 +133,6 @@ async function fetchGenerateAIContext(
         };
       })(),
     ]);
-
-  const history = (historyResult.data || [])
-    .reverse()
-    .filter((m) => m.message !== trimmed);
 
   return {
     history,
@@ -286,7 +288,7 @@ export async function generateAIResponse(
   const collectedContext = appointmentMode
     ? (() => {
         const collected = parseCollectedFields(history, trimmed);
-        const slotHint = buildParsedSlotHint(history, trimmed, collected, appointmentCtx);
+        const slotHint = buildParsedSlotHint(history, trimmed, collected, appointmentCtx, conversationLang);
         return buildCollectedFieldsContext(history, trimmed, conversationLang, company.category) + slotHint;
       })()
     : '';

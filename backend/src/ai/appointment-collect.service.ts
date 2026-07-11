@@ -3,6 +3,7 @@
  */
 
 import { ConversationLang, detectConversationLanguage, t, getAppointmentProviderLabel } from './language.service';
+import { CONFIRM_WORDS_PATTERN } from './appointment-confirm-tokens';
 import {
   buildAppointmentProviderRule,
   shouldAskAppointmentProvider,
@@ -38,8 +39,7 @@ function extractPhone(text: string): string | null {
   return n.length >= 10 ? n : null;
 }
 
-const CONFIRM_WORDS = /^(evet|onayl?[iıİI]yorum|onaylıyorum|onayliyorum|onay|tamam|uygun|olur|kabul|ok|yes|hayır|hayir)$/iu;
-const APPOINTMENT_REQUEST_RE = /randevu|rezervasyon|appointment|müsait|musait|alabilir\s*miyim|alabilirmiyim|almak istiyorum/i;
+const APPOINTMENT_REQUEST_RE = /randevu|rezervasyon|appointment|termin|rendez-vous|cita|reserva|موعد|запись|müsait|musait|available|frei|disponible|alabilir\s*miyim|alabilirmiyim|almak istiyorum|book.*appointment|make.*appointment/i;
 const PROFANITY_RE =
   /\b(amk|amına|amina|amın|siktir|sikeyim|orospu|oç|oc\b|yarrak|piç|pic\b|sokuk|göt|got\b|kahpe|ibne|mal\b|salak|aptal)\b/i;
 const COMPLAINT_RE =
@@ -160,7 +160,7 @@ export function parseCollectedFields(
     const cust = next.message.trim();
     if (!cust || cust.length < 2) continue;
     if (isComplaintOrCorrectionMessage(cust)) continue;
-    if (CONFIRM_WORDS.test(cust)) continue;
+    if (CONFIRM_WORDS_PATTERN.test(cust)) continue;
 
     if (isAskingForName(ai) && isValidFullName(cust)) {
       customer_name = cust;
@@ -205,7 +205,7 @@ export function parseCollectedFields(
       if (isComplaintOrCorrectionMessage(candidate)) continue;
       if (!isValidFullName(candidate)) continue;
       if (extractPhone(candidate)) continue;
-      if (CONFIRM_WORDS.test(candidate)) continue;
+      if (CONFIRM_WORDS_PATTERN.test(candidate)) continue;
       const prev = i > 0 ? messages[i - 1] : null;
       if (prev && isAiSender(prev.sender_type) && isAskingForServiceTopic(prev.message)) continue;
       customer_name = candidate;

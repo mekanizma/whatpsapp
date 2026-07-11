@@ -647,7 +647,10 @@ export async function deleteAppointment(companyId: string, id: string): Promise<
 }
 
 /** AI sistem promptu — yönetici paneli takvimine göre dolu ve müsait saatler */
-export async function getAppointmentContextForAI(companyId: string): Promise<string> {
+export async function getAppointmentContextForAI(
+  companyId: string,
+  lang: ConversationLang = 'tr'
+): Promise<string> {
   const ctx = await fetchCompanyAppointmentContext(companyId);
   const now = new Date();
   const until = new Date(now);
@@ -660,17 +663,114 @@ export async function getAppointmentContextForAI(companyId: string): Promise<str
   ]);
 
   const askProvider = shouldAskAppointmentProvider(category);
-  const providerLabel = getAppointmentProviderLabel('tr', undefined, category);
-  const scheduleSummary = buildScheduleSummary(ctx.schedule, 'tr');
+  const providerLabel = getAppointmentProviderLabel(lang, undefined, category);
+  const scheduleSummary = buildScheduleSummary(ctx.schedule, lang);
+  const locale = lang === 'other' ? 'en' : lang;
+
+  const labels: Record<string, Record<string, string>> = {
+    tr: {
+      hours: 'ÇALIŞMA SAATLERİ',
+      rules: 'KURALLAR',
+      rule1: '- Tarih/saat önerirken MUTLAKA tam tarih ve saat yaz (ör. 15.07.2026 17:00). "yarın", "15 gün sonra" gibi göreceli ifadeler KULLANMA.',
+      rule2: '- Müsaitlik yalnızca aşağıdaki MÜSAİT SAATLER listesine göre belirlenir; kafadan dolu/boş deme.',
+      rule3: '- DOLU SAATLER listesindeki saatleri ASLA önerme.',
+      rule4: '- Müşteri göreceli tarih söylerse tam takvim tarihini hesaplayıp yaz.',
+      busy: 'DOLU SAATLER (yönetici paneli takvimi — önerme)',
+      busyEmpty: 'DOLU SAATLER: Önümüzdeki 30 günde kayıtlı randevu yok.',
+      busyMore: '... ve {n} randevu daha',
+      available: 'MÜSAİT SAATLER (yönetici paneli takvimine göre — YALNIZCA bunları öner)',
+      availableEmpty: 'MÜSAİT SAATLER: Önümüzdeki 30 günde müsait saat bulunmuyor. Kafadan saat önerme.',
+    },
+    en: {
+      hours: 'WORKING HOURS',
+      rules: 'RULES',
+      rule1: '- When suggesting times, ALWAYS write exact date and time (e.g. 15.07.2026 17:00). Do NOT use relative phrases like "tomorrow" or "in 15 days".',
+      rule2: '- Availability is determined ONLY by the AVAILABLE SLOTS list below; never invent busy/free times.',
+      rule3: '- NEVER suggest times listed under BUSY SLOTS.',
+      rule4: '- If the customer uses a relative date, calculate and write the exact calendar date.',
+      busy: 'BUSY SLOTS (admin calendar — do not suggest)',
+      busyEmpty: 'BUSY SLOTS: No appointments in the next 30 days.',
+      busyMore: '... and {n} more appointments',
+      available: 'AVAILABLE SLOTS (from admin calendar — suggest ONLY these)',
+      availableEmpty: 'AVAILABLE SLOTS: No free slots in the next 30 days. Do not invent times.',
+    },
+    de: {
+      hours: 'ARBEITSZEITEN',
+      rules: 'REGELN',
+      rule1: '- Bei Terminvorschlägen IMMER exaktes Datum und Uhrzeit angeben. Keine relativen Formulierungen.',
+      rule2: '- Verfügbarkeit NUR anhand der FREIEN ZEITEN unten; keine erfundenen Zeiten.',
+      rule3: '- Zeiten unter BELEGTE ZEITEN NIEMALS vorschlagen.',
+      rule4: '- Relative Daten in exaktes Kalenderdatum umrechnen.',
+      busy: 'BELEGTE ZEITEN (Admin-Kalender — nicht vorschlagen)',
+      busyEmpty: 'BELEGTE ZEITEN: Keine Termine in den nächsten 30 Tagen.',
+      busyMore: '... und {n} weitere Termine',
+      available: 'FREIE ZEITEN (Admin-Kalender — NUR diese vorschlagen)',
+      availableEmpty: 'FREIE ZEITEN: Keine freien Zeiten in den nächsten 30 Tagen.',
+    },
+    fr: {
+      hours: 'HEURES D\'OUVERTURE',
+      rules: 'RÈGLES',
+      rule1: '- Toujours indiquer date et heure exactes. Pas d\'expressions relatives.',
+      rule2: '- Disponibilité UNIQUEMENT selon les CRÉNEAUX LIBRES ci-dessous.',
+      rule3: '- Ne jamais proposer les heures sous CRÉNEAUX OCCUPÉS.',
+      rule4: '- Convertir les dates relatives en date exacte.',
+      busy: 'CRÉNEAUX OCCUPÉS (calendrier admin — ne pas proposer)',
+      busyEmpty: 'CRÉNEAUX OCCUPÉS: Aucun rendez-vous dans les 30 prochains jours.',
+      busyMore: '... et {n} rendez-vous de plus',
+      available: 'CRÉNEAUX LIBRES (calendrier admin — proposer UNIQUEMENT ceux-ci)',
+      availableEmpty: 'CRÉNEAUX LIBRES: Aucun créneau libre dans les 30 prochains jours.',
+    },
+    es: {
+      hours: 'HORARIO',
+      rules: 'REGLAS',
+      rule1: '- Siempre indicar fecha y hora exactas. Sin expresiones relativas.',
+      rule2: '- Disponibilidad SOLO según HORARIOS LIBRES abajo.',
+      rule3: '- Nunca sugerir horas en HORARIOS OCUPADOS.',
+      rule4: '- Convertir fechas relativas a fecha exacta.',
+      busy: 'HORARIOS OCUPADOS (calendario admin — no sugerir)',
+      busyEmpty: 'HORARIOS OCUPADOS: Sin citas en los próximos 30 días.',
+      busyMore: '... y {n} citas más',
+      available: 'HORARIOS LIBRES (calendario admin — sugerir SOLO estos)',
+      availableEmpty: 'HORARIOS LIBRES: Sin horarios libres en los próximos 30 días.',
+    },
+    ar: {
+      hours: 'ساعات العمل',
+      rules: 'القواعد',
+      rule1: '- اذكر دائماً التاريخ والوقت بدقة.',
+      rule2: '- التوفر فقط من قائمة الأوقات المتاحة أدناه.',
+      rule3: '- لا تقترح أوقاتاً من قائمة الأوقات المشغولة.',
+      rule4: '- حوّل التواريخ النسبية إلى تاريخ محدد.',
+      busy: 'الأوقات المشغولة (تقويم الإدارة — لا تقترح)',
+      busyEmpty: 'الأوقات المشغولة: لا مواعيد في الـ 30 يوماً القادمة.',
+      busyMore: '... و {n} مواعيد أخرى',
+      available: 'الأوقات المتاحة (من تقويم الإدارة — اقترح هذه فقط)',
+      availableEmpty: 'الأوقات المتاحة: لا أوقات متاحة في الـ 30 يوماً القادمة.',
+    },
+    ru: {
+      hours: 'ЧАСЫ РАБОТЫ',
+      rules: 'ПРАВИЛА',
+      rule1: '- Всегда указывайте точную дату и время.',
+      rule2: '- Доступность ТОЛЬКО по списку СВОБОДНЫХ СЛОТОВ ниже.',
+      rule3: '- Никогда не предлагайте время из ЗАНЯТЫХ СЛОТОВ.',
+      rule4: '- Переводите относительные даты в точную дату.',
+      busy: 'ЗАНЯТЫЕ СЛОТЫ (календарь админа — не предлагать)',
+      busyEmpty: 'ЗАНЯТЫЕ СЛОТЫ: Нет записей в ближайшие 30 дней.',
+      busyMore: '... и ещё {n} записей',
+      available: 'СВОБОДНЫЕ СЛОТЫ (из календаря админа — предлагать ТОЛЬКО их)',
+      availableEmpty: 'СВОБОДНЫЕ СЛОТЫ: Нет свободных слотов в ближайшие 30 дней.',
+    },
+  };
+
+  const L = labels[locale] || labels.en;
 
   const sections: string[] = [
-    `ÇALIŞMA SAATLERİ: ${scheduleSummary}`,
+    `${L.hours}: ${scheduleSummary}`,
     '',
-    'KURALLAR:',
-    '- Tarih/saat önerirken MUTLAKA tam tarih ve saat yaz (ör. 15.07.2026 17:00). "yarın", "15 gün sonra", "ertesi gün" gibi göreceli ifadeler KULLANMA.',
-    '- Müsaitlik yalnızca aşağıdaki MÜSAİT SAATLER listesine göre belirlenir; kafadan dolu/boş deme.',
-    '- DOLU SAATLER listesindeki saatleri ASLA önerme.',
-    '- Müşteri göreceli tarih söylerse (ör. "15 gün sonra 17:00") tam takvim tarihini hesaplayıp yaz.',
+    `${L.rules}:`,
+    L.rule1,
+    L.rule2,
+    L.rule3,
+    L.rule4,
   ];
 
   if (items.length > 0) {
@@ -680,31 +780,24 @@ export async function getAppointmentContextForAI(companyId: string): Promise<str
       const who = a.customer_name || a.customer_phone;
       const doctor =
         askProvider && a.preferred_doctor ? ` | ${providerLabel}: ${a.preferred_doctor}` : '';
-      return `- ${formatSlot(start, end, 'tr-TR', ctx.timezone)}: ${who} — ${a.title}${doctor} [${a.status}]`;
+      return `- ${formatSlotLocalized(a.starts_at, a.ends_at, lang, ctx.timezone)}: ${who} — ${a.title}${doctor} [${a.status}]`;
     });
-    const more = items.length > 25 ? `\n... ve ${items.length - 25} randevu daha` : '';
-    sections.push('', `DOLU SAATLER (yönetici paneli takvimi — önerme):`, ...busyLines, more);
+    const more = items.length > 25 ? `\n${L.busyMore.replace('{n}', String(items.length - 25))}` : '';
+    sections.push('', L.busy, ...busyLines, more);
   } else {
-    sections.push('', 'DOLU SAATLER: Önümüzdeki 30 günde kayıtlı randevu yok.');
+    sections.push('', L.busyEmpty);
   }
 
   if (availableSlots.length > 0) {
     const availableLines = availableSlots.map((slot, i) => {
-      const label = formatSlotLocalized(slot.starts_at, slot.ends_at, 'tr', ctx.timezone);
-      const weekday = formatWeekdayLocalized(slot.starts_at, 'tr', ctx.timezone);
+      const label = formatSlotLocalized(slot.starts_at, slot.ends_at, lang, ctx.timezone);
+      const weekday = formatWeekdayLocalized(slot.starts_at, lang, ctx.timezone);
       const weekdayPart = weekday ? ` (${weekday.charAt(0).toUpperCase()}${weekday.slice(1)})` : '';
       return `${i + 1}) ${label}${weekdayPart}`;
     });
-    sections.push(
-      '',
-      'MÜSAİT SAATLER (yönetici paneli takvimine göre hesaplanmış — YALNIZCA bunları öner):',
-      ...availableLines
-    );
+    sections.push('', L.available, ...availableLines);
   } else {
-    sections.push(
-      '',
-      'MÜSAİT SAATLER: Önümüzdeki 30 günde müsait saat bulunmuyor. Müşteriye bunu açıkça belirt; kafadan saat önerme.'
-    );
+    sections.push('', L.availableEmpty);
   }
 
   return sections.join('\n');
