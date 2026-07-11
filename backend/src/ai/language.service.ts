@@ -189,6 +189,9 @@ type MessageKey =
   | 'appointment_summary_topic'
   | 'appointment_summary_phone'
   | 'appointment_summary_confirm'
+  | 'appointment_availability_list'
+  | 'appointment_availability_none'
+  | 'appointment_availability_day_closed'
   | 'kb_miss_instruction'
   | 'kb_topics_header'
   | 'history_photo'
@@ -844,6 +847,33 @@ Preguntas de ejemplo:
     ru: 'Подтверждаете эти данные?',
     fr: 'Confirmez-vous ces informations ?',
     es: '¿Confirma estos datos?',
+  },
+  appointment_availability_list: {
+    tr: '{date} tarihinde müsait saatler:\n{slots}\nHangisini tercih edersiniz? Lütfen saati yazın.',
+    en: 'Available times on {date}:\n{slots}\nWhich would you prefer? Please reply with a time.',
+    de: 'Verfügbare Zeiten am {date}:\n{slots}\nWelche bevorzugen Sie? Bitte nennen Sie eine Uhrzeit.',
+    ar: 'الأوقات المتاحة في {date}:\n{slots}\nأيها تفضل؟ يرجى كتابة الوقت.',
+    ru: 'Свободные слоты на {date}:\n{slots}\nКакой выберете? Напишите время.',
+    fr: 'Créneaux disponibles le {date} :\n{slots}\nLequel préférez-vous ? Indiquez l’heure.',
+    es: 'Horarios disponibles el {date}:\n{slots}\n¿Cuál prefiere? Escriba la hora.',
+  },
+  appointment_availability_none: {
+    tr: '{date} tarihinde müsait saat bulunmuyor. Lütfen başka bir gün veya saat yazın.',
+    en: 'No available times on {date}. Please suggest another day or time.',
+    de: 'Am {date} sind keine Zeiten frei. Bitte nennen Sie einen anderen Tag oder eine Uhrzeit.',
+    ar: 'لا توجد أوقات متاحة في {date}. يرجى اقتراح يوم أو وقت آخر.',
+    ru: 'На {date} нет свободных слотов. Предложите другой день или время.',
+    fr: 'Aucun créneau disponible le {date}. Proposez un autre jour ou horaire.',
+    es: 'No hay horarios disponibles el {date}. Proponga otro día u hora.',
+  },
+  appointment_availability_day_closed: {
+    tr: '{date} günü randevu verilmemektedir. Lütfen başka bir gün seçin.',
+    en: 'Appointments are not available on {date}. Please choose another day.',
+    de: 'Am {date} werden keine Termine vergeben. Bitte wählen Sie einen anderen Tag.',
+    ar: 'لا تُقدَّم مواعيد في {date}. يرجى اختيار يوم آخر.',
+    ru: 'На {date} записи не принимаются. Выберите другой день.',
+    fr: 'Aucun rendez-vous le {date}. Choisissez un autre jour.',
+    es: 'No hay citas el {date}. Elija otro día.',
   },
   kb_miss_instruction: {
     tr: 'Bu soru için bilgi bankasında eşleşen içerik bulunamadı. Bunu müşteriye belirt; bilgin yoksa canlı temsilciye aktarmayı teklif et.',

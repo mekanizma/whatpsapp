@@ -450,6 +450,86 @@ export async function findAvailableSlots(
   return results;
 }
 
+/** Belirli bir gün için müsait slotları hesapla */
+export async function findAvailableSlotsOnDate(
+  companyId: string,
+  dateParts: { year: number; month: number; day: number },
+  ctx: AppointmentCompanyContext = DEFAULT_APPOINTMENT_CONTEXT,
+  opts: { count?: number; durationMs?: number } = {}
+): Promise<{ starts_at: string; ends_at: string }[]> {
+  const count = opts.count ?? 20;
+  const durationMs = opts.durationMs ?? DEFAULT_SLOT_DURATION_MS;
+  const timeZone = ctx.timezone;
+
+  const wd = weekdayFromParts(dateParts, timeZone);
+  const dayKey = weekdayToDayKey(wd);
+  const daySchedule = ctx.schedule[dayKey];
+  if (!daySchedule) return [];
+
+  const dayStart = localToUtcInTimezone(
+    dateParts.year,
+    dateParts.month,
+    dateParts.day,
+    0,
+    0,
+    timeZone
+  );
+  const dayEnd = localToUtcInTimezone(
+    dateParts.year,
+    dateParts.month,
+    dateParts.day,
+    23,
+    59,
+    timeZone
+  );
+
+  const busyAppointments = await listAppointments(
+    companyId,
+    dayStart.toISOString(),
+    new Date(dayEnd.getTime() + 60_000).toISOString()
+  );
+
+  const openMin = parseHm(daySchedule.open);
+  const closeMin = parseHm(daySchedule.close);
+  const slotStepMin = durationMs / 60_000;
+  const results: { starts_at: string; ends_at: string }[] = [];
+  const now = new Date();
+
+  for (let minute = openMin; minute + slotStepMin <= closeMin; minute += 30) {
+    const hour = Math.floor(minute / 60);
+    const min = minute % 60;
+    const slotStart = localToUtcInTimezone(
+      dateParts.year,
+      dateParts.month,
+      dateParts.day,
+      hour,
+      min,
+      timeZone
+    );
+    const endMin = minute + slotStepMin;
+    if (isSlotInsideBreak(minute, endMin, daySchedule.breaks)) continue;
+    if (slotStart.getTime() < now.getTime() - 60_000) continue;
+
+    const endHour = Math.floor(endMin / 60);
+    const endMinute = endMin % 60;
+    const slotEnd = localToUtcInTimezone(
+      dateParts.year,
+      dateParts.month,
+      dateParts.day,
+      endHour,
+      endMinute,
+      timeZone
+    );
+
+    if (!slotOverlapsAppointment(slotStart, slotEnd, busyAppointments)) {
+      results.push({ starts_at: slotStart.toISOString(), ends_at: slotEnd.toISOString() });
+      if (results.length >= count) break;
+    }
+  }
+
+  return results;
+}
+
 /** Dolu saate yakın müsait alternatifler bul — yönetici paneli takvimine göre */
 export async function findAlternativeSlots(
   companyId: string,

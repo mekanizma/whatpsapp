@@ -98,6 +98,12 @@ export function escapeRegexToken(token: string): string {
   return token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/** JS \\b Türkçe harflerde (ı, ş, ğ…) çalışmaz — Unicode harf sınırı */
+export function containsWordToken(text: string, token: string): boolean {
+  const escaped = escapeRegexToken(token);
+  return new RegExp(`(?:^|[^\\p{L}])${escaped}(?:[^\\p{L}]|$)`, 'iu').test(text);
+}
+
 let cachedIntentPattern: RegExp | null = null;
 
 export function buildDateTimeIntentPattern(): RegExp {
@@ -124,10 +130,18 @@ export function hasDateTimeIntent(message: string): boolean {
   return buildDateTimeIntentPattern().test(message);
 }
 
+const AVAILABILITY_QUERY_RE =
+  /boş\s*saat|bos\s*saat|müsait\s*saat|musait\s*saat|hangi\s*saatler|hangi\s*saat|ne\s*zaman\s*müsait|ne\s*zaman\s*musait|available\s*(times?|slots?)|free\s*(times?|slots?)|saat\s*var\s*m[ıi]|var\s*m[ıi]\s*boş|var\s*m[ıi]\s*bos|müsait\s*mi|musait\s*mi|müsait\s*misin|musait\s*misin|uygun\s*saat|open\s*slots?/i;
+
+/** Müşteri belirli bir gün için müsait saat listesi soruyor mu */
+export function hasAvailabilityQuery(message: string): boolean {
+  return AVAILABILITY_QUERY_RE.test(message);
+}
+
 export function weekdayInText(text: string): number | null {
   const lower = text.toLocaleLowerCase('tr');
   for (const [name, wd] of Object.entries(WEEKDAY_TOKENS)) {
-    if (new RegExp(`\\b${escapeRegexToken(name)}\\b`, 'i').test(lower)) return wd;
+    if (containsWordToken(lower, name)) return wd;
   }
   return null;
 }

@@ -392,6 +392,44 @@ function resolveNextWeekday(
   return addDays(refParts, delta, timeZone);
 }
 
+export function parseDateFromText(
+  text: string,
+  options: SlotParseOptions = {}
+): { year: number; month: number; day: number } | null {
+  const ref = options.ref ?? new Date();
+  const timeZone = options.timezone ?? DEFAULT_COMPANY_TIMEZONE;
+  return extractDateParts(text, ref, timeZone);
+}
+
+/** Mesajda tarih var ama saat yok (ör. "14 temmuz boş saat varmı") */
+export function hasDateOnlyIntent(text: string, options: SlotParseOptions = {}): boolean {
+  return parseDateFromText(text, options) !== null && parseSlotFromText(text, options) === null;
+}
+
+export function slotMatchesRequestedDate(
+  slot: ParsedSlot,
+  message: string,
+  options: SlotParseOptions = {}
+): boolean {
+  const timeZone = options.timezone ?? DEFAULT_COMPANY_TIMEZONE;
+  const dateParts = parseDateFromText(message, options);
+  if (dateParts) {
+    const slotParts = companyDateParts(new Date(slot.starts_at), timeZone);
+    return (
+      slotParts.year === dateParts.year &&
+      slotParts.month === dateParts.month &&
+      slotParts.day === dateParts.day
+    );
+  }
+
+  const requestedWd = weekdayInText(message);
+  if (requestedWd !== null) {
+    return slotWeekday(slot.starts_at, timeZone) === requestedWd;
+  }
+
+  return true;
+}
+
 function extractDateParts(
   text: string,
   ref: Date,
@@ -432,10 +470,9 @@ function extractDateParts(
     }
   }
 
-  for (const [name, weekday] of Object.entries(WEEKDAY_TOKENS)) {
-    if (new RegExp(`\\b${name}\\b`, 'i').test(lower)) {
-      return resolveNextWeekday(weekday, localNow, timeZone, /\bnext\b/i.test(lower));
-    }
+  const weekdayFromText = weekdayInText(text);
+  if (weekdayFromText !== null) {
+    return resolveNextWeekday(weekdayFromText, localNow, timeZone, /\bnext\b/i.test(lower));
   }
 
   const monthDayMatch = dateText.match(
@@ -584,6 +621,10 @@ export function extractSlotFromConversation(
 
   const fromLatest = parseSlotFromText(latestMessage, options);
   if (fromLatest) return fromLatest;
+
+  if (hasDateOnlyIntent(latestMessage, options)) {
+    return null;
+  }
 
   for (let i = history.length - 1; i >= 0; i--) {
     const m = history[i];

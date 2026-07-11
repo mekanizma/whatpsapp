@@ -11,20 +11,25 @@ import {
 } from './appointment-collect.service';
 import {
   parseSlotFromText,
+  parseDateFromText,
   extractSlotFromConversation,
   buildAppointmentConfirmationPrompt,
   validateSlotWorkingHours,
   formatSlotLocalized,
+  formatWeekdayLocalized,
   buildWorkingHoursRejectionMessage,
+  hasDateOnlyIntent,
+  slotMatchesRequestedDate,
   ParsedSlot,
+  localToUtcInTimezone,
 } from './appointment-slot.service';
-import { ConversationLang } from './language.service';
-import { hasDateTimeIntent } from './appointment-datetime-tokens';
+import { ConversationLang, t, localeForLang } from './language.service';
+import { hasDateTimeIntent, hasAvailabilityQuery } from './appointment-datetime-tokens';
 import {
   type AppointmentCompanyContext,
   DEFAULT_APPOINTMENT_CONTEXT,
 } from './appointment-company-context';
-import { hasConflict } from '../services/appointment.service';
+import { weekdayToDayKey } from '../services/working-hours.service';
 
 const REJECTION_RE =
   /alamazsınız|alamazsiniz|verilemiyor|verilemez|müsait değil|musait degil|uygun değil|uygun degil|dolu|kapalıdır|kapalidir|not available|cannot book/i;
@@ -57,12 +62,89 @@ function resolveRequestedSlot(
   );
 }
 
+function isAvailabilityQuestion(latestMessage: string, ctx: AppointmentCompanyContext): boolean {
+  const options = slotParseOptions(ctx);
+  return hasAvailabilityQuery(latestMessage) || hasDateOnlyIntent(latestMessage, options);
+}
+
+function formatDateLabel(
+  dateParts: { year: number; month: number; day: number },
+  lang: ConversationLang,
+  timeZone: string
+): string {
+  const ref = localToUtcInTimezone(dateParts.year, dateParts.month, dateParts.day, 12, 0, timeZone);
+  const locale = localeForLang(lang);
+  const day = ref.toLocaleDateString(locale, {
+    timeZone,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+  const weekday = formatWeekdayLocalized(ref.toISOString(), lang, timeZone);
+  const weekdayPart = weekday ? ` (${weekday.charAt(0).toUpperCase()}${weekday.slice(1)})` : '';
+  return `${day}${weekdayPart}`;
+}
+
+function formatAvailabilitySlots(
+  slots: { starts_at: string; ends_at: string }[],
+  lang: ConversationLang,
+  timeZone: string
+): string {
+  return slots
+    .map((slot, i) => {
+      const label = formatSlotLocalized(slot.starts_at, slot.ends_at, lang, timeZone);
+      return `${i + 1}) ${label}`;
+    })
+    .join('\n');
+}
+
+async function buildAvailabilityResponse(
+  companyId: string,
+  latestMessage: string,
+  lang: ConversationLang,
+  ctx: AppointmentCompanyContext
+): Promise<string | null> {
+  const options = slotParseOptions(ctx);
+  const dateParts = parseDateFromText(latestMessage, options);
+  if (!dateParts) return null;
+
+  const { findAvailableSlotsOnDate } = await import('../services/appointment.service');
+
+  const dateLabel = formatDateLabel(dateParts, lang, ctx.timezone);
+  const wd = localToUtcInTimezone(
+    dateParts.year,
+    dateParts.month,
+    dateParts.day,
+    12,
+    0,
+    ctx.timezone
+  ).getUTCDay();
+  const daySchedule = ctx.schedule[weekdayToDayKey(wd)];
+
+  if (!daySchedule) {
+    return t(lang, 'appointment_availability_day_closed', { date: dateLabel });
+  }
+
+  const slots = await findAvailableSlotsOnDate(companyId, dateParts, ctx);
+  if (slots.length === 0) {
+    return t(lang, 'appointment_availability_none', { date: dateLabel });
+  }
+
+  return t(lang, 'appointment_availability_list', {
+    date: dateLabel,
+    slots: formatAvailabilitySlots(slots, lang, ctx.timezone),
+  });
+}
+
 function shouldUseDeterministicSummary(
   rawAiResponse: string,
   latestMessage: string,
-  slot: ParsedSlot | null
+  slot: ParsedSlot | null,
+  ctx: AppointmentCompanyContext
 ): boolean {
   if (!slot) return false;
+  if (isAvailabilityQuestion(latestMessage, ctx)) return false;
+  if (!slotMatchesRequestedDate(slot, latestMessage, slotParseOptions(ctx))) return false;
   if (CONFIRMATION_RE.test(rawAiResponse)) return true;
   if (VAGUE_DATE_RE.test(rawAiResponse)) return true;
   if (isComplaintOrCorrectionMessage(latestMessage)) return true;
@@ -87,12 +169,25 @@ export async function reconcileAppointmentAiResponse(
     return rawAiResponse;
   }
 
+  if (companyId && isAvailabilityQuestion(latestMessage, ctx)) {
+    const availabilityResponse = await buildAvailabilityResponse(
+      companyId,
+      latestMessage,
+      lang,
+      ctx
+    );
+    if (availabilityResponse) return availabilityResponse;
+  }
+
   const slotFromConversation = resolveRequestedSlot(history, latestMessage, ctx);
 
-  if (shouldUseDeterministicSummary(rawAiResponse, latestMessage, slotFromConversation)) {
+  if (
+    shouldUseDeterministicSummary(rawAiResponse, latestMessage, slotFromConversation, ctx)
+  ) {
     const hours = validateSlotWorkingHours(slotFromConversation!, ctx, lang);
     if (hours.valid) {
       if (companyId) {
+        const { hasConflict } = await import('../services/appointment.service');
         const conflict = await hasConflict(
           companyId,
           slotFromConversation!.starts_at,
@@ -118,11 +213,26 @@ export async function reconcileAppointmentAiResponse(
   }
 
   const customerGaveTime = hasDateTimeIntent(latestMessage);
-  const slot = customerGaveTime ? slotFromConversation : null;
+  const options = slotParseOptions(ctx);
+  const slot =
+    customerGaveTime && !hasDateOnlyIntent(latestMessage, options)
+      ? slotFromConversation
+      : null;
+
   if (!slot && slotFromConversation && VAGUE_DATE_RE.test(rawAiResponse)) {
-    return buildAppointmentConfirmationPrompt(collected, slotFromConversation, lang, ctx.timezone);
+    if (slotMatchesRequestedDate(slotFromConversation, latestMessage, options)) {
+      return buildAppointmentConfirmationPrompt(collected, slotFromConversation, lang, ctx.timezone);
+    }
   }
-  if (!slot) return rawAiResponse;
+  if (!slot) {
+    if (
+      isAvailabilityQuestion(latestMessage, ctx) &&
+      (CONFIRMATION_RE.test(rawAiResponse) || /randevu özeti/i.test(rawAiResponse))
+    ) {
+      return t(lang, 'appointment_time_unclear');
+    }
+    return rawAiResponse;
+  }
 
   const hours = validateSlotWorkingHours(slot, ctx, lang);
 
@@ -137,6 +247,7 @@ export async function reconcileAppointmentAiResponse(
   const aiConfirming = CONFIRMATION_RE.test(rawAiResponse);
 
   if (companyId && aiRejected && customerGaveTime) {
+    const { hasConflict } = await import('../services/appointment.service');
     const conflict = await hasConflict(companyId, slot.starts_at, slot.ends_at);
     if (!conflict) {
       return buildAppointmentConfirmationPrompt(collected, slot, lang, ctx.timezone);
@@ -145,16 +256,21 @@ export async function reconcileAppointmentAiResponse(
 
   if (
     customerGaveTime &&
+    slotMatchesRequestedDate(slot, latestMessage, options) &&
     (aiRejected || aiConfirming || /randevu özeti|tarih.*saat|appointment summary/i.test(rawAiResponse))
   ) {
     return buildAppointmentConfirmationPrompt(collected, slot, lang, ctx.timezone);
   }
 
-  if (aiConfirming || (VAGUE_DATE_RE.test(rawAiResponse) && slotFromConversation)) {
+  if (
+    (aiConfirming || (VAGUE_DATE_RE.test(rawAiResponse) && slotFromConversation)) &&
+    slotFromConversation &&
+    slotMatchesRequestedDate(slotFromConversation, latestMessage, options)
+  ) {
     return buildAppointmentConfirmationPrompt(collected, slot, lang, ctx.timezone);
   }
 
-  if (aiRejected && customerGaveTime) {
+  if (aiRejected && customerGaveTime && slotMatchesRequestedDate(slot, latestMessage, options)) {
     return buildAppointmentConfirmationPrompt(collected, slot, lang, ctx.timezone);
   }
 
@@ -178,7 +294,8 @@ export function buildParsedSlotHint(
     return '';
   }
 
-  if (!hasDateTimeIntent(latestMessage)) return '';
+  const options = slotParseOptions(ctx);
+  if (!hasDateTimeIntent(latestMessage) || hasDateOnlyIntent(latestMessage, options)) return '';
 
   const slot = resolveRequestedSlot(history, latestMessage, ctx);
   if (!slot) return '';

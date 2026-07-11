@@ -8,6 +8,8 @@ import {
   preferHistorySlot,
   slotsRoughlyMatch,
   parseSlotFromText,
+  parseDateFromText,
+  hasDateOnlyIntent,
 } from './appointment-slot.service';
 
 const REF = new Date('2026-06-30T10:00:00.000Z'); // 30 Haziran 2026 TR öğlen
@@ -129,5 +131,51 @@ describe('appointment-slot.service', () => {
       minute: '2-digit',
     });
     assert.equal(startTr, '13:00');
+  });
+
+  it('14 temmuz ifadesinden tarih çıkarır', () => {
+    const date = parseDateFromText('14 temmuz boş saat varmı', {
+      ref: REF,
+      timezone: 'Europe/Istanbul',
+    });
+    assert.ok(date);
+    assert.equal(date!.day, 14);
+    assert.equal(date!.month, 7);
+  });
+
+  it('tarih var saat yok mesajını date-only olarak işaretler', () => {
+    const options = { ref: REF, timezone: 'Europe/Istanbul' };
+    assert.equal(hasDateOnlyIntent('14 temmuz boş saat varmı', options), true);
+    assert.equal(hasDateOnlyIntent('14 temmuz saat 10:00', options), false);
+  });
+
+  it('yeni tarih sorusunda geçmiş AI teklifini kullanmaz', () => {
+    const history = [
+      {
+        sender_type: 'ai',
+        message:
+          '13 Temmuz 2026 tarihinde saat 09:00 ile 09:30 arasında bir randevu önerebilirim. Bu saat sizin için uygun mu?',
+      },
+    ];
+    const slot = extractSlotFromConversation(history, '14 temmuz boş saat varmı', {
+      ref: new Date('2026-07-11T10:00:00.000Z'),
+      timezone: 'Europe/Istanbul',
+    });
+    assert.equal(slot, null);
+  });
+
+  it('salı günü hangi saatler müsait sorusunda geçmiş teklifi kullanmaz', () => {
+    const history = [
+      {
+        sender_type: 'ai',
+        message:
+          '13 Temmuz 2026 tarihinde saat 09:00 ile 09:30 arasında bir randevu önerebilirim.',
+      },
+    ];
+    const slot = extractSlotFromConversation(history, 'Salı günü hangi saatler müsait', {
+      ref: new Date('2026-07-11T10:00:00.000Z'),
+      timezone: 'Europe/Istanbul',
+    });
+    assert.equal(slot, null);
   });
 });
