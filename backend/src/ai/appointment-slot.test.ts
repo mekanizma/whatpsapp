@@ -7,6 +7,7 @@ import {
   formatSlotTurkish,
   preferHistorySlot,
   slotsRoughlyMatch,
+  parseSlotFromText,
 } from './appointment-slot.service';
 
 const REF = new Date('2026-06-30T10:00:00.000Z'); // 30 Haziran 2026 TR öğlen
@@ -96,5 +97,26 @@ describe('appointment-slot.service', () => {
     const slot = extractSlotFromConversation(history, 'yarın saat 15:00', REF);
     assert.ok(slot);
     assert.match(formatSlotTurkish(slot!.starts_at, slot!.ends_at), /01\.07\.2026 15:00/);
+  });
+
+  it('15 gün sonra saat 17:00 ifadesini parse eder', () => {
+    const slot = parseSlotFromTurkishText('15 gün sonra saat 17:00', REF);
+    assert.ok(slot);
+    assert.match(formatSlotTurkish(slot!.starts_at, slot!.ends_at), /15\.07\.2026 17:00/);
+  });
+
+  it('15 days later at 17:00 ifadesini parse eder', () => {
+    const slot = parseSlotFromText('15 days later at 17:00', {
+      ref: REF,
+      timezone: 'Europe/Istanbul',
+    });
+    assert.ok(slot);
+    assert.match(formatSlotTurkish(slot!.starts_at, slot!.ends_at), /15\.07\.2026 17:00/);
+  });
+
+  it('ertesi gün saat 10 ifadesini yarın olarak parse eder', () => {
+    const slot = parseSlotFromTurkishText('ertesi gün saat 10', REF);
+    assert.ok(slot);
+    assert.match(formatSlotTurkish(slot!.starts_at, slot!.ends_at), /01\.07\.2026 10:00/);
   });
 });

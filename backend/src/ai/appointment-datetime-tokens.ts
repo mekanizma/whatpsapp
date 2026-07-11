@@ -79,10 +79,12 @@ export const WEEKDAY_TOKENS: Record<string, number> = {
 
 export const RELATIVE_DATE_TOKENS = {
   today: [/\bbugün\b/i, /\bbugun\b/i, /\btoday\b/i],
-  tomorrow: [/\byarın\b/i, /\byarin\b/i, /\btomorrow\b/i],
+  tomorrow: [/\byarın\b/i, /\byarin\b/i, /\btomorrow\b/i, /\bertesi\s+gün\b/i, /\bertesi\s+gun\b/i],
   dayAfterTomorrow: [/\böbür gün\b/i, /\bobur\s+gün\b/i, /\bobur\s+gun\b/i, /\bday after tomorrow\b/i],
   nextWeek: [/\bgelecek\s+hafta\b/i, /\bnext\s+week\b/i],
 } as const;
+
+export const DAYS_LATER_RE = /\b(\d{1,3})\s*(?:gün\s*sonra|gun\s*sonra|days?\s*later)\b/i;
 
 export const NEXT_WEEKDAY_RE =
   /\b(?:next|gelecek)\s+(pazartesi|pazar|salı|sali|çarşamba|carsamba|perşembe|persembe|cuma|cumartesi|monday|tuesday|wednesday|thursday|friday|saturday|sunday|mon|tue|wed|thu|fri|sat|sun)\b/i;
@@ -102,7 +104,8 @@ export function buildDateTimeIntentPattern(): RegExp {
   if (cachedIntentPattern) return cachedIntentPattern;
 
   const parts = [
-    'yarın|yarin|tomorrow|today|bugün|bugun',
+    'yarın|yarin|tomorrow|today|bugün|bugun|ertesi\\s+gün|ertesi\\s+gun',
+    '\\d{1,3}\\s*(gün\\s*sonra|gun\\s*sonra|days?\\s*later)',
     'saat\\s*\\d|at\\s+\\d',
     ...Object.keys(WEEKDAY_TOKENS).map(escapeRegexToken),
     '\\d{1,2}[:.]\\d{2}',

@@ -23,6 +23,7 @@ import {
   NEXT_WEEKDAY_RE,
   PM_TOKENS,
   RELATIVE_DATE_TOKENS,
+  DAYS_LATER_RE,
   WEEKDAY_TOKENS,
   weekdayInText,
 } from './appointment-datetime-tokens';
@@ -414,6 +415,14 @@ function extractDateParts(
   }
   if (RELATIVE_DATE_TOKENS.today.some((re) => re.test(lower))) {
     return localNow;
+  }
+
+  const daysLaterMatch = lower.match(DAYS_LATER_RE);
+  if (daysLaterMatch) {
+    const offset = parseInt(daysLaterMatch[1], 10);
+    if (offset >= 1 && offset <= 365) {
+      return addDays(localNow, offset, timeZone);
+    }
   }
 
   for (const [name, weekday] of Object.entries(WEEKDAY_TOKENS)) {

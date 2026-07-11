@@ -24,6 +24,12 @@ const REJECTION_RE =
 
 const CONFIRMATION_RE = /onaylıyor musunuz|onayliyor musunuz|onaylıyor musun|do you confirm/i;
 
+const DATE_QUESTION_RE =
+  /tarih.*ne|hangi\s+tarih|gün\s+ne|hangi\s+gün|what.*date|tell.*date|tarihi\s+söyle|tarihi\s+soyle|tarihi\s+yaz/i;
+
+const VAGUE_DATE_RE =
+  /\b(\d{1,3}\s*)?(gün\s*sonra|gun\s*sonra|days?\s*later|yarın|yarin|tomorrow|ertesi\s*gün|ertesi\s*gun|öbür\s*gün|obur\s*gun|gelecek\s*hafta|next\s*week)\b/i;
+
 function slotParseOptions(ctx: AppointmentCompanyContext, ref?: Date) {
   return { timezone: ctx.timezone, ref: ref ?? ctx.parseRef };
 }
@@ -55,8 +61,17 @@ export function reconcileAppointmentAiResponse(
     return rawAiResponse;
   }
 
+  const slotFromConversation = resolveRequestedSlot(history, latestMessage, ctx);
+
+  if (DATE_QUESTION_RE.test(latestMessage) && slotFromConversation) {
+    return buildAppointmentConfirmationPrompt(collected, slotFromConversation, lang, ctx.timezone);
+  }
+
   const customerGaveTime = hasDateTimeIntent(latestMessage);
-  const slot = customerGaveTime ? resolveRequestedSlot(history, latestMessage, ctx) : null;
+  const slot = customerGaveTime ? slotFromConversation : null;
+  if (!slot && slotFromConversation && VAGUE_DATE_RE.test(rawAiResponse)) {
+    return buildAppointmentConfirmationPrompt(collected, slotFromConversation, lang, ctx.timezone);
+  }
   if (!slot) return rawAiResponse;
 
   const hours = validateSlotWorkingHours(slot, ctx, lang);
@@ -73,7 +88,7 @@ export function reconcileAppointmentAiResponse(
     return buildAppointmentConfirmationPrompt(collected, slot, lang, ctx.timezone);
   }
 
-  if (aiConfirming) {
+  if (aiConfirming || (VAGUE_DATE_RE.test(rawAiResponse) && slotFromConversation)) {
     return buildAppointmentConfirmationPrompt(collected, slot, lang, ctx.timezone);
   }
 

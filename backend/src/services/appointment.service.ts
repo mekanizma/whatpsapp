@@ -8,12 +8,12 @@ import { Appointment, AppointmentSource, AppointmentStatus } from '../types';
 import {
   preferHistorySlot,
   formatSlotLocalized,
-  turkeyLocalToUtc,
-  turkeyDateParts,
-  turkeyTimeParts,
+  formatWeekdayLocalized,
+  localToUtcInTimezone,
+  companyDateParts,
 } from '../ai/appointment-slot.service';
 import type { AppointmentCompanyContext } from '../ai/appointment-company-context';
-import { DEFAULT_APPOINTMENT_CONTEXT } from '../ai/appointment-company-context';
+import { DEFAULT_APPOINTMENT_CONTEXT, buildAppointmentCompanyContext } from '../ai/appointment-company-context';
 import type { HistoryMsg } from '../ai/appointment-collect.service';
 import { isValidFullName, isValidProcedureTitle } from '../ai/appointment-collect.service';
 import { ConversationLang, t, getAppointmentProviderLabel } from '../ai/language.service';
@@ -21,6 +21,12 @@ import {
   shouldAskAppointmentProvider,
   isGenericAppointmentTitle,
 } from './appointment-category.service';
+import {
+  buildScheduleSummary,
+  parseHm,
+  weekdayToDayKey,
+  type WorkingHoursSchedule,
+} from './working-hours.service';
 
 const APPOINTMENT_BLOCK_RE = /\[APPOINTMENT\]([\s\S]*?)\[\/APPOINTMENT\]/gi;
 const FALSE_SUCCESS_RE =
@@ -200,94 +206,236 @@ export async function hasConflict(
   return (count || 0) > 0;
 }
 
-const WORK_START_HOUR = 9;
-const WORK_END_HOUR = 18;
 const SLOT_STEP_MS = 30 * 60 * 1000;
+const DEFAULT_SLOT_DURATION_MS = SLOT_STEP_MS;
+const DEFAULT_SEARCH_DAYS = 30;
+const DEFAULT_AVAILABLE_SLOT_COUNT = 15;
 
-function turkeyWeekday(ref: Date): number {
-  return turkeyLocalToUtc(
-    turkeyDateParts(ref).year,
-    turkeyDateParts(ref).month,
-    turkeyDateParts(ref).day,
-    12,
-    0
-  ).getUTCDay();
-}
-
-function advanceToNextWorkSlot(cursor: Date): Date {
-  let next = new Date(cursor.getTime());
-  for (let i = 0; i < 366; i++) {
-    const parts = turkeyDateParts(next);
-    const { hour } = turkeyTimeParts(next);
-    const wd = turkeyWeekday(next);
-
-    if (wd === 0) {
-      const d = addDaysParts(parts, 1);
-      next = turkeyLocalToUtc(d.year, d.month, d.day, WORK_START_HOUR, 0);
-      continue;
-    }
-
-    if (hour < WORK_START_HOUR) {
-      next = turkeyLocalToUtc(parts.year, parts.month, parts.day, WORK_START_HOUR, 0);
-      return next;
-    }
-
-    if (hour >= WORK_END_HOUR) {
-      const d = addDaysParts(parts, 1);
-      next = turkeyLocalToUtc(d.year, d.month, d.day, WORK_START_HOUR, 0);
-      continue;
-    }
-
-    return next;
+function slotOverlapsAppointment(
+  slotStart: Date,
+  slotEnd: Date,
+  appointments: Appointment[]
+): boolean {
+  for (const a of appointments) {
+    const aStart = new Date(a.starts_at);
+    const aEnd = new Date(a.ends_at);
+    if (slotStart < aEnd && slotEnd > aStart) return true;
   }
-  return next;
+  return false;
 }
 
-function addDaysParts(parts: { year: number; month: number; day: number }, days: number) {
-  const d = turkeyLocalToUtc(parts.year, parts.month, parts.day, 12, 0);
+function isSlotInsideBreak(
+  startMin: number,
+  endMin: number,
+  breaks: { start: string; end: string }[] = []
+): boolean {
+  for (const br of breaks) {
+    const breakStart = parseHm(br.start);
+    const breakEnd = parseHm(br.end);
+    if (startMin < breakEnd && endMin > breakStart) return true;
+  }
+  return false;
+}
+
+function addDaysToParts(
+  parts: { year: number; month: number; day: number },
+  days: number,
+  timeZone: string
+) {
+  const d = localToUtcInTimezone(parts.year, parts.month, parts.day, 12, 0, timeZone);
   d.setUTCDate(d.getUTCDate() + days);
-  return turkeyDateParts(d);
+  return companyDateParts(d, timeZone);
 }
 
-/** Dolu saate yakın müsait alternatifler bul */
+function weekdayFromParts(
+  parts: { year: number; month: number; day: number },
+  timeZone: string
+): number {
+  return localToUtcInTimezone(parts.year, parts.month, parts.day, 12, 0, timeZone).getUTCDay();
+}
+
+function advanceCursorInSchedule(
+  cursor: Date,
+  schedule: WorkingHoursSchedule,
+  timeZone: string
+): Date | null {
+  const maxIterations = 366;
+  let next = new Date(cursor.getTime());
+
+  for (let i = 0; i < maxIterations; i++) {
+    const parts = companyDateParts(next, timeZone);
+    const { hour, minute } = (() => {
+      const fmt = new Intl.DateTimeFormat('en-GB', {
+        timeZone,
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+      const [h, m] = fmt.format(next).split(':').map(Number);
+      return { hour: h, minute: m };
+    })();
+    const minuteOfDay = hour * 60 + minute;
+    const wd = weekdayFromParts(parts, timeZone);
+    const dayKey = weekdayToDayKey(wd);
+    const daySchedule = schedule[dayKey];
+
+    if (!daySchedule) {
+      const tomorrow = addDaysToParts(parts, 1, timeZone);
+      next = localToUtcInTimezone(tomorrow.year, tomorrow.month, tomorrow.day, 0, 0, timeZone);
+      continue;
+    }
+
+    const openMin = parseHm(daySchedule.open);
+    const closeMin = parseHm(daySchedule.close);
+
+    if (minuteOfDay < openMin) {
+      return localToUtcInTimezone(parts.year, parts.month, parts.day, Math.floor(openMin / 60), openMin % 60, timeZone);
+    }
+
+    if (minuteOfDay >= closeMin) {
+      const tomorrow = addDaysToParts(parts, 1, timeZone);
+      next = localToUtcInTimezone(tomorrow.year, tomorrow.month, tomorrow.day, 0, 0, timeZone);
+      continue;
+    }
+
+    const alignedMin = minuteOfDay % 30 === 0 ? minuteOfDay : minuteOfDay + (30 - (minuteOfDay % 30));
+    if (alignedMin >= closeMin) {
+      const tomorrow = addDaysToParts(parts, 1, timeZone);
+      next = localToUtcInTimezone(tomorrow.year, tomorrow.month, tomorrow.day, 0, 0, timeZone);
+      continue;
+    }
+
+    const alignedHour = Math.floor(alignedMin / 60);
+    const alignedMinute = alignedMin % 60;
+    const candidate = localToUtcInTimezone(
+      parts.year,
+      parts.month,
+      parts.day,
+      alignedHour,
+      alignedMinute,
+      timeZone
+    );
+    const endMin = alignedMin + DEFAULT_SLOT_DURATION_MS / 60_000;
+    if (endMin > closeMin || isSlotInsideBreak(alignedMin, endMin, daySchedule.breaks)) {
+      next = new Date(candidate.getTime() + SLOT_STEP_MS);
+      continue;
+    }
+
+    return candidate;
+  }
+
+  return null;
+}
+
+async function fetchCompanyAppointmentContext(companyId: string): Promise<AppointmentCompanyContext> {
+  const { data } = await adminClient
+    .from('companies')
+    .select('working_hours, timezone')
+    .eq('id', companyId)
+    .maybeSingle();
+
+  return buildAppointmentCompanyContext(data?.working_hours, data?.timezone);
+}
+
+/** Yönetici paneli takvimine ve çalışma saatlerine göre gerçek müsait slotları hesapla */
+export async function findAvailableSlots(
+  companyId: string,
+  ctx: AppointmentCompanyContext = DEFAULT_APPOINTMENT_CONTEXT,
+  opts: {
+    count?: number;
+    daysAhead?: number;
+    durationMs?: number;
+    after?: Date;
+  } = {}
+): Promise<{ starts_at: string; ends_at: string }[]> {
+  const count = opts.count ?? DEFAULT_AVAILABLE_SLOT_COUNT;
+  const daysAhead = opts.daysAhead ?? DEFAULT_SEARCH_DAYS;
+  const durationMs = opts.durationMs ?? DEFAULT_SLOT_DURATION_MS;
+  const now = opts.after ?? new Date();
+  const until = new Date(now);
+  until.setDate(until.getDate() + daysAhead);
+
+  const busyAppointments = await listAppointments(companyId, now.toISOString(), until.toISOString());
+  const results: { starts_at: string; ends_at: string }[] = [];
+
+  let cursor = advanceCursorInSchedule(now, ctx.schedule, ctx.timezone);
+  if (!cursor) return results;
+
+  const searchUntil = until.getTime();
+
+  while (results.length < count && cursor.getTime() < searchUntil) {
+    const parts = companyDateParts(cursor, ctx.timezone);
+    const { hour, minute } = (() => {
+      const fmt = new Intl.DateTimeFormat('en-GB', {
+        timeZone: ctx.timezone,
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      });
+      const [h, m] = fmt.format(cursor).split(':').map(Number);
+      return { hour: h, minute: m };
+    })();
+    const startMin = hour * 60 + minute;
+    const endMin = startMin + durationMs / 60_000;
+    const wd = weekdayFromParts(parts, ctx.timezone);
+    const daySchedule = ctx.schedule[weekdayToDayKey(wd)];
+
+    if (daySchedule) {
+      const closeMin = parseHm(daySchedule.close);
+      if (
+        endMin <= closeMin &&
+        !isSlotInsideBreak(startMin, endMin, daySchedule.breaks) &&
+        cursor.getTime() >= now.getTime()
+      ) {
+        const endHour = Math.floor(endMin / 60);
+        const endMinute = endMin % 60;
+        const slotEnd = localToUtcInTimezone(
+          parts.year,
+          parts.month,
+          parts.day,
+          endHour,
+          endMinute,
+          ctx.timezone
+        );
+        if (!slotOverlapsAppointment(cursor, slotEnd, busyAppointments)) {
+          results.push({ starts_at: cursor.toISOString(), ends_at: slotEnd.toISOString() });
+        }
+      }
+    }
+
+    const nextCursor = advanceCursorInSchedule(
+      new Date(cursor.getTime() + SLOT_STEP_MS),
+      ctx.schedule,
+      ctx.timezone
+    );
+    if (!nextCursor || nextCursor.getTime() <= cursor.getTime()) break;
+    cursor = nextCursor;
+  }
+
+  return results;
+}
+
+/** Dolu saate yakın müsait alternatifler bul — yönetici paneli takvimine göre */
 export async function findAlternativeSlots(
   companyId: string,
   preferredStartIso: string,
   preferredEndIso?: string,
   count = 3
 ): Promise<{ starts_at: string; ends_at: string }[]> {
+  const ctx = await fetchCompanyAppointmentContext(companyId);
   const durationMs = preferredEndIso
     ? Math.max(new Date(preferredEndIso).getTime() - new Date(preferredStartIso).getTime(), SLOT_STEP_MS)
     : SLOT_STEP_MS;
 
-  let cursor = advanceToNextWorkSlot(new Date(preferredStartIso));
-  const now = new Date();
-  if (cursor.getTime() < now.getTime()) {
-    cursor = advanceToNextWorkSlot(now);
-  }
+  const after = new Date(Math.max(new Date(preferredStartIso).getTime(), Date.now()));
+  const all = await findAvailableSlots(companyId, ctx, {
+    count: count + 5,
+    daysAhead: DEFAULT_SEARCH_DAYS,
+    durationMs,
+    after,
+  });
 
-  const results: { starts_at: string; ends_at: string }[] = [];
-  const searchUntil = Date.now() + 14 * 24 * 60 * 60 * 1000;
-
-  while (results.length < count && cursor.getTime() < searchUntil) {
-    cursor = advanceToNextWorkSlot(cursor);
-    const { hour } = turkeyTimeParts(cursor);
-    if (hour >= WORK_END_HOUR) {
-      const parts = turkeyDateParts(cursor);
-      const nextDay = addDaysParts(parts, 1);
-      cursor = turkeyLocalToUtc(nextDay.year, nextDay.month, nextDay.day, WORK_START_HOUR, 0);
-      continue;
-    }
-
-    const end = new Date(cursor.getTime() + durationMs);
-    const conflict = await hasConflict(companyId, cursor.toISOString(), end.toISOString());
-    if (!conflict) {
-      results.push({ starts_at: cursor.toISOString(), ends_at: end.toISOString() });
-    }
-    cursor = new Date(cursor.getTime() + SLOT_STEP_MS);
-  }
-
-  return results;
+  return all.slice(0, count);
 }
 
 export async function buildConflictMessageWithAlternatives(
@@ -380,32 +528,68 @@ export async function deleteAppointment(companyId: string, id: string): Promise<
   if (error) throw new Error(error.message);
 }
 
-/** AI sistem promptu için önümüzdeki randevular özeti */
+/** AI sistem promptu — yönetici paneli takvimine göre dolu ve müsait saatler */
 export async function getAppointmentContextForAI(companyId: string): Promise<string> {
+  const ctx = await fetchCompanyAppointmentContext(companyId);
   const now = new Date();
   const until = new Date(now);
-  until.setDate(until.getDate() + 14);
+  until.setDate(until.getDate() + DEFAULT_SEARCH_DAYS);
 
-  const items = await listAppointments(companyId, now.toISOString(), until.toISOString());
-  const category = await fetchCompanyCategory(companyId);
+  const [items, availableSlots, category] = await Promise.all([
+    listAppointments(companyId, now.toISOString(), until.toISOString()),
+    findAvailableSlots(companyId, ctx, { count: DEFAULT_AVAILABLE_SLOT_COUNT, daysAhead: DEFAULT_SEARCH_DAYS }),
+    fetchCompanyCategory(companyId),
+  ]);
+
   const askProvider = shouldAskAppointmentProvider(category);
   const providerLabel = getAppointmentProviderLabel('tr', undefined, category);
+  const scheduleSummary = buildScheduleSummary(ctx.schedule, 'tr');
 
-  if (items.length === 0) {
-    return 'Önümüzdeki 14 günde kayıtlı randevu yok. Müsait saatleri bilgi bankası çalışma saatlerine göre öner.';
+  const sections: string[] = [
+    `ÇALIŞMA SAATLERİ: ${scheduleSummary}`,
+    '',
+    'KURALLAR:',
+    '- Tarih/saat önerirken MUTLAKA tam tarih ve saat yaz (ör. 15.07.2026 17:00). "yarın", "15 gün sonra", "ertesi gün" gibi göreceli ifadeler KULLANMA.',
+    '- Müsaitlik yalnızca aşağıdaki MÜSAİT SAATLER listesine göre belirlenir; kafadan dolu/boş deme.',
+    '- DOLU SAATLER listesindeki saatleri ASLA önerme.',
+    '- Müşteri göreceli tarih söylerse (ör. "15 gün sonra 17:00") tam takvim tarihini hesaplayıp yaz.',
+  ];
+
+  if (items.length > 0) {
+    const busyLines = items.slice(0, 25).map((a) => {
+      const start = new Date(a.starts_at);
+      const end = new Date(a.ends_at);
+      const who = a.customer_name || a.customer_phone;
+      const doctor =
+        askProvider && a.preferred_doctor ? ` | ${providerLabel}: ${a.preferred_doctor}` : '';
+      return `- ${formatSlot(start, end, 'tr-TR', ctx.timezone)}: ${who} — ${a.title}${doctor} [${a.status}]`;
+    });
+    const more = items.length > 25 ? `\n... ve ${items.length - 25} randevu daha` : '';
+    sections.push('', `DOLU SAATLER (yönetici paneli takvimi — önerme):`, ...busyLines, more);
+  } else {
+    sections.push('', 'DOLU SAATLER: Önümüzdeki 30 günde kayıtlı randevu yok.');
   }
 
-  const lines = items.slice(0, 25).map((a) => {
-    const start = new Date(a.starts_at);
-    const end = new Date(a.ends_at);
-    const who = a.customer_name || a.customer_phone;
-    const doctor =
-      askProvider && a.preferred_doctor ? ` | ${providerLabel}: ${a.preferred_doctor}` : '';
-    return `- ${formatSlot(start, end)}: ${who} — ${a.title}${doctor} [${a.status}]`;
-  });
+  if (availableSlots.length > 0) {
+    const availableLines = availableSlots.map((slot, i) => {
+      const label = formatSlotLocalized(slot.starts_at, slot.ends_at, 'tr', ctx.timezone);
+      const weekday = formatWeekdayLocalized(slot.starts_at, 'tr', ctx.timezone);
+      const weekdayPart = weekday ? ` (${weekday.charAt(0).toUpperCase()}${weekday.slice(1)})` : '';
+      return `${i + 1}) ${label}${weekdayPart}`;
+    });
+    sections.push(
+      '',
+      'MÜSAİT SAATLER (yönetici paneli takvimine göre hesaplanmış — YALNIZCA bunları öner):',
+      ...availableLines
+    );
+  } else {
+    sections.push(
+      '',
+      'MÜSAİT SAATLER: Önümüzdeki 30 günde müsait saat bulunmuyor. Müşteriye bunu açıkça belirt; kafadan saat önerme.'
+    );
+  }
 
-  const more = items.length > 25 ? `\n... ve ${items.length - 25} randevu daha` : '';
-  return `DOLU SAATLER (çakışma yapma):\n${lines.join('\n')}${more}`;
+  return sections.join('\n');
 }
 
 export function stripAppointmentMarkers(text: string): string {
