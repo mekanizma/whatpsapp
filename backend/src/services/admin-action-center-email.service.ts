@@ -15,6 +15,15 @@ import { resolveAdminNotifyEmails } from './admin-email-notification.service';
 const CHECK_INTERVAL_MS = 5 * 60 * 1000;
 const NOTIFY_SEVERITIES = new Set<ActionCenterSeverity>(['critical', 'warning']);
 
+/** Yalnızca operasyonel alarmlar e-posta ile bildirilir (açık destek talepleri hariç) */
+const EMAIL_ALERT_TYPES = new Set([
+  'whatsapp_disconnected',
+  'quota_exhausted',
+  'quota_high',
+  'trial_expired',
+  'trial_ending',
+]);
+
 let checkTimer: NodeJS.Timeout | null = null;
 let checkInProgress = false;
 
@@ -157,7 +166,9 @@ export async function checkAndNotifyActionCenterAlerts(): Promise<void> {
   checkInProgress = true;
   try {
     const actionCenter = await getAdminActionCenter();
-    const activeAlerts = actionCenter.items.filter((item) => NOTIFY_SEVERITIES.has(item.severity));
+    const activeAlerts = actionCenter.items.filter(
+      (item) => NOTIFY_SEVERITIES.has(item.severity) && EMAIL_ALERT_TYPES.has(item.type)
+    );
     const activeIds = new Set(activeAlerts.map((a) => a.id));
 
     await cleanupResolvedAlerts(activeIds);

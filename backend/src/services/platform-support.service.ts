@@ -5,7 +5,6 @@
 import { adminClient } from '../database/supabase';
 import {
   notifyAdminsNewPlatformSupportTicket,
-  notifyAdminsPlatformSupportReply,
 } from './admin-email-notification.service';
 
 export type PlatformSupportCategory =
@@ -341,10 +340,6 @@ export async function addPlatformSupportCustomerMessage(
   }
 
   const updatedTicket = await getPlatformSupportTicketForCompany(companyId, ticketId);
-
-  void notifyAdminsPlatformSupportReply(updatedTicket, trimmed, author.name).catch((err) => {
-    console.error('[PlatformSupport] Admin yanıt e-posta bildirimi hatası:', err);
-  });
 
   return updatedTicket;
 }
