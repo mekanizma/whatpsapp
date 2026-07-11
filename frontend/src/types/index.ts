@@ -67,7 +67,6 @@ export interface PlatformStats {
   total_conversations: number;
   total_messages_used: number;
   active_subscriptions: number;
-  open_tickets: number;
   platform_support_open: number;
   signup_applications_pending: number;
   whatsapp_connected: number;

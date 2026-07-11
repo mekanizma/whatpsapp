@@ -33,7 +33,7 @@ import { clearCompanyCache } from '../ai/ai-cache.service';
 export async function getExtendedPlatformStats() {
   const monthStart = getMonthStartISO();
 
-  const [companies, totalConversations, subs, aiLogs, tickets, waConnected, platformSupportOpen, signupApplicationsPending] = await Promise.all([
+  const [companies, totalConversations, subs, aiLogs, waConnected, platformSupportOpen, signupApplicationsPending] = await Promise.all([
     adminClient.from('companies').select('id', { count: 'exact', head: true }),
     getPlatformConversationCount(),
     adminClient.from('subscriptions').select('messages_used, messages_limit, status'),
@@ -41,10 +41,6 @@ export async function getExtendedPlatformStats() {
       .from('ai_usage_logs')
       .select('total_tokens, cached, skipped')
       .gte('created_at', monthStart),
-    adminClient
-      .from('tickets')
-      .select('id', { count: 'exact', head: true })
-      .in('status', ['open', 'in_progress']),
     adminClient
       .from('whatsapp_configs')
       .select('id', { count: 'exact', head: true })
@@ -69,7 +65,6 @@ export async function getExtendedPlatformStats() {
     total_conversations: totalConversations,
     total_messages_used: allSubs.reduce((s, x) => s + (x.messages_used || 0), 0),
     active_subscriptions: allSubs.filter((s) => s.status === 'active' || s.status === 'trial').length,
-    open_tickets: tickets.count || 0,
     platform_support_open: platformSupportOpen,
     signup_applications_pending: signupApplicationsPending,
     whatsapp_connected: waConnected.count || 0,
@@ -757,56 +752,24 @@ export async function getAdminActionCenter(): Promise<ActionCenterData> {
   const companyMap = new Map(allCompanies.map((c) => [c.id, c]));
 
   if (companyIds.length === 0) {
-    const [ticketsOnly, platformSupportRes] = await Promise.all([
-      adminClient
-        .from('tickets')
-        .select('id, company_id, subject, priority, status, created_at')
-        .in('status', ['open', 'in_progress'])
-        .order('created_at', { ascending: false })
-        .limit(30),
-      adminClient
-        .from('platform_support_tickets')
-        .select('id, company_id, subject, priority, status, created_at')
-        .in('status', ['open', 'in_progress'])
-        .order('created_at', { ascending: false })
-        .limit(30),
-    ]);
+    const { data: platformTickets, error: platformSupportError } = await adminClient
+      .from('platform_support_tickets')
+      .select('id, company_id, subject, priority, status, created_at')
+      .in('status', ['open', 'in_progress'])
+      .order('created_at', { ascending: false })
+      .limit(30);
 
-    if (ticketsOnly.error) throw new Error(ticketsOnly.error.message);
-    if (platformSupportRes.error) throw new Error(platformSupportRes.error.message);
-
-    const ticketItems: ActionCenterItem[] = (ticketsOnly.data || [])
-      .map((ticket) => {
-        const company = companyMap.get(ticket.company_id);
-        if (!company) return null;
-        return {
-          id: `open_ticket-${ticket.id}`,
-          type: 'open_ticket' as const,
-          category: 'tickets' as const,
-          severity:
-            ticket.priority === 'high' || ticket.priority === 'urgent'
-              ? ('critical' as const)
-              : ('warning' as const),
-          company_id: ticket.company_id,
-          company_name: company.company_name,
-          meta: {
-            ticket_id: ticket.id,
-            ticket_subject: ticket.subject,
-            ticket_priority: ticket.priority,
-          },
-        };
-      })
-      .filter(Boolean) as ActionCenterItem[];
+    if (platformSupportError) throw new Error(platformSupportError.message);
 
     const platformSupportItems = mapPlatformSupportTicketsToActionItems(
-      platformSupportRes.data || [],
+      platformTickets || [],
       companyMap
     );
 
-    return summarizeActionCenter([...ticketItems, ...platformSupportItems]);
+    return summarizeActionCenter(platformSupportItems);
   }
 
-  const [subsRes, waRes, recentMsgRes, ticketsRes, platformSupportRes] = await Promise.all([
+  const [subsRes, waRes, recentMsgRes, platformSupportRes] = await Promise.all([
     adminClient
       .from('subscriptions')
       .select('company_id, messages_used, messages_limit, status, ends_at, starts_at')
@@ -821,12 +784,6 @@ export async function getAdminActionCenter(): Promise<ActionCenterData> {
       .gte('created_at', dayAgo)
       .in('company_id', companyIds),
     adminClient
-      .from('tickets')
-      .select('id, company_id, subject, priority, status, created_at')
-      .in('status', ['open', 'in_progress'])
-      .order('created_at', { ascending: false })
-      .limit(30),
-    adminClient
       .from('platform_support_tickets')
       .select('id, company_id, subject, priority, status, created_at')
       .in('status', ['open', 'in_progress'])
@@ -837,7 +794,6 @@ export async function getAdminActionCenter(): Promise<ActionCenterData> {
   if (subsRes.error) throw new Error(subsRes.error.message);
   if (waRes.error) throw new Error(waRes.error.message);
   if (recentMsgRes.error) throw new Error(recentMsgRes.error.message);
-  if (ticketsRes.error) throw new Error(ticketsRes.error.message);
   if (platformSupportRes.error) throw new Error(platformSupportRes.error.message);
 
   const subMap = new Map((subsRes.data || []).map((s) => [s.company_id, s]));
@@ -938,25 +894,6 @@ export async function getAdminActionCenter(): Promise<ActionCenterData> {
         meta: { hours_inactive: INACTIVE_HOURS },
       });
     }
-  }
-
-  for (const ticket of ticketsRes.data || []) {
-    const company = companyMap.get(ticket.company_id);
-    if (!company) continue;
-
-    items.push({
-      id: `open_ticket-${ticket.id}`,
-      type: 'open_ticket',
-      category: 'tickets',
-      severity: ticket.priority === 'high' || ticket.priority === 'urgent' ? 'critical' : 'warning',
-      company_id: ticket.company_id,
-      company_name: company.company_name,
-      meta: {
-        ticket_id: ticket.id,
-        ticket_subject: ticket.subject,
-        ticket_priority: ticket.priority,
-      },
-    });
   }
 
   items.push(

@@ -1,9 +1,9 @@
 /**
  * Platform yöneticilerine e-posta bildirimleri
  *
- * Anlık e-posta: yeni kayıt başvurusu, yeni platform destek talebi
- * Periyodik e-posta (Aksiyon Merkezi): WhatsApp kopması, kota, deneme süresi
- * Gönderilmez: destek talebine yanıt, şirket içi müşteri talepleri
+ * Anlık e-posta: yeni kayıt başvurusu, yeni platform destek talebi (müşteri paneli)
+ * Periyodik e-posta: WhatsApp kopması, kota, deneme süresi
+ * Gönderilmez: WhatsApp canlı destek talepleri, destek yanıtları, şirket içi müşteri talepleri
  */
 
 import { config } from '../config';
