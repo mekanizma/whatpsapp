@@ -96,4 +96,38 @@ describe('appointment-collect.service', () => {
     assert.equal(gate.blocked, true);
     assert.match(gate.message!, /ad ve soyad/i);
   });
+
+  it('randevu özeti sonrası şikayet mesajı konu veya ad olarak alınmaz', () => {
+    const history = [
+      { sender_type: 'ai', message: 'Ad soyadınız?' },
+      { sender_type: 'customer', message: 'Gurcem Semercioglu' },
+      { sender_type: 'ai', message: 'Telefon?' },
+      { sender_type: 'customer', message: '05338507761' },
+      { sender_type: 'ai', message: 'Hangi işlem için randevu?' },
+      { sender_type: 'customer', message: 'satım alma deneme' },
+      {
+        sender_type: 'ai',
+        message:
+          'Randevu özeti\nTarih/saat: 13.07.2026 15:00\nAd Soyad: Gurcem Semercioglu\nKonu: satım alma deneme\nOnaylıyor musunuz?',
+      },
+      { sender_type: 'customer', message: 'konuyu yine değiştirdin' },
+    ];
+    const collected = parseCollectedFields(history, 'konuyu yine değiştirdin');
+    assert.equal(collected.customer_name, 'Gurcem Semercioglu');
+    assert.equal(collected.title, 'satım alma deneme');
+  });
+
+  it('küfür ve şikayet konu olarak alınmaz', () => {
+    const history = [
+      { sender_type: 'ai', message: 'Hangi işlem için randevu?' },
+      { sender_type: 'customer', message: 'satım alma deneme' },
+      {
+        sender_type: 'ai',
+        message: 'Randevu özeti\nKonu: satım alma deneme\nOnaylıyor musunuz?',
+      },
+      { sender_type: 'customer', message: 'kütle hızı yapıyoruz amk' },
+    ];
+    const collected = parseCollectedFields(history, 'kütle hızı yapıyoruz amk');
+    assert.equal(collected.title, 'satım alma deneme');
+  });
 });

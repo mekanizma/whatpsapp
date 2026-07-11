@@ -349,7 +349,14 @@ export async function generateAIResponse(
   let raw = completion.choices[0]?.message?.content?.trim() || '';
 
   if (appointmentMode) {
-    raw = reconcileAppointmentAiResponse(raw, history, trimmed, conversationLang, appointmentCtx);
+    raw = await reconcileAppointmentAiResponse(
+      raw,
+      history,
+      trimmed,
+      conversationLang,
+      appointmentCtx,
+      companyId
+    );
   }
 
   const booking = await handleAppointmentBooking(

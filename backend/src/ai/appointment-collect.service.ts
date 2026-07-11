@@ -40,8 +40,29 @@ function extractPhone(text: string): string | null {
 
 const CONFIRM_WORDS = /^(evet|onayl?[iıİI]yorum|onaylıyorum|onayliyorum|onay|tamam|uygun|olur|kabul|ok|yes|hayır|hayir)$/iu;
 const APPOINTMENT_REQUEST_RE = /randevu|rezervasyon|appointment|müsait|musait|alabilir\s*miyim|alabilirmiyim|almak istiyorum/i;
+const PROFANITY_RE =
+  /\b(amk|amına|amina|amın|siktir|sikeyim|orospu|oç|oc\b|yarrak|piç|pic\b|sokuk|göt|got\b|kahpe|ibne|mal\b|salak|aptal)\b/i;
+const COMPLAINT_RE =
+  /değiştirdin|degistirdin|değiştirmiş|degistirmis|yanlış|yanlis|hatalı|hatalli|sen ekledin|başka randevu yok|kafadan|konu bu mu|konuyu yine|neden değiştir|doğru kaydedemedim|dogru kaydedemedim|yanlış yaz|yanlis yaz|olmaz bu|ne diyosun|ne diyorsun/i;
 const CONVERSATIONAL_NONSENSE_RE =
   /\?|^(ne|niye|neden|nasıl|nasil|kim|hangi|kaç|kac|nedir|diyosun|diyorsun|verebilir|istiyorum|sordu|vizyon|kodlad|merhaba|selam|hey|tamam|ok)\b|\b(verebilir|istiyorum|diyosun|diyorsun|vizyon|kodlad)\b/i;
+
+export function isComplaintOrCorrectionMessage(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  if (PROFANITY_RE.test(trimmed)) return true;
+  if (COMPLAINT_RE.test(trimmed)) return true;
+  return false;
+}
+
+function isAppointmentSummaryMessage(aiMessage: string): boolean {
+  return (
+    /randevu özeti|appointment summary|onaylıyor musunuz|onayliyor musunuz|do you confirm/i.test(
+      aiMessage
+    ) ||
+    /^\s*(tarih\/saat|date\/time|ad soyad|name|konu|topic|telefon|phone)\s*:/im.test(aiMessage)
+  );
+}
 
 function isConversationalNonsense(text: string): boolean {
   const trimmed = text.trim();
@@ -52,15 +73,22 @@ function isConversationalNonsense(text: string): boolean {
 }
 
 function isAskingForName(aiMessage: string): boolean {
+  if (isAppointmentSummaryMessage(aiMessage)) return false;
   const ai = aiMessage.toLocaleLowerCase('tr');
   return /ad.{0,30}soyad|soyad.{0,15}ad|isminiz|adınız|adiniz|ad soyad/.test(ai);
 }
 
 function isAskingForServiceTopic(aiMessage: string): boolean {
+  if (isAppointmentSummaryMessage(aiMessage)) return false;
   const ai = aiMessage.toLocaleLowerCase('tr');
-  return /konu|hizmet|işlem|islem|service|topic|ne için|ne icin|hangi konu|hangi hizmet|what.*(for|about)|which service/.test(
+  return /hangi konu|hangi hizmet|hangi işlem|hangi islem|ne için randevu|ne icin randevu|konu\/hizmet|işlem veya ziyaret|islem veya ziyaret|işlem için|islem icin|hizmet için|hizmet icin|ziyaret sebebi|what.*(service|for|about)|which service|topic for/.test(
     ai
   );
+}
+
+function isAskingForPhone(aiMessage: string): boolean {
+  if (isAppointmentSummaryMessage(aiMessage)) return false;
+  return /telefon|numara|cep/.test(aiMessage.toLocaleLowerCase('tr'));
 }
 
 function isAskingForProvider(aiMessage: string): boolean {
@@ -72,6 +100,7 @@ function isAskingForProvider(aiMessage: string): boolean {
 
 export function isValidFullName(name: string): boolean {
   const trimmed = name.trim();
+  if (isComplaintOrCorrectionMessage(trimmed)) return false;
   if (isConversationalNonsense(trimmed)) return false;
   if (APPOINTMENT_REQUEST_RE.test(trimmed)) return false;
   if (
@@ -93,6 +122,7 @@ export function isValidFullName(name: string): boolean {
 
 export function isValidProcedureTitle(title: string): boolean {
   const text = title.trim();
+  if (isComplaintOrCorrectionMessage(text)) return false;
   if (text.length < 3) return false;
   if (isConversationalNonsense(text)) return false;
   if (APPOINTMENT_REQUEST_RE.test(text)) return false;
@@ -129,16 +159,18 @@ export function parseCollectedFields(
     const ai = curr.message.toLocaleLowerCase('tr');
     const cust = next.message.trim();
     if (!cust || cust.length < 2) continue;
+    if (isComplaintOrCorrectionMessage(cust)) continue;
+    if (CONFIRM_WORDS.test(cust)) continue;
 
     if (isAskingForName(ai) && isValidFullName(cust)) {
       customer_name = cust;
     }
-    if (/telefon|numara|cep/.test(ai)) {
+    if (isAskingForPhone(ai)) {
       const p = extractPhone(cust);
       if (p) customer_phone = p;
     }
     if (isAskingForServiceTopic(ai)) {
-      if (!extractPhone(cust) && !CONFIRM_WORDS.test(cust) && isValidProcedureTitle(cust)) {
+      if (!extractPhone(cust) && isValidProcedureTitle(cust)) {
         title = cust;
       }
     }
@@ -170,6 +202,7 @@ export function parseCollectedFields(
       const m = messages[i];
       if (m.sender_type !== 'customer') continue;
       const candidate = m.message.trim();
+      if (isComplaintOrCorrectionMessage(candidate)) continue;
       if (!isValidFullName(candidate)) continue;
       if (extractPhone(candidate)) continue;
       if (CONFIRM_WORDS.test(candidate)) continue;
@@ -271,11 +304,13 @@ export function mergeCollectedWithAction<T extends {
   collected: CollectedAppointmentFields,
   action: T
 ): T & { customer_name: string; customer_phone: string; title: string } {
+  const actionName = action.customer_name?.trim() || '';
+  const actionTitle = action.title?.trim() || '';
   return {
     ...action,
-    customer_name: (action.customer_name?.trim() || collected.customer_name || '').trim(),
+    customer_name: (isValidFullName(actionName) ? actionName : collected.customer_name || '').trim(),
     customer_phone: normalizePhone(action.customer_phone?.trim() || collected.customer_phone || ''),
-    title: (action.title?.trim() || collected.title || '').trim(),
+    title: (isValidProcedureTitle(actionTitle) ? actionTitle : collected.title || '').trim(),
     doctor_name: action.doctor_name || action.preferred_doctor || collected.doctor_name || undefined,
   };
 }

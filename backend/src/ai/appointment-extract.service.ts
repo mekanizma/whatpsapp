@@ -150,7 +150,10 @@ async function persistAppointment(
   },
   lang: ConversationLang = 'tr'
 ): Promise<{ message: string; appointment: Appointment | null }> {
-  const conflict = await hasConflict(companyId, merged.starts_at, merged.ends_at);
+  const conflict = await hasConflict(companyId, merged.starts_at, merged.ends_at, undefined, {
+    customerPhone: merged.customer_phone,
+    replaceSameCustomerAi: true,
+  });
   if (conflict) {
     const altMsg = await buildConflictMessageWithAlternatives(
       companyId,

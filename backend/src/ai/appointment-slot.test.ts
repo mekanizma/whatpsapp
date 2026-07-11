@@ -119,4 +119,15 @@ describe('appointment-slot.service', () => {
     assert.ok(slot);
     assert.match(formatSlotTurkish(slot!.starts_at, slot!.ends_at), /01\.07\.2026 10:00/);
   });
+
+  it('salı günü 13.00 ifadesini doğru parse eder', () => {
+    const slot = parseSlotFromTurkishText('salı günü 13.00 müsait misin', REF);
+    assert.ok(slot);
+    const startTr = new Date(slot!.starts_at).toLocaleTimeString('tr-TR', {
+      timeZone: 'Europe/Istanbul',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+    assert.equal(startTr, '13:00');
+  });
 });

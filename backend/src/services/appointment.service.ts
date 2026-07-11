@@ -189,8 +189,18 @@ export async function hasConflict(
   companyId: string,
   startsAt: string,
   endsAt: string,
-  excludeId?: string
+  excludeId?: string,
+  opts?: { customerPhone?: string; replaceSameCustomerAi?: boolean }
 ): Promise<boolean> {
+  if (opts?.replaceSameCustomerAi && opts.customerPhone) {
+    await cancelOverlappingSameCustomerAiAppointments(
+      companyId,
+      opts.customerPhone,
+      startsAt,
+      endsAt
+    );
+  }
+
   let query = adminClient
     .from('appointments')
     .select('id', { count: 'exact', head: true })
@@ -204,6 +214,31 @@ export async function hasConflict(
   const { count, error } = await query;
   if (error) throw new Error(error.message);
   return (count || 0) > 0;
+}
+
+/** Aynı müşterinin hatalı AI randevusu yeni kayıt öncesi iptal edilir */
+async function cancelOverlappingSameCustomerAiAppointments(
+  companyId: string,
+  customerPhone: string,
+  startsAt: string,
+  endsAt: string
+): Promise<void> {
+  const phone = normalizePhone(customerPhone);
+  const { data, error } = await adminClient
+    .from('appointments')
+    .select('id, source')
+    .eq('company_id', companyId)
+    .eq('customer_phone', phone)
+    .in('status', ['pending', 'confirmed'])
+    .in('source', ['ai'])
+    .lt('starts_at', endsAt)
+    .gt('ends_at', startsAt);
+
+  if (error) throw new Error(error.message);
+
+  for (const row of data || []) {
+    await updateAppointment(companyId, row.id, { status: 'cancelled' });
+  }
 }
 
 const SLOT_STEP_MS = 30 * 60 * 1000;
@@ -462,7 +497,10 @@ export async function createAppointment(
   companyId: string,
   input: AppointmentInput
 ): Promise<Appointment> {
-  const conflict = await hasConflict(companyId, input.starts_at, input.ends_at);
+  const conflict = await hasConflict(companyId, input.starts_at, input.ends_at, undefined, {
+    customerPhone: input.customer_phone,
+    replaceSameCustomerAi: input.source === 'ai',
+  });
   if (conflict) {
     throw new Error('Bu saat aralığında başka bir randevu var.');
   }
@@ -725,9 +763,15 @@ export async function processAIAppointmentBooking(
 
   const mergedAction: ParsedAppointmentAction = {
     ...actionWithSlot,
-    customer_name: actionWithSlot.customer_name?.trim() || collected?.customer_name?.trim() || undefined,
+    customer_name:
+      (isValidFullName(actionWithSlot.customer_name || '')
+        ? actionWithSlot.customer_name!.trim()
+        : collected?.customer_name?.trim()) || undefined,
     customer_phone: actionWithSlot.customer_phone?.trim() || collected?.customer_phone?.trim() || undefined,
-    title: actionWithSlot.title?.trim() || collected?.title?.trim() || undefined,
+    title:
+      (isValidProcedureTitle(actionWithSlot.title || '')
+        ? actionWithSlot.title!.trim()
+        : collected?.title?.trim()) || undefined,
     doctor_name: actionWithSlot.doctor_name || actionWithSlot.preferred_doctor || collected?.doctor_name || undefined,
   };
 
@@ -746,7 +790,12 @@ export async function processAIAppointmentBooking(
   const conflict = await hasConflict(
     companyId,
     mergedAction.starts_at,
-    mergedAction.ends_at
+    mergedAction.ends_at,
+    undefined,
+    {
+      customerPhone: mergedAction.customer_phone || customerPhone,
+      replaceSameCustomerAi: true,
+    }
   );
   if (conflict) {
     const altMsg = await buildConflictMessageWithAlternatives(

@@ -57,12 +57,12 @@ describe('idris senaryosu', () => {
     assert.equal(formatSlotTurkish(slot!.starts_at, slot!.ends_at), '02.07.2026 14:00-14:30');
   });
 
-  it('AI hatalı red yerine doğru onay özeti üretir', () => {
+  it('AI hatalı red yerine doğru onay özeti üretir', async () => {
     const slot = parseSlotFromTurkishText('yarın saat 3 de', REF)!;
     const dateLabel = formatSlotTurkish(slot.starts_at, slot.ends_at).split('-')[0].trim();
     const ctx = buildAppointmentCompanyContext({}, 'Europe/Istanbul');
     ctx.parseRef = REF;
-    const fixed = reconcileAppointmentAiResponse(
+    const fixed = await reconcileAppointmentAiResponse(
       "Üzgünüm, yarın saat 15:00'te randevu alamazsınız.",
       history.slice(0, 7),
       'yarın saat 3 de',

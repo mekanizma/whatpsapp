@@ -341,6 +341,13 @@ function extractTimeFromText(text: string): { hour: number; minute: number } | n
     if (hour <= 23 && minute <= 59) return { hour, minute };
   }
 
+  const bareTime = text.match(/\b(\d{1,2})\.(\d{2})\b/);
+  if (bareTime) {
+    hour = parseInt(bareTime[1], 10);
+    minute = parseInt(bareTime[2], 10);
+    if (hour <= 23 && minute <= 59) return { hour, minute };
+  }
+
   const rangeMatch = text.match(/(\d{1,2})[:.](\d{2})\s*[-–]\s*(\d{1,2})[:.](\d{2})/);
   if (rangeMatch) {
     hour = parseInt(rangeMatch[1], 10);

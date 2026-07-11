@@ -4,6 +4,7 @@
 
 import { KnowledgeItem } from '../types';
 import { config } from '../config';
+import { isComplaintOrCorrectionMessage } from './appointment-collect.service';
 
 const STOP_WORDS = new Set([
   'bir', 've', 'ile', 'için', 'icin', 'mi', 'mı', 'mu', 'mü', 'ne', 'nasıl', 'nasil',
@@ -331,6 +332,17 @@ export function isAppointmentIntent(
 ): boolean {
   const trimmed = message.trim();
 
+  if (isComplaintOrCorrectionMessage(trimmed)) {
+    const recent = history.slice(-8);
+    const inAppointmentFlow = recent.some(
+      (m) =>
+        (m.sender_type === 'ai' || m.sender_type === 'assistant') &&
+        /randevu|onaylıyor|onayliyor|randevu özeti|appointment summary/.test(m.message.toLowerCase())
+    );
+    if (inAppointmentFlow) return true;
+    return false;
+  }
+
   if (looksLikeQuestion(trimmed)) {
     return false;
   }
@@ -355,7 +367,11 @@ export function isAppointmentIntent(
   if (APPOINTMENT_TIME_RE.test(trimmed)) return true;
 
   const nameParts = trimmed.split(/\s+/).filter(Boolean);
-  if (nameParts.length >= 2 && nameParts.every((p) => p.length >= 2 && /^[\p{L}'-]+$/u.test(p))) {
+  if (
+    nameParts.length >= 2 &&
+    !isComplaintOrCorrectionMessage(trimmed) &&
+    nameParts.every((p) => p.length >= 2 && /^[\p{L}'-]+$/u.test(p))
+  ) {
     return true;
   }
 
