@@ -158,3 +158,28 @@ export function incrementValidationFailure(
 export function _resetAppointmentSessionsForTest(): void {
   sessionStore.clear();
 }
+
+/** AI randevu onay / oluşturuldu mesajı — aktif toplama akışı kapandı */
+export const APPOINTMENT_COMPLETED_AI_RE =
+  /randevunuz oluşturuldu|randevunuz kaydedildi|randevu oluşturuldu|randevu kaydedildi|appointment is confirmed|your appointment is confirmed|termin.*bestätigt|rendez-vous.*confirmé|randevu saatinde sizi bekliyoruz|we look forward to seeing you/i;
+
+export function isAppointmentCompletedAiMessage(message: string): boolean {
+  return APPOINTMENT_COMPLETED_AI_RE.test(message);
+}
+
+/** Randevu sonrası kısa teşekkür / kapanış mesajları */
+export function isPostAppointmentClosureMessage(message: string): boolean {
+  const trimmed = message.trim();
+  if (!trimmed || trimmed.length > 120) return false;
+  if (isAppointmentSessionRestartMessage(trimmed)) return false;
+  return /^(teşekkür|tesekkür|tesekkur|çok teşekkür|cok tesekkur|sağol|sagol|eyvallah|thanks|thank you|thank u|thx|ok|okay|tamam|mükemmel|mukemmel|harika|süper|super|güzel|guzel|👍|🙏)\b/i.test(
+    trimmed
+  );
+}
+
+export function clearSavedAppointmentSession(
+  companyId: string,
+  customerPhone: string
+): void {
+  clearAppointmentSession(companyId, customerPhone);
+}

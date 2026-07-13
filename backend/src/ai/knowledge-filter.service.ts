@@ -5,6 +5,10 @@
 import { KnowledgeItem } from '../types';
 import { config } from '../config';
 import { hasDateTimeIntent } from './appointment-datetime-tokens';
+import {
+  isAppointmentCompletedAiMessage,
+  isAppointmentSessionRestartMessage,
+} from './appointment-state.service';
 import { CONFIRM_WORDS_PATTERN } from './appointment-confirm-tokens';
 import { isComplaintOrCorrectionMessage } from './appointment-collect.service';
 
@@ -335,11 +339,17 @@ export function isInActiveAppointmentFlow(
   history: { sender_type: string; message: string }[] = []
 ): boolean {
   const recent = history.slice(-12);
-  return recent.some(
+  const appointmentAi = recent.filter(
     (m) =>
       (m.sender_type === 'ai' || m.sender_type === 'assistant') &&
       APPOINTMENT_FLOW_AI_RE.test(m.message)
   );
+  if (appointmentAi.length === 0) return false;
+
+  const last = appointmentAi[appointmentAi.length - 1];
+  if (isAppointmentCompletedAiMessage(last.message)) return false;
+
+  return true;
 }
 
 function isOffTopicDuringAppointmentFlow(message: string): boolean {
@@ -371,6 +381,18 @@ export function isAppointmentIntent(
   if (inFlow) {
     if (isOffTopicDuringAppointmentFlow(trimmed)) return false;
     return true;
+  }
+
+  const recentAi = history.slice(-4);
+  const appointmentJustCompleted = recentAi.some(
+    (m) =>
+      (m.sender_type === 'ai' || m.sender_type === 'assistant') &&
+      isAppointmentCompletedAiMessage(m.message)
+  );
+  if (appointmentJustCompleted && !isAppointmentSessionRestartMessage(trimmed)) {
+    if (!hasAppointmentSignals(trimmed) && !APPOINTMENT_STATUS_RE.test(trimmed)) {
+      return false;
+    }
   }
 
   if (APPOINTMENT_STATUS_RE.test(trimmed)) return true;

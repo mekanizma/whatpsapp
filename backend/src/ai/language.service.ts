@@ -207,6 +207,7 @@ type MessageKey =
   | 'appointment_available_slots'
   | 'appointment_available_for_date'
   | 'appointment_no_available_slots'
+  | 'appointment_flow_closed'
   | 'kb_miss_instruction'
   | 'kb_topics_header'
   | 'history_photo'
@@ -1000,6 +1001,15 @@ Preguntas de ejemplo:
     ru: 'На эту дату нет свободного времени.',
     fr: 'Aucun créneau disponible à cette date.',
     es: 'No hay horarios disponibles en esta fecha.',
+  },
+  appointment_flow_closed: {
+    tr: 'Rica ederim! Randevunuz kayıtlı. Başka bir konuda yardıma ihtiyacınız olursa yazabilirsiniz.',
+    en: 'You’re welcome! Your appointment is booked. If you need help with anything else, just message us.',
+    de: 'Gern geschehen! Ihr Termin ist gebucht. Wenn Sie sonst noch Hilfe brauchen, schreiben Sie uns.',
+    ar: 'عفواً! تم حجز موعدكم. إذا احتجتم مساعدة في موضوع آخر، راسلونا.',
+    ru: 'Пожалуйста! Ваша запись подтверждена. Если понадобится помощь по другому вопросу — напишите нам.',
+    fr: 'Avec plaisir ! Votre rendez-vous est enregistré. Pour toute autre question, écrivez-nous.',
+    es: '¡De nada! Su cita está registrada. Si necesita ayuda con otro tema, escríbanos.',
   },
   kb_miss_instruction: {
     tr: 'Bu soru için bilgi bankasında eşleşen içerik bulunamadı. Bunu müşteriye belirt; bilgin yoksa canlı temsilciye aktarmayı teklif et.',

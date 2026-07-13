@@ -12,7 +12,7 @@ import {
   buildDynamicUserMessage,
   buildLanguageBlockForTurn,
 } from './admin-prompt-builder';
-import { detectConversationLanguage } from './language.service';
+import { detectConversationLanguage, t } from './language.service';
 import { logAIUsage } from './ai-quota.service';
 import { getAllActivePromptContentsForAI } from '../services/prompt.service';
 import { preAIGate } from './ai-gate.service';
@@ -26,6 +26,12 @@ import { runAppointmentLlmFlow } from './appointment-llm-flow.service';
 import { appointmentConfig } from '../config/appointment.config';
 import { shouldRecordUnknownQuestion, isKnowledgeMissAiResponse } from './knowledge-miss.service';
 import { buildAppointmentCompanyContext } from './appointment-company-context';
+import {
+  getAppointmentSession,
+  isAppointmentSessionRestartMessage,
+  isPostAppointmentClosureMessage,
+  clearSavedAppointmentSession,
+} from './appointment-state.service';
 import {
   getCachedResponse,
   setCachedResponse,
@@ -220,6 +226,33 @@ export async function generateAIResponse(
       skipReason: gate.reason,
       tokensUsed: 0,
     };
+  }
+
+  const apptSession = getAppointmentSession(companyId, customerPhone);
+  if (apptSession.status === 'saved' && !isAppointmentSessionRestartMessage(trimmed)) {
+    clearSavedAppointmentSession(companyId, customerPhone);
+    if (isPostAppointmentClosureMessage(trimmed)) {
+      await logAIUsage({
+        companyId,
+        customerPhone,
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        cached: false,
+        skipped: true,
+        skipReason: 'appointment_closed',
+        model: config.openai.model,
+      });
+      return {
+        message: t(conversationLang, 'appointment_flow_closed'),
+        shouldTransfer: false,
+        skippedAI: true,
+        skipReason: 'appointment_closed',
+        tokensUsed: 0,
+        appointmentBooked: false,
+        knowledgeMiss: false,
+      };
+    }
   }
 
   const appointmentMode = isAppointmentIntent(trimmed, history);

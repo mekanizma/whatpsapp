@@ -4,6 +4,7 @@ import {
   filterRelevantKnowledge,
   isBroadKnowledgeQuery,
   isAppointmentIntent,
+  isInActiveAppointmentFlow,
   isKnowledgeQuestion,
   isPriceQuery,
   isGeneralPriceListQuery,
@@ -145,6 +146,29 @@ describe('knowledge-filter', () => {
 
   it('randevu durumu sorusu randevu moduna girer', () => {
     assert.equal(isAppointmentIntent('oluşturdunmu?', []), true);
+  });
+
+  it('randevu oluşturulduktan sonra teşekkür randevu moduna girmez', () => {
+    const history = [
+      {
+        sender_type: 'ai',
+        message:
+          'Randevunuz oluşturuldu.\n\n• Tarih/Saat: 14.07.2026 16:00-16:30\n• Ad Soyad: İdris Yıldırım\nRandevu saatinde sizi bekliyoruz.',
+      },
+      { sender_type: 'customer', message: 'Teşekkürler' },
+    ];
+    assert.equal(isInActiveAppointmentFlow(history), false);
+    assert.equal(isAppointmentIntent('Teşekkürler', history), false);
+  });
+
+  it('randevu oluşturulduktan sonra yeni randevu talebi randevu moduna girer', () => {
+    const history = [
+      {
+        sender_type: 'ai',
+        message: 'Randevunuz oluşturuldu. Randevu saatinde sizi bekliyoruz.',
+      },
+    ];
+    assert.equal(isAppointmentIntent('Yeni randevu almak istiyorum', history), true);
   });
 });
 

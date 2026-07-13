@@ -12,7 +12,7 @@ import {
   buildLanguageBlockForTurn,
   buildAppointmentRolePrompt,
 } from './admin-prompt-builder';
-import { detectConversationLanguage, ConversationLang } from './language.service';
+import { detectConversationLanguage, ConversationLang, t } from './language.service';
 import { stripTransferMarker } from './transfer.service';
 import { retrieveKnowledgeContext } from '../services/knowledge-retrieval.service';
 import { prepareConversationHistoryForChat } from './conversation-history.service';
@@ -34,8 +34,10 @@ import {
   markSessionHandedOff,
   incrementValidationFailure,
   resolveAppointmentState,
+  createEmptyAppointmentState,
   isAppointmentSessionRestartMessage,
   resetAppointmentSessionForRetry,
+  clearSavedAppointmentSession,
   type AppointmentLlmState,
   type AppointmentSessionMeta,
 } from './appointment-state.service';
@@ -450,6 +452,23 @@ export async function runAppointmentLlmFlow(
     } else {
       meta = queueSystemNote(meta, 'HANDOFF');
     }
+  } else if (meta.status === 'saved') {
+    if (isAppointmentSessionRestartMessage(input.customerMessage)) {
+      meta = resetAppointmentSessionForRetry(input.companyId, input.customerPhone);
+      state = resolveAppointmentState(null);
+      logFlow('session_reset_after_save', { message: input.customerMessage.slice(0, 80) });
+    } else {
+      clearSavedAppointmentSession(input.companyId, input.customerPhone);
+      logFlow('session_closed_after_save', { message: input.customerMessage.slice(0, 80) });
+      return {
+        message: t(lang, 'appointment_flow_closed'),
+        shouldTransfer: false,
+        tokensUsed: 0,
+        appointmentBooked: false,
+        appointment: null,
+        skipReason: 'appointment_closed',
+      };
+    }
   }
 
   meta = { ...meta, turnCount: meta.turnCount + 1 };
@@ -566,7 +585,12 @@ export async function runAppointmentLlmFlow(
         appointmentId: bookResult.appointment.id,
         phone: input.customerPhone,
       });
-      saveAppointmentSession(input.companyId, input.customerPhone, meta, state);
+      saveAppointmentSession(
+        input.companyId,
+        input.customerPhone,
+        meta,
+        createEmptyAppointmentState()
+      );
       const confirmMessage = await buildBookedConfirmationMessage(
         input.companyId,
         bookResult.appointment,
