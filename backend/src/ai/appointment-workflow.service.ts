@@ -443,9 +443,18 @@ export async function runAppointmentWorkflow(
     }
 
     const slotLabel = formatSlotLocalized(slot.starts_at, slot.ends_at, lang, ctx.timezone);
+    const phoneDisplay = merged.customer_phone.replace(
+      /(\d{2})(\d{3})(\d{3})(\d{2})(\d{2})/,
+      '$2 $3 $4 $5'
+    );
     return {
       handled: true,
-      message: t(lang, 'appointment_confirm_prompt', { slot: slotLabel }),
+      message: t(lang, 'appointment_confirm_prompt', {
+        slot: slotLabel,
+        name: merged.customer_name,
+        title: merged.title,
+        phone: phoneDisplay.length >= 10 ? phoneDisplay : merged.customer_phone,
+      }),
       appointment: null,
     };
   }

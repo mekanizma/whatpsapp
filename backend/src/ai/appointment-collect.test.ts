@@ -111,6 +111,47 @@ describe('appointment-collect.service', () => {
     assert.equal(collected.title, 'genel bilgi');
   });
 
+  it('tek mesajda ad, telefon, konu ve tarih ayıklanır (idris senaryosu)', () => {
+    const history = [
+      {
+        sender_type: 'ai',
+        message:
+          'Randevu oluşturabilmem için lütfen ad soyadınızı, telefon numaranızı, randevu konusunu ve istediğiniz tarih/saati paylaşır mısınız?',
+      },
+    ];
+    const msg =
+      'idris yıldırım 05338398293 üniversite hakkında bilgi almak yarın saat 10 a';
+    const collected = parseCollectedFields(history, msg);
+    assert.equal(collected.customer_name, 'idris yıldırım');
+    assert.equal(collected.customer_phone, '905338398293');
+    assert.match(collected.title!, /üniversite hakkında bilgi/i);
+
+    const missing = getMissingRequiredFields(collected, undefined, history, msg);
+    assert.deepEqual(missing, []);
+  });
+
+  it('yalnızca ad cevabı konu olarak kaydedilmez', () => {
+    const history = [
+      {
+        sender_type: 'ai',
+        message:
+          'Randevu oluşturabilmem için lütfen ad soyadınızı, telefon numaranızı, randevu konusunu ve istediğiniz tarih/saati paylaşır mısınız?',
+      },
+      {
+        sender_type: 'customer',
+        message:
+          'idris yıldırım 05338398293 üniversite hakkında bilgi almak yarın saat 10 a',
+      },
+      { sender_type: 'ai', message: 'Randevu oluşturabilmem için önce ad ve soyadınızı yazar mısınız?' },
+      { sender_type: 'customer', message: 'idris yıldırım' },
+      { sender_type: 'ai', message: 'Randevunuzu onaylıyor musunuz?' },
+    ];
+    const collected = parseCollectedFields(history, 'onaylıyorum');
+    assert.equal(collected.customer_name, 'idris yıldırım');
+    assert.match(collected.title!, /üniversite hakkında bilgi/i);
+    assert.notEqual(collected.title, collected.customer_name);
+  });
+
   it('sohbet cümleleri ad veya konu olarak alınmaz', () => {
     const history = [
       { sender_type: 'customer', message: 'Randevu verebilirmisin' },
