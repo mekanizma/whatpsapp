@@ -78,4 +78,25 @@ describe('appointment-slot.service', () => {
     assert.ok(slot);
     assert.match(formatSlotTurkish(slot!.starts_at, slot!.ends_at), /01\.07\.2026 15:00/);
   });
+
+  it('göreli Türkçe tarihleri parse eder', () => {
+    const cases: [string, string][] = [
+      ['yarın saat 10', '01.07.2026 10:00'],
+      ['öbürgün saat 10', '02.07.2026 10:00'],
+      ['oburgun saat 10', '02.07.2026 10:00'],
+      ['haftaya saat 10', '07.07.2026 10:00'],
+      ['5 gün sonra saat 10', '05.07.2026 10:00'],
+      ['2 hafta sonra saat 10', '14.07.2026 10:00'],
+      ['1 ay sonra saat 10', '30.07.2026 10:00'],
+    ];
+    for (const [input, expected] of cases) {
+      const slot = parseSlotFromTurkishText(input, REF);
+      assert.ok(slot, `slot null for: ${input}`);
+      assert.match(
+        formatSlotTurkish(slot!.starts_at, slot!.ends_at),
+        new RegExp(expected.replace('-', '[-–]')),
+        `failed for: ${input}`
+      );
+    }
+  });
 });

@@ -24,6 +24,10 @@ import {
   PM_TOKENS,
   RELATIVE_DATE_TOKENS,
   WEEKDAY_TOKENS,
+  DAYS_LATER_RE,
+  WEEKS_LATER_RE,
+  MONTHS_LATER_RE,
+  normalizeAppointmentDateText,
   weekdayInText,
   hasDateTimeIntent,
 } from './appointment-datetime-tokens';
@@ -247,6 +251,25 @@ function addDays(
   return companyDateParts(d, timeZone);
 }
 
+function addMonths(
+  parts: { year: number; month: number; day: number },
+  months: number,
+  timeZone: string
+): { year: number; month: number; day: number } {
+  let month = parts.month + months;
+  let year = parts.year;
+  while (month > 12) {
+    month -= 12;
+    year += 1;
+  }
+  while (month < 1) {
+    month += 12;
+    year -= 1;
+  }
+  const day = Math.min(parts.day, daysInMonth(year, month));
+  return { year, month, day };
+}
+
 function daysInMonth(year: number, month: number): number {
   return new Date(Date.UTC(year, month, 0)).getUTCDate();
 }
@@ -391,11 +414,12 @@ function extractDateParts(
   timeZone: string
 ): { year: number; month: number; day: number } | null {
   const dateText = stripTimeFromText(text);
-  const lower = dateText.toLocaleLowerCase('tr');
+  const normalized = normalizeAppointmentDateText(dateText);
+  const lower = normalized.toLocaleLowerCase('tr');
   const localNow = companyDateParts(ref, timeZone);
   let { year, month, day } = localNow;
 
-  const nextWd = text.match(NEXT_WEEKDAY_RE);
+  const nextWd = normalized.match(NEXT_WEEKDAY_RE);
   if (nextWd) {
     const token = nextWd[1].toLocaleLowerCase('tr');
     const weekday = WEEKDAY_TOKENS[token];
@@ -410,11 +434,29 @@ function extractDateParts(
   if (RELATIVE_DATE_TOKENS.tomorrow.some((re) => re.test(lower))) {
     return addDays(localNow, 1, timeZone);
   }
-  if (RELATIVE_DATE_TOKENS.dayAfterTomorrow.some((re) => re.test(lower))) {
+  if (
+    RELATIVE_DATE_TOKENS.dayAfterTomorrow.some((re) => re.test(lower)) ||
+    /öbürgün|öbür\s*gün|oburgun|obur\s*gun|obergun/i.test(lower)
+  ) {
     return addDays(localNow, 2, timeZone);
   }
   if (RELATIVE_DATE_TOKENS.today.some((re) => re.test(lower))) {
     return localNow;
+  }
+
+  const daysLater = normalized.match(DAYS_LATER_RE);
+  if (daysLater) {
+    return addDays(localNow, parseInt(daysLater[1], 10), timeZone);
+  }
+
+  const weeksLater = normalized.match(WEEKS_LATER_RE);
+  if (weeksLater) {
+    return addDays(localNow, parseInt(weeksLater[1], 10) * 7, timeZone);
+  }
+
+  const monthsLater = normalized.match(MONTHS_LATER_RE);
+  if (monthsLater) {
+    return addMonths(localNow, parseInt(monthsLater[1], 10), timeZone);
   }
 
   for (const [name, weekday] of Object.entries(WEEKDAY_TOKENS)) {
@@ -423,7 +465,7 @@ function extractDateParts(
     }
   }
 
-  const monthDayMatch = dateText.match(
+  const monthDayMatch = normalized.match(
     new RegExp(
       `(\\d{1,2})\\s*[,.\s/-]*\\s*(${MONTH_NAME_PATTERN})(?:\\s*[,.\s/-]*\\s*(\\d{2,4}))?`,
       'i'
@@ -439,7 +481,7 @@ function extractDateParts(
     return null;
   }
 
-  const dayMonthMatch = dateText.match(
+  const dayMonthMatch = normalized.match(
     new RegExp(
       `(${MONTH_NAME_PATTERN})\\s*[,.\s/-]*\\s*(\\d{1,2})(?:\\s*[,.\s/-]*\\s*(\\d{2,4}))?`,
       'i'
@@ -455,7 +497,7 @@ function extractDateParts(
     return null;
   }
 
-  const isoMatch = dateText.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
+  const isoMatch = normalized.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
   if (isoMatch) {
     year = parseInt(isoMatch[1], 10);
     month = parseInt(isoMatch[2], 10);
@@ -466,7 +508,7 @@ function extractDateParts(
     return null;
   }
 
-  const dateMatch = dateText.match(/(\d{1,2})[./](\d{1,2})(?:[./](\d{2,4}))?/);
+  const dateMatch = normalized.match(/(\d{1,2})[./](\d{1,2})(?:[./](\d{2,4}))?/);
   if (dateMatch) {
     day = parseInt(dateMatch[1], 10);
     month = parseInt(dateMatch[2], 10);
@@ -477,7 +519,7 @@ function extractDateParts(
     return { year, month, day };
   }
 
-  if (MONTH_NAME_RE.test(dateText)) return null;
+  if (MONTH_NAME_RE.test(normalized)) return null;
 
   return null;
 }
