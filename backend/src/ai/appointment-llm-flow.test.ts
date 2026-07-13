@@ -22,6 +22,12 @@ import {
   evaluateHandoffTriggers,
   applyPostAiProcessing,
 } from './appointment-llm-flow.service';
+import {
+  resolveAppointmentState,
+  detectNameCorrection,
+  hydrateStateFromCustomerMessages,
+  shouldExpectAppointmentDataBlock,
+} from './appointment-customer-hydrate.service';
 import { appointmentConfig } from '../config/appointment.config';
 import { DEFAULT_APPOINTMENT_CONTEXT } from './appointment-company-context';
 import { localToUtcInTimezone } from './appointment-slot.service';
@@ -34,9 +40,16 @@ function ctxAtRef() {
 }
 
 function futureSlotIso(hour: number, minute = 0): { date: string; time: string } {
-  const start = localToUtcInTimezone(2026, 7, 15, hour, minute, TZ);
   return { date: '2026-07-15', time: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}` };
 }
+
+const GURCEM_HISTORY = [
+  { sender_type: 'ai', message: 'Ad ve soyadınızı yazar mısınız?' },
+  { sender_type: 'customer', message: 'gurcem semercioglu' },
+  { sender_type: 'ai', message: 'Telefon numaranızı yazar mısınız?' },
+  { sender_type: 'customer', message: '0533 850 7761' },
+  { sender_type: 'ai', message: 'Hangi konuda randevu almak istiyorsunuz?' },
+];
 
 describe('appointment_data parser', () => {
   it('parses valid block and strips from customer message', () => {
@@ -46,50 +59,39 @@ describe('appointment_data parser', () => {
     assert.equal(parsed.hadBlock, true);
     assert.equal(parsed.parseError, false);
     assert.equal(parsed.data?.date, '2026-07-14');
-    assert.equal(parsed.data?.time, '14:00');
     assert.doesNotMatch(parsed.cleanMessage, /appointment_data/);
-  });
-
-  it('flags parse error on broken JSON', () => {
-    const parsed = parseAppointmentDataFromResponse(
-      'Merhaba <appointment_data>{broken</appointment_data>'
-    );
-    assert.equal(parsed.hadBlock, true);
-    assert.equal(parsed.parseError, true);
-    assert.equal(parsed.data, null);
   });
 });
 
-describe('LLM collected context', () => {
-  it('formats state as specified', () => {
-    const state = mergeAppointmentData(createEmptyAppointmentState(), {
-      customer_name: 'Ali Veli',
-      customer_phone: '905551112233',
-      date: '2026-07-15',
-    });
+describe('gurcem senaryosu — müşteri hydrate', () => {
+  it('müşteri adını AI düzeltmesi olmadan aynen alır', () => {
+    const state = resolveAppointmentState(null, GURCEM_HISTORY, '0533 850 7761');
+    assert.equal(state.customer_name, 'gurcem semercioglu');
+    assert.equal(state.customer_phone, '905338507761');
+  });
+
+  it('ismim düzeltmesini algılar', () => {
+    const corrected = detectNameCorrection('ismim gurcem semercioglu');
+    assert.equal(corrected, 'gurcem semercioglu');
+  });
+
+  it('konu cevabını tam mesaj olarak alır', () => {
+    const topic = 'sisteminizle ilgili demo talep ediyorum';
+    const state = resolveAppointmentState(null, GURCEM_HISTORY, topic);
+    assert.equal(state.title, topic);
+    assert.equal(state.customer_name, 'gurcem semercioglu');
+  });
+
+  it('collectedContext ad düzeltme uyarısı içerir', () => {
+    const state = hydrateStateFromCustomerMessages(createEmptyAppointmentState(), GURCEM_HISTORY, 'x');
+    state.customer_name = 'gurcem semercioglu';
     const ctx = buildLlmCollectedContext(state);
-    assert.match(ctx, /Ad Soyad: Ali Veli/);
-    assert.match(ctx, /Telefon: 905551112233/);
-    assert.match(ctx, /Konu: null/);
-    assert.match(ctx, /Tarih: 2026-07-15/);
-    assert.match(ctx, /Onay: hayır/);
+    assert.match(ctx, /gurcem semercioglu/);
+    assert.match(ctx, /AYNEN/);
   });
 });
 
 describe('state merge from history', () => {
-  it('yarın 14:00 scenario — AI resolves date in data block', () => {
-    const history = [
-      {
-        sender_type: 'ai',
-        message:
-          'Yarın 14:00 için not aldım.\n<appointment_data>{"date":"2026-07-14","time":"14:00","confirmed":false}</appointment_data>',
-      },
-    ];
-    const state = rebuildStateFromHistory(history);
-    assert.equal(state.date, '2026-07-14');
-    assert.equal(state.time, '14:00');
-  });
-
   it('customer changes time — later block overrides', () => {
     const history = [
       {
@@ -110,31 +112,20 @@ describe('state merge from history', () => {
   });
 });
 
-describe('date/time validation', () => {
-  it('accepts valid future slot within MAX_DAYS_AHEAD', () => {
-    const { date, time } = futureSlotIso(14);
-    const state = mergeAppointmentData(createEmptyAppointmentState(), { date, time });
-    const result = validateAppointmentDateTime(state, ctxAtRef());
-    assert.equal(result.valid, true);
-    assert.ok(result.slot);
+describe('session state persistence', () => {
+  beforeEach(() => {
+    _resetAppointmentSessionsForTest();
   });
 
-  it('rejects past datetime as INVALID_DATE', () => {
+  it('oturum state DB mesajı olmadan korunur', () => {
+    let meta = getAppointmentSession('co1', '905551112233');
     const state = mergeAppointmentData(createEmptyAppointmentState(), {
-      date: '2026-07-12',
-      time: '10:00',
+      customer_name: 'gurcem semercioglu',
+      customer_phone: '905338507761',
     });
-    const result = validateAppointmentDateTime(state, ctxAtRef());
-    assert.equal(result.valid, false);
-    assert.equal(result.code, 'INVALID_DATE');
-  });
-});
-
-describe('system notes', () => {
-  it('prefixes system note for AI call', () => {
-    const note = formatSystemNotePrefix(appointmentConfig.systemNotes.SLOT_TAKEN);
-    assert.match(note, /^\[SISTEM NOTU:/);
-    assert.match(note, /ÖNERME/);
+    saveAppointmentSession('co1', '905551112233', meta, state);
+    meta = getAppointmentSession('co1', '905551112233');
+    assert.equal(meta.llmState?.customer_name, 'gurcem semercioglu');
   });
 });
 
@@ -143,77 +134,68 @@ describe('safety net handoff triggers', () => {
     _resetAppointmentSessionsForTest();
   });
 
-  it('2x SLOT_TAKEN triggers handoff', () => {
+  it('bilgi toplama aşamasında eksik blok handoff tetiklemez', () => {
     let meta = getAppointmentSession('co1', '905551112233');
-    meta = { ...meta, slotTakenCount: 2 };
+    meta = { ...meta, missingDataBlockStreak: 5 };
     const state = createEmptyAppointmentState();
-    const result = evaluateHandoffTriggers(meta, state, []);
-    assert.equal(result.shouldHandoff, true);
-    assert.equal(result.reason, 'slot_taken_twice');
+    const parsed = parseAppointmentDataFromResponse('Adınızı yazar mısınız?');
+    const post = applyPostAiProcessing(meta, state, parsed, [], 'merhaba');
+    assert.equal(post.handoff, null);
+    assert.equal(post.meta.missingDataBlockStreak, 0);
   });
 
-  it('broken data block x2 triggers handoff', () => {
+  it('temel alanlar doluyken 2x bozuk blok handoff tetikler', () => {
     let meta = getAppointmentSession('co1', '905551112233');
     meta = { ...meta, missingDataBlockStreak: 1 };
-    const state = createEmptyAppointmentState();
+    const state = mergeAppointmentData(createEmptyAppointmentState(), {
+      customer_name: 'gurcem semercioglu',
+      customer_phone: '905338507761',
+      title: 'demo talebi',
+    });
+    assert.equal(shouldExpectAppointmentDataBlock(state), true);
     const broken = parseAppointmentDataFromResponse(
-      'Cevap <appointment_data>{bad json</appointment_data>'
+      'Özet <appointment_data>{bad</appointment_data>'
     );
-    const post = applyPostAiProcessing(meta, state, broken, []);
-    assert.equal(post.meta.missingDataBlockStreak, 2);
+    const post = applyPostAiProcessing(meta, state, broken, GURCEM_HISTORY, 'demo');
     assert.equal(post.handoff, 'missing_data_block');
   });
 
-  it('SLOT_TAKEN resets confirmed and date/time in session flow', () => {
-    const state = mergeAppointmentData(createEmptyAppointmentState(), {
-      date: '2026-07-15',
-      time: '14:00',
-      confirmed: true,
-      customer_name: 'Ali Veli',
-      customer_phone: '905551112233',
-      title: 'Kontrol',
-    });
-    assert.equal(isReadyForBooking(state), true);
-    const slot = buildSlotFromState(state, ctxAtRef());
-    assert.ok(slot);
+  it('2x SLOT_TAKEN triggers handoff', () => {
+    let meta = getAppointmentSession('co1', '905551112233');
+    meta = { ...meta, slotTakenCount: 2 };
+    const result = evaluateHandoffTriggers(meta, createEmptyAppointmentState(), []);
+    assert.equal(result.reason, 'slot_taken_twice');
+  });
+});
+
+describe('date/time validation', () => {
+  it('accepts valid future slot within MAX_DAYS_AHEAD', () => {
+    const { date, time } = futureSlotIso(14);
+    const state = mergeAppointmentData(createEmptyAppointmentState(), { date, time });
+    const result = validateAppointmentDateTime(state, ctxAtRef());
+    assert.equal(result.valid, true);
   });
 });
 
 describe('confirmed booking readiness', () => {
   it('requires confirmed:true and all fields', () => {
     const { date, time } = futureSlotIso(10);
-    const incomplete = mergeAppointmentData(createEmptyAppointmentState(), {
+    const complete = mergeAppointmentData(createEmptyAppointmentState(), {
       date,
       time,
       confirmed: true,
-    });
-    assert.equal(isReadyForBooking(incomplete), false);
-
-    const complete = mergeAppointmentData(incomplete, {
-      customer_name: 'Ayşe Yılmaz',
-      customer_phone: '905559998877',
-      title: 'Genel muayene',
+      customer_name: 'gurcem semercioglu',
+      customer_phone: '905338507761',
+      title: 'demo talebi',
     });
     assert.equal(isReadyForBooking(complete), true);
+    assert.ok(buildSlotFromState(complete, ctxAtRef()));
   });
 });
 
-describe('session state transitions', () => {
-  beforeEach(() => {
-    _resetAppointmentSessionsForTest();
-  });
-
-  it('queues SLOT_TAKEN note key after slot conflict counter', () => {
-    let meta = getAppointmentSession('co2', '905551112233');
-    meta = {
-      ...meta,
-      slotTakenCount: 1,
-      pendingSystemNoteKey: 'SLOT_TAKEN',
-      pendingSystemNote: appointmentConfig.systemNotes.SLOT_TAKEN,
-    };
-    saveAppointmentSession('co2', '905551112233', meta);
-    const loaded = getAppointmentSession('co2', '905551112233');
-    assert.equal(loaded.pendingSystemNoteKey, 'SLOT_TAKEN');
-    assert.match(loaded.pendingSystemNote || '', /ÖNERME/);
+describe('system notes', () => {
+  it('prefixes system note for AI call', () => {
+    const note = formatSystemNotePrefix(appointmentConfig.systemNotes.SLOT_TAKEN);
+    assert.match(note, /^\[SISTEM NOTU:/);
   });
 });

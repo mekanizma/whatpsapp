@@ -31,6 +31,8 @@ export interface AppointmentSessionMeta {
   pendingSystemNote: string | null;
   pendingSystemNoteKey: AppointmentSystemNoteKey | null;
   lastHandoffReason: string | null;
+  /** Oturum boyunca biriken randevu alanları — DB mesajlarında appointment_data saklanmaz */
+  llmState: AppointmentLlmState | null;
   expires: number;
 }
 
@@ -81,7 +83,7 @@ export function rebuildStateFromHistory(history: HistoryMsg[]): AppointmentLlmSt
 
 export function buildLlmCollectedContext(state: AppointmentLlmState): string {
   const onay = state.confirmed ? 'evet' : 'hayır';
-  return [
+  const parts = [
     'Şu ana kadar toplanan:',
     `Ad Soyad: ${state.customer_name ?? 'null'}`,
     `Telefon: ${state.customer_phone ?? 'null'}`,
@@ -89,7 +91,11 @@ export function buildLlmCollectedContext(state: AppointmentLlmState): string {
     `Tarih: ${state.date ?? 'null'}`,
     `Saat: ${state.time ?? 'null'}`,
     `Onay: ${onay}`,
-  ].join(' | ');
+  ];
+  if (state.customer_name) {
+    parts.push(`NOT: Adı müşterinin yazdığı gibi AYNEN kullan — otomatik düzeltme yapma.`);
+  }
+  return parts.join(' | ');
 }
 
 export function getAppointmentSession(
@@ -110,6 +116,7 @@ export function getAppointmentSession(
     pendingSystemNote: null,
     pendingSystemNoteKey: null,
     lastHandoffReason: null,
+    llmState: null,
     expires: now + SESSION_TTL_MS,
   };
   sessionStore.set(key, fresh);
@@ -119,10 +126,12 @@ export function getAppointmentSession(
 export function saveAppointmentSession(
   companyId: string,
   customerPhone: string,
-  meta: AppointmentSessionMeta
+  meta: AppointmentSessionMeta,
+  llmState?: AppointmentLlmState
 ): void {
   sessionStore.set(sessionKey(companyId, customerPhone), {
     ...meta,
+    llmState: llmState ?? meta.llmState,
     expires: Date.now() + SESSION_TTL_MS,
   });
 }

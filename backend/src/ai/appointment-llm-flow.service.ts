@@ -24,7 +24,6 @@ import {
   formatSystemNotePrefix,
 } from './appointment-data-parser.service';
 import {
-  rebuildStateFromHistory,
   buildLlmCollectedContext,
   getAppointmentSession,
   saveAppointmentSession,
@@ -48,6 +47,13 @@ import {
 import { buildScheduleSummary } from '../services/working-hours.service';
 import { buildDateTimePlaceholders } from './appointment-datetime-context';
 import type { HistoryMsg } from './appointment-collect.service';
+import {
+  resolveAppointmentState,
+  mergeAiDataPreferCustomer,
+  extractCustomerFields,
+  shouldExpectAppointmentDataBlock,
+  hasNameCorrectionInMessage,
+} from './appointment-customer-hydrate.service';
 
 export interface AppointmentLlmFlowInput {
   companyId: string;
@@ -144,6 +150,7 @@ export function evaluateHandoffTriggers(
 
   if (
     options?.missingDataBlock &&
+    shouldExpectAppointmentDataBlock(state) &&
     meta.missingDataBlockStreak >= appointmentConfig.maxMissingDataBlocks
   ) {
     return { shouldHandoff: true, reason: 'missing_data_block' };
@@ -209,24 +216,34 @@ export function applyPostAiProcessing(
   meta: AppointmentSessionMeta,
   state: AppointmentLlmState,
   parsed: ReturnType<typeof parseAppointmentDataFromResponse>,
-  history: HistoryMsg[]
+  history: HistoryMsg[],
+  latestMessage: string
 ): { meta: AppointmentSessionMeta; state: AppointmentLlmState; handoff: HandoffTrigger | null } {
   let nextMeta = { ...meta };
   let nextState = { ...state };
+  const customer = extractCustomerFields(history, latestMessage);
+  const expectBlock = shouldExpectAppointmentDataBlock(nextState);
 
   if (parsed.hadBlock && parsed.parseError) {
-    nextMeta = { ...nextMeta, missingDataBlockStreak: nextMeta.missingDataBlockStreak + 1 };
-    logFlow('missing_data_block', { streak: nextMeta.missingDataBlockStreak });
+    if (expectBlock) {
+      nextMeta = { ...nextMeta, missingDataBlockStreak: nextMeta.missingDataBlockStreak + 1 };
+      logFlow('missing_data_block', { streak: nextMeta.missingDataBlockStreak });
+    }
   } else if (parsed.hadBlock && parsed.data) {
     nextMeta = { ...nextMeta, missingDataBlockStreak: 0 };
-    nextState = mergeAppointmentData(nextState, parsed.data);
+    nextState = mergeAiDataPreferCustomer(nextState, parsed.data, customer, history, latestMessage);
     logFlow('state_merge', { state: nextState });
-  } else if (!parsed.hadBlock) {
+  } else if (!parsed.hadBlock && expectBlock) {
     nextMeta = { ...nextMeta, missingDataBlockStreak: nextMeta.missingDataBlockStreak + 1 };
+    logFlow('missing_data_block', { streak: nextMeta.missingDataBlockStreak, expectBlock: true });
+  } else if (!parsed.hadBlock) {
+    // Bilgi toplama aşamasında blok beklenmez — streak artırma
+    nextMeta = { ...nextMeta, missingDataBlockStreak: 0 };
   }
 
   const handoffCheck = evaluateHandoffTriggers(nextMeta, nextState, history, {
-    missingDataBlock: !parsed.hadBlock || parsed.parseError,
+    missingDataBlock:
+      expectBlock && (!parsed.hadBlock || parsed.parseError),
   });
 
   if (handoffCheck.shouldHandoff && handoffCheck.reason) {
@@ -343,7 +360,12 @@ export async function runAppointmentLlmFlow(
 ): Promise<AppointmentLlmFlowResult> {
   const lang = detectConversationLanguage(input.customerMessage, input.history);
   let meta = getAppointmentSession(input.companyId, input.customerPhone);
-  let state = rebuildStateFromHistory(input.history);
+  let state = resolveAppointmentState(meta.llmState, input.history, input.customerMessage);
+
+  if (hasNameCorrectionInMessage(input.customerMessage)) {
+    meta = queueSystemNote(meta, 'NAME_CORRECTION');
+    logFlow('name_correction', { message: input.customerMessage.slice(0, 80), state });
+  }
 
   if (meta.status === 'handed_off') {
     meta = queueSystemNote(meta, 'HANDOFF');
@@ -377,7 +399,7 @@ export async function runAppointmentLlmFlow(
     );
     if (preBook.ok) {
       meta = queueSystemNote({ ...meta, status: 'saved' }, 'SAVED_OK');
-      saveAppointmentSession(input.companyId, input.customerPhone, meta);
+      saveAppointmentSession(input.companyId, input.customerPhone, meta, state);
       logFlow('book_success_pre_ai', { appointmentId: preBook.appointment.id });
     } else if (preBook.code === 'INVALID_DATE') {
       meta = incrementValidationFailure(queueSystemNote(meta, 'INVALID_DATE'), 'INVALID_DATE');
@@ -415,7 +437,13 @@ export async function runAppointmentLlmFlow(
   totalTokens += tokensUsed;
 
   const parsed = parseAppointmentDataFromResponse(raw);
-  const post = applyPostAiProcessing(meta, state, parsed, input.history);
+  const post = applyPostAiProcessing(
+    meta,
+    state,
+    parsed,
+    input.history,
+    input.customerMessage
+  );
   meta = post.meta;
   state = post.state;
 
@@ -458,7 +486,7 @@ export async function runAppointmentLlmFlow(
           appointmentId: bookResult.appointment.id,
           phone: input.customerPhone,
         });
-        saveAppointmentSession(input.companyId, input.customerPhone, meta);
+        saveAppointmentSession(input.companyId, input.customerPhone, meta, state);
         return {
           message,
           shouldTransfer,
@@ -516,7 +544,7 @@ export async function runAppointmentLlmFlow(
     shouldTransfer = handoff.shouldTransfer;
   }
 
-  saveAppointmentSession(input.companyId, input.customerPhone, meta);
+  saveAppointmentSession(input.companyId, input.customerPhone, meta, state);
   logFlow('turn_end', {
     status: meta.status,
     state,

@@ -8,7 +8,8 @@ export type AppointmentSystemNoteKey =
   | 'INVALID_DATE'
   | 'SLOT_TAKEN'
   | 'SAVED_OK'
-  | 'HANDOFF';
+  | 'HANDOFF'
+  | 'NAME_CORRECTION';
 
 function parseMode(raw: string | undefined): AppointmentMode {
   const v = (raw || 'llm').trim().toLowerCase();
@@ -51,5 +52,8 @@ export const appointmentConfig = {
     HANDOFF:
       process.env.APPOINTMENT_NOTE_HANDOFF ||
       'Randevu akışında teknik sorun oluştu; müşteriyi canlı temsilciye kibarca yönlendir ve mesajın sonuna transfer işaretini ekle.',
+    NAME_CORRECTION:
+      process.env.APPOINTMENT_NOTE_NAME_CORRECTION ||
+      'Müşteri adını düzeltti; appointment_data bloğunda müşterinin yazdığı adı AYNEN kullan, otomatik düzeltme veya Türkçe karakter ekleme yapma.',
   } satisfies Record<AppointmentSystemNoteKey, string>,
 } as const;
