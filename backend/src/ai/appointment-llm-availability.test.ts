@@ -45,6 +45,44 @@ describe('appointment-llm-availability.service', () => {
     assert.equal(shouldQueryAppointmentAvailability('randevu almak istiyorum'), false);
   });
 
+  it('numaralı saat seçiminde DB sorgusu tetikler', () => {
+    const history = [
+      {
+        sender_type: 'ai',
+        message:
+          'Müsait saatler:\n1) 09:00-09:30\n2) 09:30-10:00\n8) 16:30-17:00',
+      },
+    ];
+    assert.equal(shouldQueryAppointmentAvailability('8', history), true);
+    assert.equal(shouldQueryAppointmentAvailability('8', []), false);
+  });
+
+  it('müşteri 8 yazınca listedeki 8. saati seçer', async () => {
+    const history = [
+      ...IDRIS_HISTORY,
+      { sender_type: 'customer', message: '14 temmuz' },
+      {
+        sender_type: 'ai',
+        message:
+          'Müsait saatler:\n1) 09:00-09:30\n2) 09:30-10:00\n8) 16:30-17:00\n\nHangi saati tercih edersiniz?',
+      },
+    ];
+
+    const result = await buildAppointmentAvailabilityContext(
+      'co1',
+      history,
+      '8',
+      ctxAtRef(),
+      'tr',
+      { date: '2026-07-14' }
+    );
+
+    assert.ok(result.systemNote);
+    assert.match(result.systemNote!, /MÜSAİT|DOLU/);
+    assert.equal(result.statePatch?.date, '2026-07-14');
+    assert.equal(result.statePatch?.time, '16:30');
+  });
+
   it('yarın saat 3 müsaitmi → belirli slot müsait notu ve state patch', async () => {
     const result = await buildAppointmentAvailabilityContext(
       'co1',

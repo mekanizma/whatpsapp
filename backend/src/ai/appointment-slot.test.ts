@@ -113,4 +113,38 @@ describe('appointment-slot.service', () => {
     assert.ok(slot);
     assert.match(formatSlotTurkish(slot!.starts_at, slot!.ends_at), /16:30/);
   });
+
+  it('numaralı seçimde state tarihini kullanır', () => {
+    const history = [
+      { sender_type: 'customer', message: '14 temmuz için randevu' },
+      {
+        sender_type: 'ai',
+        message:
+          'Müsait saatler:\n1) 09:00-09:30\n2) 09:30-10:00\n8) 16:30-17:00\n\nHangi saati tercih edersiniz?',
+      },
+    ];
+    const slot = extractNumberedAlternative(history, '8', {
+      ref: REF,
+      timezone: 'Europe/Istanbul',
+      dateAnchor: '2026-07-14',
+    });
+    assert.ok(slot);
+    assert.match(formatSlotTurkish(slot!.starts_at, slot!.ends_at), /14\.07\.2026 16:30/);
+  });
+
+  it('numaralı liste 1. formatını destekler', () => {
+    const history = [
+      {
+        sender_type: 'ai',
+        message: 'Saatler:\n1. 09:00-09:30\n2. 10:00-10:30',
+      },
+    ];
+    const slot = extractNumberedAlternative(history, '2', {
+      ref: REF,
+      timezone: 'Europe/Istanbul',
+      dateAnchor: '2026-07-14',
+    });
+    assert.ok(slot);
+    assert.match(formatSlotTurkish(slot!.starts_at, slot!.ends_at), /10:00/);
+  });
 });

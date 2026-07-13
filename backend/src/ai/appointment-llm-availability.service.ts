@@ -9,7 +9,10 @@ import type { AppointmentCompanyContext } from './appointment-company-context';
 import { ConversationLang, t } from './language.service';
 import {
   extractCustomerSlotFromConversation,
+  extractNumberedAlternative,
   formatSlotLocalized,
+  hasRecentNumberedSlotList,
+  isNumberedSlotReply,
   parseDateAnchorFromText,
   validateSlotWorkingHours,
   buildWorkingHoursRejectionMessage,
@@ -25,8 +28,13 @@ export const appointmentAvailabilityDeps = {
   listAvailableSlotsForDate,
 };
 
-export function shouldQueryAppointmentAvailability(message: string): boolean {
-  return hasAvailabilityQuery(message) || hasDateTimeIntent(message);
+export function shouldQueryAppointmentAvailability(
+  message: string,
+  history: HistoryMsg[] = []
+): boolean {
+  if (hasAvailabilityQuery(message) || hasDateTimeIntent(message)) return true;
+  if (isNumberedSlotReply(message) && hasRecentNumberedSlotList(history)) return true;
+  return false;
 }
 
 function slotOptions(ctx: AppointmentCompanyContext) {
@@ -112,6 +120,11 @@ export interface AppointmentAvailabilityContext {
   systemNote: string | null;
   statePatch: { date: string; time: string } | null;
   dbError: boolean;
+}
+
+export interface AppointmentAvailabilityStateHint {
+  date?: string | null;
+  time?: string | null;
 }
 
 async function buildSpecificSlotNote(
@@ -234,13 +247,25 @@ export async function buildAppointmentAvailabilityContext(
   history: HistoryMsg[],
   latestMessage: string,
   ctx: AppointmentCompanyContext,
-  lang: ConversationLang
+  lang: ConversationLang,
+  stateHint: AppointmentAvailabilityStateHint = {}
 ): Promise<AppointmentAvailabilityContext> {
-  if (!shouldQueryAppointmentAvailability(latestMessage)) {
+  const options = {
+    ...slotOptions(ctx),
+    ...(stateHint.date ? { dateAnchor: stateHint.date } : {}),
+  };
+
+  if (isNumberedSlotReply(latestMessage)) {
+    const numberedSlot = extractNumberedAlternative(history, latestMessage, options);
+    if (numberedSlot) {
+      return buildSpecificSlotNote(companyId, numberedSlot, ctx, lang);
+    }
+  }
+
+  if (!shouldQueryAppointmentAvailability(latestMessage, history)) {
     return { systemNote: null, statePatch: null, dbError: false };
   }
 
-  const options = slotOptions(ctx);
   const slot = extractCustomerSlotFromConversation(history, latestMessage, options);
 
   if (slot) {

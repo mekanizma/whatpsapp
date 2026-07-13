@@ -44,6 +44,8 @@ export interface ParsedSlot {
 export interface SlotParseOptions {
   ref?: Date;
   timezone?: string;
+  /** YYYY-MM-DD — saat-only listede doğru günü sabitlemek için */
+  dateAnchor?: string;
 }
 
 function normalizeSlotOptions(refOrOptions: Date | SlotParseOptions = {}): SlotParseOptions {
@@ -551,6 +553,17 @@ export function parseSlotFromText(
   const localNow = companyDateParts(ref, timeZone);
   let dateParts = extractDateParts(text, ref, timeZone);
 
+  if (!dateParts && options.dateAnchor) {
+    const iso = options.dateAnchor.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (iso) {
+      dateParts = {
+        year: parseInt(iso[1], 10),
+        month: parseInt(iso[2], 10),
+        day: parseInt(iso[3], 10),
+      };
+    }
+  }
+
   if (!dateParts) {
     dateParts = { ...localNow };
     const startToday = localToUtcInTimezone(localNow.year, localNow.month, localNow.day, hour, minute, timeZone);
@@ -589,6 +602,67 @@ export function parseSlotFromTurkishText(text: string, ref = new Date()): Parsed
   return parseSlotFromText(text, { ref });
 }
 
+const NUMBERED_SLOT_LINE_RE = /^(\d{1,2})\s*[).:\-–]\s*(.+)$/;
+
+export function isNumberedSlotReply(message: string): boolean {
+  const m = message.trim().match(/^(\d{1,2})$/);
+  if (!m) return false;
+  const n = parseInt(m[1], 10);
+  return n >= 1 && n <= 15;
+}
+
+export function hasRecentNumberedSlotList(history: HistoryMsg[]): boolean {
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i].sender_type !== 'ai') continue;
+    const lines = history[i].message.split('\n');
+    for (const line of lines) {
+      if (NUMBERED_SLOT_LINE_RE.test(line.trim())) return true;
+    }
+    return false;
+  }
+  return false;
+}
+
+function resolveNumberedListDateAnchor(
+  aiMessage: string,
+  history: HistoryMsg[],
+  options: SlotParseOptions
+): string | undefined {
+  if (options.dateAnchor) return options.dateAnchor;
+
+  const ref = options.ref ?? new Date();
+  const timeZone = options.timezone ?? DEFAULT_COMPANY_TIMEZONE;
+
+  for (const line of aiMessage.split('\n')) {
+    const parts = extractDateParts(line, ref, timeZone);
+    if (parts) {
+      return `${parts.year}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`;
+    }
+  }
+
+  for (let i = history.length - 1; i >= 0; i--) {
+    const parts = extractDateParts(history[i].message, ref, timeZone);
+    if (parts) {
+      return `${parts.year}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`;
+    }
+  }
+
+  return undefined;
+}
+
+function parseNumberedSlotLine(lineText: string, options: SlotParseOptions): ParsedSlot | null {
+  const ref = options.ref ?? new Date();
+  const timeZone = options.timezone ?? DEFAULT_COMPANY_TIMEZONE;
+  const trimmed = lineText.trim();
+  let text = trimmed;
+
+  if (!extractDateParts(trimmed, ref, timeZone) && options.dateAnchor) {
+    text = `${options.dateAnchor} ${trimmed}`;
+  }
+
+  return parseSlotFromText(text, options);
+}
+
 export function extractNumberedAlternative(
   history: HistoryMsg[],
   latestMessage: string,
@@ -602,12 +676,15 @@ export function extractNumberedAlternative(
 
   for (let i = history.length - 1; i >= 0; i--) {
     if (history[i].sender_type !== 'ai') continue;
-    for (const line of history[i].message.split('\n')) {
-      const m = line.match(new RegExp(`^${n}\\)\\s*(.+)$`));
-      if (m) {
-        const slot = parseSlotFromText(m[1].trim(), options);
-        if (slot) return slot;
-      }
+    const aiMessage = history[i].message;
+    const dateAnchor = resolveNumberedListDateAnchor(aiMessage, history.slice(0, i), options);
+    const parseOptions = dateAnchor ? { ...options, dateAnchor } : options;
+
+    for (const line of aiMessage.split('\n')) {
+      const m = line.trim().match(NUMBERED_SLOT_LINE_RE);
+      if (!m || parseInt(m[1], 10) !== n) continue;
+      const slot = parseNumberedSlotLine(m[2], parseOptions);
+      if (slot) return slot;
     }
   }
   return null;

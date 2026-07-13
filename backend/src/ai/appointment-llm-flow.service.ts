@@ -85,6 +85,7 @@ function patchStateFromNumberedSlot(
   const slot = extractNumberedAlternative(history, latestMessage, {
     timezone: appointmentCtx.timezone,
     ref: appointmentCtx.parseRef,
+    dateAnchor: state.date ?? undefined,
   });
   if (!slot) return state;
   const d = companyDateParts(new Date(slot.starts_at), appointmentCtx.timezone);
@@ -479,23 +480,25 @@ export async function runAppointmentLlmFlow(
     (meta.pendingSystemNoteKey ? appointmentConfig.systemNotes[meta.pendingSystemNoteKey] : null);
   meta = { ...meta, pendingSystemNote: null, pendingSystemNoteKey: null };
 
-  const availability = await buildAppointmentAvailabilityContext(
-    input.companyId,
-    input.history,
-    input.customerMessage,
-    input.appointmentCtx,
-    lang
-  );
-  if (availability.statePatch) {
-    state = mergeAppointmentData(state, availability.statePatch);
-    logFlow('availability_state_patch', { patch: availability.statePatch });
-  }
   state = patchStateFromNumberedSlot(
     state,
     input.history,
     input.customerMessage,
     input.appointmentCtx
   );
+
+  const availability = await buildAppointmentAvailabilityContext(
+    input.companyId,
+    input.history,
+    input.customerMessage,
+    input.appointmentCtx,
+    lang,
+    { date: state.date, time: state.time }
+  );
+  if (availability.statePatch) {
+    state = mergeAppointmentData(state, availability.statePatch);
+    logFlow('availability_state_patch', { patch: availability.statePatch });
+  }
   if (availability.systemNote) {
     logFlow('availability_checked', { dbError: availability.dbError });
   } else if (availability.dbError) {
