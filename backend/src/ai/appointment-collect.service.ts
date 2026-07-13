@@ -8,6 +8,10 @@ import {
   buildAppointmentProviderRule,
   shouldAskAppointmentProvider,
 } from '../services/appointment-category.service';
+import { parseSlotFromText } from './appointment-slot.service';
+import type { AppointmentCompanyContext } from './appointment-company-context';
+import { DEFAULT_APPOINTMENT_CONTEXT } from './appointment-company-context';
+import { hasDateTimeIntent } from './appointment-datetime-tokens';
 
 export interface HistoryMsg {
   sender_type: string;
@@ -21,7 +25,7 @@ export interface CollectedAppointmentFields {
   doctor_name: string | null;
 }
 
-export type MissingAppointmentField = 'name' | 'phone' | 'title';
+export type MissingAppointmentField = 'name' | 'phone' | 'title' | 'datetime';
 
 const PHONE_RE = /(?:\+?90|0)?[\s-]?5\d{2}[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}|\d{10,15}/;
 
@@ -238,15 +242,57 @@ export function buildCollectedFieldsContext(
 
   const providerRule = buildAppointmentProviderRule(companyCategory);
 
-  const missing = getMissingRequiredFields(c);
+  const missing = getMissingRequiredFields(c, undefined, history, latestMessage);
   let next = '';
   if (missing.length > 0) {
-    next = `\nSIRADAKİ TEK SORU: ${promptForMissingField(missing[0], conversationLang)}\nZaten alınan bilgileri TEKRAR SORMA.`;
+    next = `\nEKSİK ALANLAR: ${missing.map((f) => fieldLabel(f, conversationLang)).join(', ')}\nMüsaitlik veya saat ÖNERME. Yalnızca eksik bilgileri iste.`;
   } else {
-    next = '\nTüm bilgiler tamam — tarih/saat öner veya onay bekle.';
+    next = '\nTüm bilgiler tamam — müsaitlik hakkında bilgi VERME; sistem veritabanını kontrol eder.';
   }
 
   return `${providerRule}\n\nTOPLANAN RANDEVU BİLGİLERİ:\n${lines.join('\n')}${next}`;
+}
+
+function fieldLabel(field: MissingAppointmentField, lang: ConversationLang): string {
+  switch (field) {
+    case 'name':
+      return t(lang, 'appointment_field_name');
+    case 'phone':
+      return t(lang, 'appointment_field_phone');
+    case 'title':
+      return t(lang, 'appointment_field_subject');
+    case 'datetime':
+      return t(lang, 'appointment_field_datetime');
+    default:
+      return field;
+  }
+}
+
+export function buildAllRequiredFieldsMessage(lang: ConversationLang = 'tr'): string {
+  return t(lang, 'appointment_request_all_fields');
+}
+
+export function buildMissingFieldsMessage(
+  missing: MissingAppointmentField[],
+  lang: ConversationLang = 'tr'
+): string {
+  const fields = missing.map((f) => `• ${fieldLabel(f, lang)}`).join('\n');
+  return t(lang, 'appointment_request_missing_fields', { fields });
+}
+
+export function hasCollectedDateTime(
+  history: HistoryMsg[],
+  latestMessage: string,
+  ctx: AppointmentCompanyContext = DEFAULT_APPOINTMENT_CONTEXT
+): boolean {
+  const options = { timezone: ctx.timezone, ref: ctx.parseRef };
+  const messages = [...history, { sender_type: 'customer', message: latestMessage }];
+  for (const m of messages) {
+    if (m.sender_type !== 'customer') continue;
+    if (!hasDateTimeIntent(m.message)) continue;
+    if (parseSlotFromText(m.message, options)) return true;
+  }
+  return false;
 }
 
 export function getMissingRequiredFields(
@@ -255,7 +301,12 @@ export function getMissingRequiredFields(
     customer_name?: string;
     customer_phone?: string;
     title?: string;
-  }
+    starts_at?: string;
+    ends_at?: string;
+  },
+  history: HistoryMsg[] = [],
+  latestMessage = '',
+  ctx: AppointmentCompanyContext = DEFAULT_APPOINTMENT_CONTEXT
 ): MissingAppointmentField[] {
   const name = (fromAction?.customer_name || collected.customer_name || '').trim();
   const phone = normalizePhone(fromAction?.customer_phone || collected.customer_phone || '');
@@ -265,6 +316,12 @@ export function getMissingRequiredFields(
   if (!isValidFullName(name)) missing.push('name');
   if (!phone || phone.length < 10) missing.push('phone');
   if (!isValidProcedureTitle(titleText)) missing.push('title');
+
+  const hasDatetime =
+    !!(fromAction?.starts_at && fromAction?.ends_at) ||
+    hasCollectedDateTime(history, latestMessage, ctx);
+  if (!hasDatetime) missing.push('datetime');
+
   return missing;
 }
 
@@ -279,6 +336,8 @@ export function promptForMissingField(
       return t(lang, 'appointment_phone');
     case 'title':
       return t(lang, 'appointment_title');
+    case 'datetime':
+      return t(lang, 'appointment_datetime_required');
     default:
       return t(lang, 'appointment_missing_default');
   }
@@ -287,11 +346,15 @@ export function promptForMissingField(
 export function getFirstMissingPrompt(
   collected: CollectedAppointmentFields,
   fromAction?: { customer_name?: string; customer_phone?: string; title?: string },
-  lang: ConversationLang = 'tr'
+  lang: ConversationLang = 'tr',
+  history: HistoryMsg[] = [],
+  latestMessage = '',
+  ctx: AppointmentCompanyContext = DEFAULT_APPOINTMENT_CONTEXT
 ): string | null {
-  const missing = getMissingRequiredFields(collected, fromAction);
+  const missing = getMissingRequiredFields(collected, fromAction, history, latestMessage, ctx);
   if (missing.length === 0) return null;
-  return promptForMissingField(missing[0], lang);
+  if (missing.length === 1) return promptForMissingField(missing[0], lang);
+  return buildMissingFieldsMessage(missing, lang);
 }
 
 export function mergeCollectedWithAction<T extends {
@@ -320,11 +383,19 @@ export function blockBookingIfIncomplete(
   history: HistoryMsg[],
   latestMessage: string,
   fromAction?: { customer_name?: string; customer_phone?: string; title?: string },
-  lang?: ConversationLang
+  lang?: ConversationLang,
+  ctx: AppointmentCompanyContext = DEFAULT_APPOINTMENT_CONTEXT
 ): { blocked: boolean; message: string | null; collected: CollectedAppointmentFields } {
   const conversationLang = lang ?? detectConversationLanguage(latestMessage, history);
   const collected = parseCollectedFields(history, latestMessage);
-  const prompt = getFirstMissingPrompt(collected, fromAction, conversationLang);
+  const prompt = getFirstMissingPrompt(
+    collected,
+    fromAction,
+    conversationLang,
+    history,
+    latestMessage,
+    ctx
+  );
   if (prompt) {
     return { blocked: true, message: prompt, collected };
   }

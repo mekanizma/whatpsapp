@@ -47,8 +47,8 @@ function formatTopicTitlesList(titles: string[]): string {
   return joined;
 }
 
-/** Ana sistem promptuna dahil edilmeyen roller */
-const NON_CHAT_ROLES = new Set(['greeting', 'translation']);
+/** Ana sistem promptuna ve dinamik LLM bağlamına dahil edilmeyen roller */
+const NON_CHAT_ROLES = new Set(['greeting', 'translation', 'appointment']);
 
 /**
  * Dinamik değişkenler — statik promptta kararlı yer tutucu metin.

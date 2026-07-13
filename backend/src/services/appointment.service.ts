@@ -1,38 +1,45 @@
 /**
- * Randevu iş mantığı ve AI takvim entegrasyonu
+ * Randevu iş mantığı — veritabanı CRUD ve doğrulama.
+ * Müsaitlik ve kayıt yalnızca deterministik workflow üzerinden yapılır.
  */
 
 import { adminClient } from '../database/supabase';
 import { Appointment, AppointmentSource, AppointmentStatus } from '../types';
-
 import {
-  preferHistorySlot,
   formatSlotLocalized,
-  formatWeekdayLocalized,
-  localToUtcInTimezone,
-  companyDateParts,
+  validateSlotWorkingHours,
+  buildWorkingHoursRejectionMessage,
 } from '../ai/appointment-slot.service';
-import type { AppointmentCompanyContext } from '../ai/appointment-company-context';
-import { DEFAULT_APPOINTMENT_CONTEXT, buildAppointmentCompanyContext } from '../ai/appointment-company-context';
-import type { HistoryMsg } from '../ai/appointment-collect.service';
 import { isValidFullName, isValidProcedureTitle } from '../ai/appointment-collect.service';
 import { ConversationLang, t, getAppointmentProviderLabel } from '../ai/language.service';
+import { buildAppointmentCompanyContext } from '../ai/appointment-company-context';
 import {
   shouldAskAppointmentProvider,
   isGenericAppointmentTitle,
 } from './appointment-category.service';
-import {
-  buildScheduleSummary,
-  parseHm,
-  weekdayToDayKey,
-  type WorkingHoursSchedule,
-} from './working-hours.service';
 
-const APPOINTMENT_BLOCK_RE = /\[APPOINTMENT\]([\s\S]*?)\[\/APPOINTMENT\]/gi;
-const FALSE_SUCCESS_RE =
-  /randevu(nuz)?\s+(başarıyla\s+|basariyla\s+)?(oluşturuldu|olusturuldu|alındı|alindi|onaylandı|onaylandi|kaydedildi|kaydediyorum)/i;
+export type AppointmentBookingErrorCode =
+  | 'validation'
+  | 'conflict'
+  | 'working_hours'
+  | 'database';
 
-export const APPOINTMENT_MARKER = '[APPOINTMENT]';
+export class AppointmentBookingError extends Error {
+  readonly code: AppointmentBookingErrorCode;
+
+  constructor(message: string, code: AppointmentBookingErrorCode) {
+    super(message);
+    this.name = 'AppointmentBookingError';
+    this.code = code;
+  }
+}
+
+export function logAppointmentEvent(
+  action: string,
+  details: Record<string, unknown>
+): void {
+  console.log(`[Randevu:${action}]`, JSON.stringify({ ...details, ts: new Date().toISOString() }));
+}
 
 export interface AppointmentInput {
   customer_phone: string;
@@ -57,38 +64,8 @@ export interface ParsedAppointmentAction {
   preferred_doctor?: string;
 }
 
-function formatSlot(start: Date, end: Date, locale = 'tr-TR', timeZone = DEFAULT_APPOINTMENT_CONTEXT.timezone): string {
-  const day = start.toLocaleDateString(locale, {
-    timeZone,
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
-  const t1 = start.toLocaleTimeString(locale, {
-    timeZone,
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-  const t2 = end.toLocaleTimeString(locale, {
-    timeZone,
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-  return `${day} ${t1}-${t2}`;
-}
-
 function normalizePhone(phone: string): string {
   return phone.replace(/\D/g, '');
-}
-
-function buildNotes(action: ParsedAppointmentAction): string | null {
-  const parts: string[] = [];
-  if (action.notes?.trim()) parts.push(action.notes.trim());
-  return parts.length > 0 ? parts.join('\n') : null;
-}
-
-function getDoctorName(action: ParsedAppointmentAction): string | null {
-  return action.doctor_name?.trim() || action.preferred_doctor?.trim() || null;
 }
 
 export async function fetchCompanyCategory(companyId: string): Promise<string> {
@@ -189,18 +166,8 @@ export async function hasConflict(
   companyId: string,
   startsAt: string,
   endsAt: string,
-  excludeId?: string,
-  opts?: { customerPhone?: string; replaceSameCustomerAi?: boolean }
+  excludeId?: string
 ): Promise<boolean> {
-  if (opts?.replaceSameCustomerAi && opts.customerPhone) {
-    await cancelOverlappingSameCustomerAiAppointments(
-      companyId,
-      opts.customerPhone,
-      startsAt,
-      endsAt
-    );
-  }
-
   let query = adminClient
     .from('appointments')
     .select('id', { count: 'exact', head: true })
@@ -216,375 +183,10 @@ export async function hasConflict(
   return (count || 0) > 0;
 }
 
-/** Aynı müşterinin hatalı AI randevusu yeni kayıt öncesi iptal edilir */
-async function cancelOverlappingSameCustomerAiAppointments(
-  companyId: string,
-  customerPhone: string,
-  startsAt: string,
-  endsAt: string
-): Promise<void> {
-  const phone = normalizePhone(customerPhone);
-  const { data, error } = await adminClient
-    .from('appointments')
-    .select('id, source')
-    .eq('company_id', companyId)
-    .eq('customer_phone', phone)
-    .in('status', ['pending', 'confirmed'])
-    .in('source', ['ai'])
-    .lt('starts_at', endsAt)
-    .gt('ends_at', startsAt);
-
-  if (error) throw new Error(error.message);
-
-  for (const row of data || []) {
-    await updateAppointment(companyId, row.id, { status: 'cancelled' });
-  }
-}
-
-const SLOT_STEP_MS = 30 * 60 * 1000;
-const DEFAULT_SLOT_DURATION_MS = SLOT_STEP_MS;
-const DEFAULT_SEARCH_DAYS = 30;
-const DEFAULT_AVAILABLE_SLOT_COUNT = 15;
-
-function slotOverlapsAppointment(
-  slotStart: Date,
-  slotEnd: Date,
-  appointments: Appointment[]
-): boolean {
-  for (const a of appointments) {
-    const aStart = new Date(a.starts_at);
-    const aEnd = new Date(a.ends_at);
-    if (slotStart < aEnd && slotEnd > aStart) return true;
-  }
-  return false;
-}
-
-function isSlotInsideBreak(
-  startMin: number,
-  endMin: number,
-  breaks: { start: string; end: string }[] = []
-): boolean {
-  for (const br of breaks) {
-    const breakStart = parseHm(br.start);
-    const breakEnd = parseHm(br.end);
-    if (startMin < breakEnd && endMin > breakStart) return true;
-  }
-  return false;
-}
-
-function addDaysToParts(
-  parts: { year: number; month: number; day: number },
-  days: number,
-  timeZone: string
-) {
-  const d = localToUtcInTimezone(parts.year, parts.month, parts.day, 12, 0, timeZone);
-  d.setUTCDate(d.getUTCDate() + days);
-  return companyDateParts(d, timeZone);
-}
-
-function weekdayFromParts(
-  parts: { year: number; month: number; day: number },
-  timeZone: string
-): number {
-  return localToUtcInTimezone(parts.year, parts.month, parts.day, 12, 0, timeZone).getUTCDay();
-}
-
-function advanceCursorInSchedule(
-  cursor: Date,
-  schedule: WorkingHoursSchedule,
-  timeZone: string
-): Date | null {
-  const maxIterations = 366;
-  let next = new Date(cursor.getTime());
-
-  for (let i = 0; i < maxIterations; i++) {
-    const parts = companyDateParts(next, timeZone);
-    const { hour, minute } = (() => {
-      const fmt = new Intl.DateTimeFormat('en-GB', {
-        timeZone,
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      });
-      const [h, m] = fmt.format(next).split(':').map(Number);
-      return { hour: h, minute: m };
-    })();
-    const minuteOfDay = hour * 60 + minute;
-    const wd = weekdayFromParts(parts, timeZone);
-    const dayKey = weekdayToDayKey(wd);
-    const daySchedule = schedule[dayKey];
-
-    if (!daySchedule) {
-      const tomorrow = addDaysToParts(parts, 1, timeZone);
-      next = localToUtcInTimezone(tomorrow.year, tomorrow.month, tomorrow.day, 0, 0, timeZone);
-      continue;
-    }
-
-    const openMin = parseHm(daySchedule.open);
-    const closeMin = parseHm(daySchedule.close);
-
-    if (minuteOfDay < openMin) {
-      return localToUtcInTimezone(parts.year, parts.month, parts.day, Math.floor(openMin / 60), openMin % 60, timeZone);
-    }
-
-    if (minuteOfDay >= closeMin) {
-      const tomorrow = addDaysToParts(parts, 1, timeZone);
-      next = localToUtcInTimezone(tomorrow.year, tomorrow.month, tomorrow.day, 0, 0, timeZone);
-      continue;
-    }
-
-    const alignedMin = minuteOfDay % 30 === 0 ? minuteOfDay : minuteOfDay + (30 - (minuteOfDay % 30));
-    if (alignedMin >= closeMin) {
-      const tomorrow = addDaysToParts(parts, 1, timeZone);
-      next = localToUtcInTimezone(tomorrow.year, tomorrow.month, tomorrow.day, 0, 0, timeZone);
-      continue;
-    }
-
-    const alignedHour = Math.floor(alignedMin / 60);
-    const alignedMinute = alignedMin % 60;
-    const candidate = localToUtcInTimezone(
-      parts.year,
-      parts.month,
-      parts.day,
-      alignedHour,
-      alignedMinute,
-      timeZone
-    );
-    const endMin = alignedMin + DEFAULT_SLOT_DURATION_MS / 60_000;
-    if (endMin > closeMin || isSlotInsideBreak(alignedMin, endMin, daySchedule.breaks)) {
-      next = new Date(candidate.getTime() + SLOT_STEP_MS);
-      continue;
-    }
-
-    return candidate;
-  }
-
-  return null;
-}
-
-async function fetchCompanyAppointmentContext(companyId: string): Promise<AppointmentCompanyContext> {
-  const { data } = await adminClient
-    .from('companies')
-    .select('working_hours, timezone')
-    .eq('id', companyId)
-    .maybeSingle();
-
-  return buildAppointmentCompanyContext(data?.working_hours, data?.timezone);
-}
-
-/** Yönetici paneli takvimine ve çalışma saatlerine göre gerçek müsait slotları hesapla */
-export async function findAvailableSlots(
-  companyId: string,
-  ctx: AppointmentCompanyContext = DEFAULT_APPOINTMENT_CONTEXT,
-  opts: {
-    count?: number;
-    daysAhead?: number;
-    durationMs?: number;
-    after?: Date;
-  } = {}
-): Promise<{ starts_at: string; ends_at: string }[]> {
-  const count = opts.count ?? DEFAULT_AVAILABLE_SLOT_COUNT;
-  const daysAhead = opts.daysAhead ?? DEFAULT_SEARCH_DAYS;
-  const durationMs = opts.durationMs ?? DEFAULT_SLOT_DURATION_MS;
-  const now = opts.after ?? new Date();
-  const until = new Date(now);
-  until.setDate(until.getDate() + daysAhead);
-
-  const busyAppointments = await listAppointments(companyId, now.toISOString(), until.toISOString());
-  const results: { starts_at: string; ends_at: string }[] = [];
-
-  let cursor = advanceCursorInSchedule(now, ctx.schedule, ctx.timezone);
-  if (!cursor) return results;
-
-  const searchUntil = until.getTime();
-
-  while (results.length < count && cursor.getTime() < searchUntil) {
-    const parts = companyDateParts(cursor, ctx.timezone);
-    const { hour, minute } = (() => {
-      const fmt = new Intl.DateTimeFormat('en-GB', {
-        timeZone: ctx.timezone,
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      });
-      const [h, m] = fmt.format(cursor).split(':').map(Number);
-      return { hour: h, minute: m };
-    })();
-    const startMin = hour * 60 + minute;
-    const endMin = startMin + durationMs / 60_000;
-    const wd = weekdayFromParts(parts, ctx.timezone);
-    const daySchedule = ctx.schedule[weekdayToDayKey(wd)];
-
-    if (daySchedule) {
-      const closeMin = parseHm(daySchedule.close);
-      if (
-        endMin <= closeMin &&
-        !isSlotInsideBreak(startMin, endMin, daySchedule.breaks) &&
-        cursor.getTime() >= now.getTime()
-      ) {
-        const endHour = Math.floor(endMin / 60);
-        const endMinute = endMin % 60;
-        const slotEnd = localToUtcInTimezone(
-          parts.year,
-          parts.month,
-          parts.day,
-          endHour,
-          endMinute,
-          ctx.timezone
-        );
-        if (!slotOverlapsAppointment(cursor, slotEnd, busyAppointments)) {
-          results.push({ starts_at: cursor.toISOString(), ends_at: slotEnd.toISOString() });
-        }
-      }
-    }
-
-    const nextCursor = advanceCursorInSchedule(
-      new Date(cursor.getTime() + SLOT_STEP_MS),
-      ctx.schedule,
-      ctx.timezone
-    );
-    if (!nextCursor || nextCursor.getTime() <= cursor.getTime()) break;
-    cursor = nextCursor;
-  }
-
-  return results;
-}
-
-/** Belirli bir gün için müsait slotları hesapla */
-export async function findAvailableSlotsOnDate(
-  companyId: string,
-  dateParts: { year: number; month: number; day: number },
-  ctx: AppointmentCompanyContext = DEFAULT_APPOINTMENT_CONTEXT,
-  opts: { count?: number; durationMs?: number } = {}
-): Promise<{ starts_at: string; ends_at: string }[]> {
-  const count = opts.count ?? 20;
-  const durationMs = opts.durationMs ?? DEFAULT_SLOT_DURATION_MS;
-  const timeZone = ctx.timezone;
-
-  const wd = weekdayFromParts(dateParts, timeZone);
-  const dayKey = weekdayToDayKey(wd);
-  const daySchedule = ctx.schedule[dayKey];
-  if (!daySchedule) return [];
-
-  const dayStart = localToUtcInTimezone(
-    dateParts.year,
-    dateParts.month,
-    dateParts.day,
-    0,
-    0,
-    timeZone
-  );
-  const dayEnd = localToUtcInTimezone(
-    dateParts.year,
-    dateParts.month,
-    dateParts.day,
-    23,
-    59,
-    timeZone
-  );
-
-  const busyAppointments = await listAppointments(
-    companyId,
-    dayStart.toISOString(),
-    new Date(dayEnd.getTime() + 60_000).toISOString()
-  );
-
-  const openMin = parseHm(daySchedule.open);
-  const closeMin = parseHm(daySchedule.close);
-  const slotStepMin = durationMs / 60_000;
-  const results: { starts_at: string; ends_at: string }[] = [];
-  const now = new Date();
-
-  for (let minute = openMin; minute + slotStepMin <= closeMin; minute += 30) {
-    const hour = Math.floor(minute / 60);
-    const min = minute % 60;
-    const slotStart = localToUtcInTimezone(
-      dateParts.year,
-      dateParts.month,
-      dateParts.day,
-      hour,
-      min,
-      timeZone
-    );
-    const endMin = minute + slotStepMin;
-    if (isSlotInsideBreak(minute, endMin, daySchedule.breaks)) continue;
-    if (slotStart.getTime() < now.getTime() - 60_000) continue;
-
-    const endHour = Math.floor(endMin / 60);
-    const endMinute = endMin % 60;
-    const slotEnd = localToUtcInTimezone(
-      dateParts.year,
-      dateParts.month,
-      dateParts.day,
-      endHour,
-      endMinute,
-      timeZone
-    );
-
-    if (!slotOverlapsAppointment(slotStart, slotEnd, busyAppointments)) {
-      results.push({ starts_at: slotStart.toISOString(), ends_at: slotEnd.toISOString() });
-      if (results.length >= count) break;
-    }
-  }
-
-  return results;
-}
-
-/** Dolu saate yakın müsait alternatifler bul — yönetici paneli takvimine göre */
-export async function findAlternativeSlots(
-  companyId: string,
-  preferredStartIso: string,
-  preferredEndIso?: string,
-  count = 3
-): Promise<{ starts_at: string; ends_at: string }[]> {
-  const ctx = await fetchCompanyAppointmentContext(companyId);
-  const durationMs = preferredEndIso
-    ? Math.max(new Date(preferredEndIso).getTime() - new Date(preferredStartIso).getTime(), SLOT_STEP_MS)
-    : SLOT_STEP_MS;
-
-  const after = new Date(Math.max(new Date(preferredStartIso).getTime(), Date.now()));
-  const all = await findAvailableSlots(companyId, ctx, {
-    count: count + 5,
-    daysAhead: DEFAULT_SEARCH_DAYS,
-    durationMs,
-    after,
-  });
-
-  return all.slice(0, count);
-}
-
-export async function buildConflictMessageWithAlternatives(
-  companyId: string,
-  startsAt: string,
-  endsAt: string,
-  lang: ConversationLang = 'tr'
-): Promise<string> {
-  const requested = formatSlotLocalized(startsAt, endsAt, lang);
-  const alternatives = await findAlternativeSlots(companyId, startsAt, endsAt, 3);
-
-  if (alternatives.length === 0) {
-    return t(lang, 'appointment_conflict_no_alts', { requested });
-  }
-
-  const formatted = alternatives
-    .map((s, i) => `${i + 1}) ${formatSlotLocalized(s.starts_at, s.ends_at, lang)}`)
-    .join('\n');
-
-  return t(lang, 'appointment_conflict_alts', { requested, options: formatted });
-}
-
-export async function createAppointment(
+async function insertAppointmentRecord(
   companyId: string,
   input: AppointmentInput
 ): Promise<Appointment> {
-  const conflict = await hasConflict(companyId, input.starts_at, input.ends_at, undefined, {
-    customerPhone: input.customer_phone,
-    replaceSameCustomerAi: input.source === 'ai',
-  });
-  if (conflict) {
-    throw new Error('Bu saat aralığında başka bir randevu var.');
-  }
-
   const category = await fetchCompanyCategory(companyId);
   const sanitized = sanitizeAppointmentInput(category, input);
 
@@ -607,6 +209,94 @@ export async function createAppointment(
 
   if (error) throw new Error(error.message);
   return data as Appointment;
+}
+
+/**
+ * Tek randevu iş kuralı girişi — panel ve WhatsApp workflow buradan geçer.
+ * Sıra: alan doğrulama → çalışma saati → hasConflict → INSERT
+ */
+export async function bookAppointment(
+  companyId: string,
+  input: AppointmentInput,
+  lang: ConversationLang = 'tr'
+): Promise<Appointment> {
+  logAppointmentEvent('book_attempt', {
+    companyId,
+    startsAt: input.starts_at,
+    phone: input.customer_phone,
+    source: input.source || 'panel',
+  });
+
+  const validationError = validateAppointmentAction(
+    {
+      customer_name: input.customer_name ?? undefined,
+      customer_phone: input.customer_phone,
+      title: input.title,
+      starts_at: input.starts_at,
+      ends_at: input.ends_at,
+    },
+    input.customer_phone,
+    lang
+  );
+  if (validationError) {
+    throw new AppointmentBookingError(validationError, 'validation');
+  }
+
+  const { data: companyRow } = await adminClient
+    .from('companies')
+    .select('working_hours, timezone')
+    .eq('id', companyId)
+    .maybeSingle();
+
+  const ctx = buildAppointmentCompanyContext(companyRow?.working_hours, companyRow?.timezone);
+  const hoursCheck = validateSlotWorkingHours(
+    { starts_at: input.starts_at, ends_at: input.ends_at },
+    ctx,
+    lang
+  );
+  if (!hoursCheck.valid) {
+    throw new AppointmentBookingError(
+      buildWorkingHoursRejectionMessage(hoursCheck, ctx, lang),
+      'working_hours'
+    );
+  }
+
+  let conflict: boolean;
+  try {
+    conflict = await hasConflict(companyId, input.starts_at, input.ends_at);
+  } catch (err) {
+    logAppointmentEvent('book_db_error', {
+      companyId,
+      error: (err as Error).message,
+    });
+    throw new AppointmentBookingError(t(lang, 'appointment_db_unavailable'), 'database');
+  }
+
+  if (conflict) {
+    logAppointmentEvent('book_conflict', { companyId, startsAt: input.starts_at });
+    throw new AppointmentBookingError(t(lang, 'appointment_slot_occupied'), 'conflict');
+  }
+
+  try {
+    const appointment = await insertAppointmentRecord(companyId, input);
+    logAppointmentEvent('book_success', { companyId, appointmentId: appointment.id });
+    return appointment;
+  } catch (err) {
+    const errMsg = (err as Error).message;
+    logAppointmentEvent('book_insert_error', { companyId, error: errMsg });
+    if (/başka bir randevu|çakışma|duplicate|unique/i.test(errMsg)) {
+      throw new AppointmentBookingError(t(lang, 'appointment_slot_occupied'), 'conflict');
+    }
+    throw new AppointmentBookingError(t(lang, 'appointment_create_system_error'), 'database');
+  }
+}
+
+/** @deprecated bookAppointment kullanın — geriye dönük uyumluluk */
+export async function createAppointment(
+  companyId: string,
+  input: AppointmentInput
+): Promise<Appointment> {
+  return bookAppointment(companyId, input);
 }
 
 export async function updateAppointment(
@@ -644,171 +334,6 @@ export async function deleteAppointment(companyId: string, id: string): Promise<
     .eq('company_id', companyId);
 
   if (error) throw new Error(error.message);
-}
-
-/** AI sistem promptu — yönetici paneli takvimine göre dolu ve müsait saatler */
-export async function getAppointmentContextForAI(
-  companyId: string,
-  lang: ConversationLang = 'tr'
-): Promise<string> {
-  const ctx = await fetchCompanyAppointmentContext(companyId);
-  const now = new Date();
-  const until = new Date(now);
-  until.setDate(until.getDate() + DEFAULT_SEARCH_DAYS);
-
-  const [items, availableSlots, category] = await Promise.all([
-    listAppointments(companyId, now.toISOString(), until.toISOString()),
-    findAvailableSlots(companyId, ctx, { count: DEFAULT_AVAILABLE_SLOT_COUNT, daysAhead: DEFAULT_SEARCH_DAYS }),
-    fetchCompanyCategory(companyId),
-  ]);
-
-  const askProvider = shouldAskAppointmentProvider(category);
-  const providerLabel = getAppointmentProviderLabel(lang, undefined, category);
-  const scheduleSummary = buildScheduleSummary(ctx.schedule, lang);
-  const locale = lang === 'other' ? 'en' : lang;
-
-  const labels: Record<string, Record<string, string>> = {
-    tr: {
-      hours: 'ÇALIŞMA SAATLERİ',
-      rules: 'KURALLAR',
-      rule1: '- Tarih/saat önerirken MUTLAKA tam tarih ve saat yaz (ör. 15.07.2026 17:00). "yarın", "15 gün sonra" gibi göreceli ifadeler KULLANMA.',
-      rule2: '- Müsaitlik yalnızca aşağıdaki MÜSAİT SAATLER listesine göre belirlenir; kafadan dolu/boş deme.',
-      rule3: '- DOLU SAATLER listesindeki saatleri ASLA önerme.',
-      rule4: '- Müşteri göreceli tarih söylerse tam takvim tarihini hesaplayıp yaz.',
-      busy: 'DOLU SAATLER (yönetici paneli takvimi — önerme)',
-      busyEmpty: 'DOLU SAATLER: Önümüzdeki 30 günde kayıtlı randevu yok.',
-      busyMore: '... ve {n} randevu daha',
-      available: 'MÜSAİT SAATLER (yönetici paneli takvimine göre — YALNIZCA bunları öner)',
-      availableEmpty: 'MÜSAİT SAATLER: Önümüzdeki 30 günde müsait saat bulunmuyor. Kafadan saat önerme.',
-    },
-    en: {
-      hours: 'WORKING HOURS',
-      rules: 'RULES',
-      rule1: '- When suggesting times, ALWAYS write exact date and time (e.g. 15.07.2026 17:00). Do NOT use relative phrases like "tomorrow" or "in 15 days".',
-      rule2: '- Availability is determined ONLY by the AVAILABLE SLOTS list below; never invent busy/free times.',
-      rule3: '- NEVER suggest times listed under BUSY SLOTS.',
-      rule4: '- If the customer uses a relative date, calculate and write the exact calendar date.',
-      busy: 'BUSY SLOTS (admin calendar — do not suggest)',
-      busyEmpty: 'BUSY SLOTS: No appointments in the next 30 days.',
-      busyMore: '... and {n} more appointments',
-      available: 'AVAILABLE SLOTS (from admin calendar — suggest ONLY these)',
-      availableEmpty: 'AVAILABLE SLOTS: No free slots in the next 30 days. Do not invent times.',
-    },
-    de: {
-      hours: 'ARBEITSZEITEN',
-      rules: 'REGELN',
-      rule1: '- Bei Terminvorschlägen IMMER exaktes Datum und Uhrzeit angeben. Keine relativen Formulierungen.',
-      rule2: '- Verfügbarkeit NUR anhand der FREIEN ZEITEN unten; keine erfundenen Zeiten.',
-      rule3: '- Zeiten unter BELEGTE ZEITEN NIEMALS vorschlagen.',
-      rule4: '- Relative Daten in exaktes Kalenderdatum umrechnen.',
-      busy: 'BELEGTE ZEITEN (Admin-Kalender — nicht vorschlagen)',
-      busyEmpty: 'BELEGTE ZEITEN: Keine Termine in den nächsten 30 Tagen.',
-      busyMore: '... und {n} weitere Termine',
-      available: 'FREIE ZEITEN (Admin-Kalender — NUR diese vorschlagen)',
-      availableEmpty: 'FREIE ZEITEN: Keine freien Zeiten in den nächsten 30 Tagen.',
-    },
-    fr: {
-      hours: 'HEURES D\'OUVERTURE',
-      rules: 'RÈGLES',
-      rule1: '- Toujours indiquer date et heure exactes. Pas d\'expressions relatives.',
-      rule2: '- Disponibilité UNIQUEMENT selon les CRÉNEAUX LIBRES ci-dessous.',
-      rule3: '- Ne jamais proposer les heures sous CRÉNEAUX OCCUPÉS.',
-      rule4: '- Convertir les dates relatives en date exacte.',
-      busy: 'CRÉNEAUX OCCUPÉS (calendrier admin — ne pas proposer)',
-      busyEmpty: 'CRÉNEAUX OCCUPÉS: Aucun rendez-vous dans les 30 prochains jours.',
-      busyMore: '... et {n} rendez-vous de plus',
-      available: 'CRÉNEAUX LIBRES (calendrier admin — proposer UNIQUEMENT ceux-ci)',
-      availableEmpty: 'CRÉNEAUX LIBRES: Aucun créneau libre dans les 30 prochains jours.',
-    },
-    es: {
-      hours: 'HORARIO',
-      rules: 'REGLAS',
-      rule1: '- Siempre indicar fecha y hora exactas. Sin expresiones relativas.',
-      rule2: '- Disponibilidad SOLO según HORARIOS LIBRES abajo.',
-      rule3: '- Nunca sugerir horas en HORARIOS OCUPADOS.',
-      rule4: '- Convertir fechas relativas a fecha exacta.',
-      busy: 'HORARIOS OCUPADOS (calendario admin — no sugerir)',
-      busyEmpty: 'HORARIOS OCUPADOS: Sin citas en los próximos 30 días.',
-      busyMore: '... y {n} citas más',
-      available: 'HORARIOS LIBRES (calendario admin — sugerir SOLO estos)',
-      availableEmpty: 'HORARIOS LIBRES: Sin horarios libres en los próximos 30 días.',
-    },
-    ar: {
-      hours: 'ساعات العمل',
-      rules: 'القواعد',
-      rule1: '- اذكر دائماً التاريخ والوقت بدقة.',
-      rule2: '- التوفر فقط من قائمة الأوقات المتاحة أدناه.',
-      rule3: '- لا تقترح أوقاتاً من قائمة الأوقات المشغولة.',
-      rule4: '- حوّل التواريخ النسبية إلى تاريخ محدد.',
-      busy: 'الأوقات المشغولة (تقويم الإدارة — لا تقترح)',
-      busyEmpty: 'الأوقات المشغولة: لا مواعيد في الـ 30 يوماً القادمة.',
-      busyMore: '... و {n} مواعيد أخرى',
-      available: 'الأوقات المتاحة (من تقويم الإدارة — اقترح هذه فقط)',
-      availableEmpty: 'الأوقات المتاحة: لا أوقات متاحة في الـ 30 يوماً القادمة.',
-    },
-    ru: {
-      hours: 'ЧАСЫ РАБОТЫ',
-      rules: 'ПРАВИЛА',
-      rule1: '- Всегда указывайте точную дату и время.',
-      rule2: '- Доступность ТОЛЬКО по списку СВОБОДНЫХ СЛОТОВ ниже.',
-      rule3: '- Никогда не предлагайте время из ЗАНЯТЫХ СЛОТОВ.',
-      rule4: '- Переводите относительные даты в точную дату.',
-      busy: 'ЗАНЯТЫЕ СЛОТЫ (календарь админа — не предлагать)',
-      busyEmpty: 'ЗАНЯТЫЕ СЛОТЫ: Нет записей в ближайшие 30 дней.',
-      busyMore: '... и ещё {n} записей',
-      available: 'СВОБОДНЫЕ СЛОТЫ (из календаря админа — предлагать ТОЛЬКО их)',
-      availableEmpty: 'СВОБОДНЫЕ СЛОТЫ: Нет свободных слотов в ближайшие 30 дней.',
-    },
-  };
-
-  const L = labels[locale] || labels.en;
-
-  const sections: string[] = [
-    `${L.hours}: ${scheduleSummary}`,
-    '',
-    `${L.rules}:`,
-    L.rule1,
-    L.rule2,
-    L.rule3,
-    L.rule4,
-  ];
-
-  if (items.length > 0) {
-    const busyLines = items.slice(0, 25).map((a) => {
-      const start = new Date(a.starts_at);
-      const end = new Date(a.ends_at);
-      const who = a.customer_name || a.customer_phone;
-      const doctor =
-        askProvider && a.preferred_doctor ? ` | ${providerLabel}: ${a.preferred_doctor}` : '';
-      return `- ${formatSlotLocalized(a.starts_at, a.ends_at, lang, ctx.timezone)}: ${who} — ${a.title}${doctor} [${a.status}]`;
-    });
-    const more = items.length > 25 ? `\n${L.busyMore.replace('{n}', String(items.length - 25))}` : '';
-    sections.push('', L.busy, ...busyLines, more);
-  } else {
-    sections.push('', L.busyEmpty);
-  }
-
-  if (availableSlots.length > 0) {
-    const availableLines = availableSlots.map((slot, i) => {
-      const label = formatSlotLocalized(slot.starts_at, slot.ends_at, lang, ctx.timezone);
-      const weekday = formatWeekdayLocalized(slot.starts_at, lang, ctx.timezone);
-      const weekdayPart = weekday ? ` (${weekday.charAt(0).toUpperCase()}${weekday.slice(1)})` : '';
-      return `${i + 1}) ${label}${weekdayPart}`;
-    });
-    sections.push('', L.available, ...availableLines);
-  } else {
-    sections.push('', L.availableEmpty);
-  }
-
-  return sections.join('\n');
-}
-
-export function stripAppointmentMarkers(text: string): string {
-  return text
-    .replace(/\[APPOINTMENT\][\s\S]*?\[\/APPOINTMENT\]/gi, '')
-    .replace(/\[APPOINTMENT\][\s\S]*/gi, '')
-    .replace(/\s+/g, ' ')
-    .trim();
 }
 
 function formatPhoneDisplay(phone: string): string {
@@ -849,172 +374,4 @@ export function buildAppointmentConfirmationMessage(
     phone: formatPhoneDisplay(appointment.customer_phone),
     doctor_line: doctorLine,
   });
-}
-
-/** [APPOINTMENT] teknik bloğunu müşteri mesajından temizle */
-export function finalizeCustomerFacingMessage(
-  message: string,
-  opts: { hadAppointmentMarker?: boolean; lang?: ConversationLang } = {}
-): string {
-  const lang = opts.lang || 'tr';
-  const cleaned = stripAppointmentMarkers(message);
-  if (cleaned && !/\[APPOINTMENT\]/i.test(cleaned)) return cleaned;
-  if (opts.hadAppointmentMarker || message.includes(APPOINTMENT_MARKER)) {
-    return t(lang, 'appointment_processing');
-  }
-  return cleaned;
-}
-
-export function parseAppointmentAction(text: string): ParsedAppointmentAction | null {
-  const match = APPOINTMENT_BLOCK_RE.exec(text);
-  APPOINTMENT_BLOCK_RE.lastIndex = 0;
-  if (!match?.[1]) return null;
-
-  const raw = match[1].trim();
-  try {
-    const parsed = JSON.parse(raw) as ParsedAppointmentAction;
-    if (!parsed.starts_at || !parsed.ends_at) return null;
-    const start = new Date(parsed.starts_at);
-    const end = new Date(parsed.ends_at);
-    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
-      return null;
-    }
-    return parsed;
-  } catch {
-    console.warn('[Randevu] APPOINTMENT JSON parse hatası:', raw.slice(0, 120));
-    return null;
-  }
-}
-
-function fixFalseSuccessMessage(
-  message: string,
-  appointment: Appointment | null,
-  hadMarker: boolean,
-  lang: ConversationLang = 'tr'
-): string {
-  if (appointment) return message;
-
-  const claimsSuccess = FALSE_SUCCESS_RE.test(message);
-  if (!claimsSuccess) return message;
-
-  if (hadMarker) {
-    return t(lang, 'appointment_booking_incomplete_retry');
-  }
-
-  return message.replace(
-    FALSE_SUCCESS_RE,
-    t(lang, 'appointment_false_success_pending')
-  );
-}
-
-export async function processAIAppointmentBooking(
-  companyId: string,
-  customerPhone: string,
-  _customerName: string | null,
-  rawResponse: string,
-  collected?: { customer_name: string | null; customer_phone: string | null; title: string | null; doctor_name?: string | null },
-  history: HistoryMsg[] = [],
-  lang: ConversationLang = 'tr',
-  latestMessage = '',
-  userConfirmed = false,
-  ctx: AppointmentCompanyContext = DEFAULT_APPOINTMENT_CONTEXT
-): Promise<{ message: string; appointment: Appointment | null }> {
-  const hadMarker = rawResponse.includes(APPOINTMENT_MARKER);
-  const action = parseAppointmentAction(rawResponse);
-  let message = stripAppointmentMarkers(rawResponse);
-
-  if (!action) {
-    message = fixFalseSuccessMessage(message, null, hadMarker, lang);
-    if (hadMarker && !action) {
-      console.error('[Randevu] Marker var ama JSON okunamadı');
-    }
-    return { message, appointment: null };
-  }
-
-  const slot = preferHistorySlot(history, action, latestMessage, { timezone: ctx.timezone });
-  const actionWithSlot = slot ? { ...action, ...slot } : action;
-
-  const mergedAction: ParsedAppointmentAction = {
-    ...actionWithSlot,
-    customer_name:
-      (isValidFullName(actionWithSlot.customer_name || '')
-        ? actionWithSlot.customer_name!.trim()
-        : collected?.customer_name?.trim()) || undefined,
-    customer_phone: actionWithSlot.customer_phone?.trim() || collected?.customer_phone?.trim() || undefined,
-    title:
-      (isValidProcedureTitle(actionWithSlot.title || '')
-        ? actionWithSlot.title!.trim()
-        : collected?.title?.trim()) || undefined,
-    doctor_name: actionWithSlot.doctor_name || actionWithSlot.preferred_doctor || collected?.doctor_name || undefined,
-  };
-
-  const validationError = validateAppointmentAction(mergedAction, customerPhone, lang);
-  if (validationError) {
-    console.warn('[Randevu] Doğrulama hatası:', validationError);
-    return { message: validationError, appointment: null };
-  }
-
-  if (!userConfirmed) {
-    const slotLabel = formatSlotLocalized(mergedAction.starts_at, mergedAction.ends_at, lang, ctx.timezone);
-    const confirmMsg = t(lang, 'appointment_confirm_prompt', { slot: slotLabel });
-    return { message: confirmMsg, appointment: null };
-  }
-
-  const conflict = await hasConflict(
-    companyId,
-    mergedAction.starts_at,
-    mergedAction.ends_at,
-    undefined,
-    {
-      customerPhone: mergedAction.customer_phone || customerPhone,
-      replaceSameCustomerAi: true,
-    }
-  );
-  if (conflict) {
-    const altMsg = await buildConflictMessageWithAlternatives(
-      companyId,
-      mergedAction.starts_at,
-      mergedAction.ends_at,
-      lang
-    );
-    return { message: altMsg, appointment: null };
-  }
-
-  try {
-    const category = await fetchCompanyCategory(companyId);
-    const appointment = await createAppointment(companyId, {
-      customer_phone: mergedAction.customer_phone || customerPhone,
-      customer_name: mergedAction.customer_name!.trim(),
-      title: mergedAction.title!.trim(),
-      notes: buildNotes(mergedAction),
-      preferred_doctor: shouldAskAppointmentProvider(category)
-        ? getDoctorName(mergedAction)
-        : null,
-      starts_at: new Date(mergedAction.starts_at).toISOString(),
-      ends_at: new Date(mergedAction.ends_at).toISOString(),
-      status: 'confirmed',
-      source: 'ai',
-    });
-
-    message = buildAppointmentConfirmationMessage(appointment, lang, category);
-
-    console.log(`[Randevu] Oluşturuldu: ${appointment.id} | ${appointment.customer_name} | ${appointment.title}`);
-    return { message, appointment };
-  } catch (err) {
-    const errMsg = (err as Error).message;
-    console.error('[Randevu] Kayıt hatası:', errMsg);
-    if (/başka bir randevu|çakışma/i.test(errMsg)) {
-      const altMsg = await buildConflictMessageWithAlternatives(
-        companyId,
-        mergedAction.starts_at,
-        mergedAction.ends_at,
-        lang
-      );
-      return { message: altMsg, appointment: null };
-    }
-    return {
-      message: t(lang, 'appointment_booking_failed', { error: errMsg }),
-      appointment: null,
-    };
-  }
 }

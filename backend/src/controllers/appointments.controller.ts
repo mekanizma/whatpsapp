@@ -8,7 +8,8 @@ import { logActivity } from '../services/log.service';
 import {
   listAppointments,
   listUpcomingAppointments,
-  createAppointment,
+  bookAppointment,
+  AppointmentBookingError,
   updateAppointment,
   deleteAppointment,
 } from '../services/appointment.service';
@@ -60,7 +61,7 @@ export async function createAppointmentHandler(req: AuthRequest, res: Response):
   }
 
   try {
-    const data = await createAppointment(companyId, {
+    const data = await bookAppointment(companyId, {
       customer_phone,
       customer_name,
       title,
@@ -82,7 +83,9 @@ export async function createAppointmentHandler(req: AuthRequest, res: Response):
 
     res.status(201).json({ success: true, data });
   } catch (err) {
-    res.status(400).json({ success: false, error: (err as Error).message });
+    const message =
+      err instanceof AppointmentBookingError ? err.message : (err as Error).message;
+    res.status(400).json({ success: false, error: message });
   }
 }
 

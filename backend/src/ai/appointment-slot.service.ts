@@ -23,14 +23,10 @@ import {
   NEXT_WEEKDAY_RE,
   PM_TOKENS,
   RELATIVE_DATE_TOKENS,
-  DAYS_LATER_RE,
   WEEKDAY_TOKENS,
   weekdayInText,
-  normalizeAppointmentDateText,
-  WEEKS_LATER_RE,
-  MONTHS_LATER_RE,
+  hasDateTimeIntent,
 } from './appointment-datetime-tokens';
-import { CONFIRM_ONLY_PATTERN } from './appointment-confirm-tokens';
 
 export const DEFAULT_COMPANY_TIMEZONE_EXPORT = DEFAULT_COMPANY_TIMEZONE;
 /** @deprecated Use DEFAULT_COMPANY_TIMEZONE or company.timezone */
@@ -221,8 +217,11 @@ export function buildWorkingHoursRejectionMessage(
 
 export { weekdayInText };
 
+const CONFIRM_ONLY_RE =
+  /^(evet|onayl?[iıİI]yorum|onaylıyorum|onayliyorum|onay|tamam|uygun|olur|kabul|ok|yes|[123])\s*$/iu;
+
 function isConfirmationOnlyMessage(message: string): boolean {
-  return CONFIRM_ONLY_PATTERN.test(message.trim());
+  return CONFIRM_ONLY_RE.test(message.trim());
 }
 
 const MONTH_NAME_RE = new RegExp(MONTH_NAME_PATTERN, 'i');
@@ -317,30 +316,6 @@ function extractTimeFromText(text: string): { hour: number; minute: number } | n
     if (hour <= 23 && minute <= 59) return { hour, minute };
   }
 
-  const umTime = text.match(/\bum\s+(\d{1,2})(?:[:.](\d{2}))?\s*(?:uhr)?\b/i);
-  if (umTime) {
-    hour = parseInt(umTime[1], 10);
-    minute = umTime[2] ? parseInt(umTime[2], 10) : 0;
-    hour = normalizeSpokenHour(hour, text);
-    if (hour <= 23 && minute <= 59) return { hour, minute };
-  }
-
-  const aLasTime = text.match(/\ba\s+las\s+(\d{1,2})(?:[:.](\d{2}))?\b/i);
-  if (aLasTime) {
-    hour = parseInt(aLasTime[1], 10);
-    minute = aLasTime[2] ? parseInt(aLasTime[2], 10) : 0;
-    hour = normalizeSpokenHour(hour, text);
-    if (hour <= 23 && minute <= 59) return { hour, minute };
-  }
-
-  const aTime = text.match(/\bà\s+(\d{1,2})(?:[:.](\d{2}))?\s*h?\b/i);
-  if (aTime) {
-    hour = parseInt(aTime[1], 10);
-    minute = aTime[2] ? parseInt(aTime[2], 10) : 0;
-    hour = normalizeSpokenHour(hour, text);
-    if (hour <= 23 && minute <= 59) return { hour, minute };
-  }
-
   const saatFull = text.match(/(?:saat|at)\s*(\d{1,2})[:.](\d{2})/i);
   if (saatFull) {
     hour = parseInt(saatFull[1], 10);
@@ -363,13 +338,6 @@ function extractTimeFromText(text: string): { hour: number; minute: number } | n
 
   if (hour !== null) {
     hour = normalizeSpokenHour(hour, text);
-    if (hour <= 23 && minute <= 59) return { hour, minute };
-  }
-
-  const bareTime = text.match(/\b(\d{1,2})\.(\d{2})\b/);
-  if (bareTime) {
-    hour = parseInt(bareTime[1], 10);
-    minute = parseInt(bareTime[2], 10);
     if (hour <= 23 && minute <= 59) return { hour, minute };
   }
 
@@ -417,62 +385,13 @@ function resolveNextWeekday(
   return addDays(refParts, delta, timeZone);
 }
 
-export function parseDateFromText(
-  text: string,
-  options: SlotParseOptions = {}
-): { year: number; month: number; day: number } | null {
-  const ref = options.ref ?? new Date();
-  const timeZone = options.timezone ?? DEFAULT_COMPANY_TIMEZONE;
-  return extractDateParts(text, ref, timeZone);
-}
-
-/** Mesajda tarih var ama saat yok (ör. "14 temmuz boş saat varmı") */
-export function hasDateOnlyIntent(text: string, options: SlotParseOptions = {}): boolean {
-  return parseDateFromText(text, options) !== null && parseSlotFromText(text, options) === null;
-}
-
-export function slotMatchesRequestedDate(
-  slot: ParsedSlot,
-  message: string,
-  options: SlotParseOptions = {}
-): boolean {
-  const timeZone = options.timezone ?? DEFAULT_COMPANY_TIMEZONE;
-  const dateParts = parseDateFromText(message, options);
-  if (dateParts) {
-    const slotParts = companyDateParts(new Date(slot.starts_at), timeZone);
-    return (
-      slotParts.year === dateParts.year &&
-      slotParts.month === dateParts.month &&
-      slotParts.day === dateParts.day
-    );
-  }
-
-  const requestedWd = weekdayInText(message);
-  if (requestedWd !== null) {
-    return slotWeekday(slot.starts_at, timeZone) === requestedWd;
-  }
-
-  return true;
-}
-
-function addMonthsToParts(
-  parts: { year: number; month: number; day: number },
-  months: number,
-  timeZone: string
-) {
-  const d = localToUtcInTimezone(parts.year, parts.month, parts.day, 12, 0, timeZone);
-  d.setUTCMonth(d.getUTCMonth() + months);
-  return companyDateParts(d, timeZone);
-}
-
 function extractDateParts(
   text: string,
   ref: Date,
   timeZone: string
 ): { year: number; month: number; day: number } | null {
-  const normalized = normalizeAppointmentDateText(text);
-  const dateText = stripTimeFromText(normalized);
-  const lower = dateText;
+  const dateText = stripTimeFromText(text);
+  const lower = dateText.toLocaleLowerCase('tr');
   const localNow = companyDateParts(ref, timeZone);
   let { year, month, day } = localNow;
 
@@ -488,10 +407,7 @@ function extractDateParts(
   if (RELATIVE_DATE_TOKENS.nextWeek.some((re) => re.test(lower))) {
     return addDays(localNow, 7, timeZone);
   }
-  if (/öbür\s*gün|obur\s*gun|oburgun|obergun/.test(lower)) {
-    return addDays(localNow, 2, timeZone);
-  }
-  if (RELATIVE_DATE_TOKENS.tomorrow.some((re) => re.test(lower)) || /ertesi\s*gün|ertesi\s*gun/.test(lower)) {
+  if (RELATIVE_DATE_TOKENS.tomorrow.some((re) => re.test(lower))) {
     return addDays(localNow, 1, timeZone);
   }
   if (RELATIVE_DATE_TOKENS.dayAfterTomorrow.some((re) => re.test(lower))) {
@@ -501,33 +417,10 @@ function extractDateParts(
     return localNow;
   }
 
-  const daysLaterMatch = lower.match(DAYS_LATER_RE);
-  if (daysLaterMatch) {
-    const offset = parseInt(daysLaterMatch[1], 10);
-    if (offset >= 1 && offset <= 365) {
-      return addDays(localNow, offset, timeZone);
+  for (const [name, weekday] of Object.entries(WEEKDAY_TOKENS)) {
+    if (new RegExp(`\\b${name}\\b`, 'i').test(lower)) {
+      return resolveNextWeekday(weekday, localNow, timeZone, /\bnext\b/i.test(lower));
     }
-  }
-
-  const weeksLaterMatch = lower.match(WEEKS_LATER_RE);
-  if (weeksLaterMatch) {
-    const offset = parseInt(weeksLaterMatch[1], 10);
-    if (offset >= 1 && offset <= 52) {
-      return addDays(localNow, offset * 7, timeZone);
-    }
-  }
-
-  const monthsLaterMatch = lower.match(MONTHS_LATER_RE);
-  if (monthsLaterMatch) {
-    const offset = parseInt(monthsLaterMatch[1], 10);
-    if (offset >= 1 && offset <= 24) {
-      return addMonthsToParts(localNow, offset, timeZone);
-    }
-  }
-
-  const weekdayFromText = weekdayInText(text);
-  if (weekdayFromText !== null) {
-    return resolveNextWeekday(weekdayFromText, localNow, timeZone, /\bnext\b/i.test(lower));
   }
 
   const monthDayMatch = dateText.match(
@@ -538,8 +431,7 @@ function extractDateParts(
   );
   if (monthDayMatch) {
     day = parseInt(monthDayMatch[1], 10);
-    const monthKey = normalizeAppointmentDateText(monthDayMatch[2]);
-    month = MONTH_TOKENS[monthKey] ?? MONTH_TOKENS[monthDayMatch[2].toLocaleLowerCase('en')];
+    month = MONTH_TOKENS[monthDayMatch[2].toLocaleLowerCase('tr')];
     if (monthDayMatch[3]) year = normalizeYear(parseInt(monthDayMatch[3], 10));
     if (day >= 1 && day <= daysInMonth(year, month)) {
       return { year, month, day };
@@ -554,8 +446,7 @@ function extractDateParts(
     )
   );
   if (dayMonthMatch) {
-    const monthKey = normalizeAppointmentDateText(dayMonthMatch[1]);
-    month = MONTH_TOKENS[monthKey] ?? MONTH_TOKENS[dayMonthMatch[1].toLocaleLowerCase('en')];
+    month = MONTH_TOKENS[dayMonthMatch[1].toLocaleLowerCase('tr')];
     day = parseInt(dayMonthMatch[2], 10);
     if (dayMonthMatch[3]) year = normalizeYear(parseInt(dayMonthMatch[3], 10));
     if (day >= 1 && day <= daysInMonth(year, month)) {
@@ -672,45 +563,11 @@ export function extractSlotFromConversation(
   latestMessage: string,
   refOrOptions: Date | SlotParseOptions = {}
 ): ParsedSlot | null {
-  const options = normalizeSlotOptions(refOrOptions);
-  const fromNumber = extractNumberedAlternative(history, latestMessage, options);
-  if (fromNumber) return fromNumber;
-
-  const fromLatest = parseSlotFromText(latestMessage, options);
-  if (fromLatest) return fromLatest;
-
-  if (hasDateOnlyIntent(latestMessage, options)) {
-    return null;
-  }
-
-  for (let i = history.length - 1; i >= 0; i--) {
-    const m = history[i];
-    if (m.sender_type !== 'customer') continue;
-    const slot = parseSlotFromText(m.message, options);
-    if (slot) return slot;
-  }
-
-  return extractOfferedSlotFromHistory(history, options);
+  return extractCustomerSlotFromConversation(history, latestMessage, refOrOptions);
 }
 
-export function extractOfferedSlotFromHistory(
-  history: HistoryMsg[],
-  refOrOptions: Date | SlotParseOptions = {}
-): ParsedSlot | null {
-  const options = normalizeSlotOptions(refOrOptions);
-  for (let i = history.length - 1; i >= 0; i--) {
-    const m = history[i];
-    if (m.sender_type !== 'ai') continue;
-    const text = m.message;
-    if (isWorkingHoursInfoMessage(text) && !OFFER_CONTEXT_RE.test(text)) continue;
-    if (!OFFER_CONTEXT_RE.test(text)) continue;
-    const slot = parseSlotFromText(text, options);
-    if (slot) return slot;
-  }
-  return null;
-}
-
-export function extractSlotForConfirmation(
+/** Yalnızca müşteri mesajlarından slot çıkarır — AI tekliflerini kullanmaz */
+export function extractCustomerSlotFromConversation(
   history: HistoryMsg[],
   latestMessage: string,
   refOrOptions: Date | SlotParseOptions = {}
@@ -719,37 +576,28 @@ export function extractSlotForConfirmation(
   const fromNumber = extractNumberedAlternative(history, latestMessage, options);
   if (fromNumber) return fromNumber;
 
-  let customerSlot: ParsedSlot | null = null;
-  let customerText = '';
+  if (hasDateTimeIntent(latestMessage)) {
+    const fromLatest = parseSlotFromText(latestMessage, options);
+    if (fromLatest) return fromLatest;
+  }
+
   for (let i = history.length - 1; i >= 0; i--) {
     const m = history[i];
     if (m.sender_type !== 'customer') continue;
-    const msg = m.message.trim();
-    if (isConfirmationOnlyMessage(msg)) continue;
-    const slot = parseSlotFromText(msg, options);
-    if (slot) {
-      customerSlot = slot;
-      customerText = msg;
-      break;
-    }
+    if (!hasDateTimeIntent(m.message)) continue;
+    const slot = parseSlotFromText(m.message, options);
+    if (slot) return slot;
   }
 
-  const aiSlot = extractOfferedSlotFromHistory(history, options);
-  const timeZone = options.timezone ?? DEFAULT_COMPANY_TIMEZONE;
+  return null;
+}
 
-  if (customerSlot && aiSlot) {
-    const requestedWd = weekdayInText(customerText);
-    if (requestedWd !== null) {
-      const parsedWd = slotWeekday(customerSlot.starts_at, timeZone);
-      if (parsedWd === requestedWd) return customerSlot;
-    }
-    if (!slotsRoughlyMatch(customerSlot.starts_at, aiSlot.starts_at, 12 * 60)) {
-      if (weekdayInText(customerText) !== null) return customerSlot;
-    }
-    return customerSlot;
-  }
-
-  return customerSlot || aiSlot || parseSlotFromText(latestMessage, options);
+export function extractSlotForConfirmation(
+  history: HistoryMsg[],
+  latestMessage: string,
+  refOrOptions: Date | SlotParseOptions = {}
+): ParsedSlot | null {
+  return extractCustomerSlotFromConversation(history, latestMessage, refOrOptions);
 }
 
 export function formatWeekdayLocalized(
@@ -835,26 +683,4 @@ export function formatSlotLocalized(
     minute: '2-digit',
   });
   return `${day} ${t1}-${t2}`;
-}
-
-export function preferHistorySlot(
-  history: HistoryMsg[],
-  action: { starts_at?: string; ends_at?: string },
-  latestMessage = '',
-  refOrOptions: Date | SlotParseOptions = {}
-): { starts_at: string; ends_at: string } | null {
-  const options = normalizeSlotOptions(refOrOptions);
-  const offered = extractSlotFromConversation(history, latestMessage, options);
-  if (!offered) {
-    if (action.starts_at && action.ends_at) {
-      return { starts_at: action.starts_at, ends_at: action.ends_at };
-    }
-    return null;
-  }
-  if (action.starts_at && !slotsRoughlyMatch(offered.starts_at, action.starts_at)) {
-    console.warn(
-      `[Randevu] LLM saati (${action.starts_at}) konuşmadaki teklifle uyuşmuyor — teklif kullanılıyor: ${offered.starts_at}`
-    );
-  }
-  return offered;
 }

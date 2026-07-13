@@ -15,16 +15,13 @@ import {
 import { detectConversationLanguage } from './language.service';
 import { logAIUsage } from './ai-quota.service';
 import { getAllActivePromptContentsForAI } from '../services/prompt.service';
-import { getAppointmentContextForAI, finalizeCustomerFacingMessage, APPOINTMENT_MARKER } from '../services/appointment.service';
 import { preAIGate } from './ai-gate.service';
 import { stripTransferMarker } from './transfer.service';
 import { retrieveKnowledgeContext } from '../services/knowledge-retrieval.service';
 import { isAppointmentIntent } from './knowledge-filter.service';
 import { buildKnowledgeNoMatchHint } from './kb-answer.service';
 import { prepareConversationHistoryForChat } from './conversation-history.service';
-import { buildCollectedFieldsContext, parseCollectedFields } from './appointment-collect.service';
-import { buildParsedSlotHint, reconcileAppointmentAiResponse } from './appointment-response.service';
-import { handleAppointmentBooking } from './appointment-extract.service';
+import { runAppointmentWorkflow } from './appointment-workflow.service';
 import { shouldRecordUnknownQuestion, isKnowledgeMissAiResponse } from './knowledge-miss.service';
 import { buildAppointmentCompanyContext } from './appointment-company-context';
 import {
@@ -52,7 +49,6 @@ export interface GenerateAIContext {
   history: { sender_type: string; message: string }[];
   company: Company;
   allKnowledge: KnowledgeItem[];
-  appointmentContext: string;
   ecommerceContext: string;
   ecommerceReturnsEnabled: boolean;
 }
@@ -89,21 +85,14 @@ async function fetchGenerateAIContext(
   customerPhone: string,
   trimmed: string
 ): Promise<GenerateAIContext> {
-  const historyResult = await adminClient
-    .from('messages')
-    .select('sender_type, message')
-    .eq('company_id', companyId)
-    .eq('customer_phone', customerPhone)
-    .order('created_at', { ascending: false })
-    .limit(config.ai.maxHistoryMessages + HISTORY_FETCH_EXTRA);
-
-  const history = (historyResult.data || [])
-    .reverse()
-    .filter((m) => m.message !== trimmed);
-
-  const conversationLang = detectConversationLanguage(trimmed, history);
-
-  const [company, knowledgeResult, appointmentContext, ecommerceBase] = await Promise.all([
+  const [historyResult, company, knowledgeResult, ecommerceBase] = await Promise.all([
+      adminClient
+        .from('messages')
+        .select('sender_type, message')
+        .eq('company_id', companyId)
+        .eq('customer_phone', customerPhone)
+        .order('created_at', { ascending: false })
+        .limit(config.ai.maxHistoryMessages + HISTORY_FETCH_EXTRA),
       getCompany(companyId),
       adminClient
         .from('knowledge_base')
@@ -111,7 +100,6 @@ async function fetchGenerateAIContext(
         .eq('company_id', companyId)
         .eq('is_active', true)
         .limit(200),
-      getAppointmentContextForAI(companyId, conversationLang).catch(() => ''),
       (async () => {
         const allowed = await companyCanUseEcommerce(companyId).catch(() => false);
         if (!allowed) return { context: '', returnsEnabled: false };
@@ -134,11 +122,14 @@ async function fetchGenerateAIContext(
       })(),
     ]);
 
+  const history = (historyResult.data || [])
+    .reverse()
+    .filter((m) => m.message !== trimmed);
+
   return {
     history,
     company,
     allKnowledge: (knowledgeResult.data || []) as KnowledgeItem[],
-    appointmentContext,
     ecommerceContext: ecommerceBase.context,
     ecommerceReturnsEnabled: ecommerceBase.returnsEnabled,
   };
@@ -196,7 +187,7 @@ export async function generateAIResponse(
 ): Promise<AIResponse> {
   const trimmed = customerMessage.trim();
 
-  const { history, company, allKnowledge, appointmentContext, ecommerceContext, ecommerceReturnsEnabled } =
+  const { history, company, allKnowledge, ecommerceContext, ecommerceReturnsEnabled } =
     await generateAIResponseDeps.fetchGenerateAIContext(companyId, customerPhone, trimmed);
 
   const chatHistory = prepareConversationHistoryForChat(history, trimmed);
@@ -231,8 +222,45 @@ export async function generateAIResponse(
 
   const appointmentMode = isAppointmentIntent(trimmed, history);
 
-  if (!appointmentMode) {
-    const cachedResponse = await getCachedResponse(companyId, trimmed);
+  if (appointmentMode) {
+    const workflow = await runAppointmentWorkflow(
+      companyId,
+      customerPhone,
+      history,
+      trimmed,
+      appointmentCtx
+    );
+
+    await logAIUsage({
+      companyId,
+      customerPhone,
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      cached: false,
+      skipped: true,
+      skipReason: 'appointment_workflow',
+      model: config.openai.model,
+    });
+
+    if (workflow.appointment) {
+      console.log(
+        `[Randevu] WhatsApp kaydı: ${workflow.appointment.id} | ${workflow.appointment.customer_name}`
+      );
+    }
+
+    return {
+      message: workflow.message,
+      shouldTransfer: false,
+      skippedAI: true,
+      skipReason: 'appointment_workflow',
+      tokensUsed: 0,
+      appointmentBooked: !!workflow.appointment,
+      knowledgeMiss: false,
+    };
+  }
+
+  const cachedResponse = await getCachedResponse(companyId, trimmed);
     if (cachedResponse) {
       await logAIUsage({
         companyId,
@@ -265,7 +293,6 @@ export async function generateAIResponse(
         knowledgeMiss,
       };
     }
-  }
 
   const retrieval = await generateAIResponseDeps.retrieveKnowledgeContext(
     companyId,
@@ -285,14 +312,6 @@ export async function generateAIResponse(
     console.warn('[RAG] Lexical fallback used — embedding retrieval unavailable');
   }
 
-  const collectedContext = appointmentMode
-    ? (() => {
-        const collected = parseCollectedFields(history, trimmed);
-        const slotHint = buildParsedSlotHint(history, trimmed, collected, appointmentCtx, conversationLang);
-        return buildCollectedFieldsContext(history, trimmed, conversationLang, company.category) + slotHint;
-      })()
-    : '';
-
   const languageBlock = await buildLanguageBlockForTurn(conversationLang);
 
   const [staticSystemPrompt, activePrompts] = await Promise.all([
@@ -303,8 +322,6 @@ export async function generateAIResponse(
   const dynamicUserContent = buildDynamicUserMessage(trimmed.slice(0, 1000), {
     knowledge,
     knowledgeTitles: allKnowledge.map((k) => k.title),
-    appointmentContext,
-    collectedContext,
     ecommerceContext,
     lang: conversationLang,
     languageBlock,
@@ -312,7 +329,12 @@ export async function generateAIResponse(
 
   if (staticSystemPrompt) {
     const usedKeys = activePrompts
-      .filter((p) => p.prompt_role !== 'greeting' && p.prompt_role !== 'translation')
+      .filter(
+        (p) =>
+          p.prompt_role !== 'greeting' &&
+          p.prompt_role !== 'translation' &&
+          p.prompt_role !== 'appointment'
+      )
       .map((p) => p.prompt_key);
     console.log(
       `[AI] Static system prompt [${usedKeys.join(', ')}] (${staticSystemPrompt.length} karakter) + dynamic user (${dynamicUserContent.length} karakter)`
@@ -348,49 +370,16 @@ export async function generateAIResponse(
   const usage = completion.usage;
   const totalTokens = usage?.total_tokens || 0;
 
-  let raw = completion.choices[0]?.message?.content?.trim() || '';
+  const raw = completion.choices[0]?.message?.content?.trim() || '';
 
-  if (appointmentMode) {
-    raw = await reconcileAppointmentAiResponse(
-      raw,
-      history,
-      trimmed,
-      conversationLang,
-      appointmentCtx,
-      companyId
-    );
-  }
-
-  const booking = await handleAppointmentBooking(
-    companyId,
-    customerPhone,
-    _customerName,
-    raw,
-    history,
-    trimmed,
-    conversationLang,
-    appointmentCtx
-  );
-
-  const { message, shouldTransfer } = stripTransferMarker(
-    finalizeCustomerFacingMessage(booking.message, {
-      hadAppointmentMarker: raw.includes(APPOINTMENT_MARKER),
-      lang: conversationLang,
-    })
-  );
-
-  if (booking.appointment) {
-    console.log(
-      `[Randevu] WhatsApp kaydı: ${booking.appointment.id} | ${booking.appointment.customer_name}`
-    );
-  }
+  const { message, shouldTransfer } = stripTransferMarker(raw);
 
   const knowledgeMiss = shouldRecordUnknownQuestion({
     customerMessage: trimmed,
     aiResponse: message,
     shouldTransfer,
     skippedAI: false,
-    appointmentMode,
+    appointmentMode: false,
     kbHasNoMatch: retrieval.kbHasNoMatch,
   });
 
@@ -399,9 +388,8 @@ export async function generateAIResponse(
   }
 
   if (
-    !booking.appointment &&
     shouldCacheResponse({
-      appointmentMode,
+      appointmentMode: false,
       shouldTransfer,
       response: message,
       history,
@@ -420,7 +408,7 @@ export async function generateAIResponse(
     skippedAI: false,
     skipReason: shouldTransfer ? 'ai_transfer' : undefined,
     tokensUsed: totalTokens,
-    appointmentBooked: !!booking.appointment,
+    appointmentBooked: false,
     knowledgeMiss,
   };
 }

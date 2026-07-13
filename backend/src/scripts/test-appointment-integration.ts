@@ -9,9 +9,9 @@ import {
   deleteAppointment,
   listAppointments,
 } from '../services/appointment.service';
-import { extractOfferedSlotFromHistory, formatSlotTurkish } from '../ai/appointment-slot.service';
+import { extractCustomerSlotFromConversation, formatSlotTurkish } from '../ai/appointment-slot.service';
 import { blockBookingIfIncomplete } from '../ai/appointment-collect.service';
-import { isAppointmentConfirmation } from '../ai/appointment-extract.service';
+import { isAppointmentConfirmation } from '../ai/appointment-confirm.service';
 
 const COMPANY_ID = 'a0000000-0000-0000-0000-000000000001';
 const REF = new Date('2026-06-30T10:00:00.000Z');
@@ -24,7 +24,8 @@ async function run() {
     { sender_type: 'customer', message: '05559998877' },
     { sender_type: 'ai', message: 'Hangi işlem için randevu?' },
     { sender_type: 'customer', message: 'Otomatik test randevusu' },
-    { sender_type: 'ai', message: "Yarın saat 12:30'da randevu alabilirsiniz. Onaylıyor musunuz?" },
+    { sender_type: 'customer', message: 'Yarın saat 12:30 uygun' },
+    { sender_type: 'ai', message: 'Randevunuzu onaylıyor musunuz?' },
   ];
 
   console.log('1) Onay tanıma...');
@@ -35,7 +36,7 @@ async function run() {
   if (gate.blocked) throw new Error(`Gate engelledi: ${gate.message}`);
 
   console.log('3) Slot parse (12:30)...');
-  const slot = extractOfferedSlotFromHistory(history, REF);
+  const slot = extractCustomerSlotFromConversation(history, 'onaylıyorum', REF);
   if (!slot) throw new Error('Slot bulunamadı');
   const formatted = formatSlotTurkish(slot.starts_at, slot.ends_at);
   if (!formatted.includes('12:30')) throw new Error(`Yanlış saat: ${formatted}`);

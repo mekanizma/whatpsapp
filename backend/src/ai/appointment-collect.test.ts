@@ -28,7 +28,7 @@ describe('appointment-collect.service', () => {
     const history = fullHistory.slice(2);
     const gate = blockBookingIfIncomplete(history, 'onaylıyorum');
     assert.equal(gate.blocked, true);
-    assert.match(gate.message!, /ad ve soyad/i);
+    assert.match(gate.message!, /Ad Soyad|ad ve soyad/i);
   });
 
   it('eksik telefon varken kaydı engeller', () => {
@@ -42,8 +42,19 @@ describe('appointment-collect.service', () => {
     assert.ok(missing.includes('phone'));
   });
 
-  it('tüm zorunlu alanlar doluysa engellemez', () => {
+  it('ad telefon konu dolu ama tarih yoksa engeller', () => {
     const gate = blockBookingIfIncomplete(fullHistory, 'onaylıyorum');
+    assert.equal(gate.blocked, true);
+    assert.match(gate.message!, /tarih|saat/i);
+  });
+
+  it('tüm zorunlu alanlar ve tarih/saat doluysa engellemez', () => {
+    const historyWithDatetime = [
+      ...fullHistory.slice(0, -1),
+      { sender_type: 'customer', message: 'Yarın saat 12:30 uygun' },
+      { sender_type: 'ai', message: 'Randevunuzu onaylıyor musunuz?' },
+    ];
+    const gate = blockBookingIfIncomplete(historyWithDatetime, 'onaylıyorum');
     assert.equal(gate.blocked, false);
     assert.equal(gate.message, null);
   });
@@ -73,10 +84,10 @@ describe('appointment-collect.service', () => {
       },
     ];
     const truncated = full.slice(-4);
-    const gate = blockBookingIfIncomplete(truncated, 'kurulum desteği');
+    const gate = blockBookingIfIncomplete(truncated, 'kurulum desteği yarın saat 10');
     assert.equal(gate.blocked, false);
     assert.equal(gate.collected.customer_name, 'gurcem semercioglu');
-    assert.equal(gate.collected.title, 'kurulum desteği');
+    assert.equal(gate.collected.title, 'kurulum desteği yarın saat 10');
   });
 
   it('sohbet cümleleri ad veya konu olarak alınmaz', () => {
@@ -94,7 +105,7 @@ describe('appointment-collect.service', () => {
     assert.equal(collected.title, 'Hocayla görüşücem');
     const gate = blockBookingIfIncomplete(history, 'onaylıyorum');
     assert.equal(gate.blocked, true);
-    assert.match(gate.message!, /ad ve soyad/i);
+    assert.match(gate.message!, /Ad Soyad|ad ve soyad/i);
   });
 
   it('randevu özeti sonrası şikayet mesajı konu veya ad olarak alınmaz', () => {

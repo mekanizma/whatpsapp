@@ -189,11 +189,20 @@ type MessageKey =
   | 'appointment_summary_topic'
   | 'appointment_summary_phone'
   | 'appointment_summary_confirm'
-  | 'appointment_availability_list'
-  | 'appointment_availability_none'
-  | 'appointment_availability_day_closed'
-  | 'appointment_availability_none_with_alts'
-  | 'appointment_availability_week_list'
+  | 'appointment_request_all_fields'
+  | 'appointment_request_missing_fields'
+  | 'appointment_field_name'
+  | 'appointment_field_phone'
+  | 'appointment_field_subject'
+  | 'appointment_field_datetime'
+  | 'appointment_datetime_required'
+  | 'appointment_slot_occupied'
+  | 'appointment_db_unavailable'
+  | 'appointment_create_system_error'
+  | 'appointment_date_needed_for_availability'
+  | 'appointment_available_slots'
+  | 'appointment_available_for_date'
+  | 'appointment_no_available_slots'
   | 'kb_miss_instruction'
   | 'kb_topics_header'
   | 'history_photo'
@@ -850,50 +859,107 @@ Preguntas de ejemplo:
     fr: 'Confirmez-vous ces informations ?',
     es: '¿Confirma estos datos?',
   },
-  appointment_availability_list: {
-    tr: '{date} tarihinde müsait saatler:\n{slots}\nHangisini tercih edersiniz? Lütfen saati yazın.',
-    en: 'Available times on {date}:\n{slots}\nWhich would you prefer? Please reply with a time.',
-    de: 'Verfügbare Zeiten am {date}:\n{slots}\nWelche bevorzugen Sie? Bitte nennen Sie eine Uhrzeit.',
-    ar: 'الأوقات المتاحة في {date}:\n{slots}\nأيها تفضل؟ يرجى كتابة الوقت.',
-    ru: 'Свободные слоты на {date}:\n{slots}\nКакой выберете? Напишите время.',
-    fr: 'Créneaux disponibles le {date} :\n{slots}\nLequel préférez-vous ? Indiquez l’heure.',
-    es: 'Horarios disponibles el {date}:\n{slots}\n¿Cuál prefiere? Escriba la hora.',
+  appointment_request_all_fields: {
+    tr: 'Randevunuzu oluşturabilmem için lütfen aşağıdaki bilgileri tek bir mesajda gönderin:\n\n• Ad Soyad\n• Telefon Numarası\n• Randevu Konusu\n• İstenen Tarih\n• İstenen Saat',
+    en: 'To create your appointment, please send the following information in a single message:\n\n• Full Name\n• Phone Number\n• Appointment Subject\n• Desired Date\n• Desired Time',
+    de: 'Für Ihren Termin senden Sie bitte in einer Nachricht:\n\n• Vor- und Nachname\n• Telefonnummer\n• Termingrund\n• Gewünschtes Datum\n• Gewünschte Uhrzeit',
+    ar: 'لإنشاء موعدك، أرسل في رسالة واحدة:\n\n• الاسم الكامل\n• رقم الهاتف\n• موضوع الموعد\n• التاريخ المطلوب\n• الوقت المطلوب',
+    ru: 'Для записи отправьте в одном сообщении:\n\n• Имя и фамилия\n• Телефон\n• Тема визита\n• Желаемая дата\n• Желаемое время',
+    fr: 'Pour créer votre rendez-vous, envoyez en un seul message :\n\n• Nom complet\n• Téléphone\n• Objet du rendez-vous\n• Date souhaitée\n• Heure souhaitée',
+    es: 'Para crear su cita, envíe en un solo mensaje:\n\n• Nombre completo\n• Teléfono\n• Motivo de la cita\n• Fecha deseada\n• Hora deseada',
   },
-  appointment_availability_none: {
-    tr: '{date} tarihinde müsait saat bulunmuyor. Lütfen başka bir gün veya saat yazın.',
-    en: 'No available times on {date}. Please suggest another day or time.',
-    de: 'Am {date} sind keine Zeiten frei. Bitte nennen Sie einen anderen Tag oder eine Uhrzeit.',
-    ar: 'لا توجد أوقات متاحة في {date}. يرجى اقتراح يوم أو وقت آخر.',
-    ru: 'На {date} нет свободных слотов. Предложите другой день или время.',
-    fr: 'Aucun créneau disponible le {date}. Proposez un autre jour ou horaire.',
-    es: 'No hay horarios disponibles el {date}. Proponga otro día u hora.',
+  appointment_request_missing_fields: {
+    tr: 'Aşağıdaki bilgiler hâlâ eksik:\n\n{fields}\n\nLütfen eksik bilgileri gönderin.',
+    en: 'The following information is still missing:\n\n{fields}\n\nPlease send the missing details.',
+    de: 'Folgende Angaben fehlen noch:\n\n{fields}\n\nBitte senden Sie die fehlenden Informationen.',
+    ar: 'المعلومات التالية لا تزال ناقصة:\n\n{fields}\n\nيرجى إرسال البيانات الناقصة.',
+    ru: 'Не хватает следующих данных:\n\n{fields}\n\nПожалуйста, отправьте недостающую информацию.',
+    fr: 'Les informations suivantes manquent encore :\n\n{fields}\n\nVeuillez envoyer les détails manquants.',
+    es: 'Faltan los siguientes datos:\n\n{fields}\n\nEnvíe la información pendiente.',
   },
-  appointment_availability_none_with_alts: {
-    tr: '{date} tarihinde müsait saat yok. Yakın tarihlerde şu saatler müsait:\n{alternatives}\nHangisini tercih edersiniz?',
-    en: 'No times available on {date}. These nearby slots are open:\n{alternatives}\nWhich would you prefer?',
-    de: 'Am {date} keine freien Zeiten. Diese nahen Termine sind verfügbar:\n{alternatives}\nWelchen bevorzugen Sie?',
-    ar: 'لا توجد أوقات في {date}. الأوقات القريبة المتاحة:\n{alternatives}\nأيها تفضل؟',
-    ru: 'На {date} нет слотов. Ближайшие свободные:\n{alternatives}\nЧто выберете?',
-    fr: 'Aucun créneau le {date}. Créneaux proches disponibles :\n{alternatives}\nLequel préférez-vous ?',
-    es: 'Sin horarios el {date}. Estos huecos cercanos están libres:\n{alternatives}\n¿Cuál prefiere?',
+  appointment_field_name: {
+    tr: 'Ad Soyad', en: 'Full Name', de: 'Vor- und Nachname', ar: 'الاسم الكامل', ru: 'Имя и фамилия', fr: 'Nom complet', es: 'Nombre completo',
   },
-  appointment_availability_week_list: {
-    tr: 'Gelecek hafta müsait saatler:\n{slots}\nHangisini tercih edersiniz? Lütfen saati yazın.',
-    en: 'Available times next week:\n{slots}\nWhich would you prefer? Please reply with a time.',
-    de: 'Verfügbare Zeiten nächste Woche:\n{slots}\nWelche bevorzugen Sie? Bitte Uhrzeit nennen.',
-    ar: 'الأوقات المتاحة الأسبوع القادم:\n{slots}\nأيها تفضل؟',
-    ru: 'Свободные слоты на следующей неделе:\n{slots}\nКакой выберете?',
-    fr: 'Créneaux disponibles la semaine prochaine :\n{slots}\nLequel préférez-vous ?',
-    es: 'Horarios disponibles la próxima semana:\n{slots}\n¿Cuál prefiere?',
+  appointment_field_phone: {
+    tr: 'Telefon Numarası', en: 'Phone Number', de: 'Telefonnummer', ar: 'رقم الهاتف', ru: 'Телефон', fr: 'Téléphone', es: 'Teléfono',
   },
-  appointment_availability_day_closed: {
-    tr: '{date} günü randevu verilmemektedir. Lütfen başka bir gün seçin.',
-    en: 'Appointments are not available on {date}. Please choose another day.',
-    de: 'Am {date} werden keine Termine vergeben. Bitte wählen Sie einen anderen Tag.',
-    ar: 'لا تُقدَّم مواعيد في {date}. يرجى اختيار يوم آخر.',
-    ru: 'На {date} записи не принимаются. Выберите другой день.',
-    fr: 'Aucun rendez-vous le {date}. Choisissez un autre jour.',
-    es: 'No hay citas el {date}. Elija otro día.',
+  appointment_field_subject: {
+    tr: 'Randevu Konusu', en: 'Appointment Subject', de: 'Termingrund', ar: 'موضوع الموعد', ru: 'Тема визита', fr: 'Objet du rendez-vous', es: 'Motivo de la cita',
+  },
+  appointment_field_datetime: {
+    tr: 'İstenen Tarih ve Saat', en: 'Desired Date and Time', de: 'Gewünschtes Datum und Uhrzeit', ar: 'التاريخ والوقت المطلوب', ru: 'Желаемая дата и время', fr: 'Date et heure souhaitées', es: 'Fecha y hora deseadas',
+  },
+  appointment_datetime_required: {
+    tr: 'Randevu için istediğiniz tarih ve saati yazar mısınız? (ör. "15 temmuz saat 14:00" veya "pazartesi saat 10")',
+    en: 'Please share your desired appointment date and time (e.g. "July 15 at 2:00 PM" or "Monday at 10").',
+    de: 'Bitte nennen Sie gewünschtes Datum und Uhrzeit (z. B. „15. Juli um 14:00“).',
+    ar: 'يرجى كتابة التاريخ والوقت المطلوبين للموعد.',
+    ru: 'Укажите желаемую дату и время записи.',
+    fr: 'Indiquez la date et l\'heure souhaitées pour le rendez-vous.',
+    es: 'Indique la fecha y hora deseadas para la cita.',
+  },
+  appointment_slot_occupied: {
+    tr: 'Maalesef istediğiniz tarih ve saat dolu.\n\nLütfen başka bir tarih ve saat gönderin.',
+    en: 'Unfortunately, your requested date and time are already booked.\n\nPlease send another date and time.',
+    de: 'Leider ist Ihr gewünschter Termin bereits belegt.\n\nBitte senden Sie ein anderes Datum und eine andere Uhrzeit.',
+    ar: 'للأسف، التاريخ والوقت المطلوبان محجوزان.\n\nيرجى إرسال تاريخ ووقت آخرين.',
+    ru: 'К сожалению, выбранные дата и время уже заняты.\n\nПожалуйста, укажите другие дату и время.',
+    fr: 'Malheureusement, la date et l\'heure demandées sont déjà prises.\n\nVeuillez proposer une autre date et heure.',
+    es: 'Lamentablemente, la fecha y hora solicitadas ya están reservadas.\n\nEnvíe otra fecha y hora.',
+  },
+  appointment_db_unavailable: {
+    tr: 'Şu anda randevu takvimine erişemiyorum.\n\nYanlış bilgi vermemek için müsaitliği doğrulayamıyorum. Lütfen kısa süre sonra tekrar deneyin.',
+    en: 'I cannot access the appointment calendar right now.\n\nTo avoid giving incorrect information, I cannot verify appointment availability. Please try again shortly.',
+    de: 'Der Terminkalender ist derzeit nicht erreichbar.\n\nUm falsche Angaben zu vermeiden, kann ich die Verfügbarkeit nicht prüfen. Bitte versuchen Sie es später erneut.',
+    ar: 'لا يمكنني الوصول إلى تقويم المواعيد حالياً.\n\nلتجنب معلومات خاطئة، لا أستطيع التحقق من التوفر. يرجى المحاولة لاحقاً.',
+    ru: 'Сейчас нет доступа к календарю записей.\n\nЧтобы не дать неверную информацию, я не могу проверить доступность. Попробуйте позже.',
+    fr: 'Je ne peux pas accéder au calendrier des rendez-vous pour le moment.\n\nPour éviter toute erreur, je ne peux pas vérifier les disponibilités. Réessayez bientôt.',
+    es: 'No puedo acceder al calendario de citas en este momento.\n\nPara no dar información incorrecta, no puedo verificar disponibilidad. Inténtelo de nuevo pronto.',
+  },
+  appointment_create_system_error: {
+    tr: 'Randevunuz sistem hatası nedeniyle oluşturulamadı.\n\nLütfen tekrar deneyin.',
+    en: 'Your appointment could not be created due to a system error.\n\nPlease try again.',
+    de: 'Ihr Termin konnte aufgrund eines Systemfehlers nicht erstellt werden.\n\nBitte versuchen Sie es erneut.',
+    ar: 'تعذر إنشاء موعدك بسبب خطأ في النظام.\n\nيرجى المحاولة مرة أخرى.',
+    ru: 'Запись не удалось создать из-за системной ошибки.\n\nПопробуйте снова.',
+    fr: 'Votre rendez-vous n\'a pas pu être créé en raison d\'une erreur système.\n\nVeuillez réessayer.',
+    es: 'No se pudo crear su cita por un error del sistema.\n\nInténtelo de nuevo.',
+  },
+  appointment_date_needed_for_availability: {
+    tr: 'Müsait saatleri gösterebilmem için lütfen bir tarih belirtin.',
+    en: 'Please specify a date so I can show available times.',
+    de: 'Bitte nennen Sie ein Datum, damit ich freie Zeiten anzeigen kann.',
+    ar: 'يرجى تحديد تاريخ لعرض الأوقات المتاحة.',
+    ru: 'Укажите дату, чтобы я мог показать свободное время.',
+    fr: 'Indiquez une date pour afficher les créneaux disponibles.',
+    es: 'Indique una fecha para mostrar horarios disponibles.',
+  },
+  appointment_available_slots: {
+    tr: 'Müsait saatler:\n{slots}',
+    en: 'Available times:\n{slots}',
+    de: 'Verfügbare Zeiten:\n{slots}',
+    ar: 'الأوقات المتاحة:\n{slots}',
+    ru: 'Свободное время:\n{slots}',
+    fr: 'Créneaux disponibles :\n{slots}',
+    es: 'Horarios disponibles:\n{slots}',
+  },
+  appointment_available_for_date: {
+    tr: '{date} tarihi için müsait saatler:\n{slots}',
+    en: 'Available times for {date}:\n{slots}',
+    de: 'Verfügbare Zeiten am {date}:\n{slots}',
+    ar: 'الأوقات المتاحة في {date}:\n{slots}',
+    ru: 'Свободное время на {date}:\n{slots}',
+    fr: 'Créneaux disponibles le {date} :\n{slots}',
+    es: 'Horarios disponibles para {date}:\n{slots}',
+  },
+  appointment_no_available_slots: {
+    tr: 'Bu tarihte müsait saat bulunmuyor.',
+    en: 'No available times on this date.',
+    de: 'An diesem Datum sind keine Zeiten frei.',
+    ar: 'لا توجد أوقات متاحة في هذا التاريخ.',
+    ru: 'На эту дату нет свободного времени.',
+    fr: 'Aucun créneau disponible à cette date.',
+    es: 'No hay horarios disponibles en esta fecha.',
   },
   kb_miss_instruction: {
     tr: 'Bu soru için bilgi bankasında eşleşen içerik bulunamadı. Bunu müşteriye belirt; bilgin yoksa canlı temsilciye aktarmayı teklif et.',

@@ -4,7 +4,7 @@
 
 import { config } from '../config';
 import { parseCollectedFields, HistoryMsg } from './appointment-collect.service';
-import { extractSlotFromConversation, formatSlotLocalized } from './appointment-slot.service';
+import { extractCustomerSlotFromConversation, formatSlotLocalized } from './appointment-slot.service';
 
 const RECENT_VERBATIM_DEFAULT = 12;
 const HISTORY_MESSAGE_MAX_CHARS = 300;
@@ -25,7 +25,7 @@ export function buildOlderMessagesSummary(
   if (collected.title) parts.push(`Konu: ${collected.title}`);
   if (collected.doctor_name) parts.push(`Personel: ${collected.doctor_name}`);
 
-  const slot = extractSlotFromConversation(olderMessages, latestCustomerMessage);
+  const slot = extractCustomerSlotFromConversation(olderMessages, latestCustomerMessage);
   if (slot) {
     parts.push(`Tarih/saat: ${formatSlotLocalized(slot.starts_at, slot.ends_at, 'tr')}`);
   }

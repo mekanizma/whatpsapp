@@ -33,7 +33,8 @@ const MOCK_CONTEXT: GenerateAIContext = {
   history: [],
   company: MOCK_COMPANY,
   allKnowledge: [],
-  appointmentContext: '',
+  ecommerceContext: '',
+  ecommerceReturnsEnabled: false,
 };
 
 describe('generateAIResponse cost gates', () => {

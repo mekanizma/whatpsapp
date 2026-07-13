@@ -5,7 +5,7 @@ import {
   STRONG_CONFIRM_PATTERN,
   CONFIRM_WORDS_PATTERN,
 } from './appointment-confirm-tokens';
-import { isAppointmentConfirmation } from './appointment-extract.service';
+import { isAppointmentConfirmation } from './appointment-confirm.service';
 
 describe('appointment multilingual tokens', () => {
   it('İngilizce müsaitlik sorusunu algılar', () => {
