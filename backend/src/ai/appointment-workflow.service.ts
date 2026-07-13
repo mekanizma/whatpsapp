@@ -183,7 +183,6 @@ function resolveCollectedSlot(
         preferred_doctor: null,
         date: fromAi.date,
         time: fromAi.time,
-        confirmed: false,
       },
       ctx
     );
