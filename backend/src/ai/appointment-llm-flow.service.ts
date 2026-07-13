@@ -60,12 +60,38 @@ import {
   shouldExpectAppointmentDataBlock,
   hasNameCorrectionInMessage,
   isAppointmentTopicReply,
+  hasTopicCorrectionInMessage,
 } from './appointment-customer-hydrate.service';
 import {
   buildAppointmentAvailabilityContext,
   mergeAppointmentSystemNotes,
 } from './appointment-llm-availability.service';
 import { isAppointmentConfirmation } from './appointment-confirm.service';
+import {
+  extractNumberedAlternative,
+  companyDateParts,
+  companyTimeParts,
+} from './appointment-slot.service';
+
+function patchStateFromNumberedSlot(
+  state: AppointmentLlmState,
+  history: HistoryMsg[],
+  latestMessage: string,
+  appointmentCtx: AppointmentCompanyContext
+): AppointmentLlmState {
+  if (!/^\d{1,2}$/.test(latestMessage.trim())) return state;
+  const slot = extractNumberedAlternative(history, latestMessage, {
+    timezone: appointmentCtx.timezone,
+    ref: appointmentCtx.parseRef,
+  });
+  if (!slot) return state;
+  const d = companyDateParts(new Date(slot.starts_at), appointmentCtx.timezone);
+  const tm = companyTimeParts(new Date(slot.starts_at), appointmentCtx.timezone);
+  return mergeAppointmentData(state, {
+    date: `${d.year}-${String(d.month).padStart(2, '0')}-${String(d.day).padStart(2, '0')}`,
+    time: `${String(tm.hour).padStart(2, '0')}:${String(tm.minute).padStart(2, '0')}`,
+  });
+}
 
 export interface AppointmentLlmFlowInput {
   companyId: string;
@@ -406,6 +432,9 @@ export async function runAppointmentLlmFlow(
   if (hasNameCorrectionInMessage(input.customerMessage)) {
     meta = queueSystemNote(meta, 'NAME_CORRECTION');
     logFlow('name_correction', { message: input.customerMessage.slice(0, 80), state });
+  } else if (hasTopicCorrectionInMessage(input.customerMessage)) {
+    meta = queueSystemNote(meta, 'TOPIC_CORRECTION');
+    logFlow('topic_correction', { message: input.customerMessage.slice(0, 80), state });
   } else if (topicCaptured) {
     meta = queueSystemNote(meta, 'TOPIC_CAPTURED');
     logFlow('topic_captured', { topic: state.title });
@@ -450,6 +479,12 @@ export async function runAppointmentLlmFlow(
     state = mergeAppointmentData(state, availability.statePatch);
     logFlow('availability_state_patch', { patch: availability.statePatch });
   }
+  state = patchStateFromNumberedSlot(
+    state,
+    input.history,
+    input.customerMessage,
+    input.appointmentCtx
+  );
   if (availability.systemNote) {
     logFlow('availability_checked', { dbError: availability.dbError });
   } else if (availability.dbError) {

@@ -116,9 +116,11 @@ const TOPIC_WORDS = new Set([
 
 export function looksLikeSubject(text: string): boolean {
   const n = text.toLocaleLowerCase('tr');
-  if (/hakkında|hakkinda|üzerine|uzere|için|icin|konusu|hakkında bilgi|bilgi almak|görüşmek|gorusmek|yapılması|yapilmasi|yapılması|demo\b/i.test(n)) {
+  if (/hakkında|hakkinda|üzerine|uzere|için|icin|konusu|hakkında bilgi|bilgi almak|görüşmek|gorusmek|yapılması|yapilmasi|yapılması|demo/i.test(n)) {
     return true;
   }
+  if (/sistem|hizmetiniz|sisteminiz|ürün|urun|paket|talep/i.test(n)) return true;
+  if (/\b(ediyoruz|ediyorum|istiyoruz|istiyorum)\b/i.test(n)) return true;
   return [...TOPIC_WORDS].some((w) => n.includes(w));
 }
 
@@ -243,12 +245,32 @@ function extractLeadingName(text: string): { name: string | null; remainder: str
   return { name: null, remainder: text.trim() };
 }
 
+function isLikelyTopicOnlyMessage(text: string): boolean {
+  const trimmed = text.trim();
+  if (!looksLikeSubject(trimmed)) return false;
+  if (/[,;]/.test(trimmed)) return false;
+  if (extractPhone(trimmed)) return false;
+  const withoutPhone = stripDateTimePhrases(trimmed.replace(PHONE_RE, ' ').trim());
+  const leading = extractLeadingName(withoutPhone);
+  if (leading.name && isValidFullName(leading.name) && !looksLikeSubject(leading.name)) return false;
+  return true;
+}
+
 /** Tek mesajdan ad, telefon ve konu çıkarır */
 export function parseInlineAppointmentFields(text: string): Partial<CollectedAppointmentFields> {
   const trimmed = text.trim();
   if (!trimmed || trimmed.length < 3) return {};
   if (isComplaintOrCorrectionMessage(trimmed)) return {};
   if (CONFIRM_WORDS_PATTERN.test(trimmed)) return {};
+
+  if (isLikelyTopicOnlyMessage(trimmed)) {
+    const phone = extractPhone(trimmed);
+    let subject = stripDateTimePhrases(trimmed.replace(PHONE_RE, ' ').trim());
+    subject = cleanSubjectTitle(subject.replace(APPOINTMENT_REQUEST_RE, ' '));
+    if (isValidProcedureTitle(subject)) {
+      return { customer_name: null, customer_phone: phone, title: subject };
+    }
+  }
 
   const commaParsed = parseCommaSeparatedAppointmentFields(trimmed);
   if (commaParsed.customer_phone || commaParsed.customer_name || commaParsed.title) {
@@ -328,7 +350,10 @@ export function isValidFullName(name: string): boolean {
   const parts = trimmed.split(/\s+/).filter(Boolean);
   if (parts.length < 2) return false;
   if (/hakkında|hakkinda|üzerine|uzere/i.test(trimmed)) return false;
-  if (/\b\w+(yorum|ecem|eceğim|ecegim|acak|acağım|acagim|ücem|ucem|iyorum|mak|mek|mış|mis|mus)\b/i.test(trimmed)) {
+  if (looksLikeSubject(trimmed)) return false;
+  if (/\b(ediyoruz|ediyorum|istiyoruz|istiyorum|talep)\b/i.test(trimmed)) return false;
+  if (/\b\w+(inizin|ınızın|ınızı|unuzu|inizi|sunu|sinu|nızı|nizi)\b/i.test(trimmed)) return false;
+  if (/\b\w+(yorum|ecem|eceğim|ecegim|acak|acağım|acagim|ücem|ucem|iyorum|iyoruz|uyoruz|yoruz|mak|mek|mış|mis|mus)\b/i.test(trimmed)) {
     return false;
   }
   if (parts.every((p) => TOPIC_WORDS.has(p.toLocaleLowerCase('tr')))) return false;
@@ -353,6 +378,10 @@ export function isValidProcedureTitle(title: string): boolean {
   if (text.length < 3) return false;
   if (isConversationalNonsense(text)) return false;
   if (APPOINTMENT_REQUEST_RE.test(text)) return false;
+  if (/^(ediyoruz|istiyoruz|ediyorum|istiyorum|talep|demosunu)$/i.test(text)) return false;
+  if (/^\p{L}{3,14}(yoruz|iyoruz|uyoruz|ıyoruz|yorum|iyorum)$/iu.test(text) && !looksLikeSubject(text)) {
+    return false;
+  }
   if (/sorduğum|sordugum|cevap ver|verdim|zaten|hey|merhaba|tamam|ne kadar|fiyat|ücret|ucret|vizyon|kodlad/i.test(text)) {
     return false;
   }

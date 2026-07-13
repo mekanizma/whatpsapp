@@ -595,9 +595,10 @@ export function extractNumberedAlternative(
   refOrOptions: Date | SlotParseOptions = {}
 ): ParsedSlot | null {
   const options = normalizeSlotOptions(refOrOptions);
-  const numMatch = latestMessage.trim().match(/^([123])\s*$/);
+  const numMatch = latestMessage.trim().match(/^(\d{1,2})\s*$/);
   if (!numMatch) return null;
   const n = parseInt(numMatch[1], 10);
+  if (n < 1 || n > 15) return null;
 
   for (let i = history.length - 1; i >= 0; i--) {
     if (history[i].sender_type !== 'ai') continue;

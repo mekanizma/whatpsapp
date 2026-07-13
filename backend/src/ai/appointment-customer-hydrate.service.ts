@@ -22,7 +22,77 @@ const NAME_CORRECTION_RE =
   /ismim|adım|adin|adim|yanlış|yanlis|yanli[sş]|doğru\s*ad|dogru\s*ad|isim\s*bu|adım\s*bu/i;
 
 const TOPIC_ASK_RE =
-  /hangi konu|hangi hizmet|hangi işlem|hangi islem|randevu konusu|ne için randevu|ne icin randevu|konu\/hizmet|what.*(service|for|about)|which service/i;
+  /hangi konu|hangi hizmet|hangi işlem|hangi islem|randevu konusu|randevu konusunu|konuyu öğren|konuyu ogren|ne için randevu|ne icin randevu|konu\/hizmet|what.*(service|for|about)|which service/i;
+
+const TOPIC_CORRECTION_RE =
+  /demedim|yanlış|yanlis|yanli[sş]|doğru\s*konu|dogru\s*konu|demek istedim|konu bu değil|konu bu degil/i;
+
+function scoreTopicCandidate(text: string): number {
+  if (!text || !isValidProcedureTitle(text)) return -100;
+  let score = text.length;
+  if (looksLikeSubject(text)) score += 80;
+  return score;
+}
+
+/** Müşteri konu düzeltmesi — "ediyoruz demedimki ... dedim" vb. */
+export function detectTopicCorrection(message: string): string | null {
+  const trimmed = message.trim();
+  if (!trimmed || !TOPIC_CORRECTION_RE.test(trimmed)) return null;
+
+  const quoted = trimmed.match(/["'«](.+?)["'»]/);
+  if (quoted?.[1]) {
+    const candidate = quoted[1].trim();
+    if (isValidProcedureTitle(candidate)) return candidate;
+  }
+
+  const dedimMatch = trimmed.match(/(.+?)\s+dedim\b/iu);
+  if (dedimMatch?.[1]) {
+    const candidate = dedimMatch[1]
+      .replace(/^.*(?:demedim(?:ki)?[,.]?\s*)/iu, '')
+      .trim();
+    if (isValidProcedureTitle(candidate)) return candidate;
+  }
+
+  return null;
+}
+
+export function hasTopicCorrectionInMessage(message: string): boolean {
+  return TOPIC_CORRECTION_RE.test(message.trim());
+}
+
+function resolveBestTopicFromHistory(history: HistoryMsg[], latestMessage: string): string | null {
+  let best: string | null = null;
+  let bestScore = -Infinity;
+
+  const consider = (candidate: string | null | undefined, bonus = 0) => {
+    const text = candidate?.trim();
+    if (!text || !isValidProcedureTitle(text)) return;
+    const score = scoreTopicCandidate(text) + bonus;
+    if (score > bestScore) {
+      bestScore = score;
+      best = text;
+    }
+  };
+
+  const correction = detectTopicCorrection(latestMessage);
+  if (correction) consider(correction, 120);
+
+  for (const m of history) {
+    if (m.sender_type !== 'customer') continue;
+    consider(detectTopicCorrection(m.message), 100);
+  }
+
+  for (let i = 0; i < history.length - 1; i++) {
+    const curr = history[i];
+    const next = history[i + 1];
+    if (curr.sender_type !== 'ai' && curr.sender_type !== 'assistant') continue;
+    if (next.sender_type !== 'customer') continue;
+    if (!TOPIC_ASK_RE.test(curr.message)) continue;
+    consider(extractTopicFromLatestTurn(history.slice(0, i + 1), next.message));
+  }
+
+  return best;
+}
 
 export function extractTopicFromLatestTurn(
   history: HistoryMsg[],
@@ -80,6 +150,7 @@ export function hydrateStateFromCustomerMessages(
 ): AppointmentLlmState {
   const collected = extractCustomerFields(history, latestMessage);
   const correction = detectNameCorrection(latestMessage);
+  const topicCorrection = detectTopicCorrection(latestMessage);
   const next = { ...state };
 
   const name = correction || collected.customer_name;
@@ -89,12 +160,18 @@ export function hydrateStateFromCustomerMessages(
   if (collected.customer_phone) {
     next.customer_phone = collected.customer_phone;
   }
-  if (collected.title && isValidProcedureTitle(collected.title)) {
+  if (topicCorrection) {
+    next.title = topicCorrection;
+  } else if (collected.title && isValidProcedureTitle(collected.title)) {
     next.title = collected.title;
   }
   const topicReply = extractTopicFromLatestTurn(history, latestMessage);
   if (topicReply) {
     next.title = topicReply;
+  }
+  const bestTopic = resolveBestTopicFromHistory(history, latestMessage);
+  if (bestTopic && (!next.title || scoreTopicCandidate(bestTopic) > scoreTopicCandidate(next.title))) {
+    next.title = bestTopic;
   }
   if (collected.doctor_name) {
     next.preferred_doctor = collected.doctor_name;
@@ -113,6 +190,7 @@ export function mergeAiDataPreferCustomer(
 ): AppointmentLlmState {
   let next = mergeAppointmentData(state, aiData);
   const correction = detectNameCorrection(latestMessage);
+  const topicCorrection = detectTopicCorrection(latestMessage);
 
   const name = correction || customer.customer_name;
   if (name && isValidFullName(name)) {
@@ -121,11 +199,18 @@ export function mergeAiDataPreferCustomer(
   if (customer.customer_phone) {
     next.customer_phone = customer.customer_phone;
   }
+  if (topicCorrection) {
+    next.title = topicCorrection;
+  }
   const topicReply = extractTopicFromLatestTurn(history, latestMessage);
   if (topicReply) {
     next.title = topicReply;
   } else if (customer.title && isValidProcedureTitle(customer.title)) {
     next.title = customer.title;
+  }
+  const bestTopic = resolveBestTopicFromHistory(history, latestMessage);
+  if (bestTopic && (!next.title || scoreTopicCandidate(bestTopic) > scoreTopicCandidate(next.title))) {
+    next.title = bestTopic;
   }
 
   return next;

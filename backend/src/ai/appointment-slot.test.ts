@@ -4,6 +4,7 @@ import {
   parseSlotFromTurkishText,
   extractCustomerSlotFromConversation,
   extractSlotFromConversation,
+  extractNumberedAlternative,
   formatSlotTurkish,
 } from './appointment-slot.service';
 
@@ -98,5 +99,18 @@ describe('appointment-slot.service', () => {
         `failed for: ${input}`
       );
     }
+  });
+
+  it('numaralı alternatif 8 seçimini parse eder', () => {
+    const history = [
+      {
+        sender_type: 'ai',
+        message:
+          'Müsait saatler:\n1) 09:00-09:30\n2) 09:30-10:00\n8) 16:30-17:00',
+      },
+    ];
+    const slot = extractNumberedAlternative(history, '8', REF);
+    assert.ok(slot);
+    assert.match(formatSlotTurkish(slot!.starts_at, slot!.ends_at), /16:30/);
   });
 });
