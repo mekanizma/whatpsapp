@@ -28,14 +28,14 @@ function tryParseJson(raw: string): AppointmentDataPayload | null {
     const parsed = JSON.parse(trimmed) as Record<string, unknown>;
     if (!parsed || typeof parsed !== 'object') return null;
     const result: AppointmentDataPayload = {};
-    if ('customer_name' in parsed) {
-      result.customer_name = normalizeNullableString(parsed.customer_name);
+    if ('customer_name' in parsed || 'name' in parsed) {
+      result.customer_name = normalizeNullableString(parsed.customer_name ?? parsed.name);
     }
-    if ('customer_phone' in parsed) {
-      result.customer_phone = normalizeNullableString(parsed.customer_phone);
+    if ('customer_phone' in parsed || 'phone' in parsed) {
+      result.customer_phone = normalizeNullableString(parsed.customer_phone ?? parsed.phone);
     }
-    if ('title' in parsed) {
-      result.title = normalizeNullableString(parsed.title);
+    if ('title' in parsed || 'topic' in parsed) {
+      result.title = normalizeNullableString(parsed.title ?? parsed.topic);
     }
     if ('preferred_doctor' in parsed) {
       result.preferred_doctor = normalizeNullableString(parsed.preferred_doctor);

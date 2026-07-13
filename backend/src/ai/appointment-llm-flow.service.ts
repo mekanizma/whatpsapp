@@ -8,7 +8,6 @@ import { appointmentConfig, type AppointmentSystemNoteKey } from '../config/appo
 import { Company, KnowledgeItem, Appointment } from '../types';
 import { createChatCompletion } from './openai-client';
 import {
-  buildStaticSystemPrompt,
   buildDynamicUserMessage,
   buildLanguageBlockForTurn,
   buildAppointmentRolePrompt,
@@ -16,7 +15,6 @@ import {
 import { detectConversationLanguage, ConversationLang } from './language.service';
 import { stripTransferMarker } from './transfer.service';
 import { retrieveKnowledgeContext } from '../services/knowledge-retrieval.service';
-import { buildKnowledgeNoMatchHint } from './kb-answer.service';
 import { prepareConversationHistoryForChat } from './conversation-history.service';
 import type { AppointmentCompanyContext } from './appointment-company-context';
 import {
@@ -53,6 +51,7 @@ import {
   extractCustomerFields,
   shouldExpectAppointmentDataBlock,
   hasNameCorrectionInMessage,
+  isAppointmentTopicReply,
 } from './appointment-customer-hydrate.service';
 
 export interface AppointmentLlmFlowInput {
@@ -121,6 +120,13 @@ export type HandoffTrigger =
   | 'missing_data_block'
   | 'max_turns'
   | 'db_error';
+
+export function allowAppointmentTransfer(
+  requestedByAi: boolean,
+  handoffReason: HandoffTrigger | null
+): boolean {
+  return requestedByAi && handoffReason !== null;
+}
 
 export function evaluateHandoffTriggers(
   meta: AppointmentSessionMeta,
@@ -274,20 +280,15 @@ async function callAppointmentLlm(
   const collectedContext = buildLlmCollectedContext(state);
   const appointmentContext = buildAppointmentContextSection(appointmentCtx, lang);
 
-  const [staticSystemPrompt, appointmentRolePrompt] = await Promise.all([
-    buildStaticSystemPrompt(input.companyId, input.company),
-    buildAppointmentRolePrompt(input.company, {
-      collectedContext,
-      appointmentContext,
-      knowledge,
-      knowledgeTitles: allKnowledge.map((k) => k.title),
-      lang,
-      languageBlock,
-      appointmentCtx,
-    }),
-  ]);
-
-  const systemContent = [staticSystemPrompt, appointmentRolePrompt].filter(Boolean).join('\n\n');
+  const appointmentRolePrompt = await buildAppointmentRolePrompt(input.company, {
+    collectedContext,
+    appointmentContext,
+    knowledge,
+    knowledgeTitles: allKnowledge.map((k) => k.title),
+    lang,
+    languageBlock,
+    appointmentCtx,
+  });
 
   let customerContent = input.customerMessage.trim().slice(0, 1000);
   if (systemNote) {
@@ -305,8 +306,8 @@ async function callAppointmentLlm(
   });
 
   const chatMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [];
-  if (systemContent) {
-    chatMessages.push({ role: 'system', content: systemContent });
+  if (appointmentRolePrompt) {
+    chatMessages.push({ role: 'system', content: appointmentRolePrompt });
   }
 
   chatMessages.push(
@@ -361,10 +362,14 @@ export async function runAppointmentLlmFlow(
   const lang = detectConversationLanguage(input.customerMessage, input.history);
   let meta = getAppointmentSession(input.companyId, input.customerPhone);
   let state = resolveAppointmentState(meta.llmState, input.history, input.customerMessage);
+  const topicCaptured = isAppointmentTopicReply(input.history, input.customerMessage);
 
   if (hasNameCorrectionInMessage(input.customerMessage)) {
     meta = queueSystemNote(meta, 'NAME_CORRECTION');
     logFlow('name_correction', { message: input.customerMessage.slice(0, 80), state });
+  } else if (topicCaptured) {
+    meta = queueSystemNote(meta, 'TOPIC_CAPTURED');
+    logFlow('topic_captured', { topic: state.title });
   }
 
   if (meta.status === 'handed_off') {
@@ -379,10 +384,10 @@ export async function runAppointmentLlmFlow(
     input.customerMessage,
     input.allKnowledge
   );
-  let knowledge = retrieval.context;
-  if (retrieval.kbHasNoMatch && input.allKnowledge.length > 0) {
-    knowledge = buildKnowledgeNoMatchHint(input.allKnowledge, lang);
-  }
+  // Randevu konusu bir bilgi sorusu değildir. Bu turda KB "eşleşmedi"
+  // talimatlarını LLM'e taşımak yanlış handoff teklifine neden olur.
+  const knowledge = topicCaptured ? '' : retrieval.context;
+  const appointmentKnowledge = topicCaptured ? [] : input.allKnowledge;
 
   const noteForAi =
     meta.pendingSystemNote ||
@@ -430,7 +435,7 @@ export async function runAppointmentLlmFlow(
     effectiveNote,
     lang,
     knowledge,
-    input.allKnowledge,
+    appointmentKnowledge,
     state,
     input.appointmentCtx
   );
@@ -455,7 +460,7 @@ export async function runAppointmentLlmFlow(
       input,
       lang,
       knowledge,
-      input.allKnowledge,
+      appointmentKnowledge,
       state,
       input.appointmentCtx
     );
@@ -464,6 +469,10 @@ export async function runAppointmentLlmFlow(
     shouldTransfer = handoff.shouldTransfer;
   } else {
     ({ message, shouldTransfer } = stripTransferMarker(parsed.cleanMessage));
+    if (shouldTransfer) {
+      logFlow('unauthorized_transfer_suppressed', { state });
+      shouldTransfer = allowAppointmentTransfer(shouldTransfer, null);
+    }
   }
 
   if (meta.status !== 'saved' && isReadyForBooking(state)) {
@@ -513,7 +522,7 @@ export async function runAppointmentLlmFlow(
           input,
           lang,
           knowledge,
-          input.allKnowledge,
+          appointmentKnowledge,
           state,
           input.appointmentCtx
         );
@@ -535,7 +544,7 @@ export async function runAppointmentLlmFlow(
       input,
       lang,
       knowledge,
-      input.allKnowledge,
+      appointmentKnowledge,
       state,
       input.appointmentCtx
     );

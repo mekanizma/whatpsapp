@@ -21,12 +21,14 @@ import {
 import {
   evaluateHandoffTriggers,
   applyPostAiProcessing,
+  allowAppointmentTransfer,
 } from './appointment-llm-flow.service';
 import {
   resolveAppointmentState,
   detectNameCorrection,
   hydrateStateFromCustomerMessages,
   shouldExpectAppointmentDataBlock,
+  isAppointmentTopicReply,
 } from './appointment-customer-hydrate.service';
 import { appointmentConfig } from '../config/appointment.config';
 import { DEFAULT_APPOINTMENT_CONTEXT } from './appointment-company-context';
@@ -61,6 +63,15 @@ describe('appointment_data parser', () => {
     assert.equal(parsed.data?.date, '2026-07-14');
     assert.doesNotMatch(parsed.cleanMessage, /appointment_data/);
   });
+
+  it('DB promptundaki name/phone/topic alanlarını destekler', () => {
+    const parsed = parseAppointmentDataFromResponse(
+      '<appointment_data>{"name":"İdris Yıldırım","phone":"05338398293","topic":"Demo sistemleri","date":null,"time":null,"confirmed":false}</appointment_data>'
+    );
+    assert.equal(parsed.data?.customer_name, 'İdris Yıldırım');
+    assert.equal(parsed.data?.customer_phone, '05338398293');
+    assert.equal(parsed.data?.title, 'Demo sistemleri');
+  });
 });
 
 describe('gurcem senaryosu — müşteri hydrate', () => {
@@ -80,6 +91,7 @@ describe('gurcem senaryosu — müşteri hydrate', () => {
     const state = resolveAppointmentState(null, GURCEM_HISTORY, topic);
     assert.equal(state.title, topic);
     assert.equal(state.customer_name, 'gurcem semercioglu');
+    assert.equal(isAppointmentTopicReply(GURCEM_HISTORY, topic), true);
   });
 
   it('collectedContext ad düzeltme uyarısı içerir', () => {
@@ -197,5 +209,10 @@ describe('system notes', () => {
   it('prefixes system note for AI call', () => {
     const note = formatSystemNotePrefix(appointmentConfig.systemNotes.SLOT_TAKEN);
     assert.match(note, /^\[SISTEM NOTU:/);
+  });
+
+  it('kod handoff tetiklemediyse AI transfer markerını kabul etmez', () => {
+    assert.equal(allowAppointmentTransfer(true, null), false);
+    assert.equal(allowAppointmentTransfer(true, 'db_error'), true);
   });
 });

@@ -23,7 +23,10 @@ const NAME_CORRECTION_RE =
 const TOPIC_ASK_RE =
   /hangi konu|hangi hizmet|hangi işlem|hangi islem|randevu konusu|ne için randevu|ne icin randevu|konu\/hizmet|what.*(service|for|about)|which service/i;
 
-function extractTopicFromLatestTurn(history: HistoryMsg[], latestMessage: string): string | null {
+export function extractTopicFromLatestTurn(
+  history: HistoryMsg[],
+  latestMessage: string
+): string | null {
   const trimmed = latestMessage.trim();
   if (!trimmed || !isValidProcedureTitle(trimmed)) return null;
   if (isValidFullName(trimmed) && !looksLikeSubject(trimmed)) return null;
@@ -34,6 +37,13 @@ function extractTopicFromLatestTurn(history: HistoryMsg[], latestMessage: string
     return trimmed;
   }
   return null;
+}
+
+export function isAppointmentTopicReply(
+  history: HistoryMsg[],
+  latestMessage: string
+): boolean {
+  return extractTopicFromLatestTurn(history, latestMessage) !== null;
 }
 
 /** Müşteri ad düzeltmesi algıla — "ismim gurcem semercioglu" vb. */
