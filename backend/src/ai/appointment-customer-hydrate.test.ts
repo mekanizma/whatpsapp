@@ -6,7 +6,7 @@ import {
   detectTopicCorrection,
   extractCustomerFields,
 } from './appointment-customer-hydrate.service';
-import { createEmptyAppointmentState } from './appointment-state.service';
+import { createEmptyAppointmentState, mergeAppointmentData } from './appointment-state.service';
 import {
   parseInlineAppointmentFields,
   isValidProcedureTitle,
@@ -89,5 +89,27 @@ describe('resolveAppointmentState gurcem akışı', () => {
     );
     const state = resolveAppointmentState(null, extended, correction);
     assert.equal(state.title, 'sisteminizin demosunu talep ediyoruz');
+  });
+
+  it('müşteri evet dediğinde confirmed true olur', () => {
+    const extended = [
+      ...history,
+      {
+        sender_type: 'ai',
+        message: '14 Temmuz 2026 saat 09:00 için randevu özeti. Onaylıyor musunuz?',
+      },
+    ];
+    const state = resolveAppointmentState(
+      mergeAppointmentData(createEmptyAppointmentState(), {
+        customer_name: 'idris yıldırım',
+        customer_phone: '905338398293',
+        title: 'sistemler hakkında bilgi',
+        date: '2026-07-14',
+        time: '09:00',
+      }),
+      extended,
+      'evet'
+    );
+    assert.equal(state.confirmed, true);
   });
 });

@@ -44,6 +44,8 @@ import {
   bookAppointment,
   AppointmentBookingError,
   logAppointmentEvent,
+  buildAppointmentConfirmationMessage,
+  fetchCompanyCategory,
 } from '../services/appointment.service';
 import { buildScheduleSummary } from '../services/working-hours.service';
 import { buildDateTimePlaceholders } from './appointment-datetime-context';
@@ -238,7 +240,7 @@ async function tryBookAppointment(
         preferred_doctor: state.preferred_doctor,
         starts_at: validation.slot.starts_at,
         ends_at: validation.slot.ends_at,
-        status: 'pending',
+        status: 'confirmed',
         source: 'ai',
       },
       lang
@@ -274,6 +276,15 @@ function customerAdvancedAppointmentState(
   if (fromLatest.title && isValidProcedureTitle(fromLatest.title)) return true;
 
   return false;
+}
+
+async function buildBookedConfirmationMessage(
+  companyId: string,
+  appointment: Appointment,
+  lang: ConversationLang
+): Promise<string> {
+  const category = await fetchCompanyCategory(companyId);
+  return buildAppointmentConfirmationMessage(appointment, lang, category);
 }
 
 export function applyPostAiProcessing(
@@ -505,6 +516,19 @@ export async function runAppointmentLlmFlow(
       meta = queueSystemNote({ ...meta, status: 'saved' }, 'SAVED_OK');
       saveAppointmentSession(input.companyId, input.customerPhone, meta, state);
       logFlow('book_success_pre_ai', { appointmentId: preBook.appointment.id });
+      const confirmMessage = await buildBookedConfirmationMessage(
+        input.companyId,
+        preBook.appointment,
+        lang
+      );
+      return {
+        message: confirmMessage,
+        shouldTransfer: false,
+        tokensUsed: 0,
+        appointmentBooked: true,
+        appointment: preBook.appointment,
+        skipReason: 'appointment_llm',
+      };
     } else if (preBook.code === 'INVALID_DATE') {
       meta = incrementValidationFailure(queueSystemNote(meta, 'INVALID_DATE'), 'INVALID_DATE');
       state = preBook.state;
@@ -597,8 +621,13 @@ export async function runAppointmentLlmFlow(
           phone: input.customerPhone,
         });
         saveAppointmentSession(input.companyId, input.customerPhone, meta, state);
+        const confirmMessage = await buildBookedConfirmationMessage(
+          input.companyId,
+          bookResult.appointment,
+          lang
+        );
         return {
-          message,
+          message: confirmMessage,
           shouldTransfer,
           tokensUsed: totalTokens,
           appointmentBooked: true,

@@ -50,7 +50,7 @@ export const appointmentConfig = {
       'İstenen tarih/saat dolu; müşteriden alternatif iste, kendin saat ÖNERME.',
     SAVED_OK:
       process.env.APPOINTMENT_NOTE_SAVED_OK ||
-      "Randevu talebi sisteme kaydedildi; müşteriye talebin alındığını ve onay için dönüş yapılacağını söyle, 'kesin onaylandı' deme.",
+      'Randevu veritabanına ONAYLI olarak kaydedildi. Müşteriye randevunun kesinleştiğini ve tarih/saat bilgisini net şekilde söyle. "Talebiniz alındı", "onay için sizinle iletişime geçilecek" veya benzeri ifadeler KULLANMA.',
     HANDOFF:
       process.env.APPOINTMENT_NOTE_HANDOFF ||
       'Randevu akışında teknik sorun oluştu; müşteriyi canlı temsilciye kibarca yönlendir ve mesajın sonuna transfer işaretini ekle.',

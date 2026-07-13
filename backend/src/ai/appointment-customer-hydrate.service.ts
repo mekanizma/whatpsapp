@@ -173,6 +173,9 @@ export function hydrateStateFromCustomerMessages(
   if (bestTopic && (!next.title || scoreTopicCandidate(bestTopic) > scoreTopicCandidate(next.title))) {
     next.title = bestTopic;
   }
+  if (isAppointmentConfirmation(latestMessage, history)) {
+    next.confirmed = true;
+  }
   if (collected.doctor_name) {
     next.preferred_doctor = collected.doctor_name;
   }
@@ -211,6 +214,9 @@ export function mergeAiDataPreferCustomer(
   const bestTopic = resolveBestTopicFromHistory(history, latestMessage);
   if (bestTopic && (!next.title || scoreTopicCandidate(bestTopic) > scoreTopicCandidate(next.title))) {
     next.title = bestTopic;
+  }
+  if (isAppointmentConfirmation(latestMessage, history)) {
+    next.confirmed = true;
   }
 
   return next;

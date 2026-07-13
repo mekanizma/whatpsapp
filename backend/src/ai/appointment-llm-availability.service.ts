@@ -178,8 +178,8 @@ async function buildSpecificSlotNote(
   return {
     systemNote:
       `VERİTABANI MÜSAİTLİK SONUCU (belirli saat): ${slotLabel} — MÜSAİT.\n` +
-      'Müşteriye bu saatin müsait olduğunu söyle ve randevu özetini onay için sun. ' +
-      'confirmed:true olmadan kayıt yapılmaz.',
+      'Müşteriye bu saatin müsait olduğunu söyle ve randevu özetini onay iste. ' +
+      'Müşteri onayladığında sistem randevuyu doğrudan onaylı kaydeder; "iletişime geçilecek" deme.',
     statePatch,
     dbError: false,
   };
