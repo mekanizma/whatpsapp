@@ -35,11 +35,82 @@ import {
   buildMissingFieldsMessage,
   buildAllRequiredFieldsMessage,
   mergeCollectedWithAction,
+  promptForMissingField,
 } from './appointment-collect.service';
 import { localToUtcInTimezone } from './appointment-slot.service';
 import { parseHm, weekdayToDayKey } from '../services/working-hours.service';
 
 const SLOT_STEP_MINUTES = 30;
+
+const APPOINTMENT_STATUS_INQUIRY_RE =
+  /oluşturd|olusturd|kaydett|takvime\s*(işl|isl)|randevum\s*var|randevu\s*old[uü]|onaylad[ıi]n/i;
+
+function normalizePhoneForLookup(phone: string): string {
+  let d = phone.replace(/\D/g, '');
+  if (d.startsWith('0')) d = `90${d.slice(1)}`;
+  if (d.length === 10 && d.startsWith('5')) d = `90${d}`;
+  return d;
+}
+
+function isAppointmentStatusInquiry(message: string): boolean {
+  return APPOINTMENT_STATUS_INQUIRY_RE.test(message.trim());
+}
+
+async function handleAppointmentStatusInquiry(
+  companyId: string,
+  customerPhone: string,
+  lang: ConversationLang,
+  ctx: AppointmentCompanyContext
+): Promise<AppointmentWorkflowResult> {
+  try {
+    const now = new Date();
+    const until = new Date();
+    until.setDate(until.getDate() + 60);
+    const appointments = await listAppointments(companyId, now.toISOString(), until.toISOString());
+    const mine = appointments
+      .filter(
+        (a) =>
+          normalizePhoneForLookup(a.customer_phone) === normalizePhoneForLookup(customerPhone) &&
+          (a.status === 'pending' || a.status === 'confirmed')
+      )
+      .sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime());
+
+    if (mine.length === 0) {
+      return {
+        handled: true,
+        message: t(lang, 'appointment_status_not_found'),
+        appointment: null,
+      };
+    }
+
+    const latest = mine[0];
+    const slot = formatSlotLocalized(latest.starts_at, latest.ends_at, lang, ctx.timezone);
+    const statusLabel =
+      latest.status === 'confirmed'
+        ? lang === 'tr'
+          ? 'Onaylandı'
+          : 'Confirmed'
+        : lang === 'tr'
+          ? 'Beklemede'
+          : 'Pending';
+
+    return {
+      handled: true,
+      message: t(lang, 'appointment_status_found', {
+        slot,
+        title: latest.title,
+        status: statusLabel,
+      }),
+      appointment: latest,
+    };
+  } catch {
+    return {
+      handled: true,
+      message: t(lang, 'appointment_db_unavailable'),
+      appointment: null,
+    };
+  }
+}
 
 export interface AppointmentWorkflowResult {
   handled: boolean;
@@ -294,6 +365,11 @@ export async function runAppointmentWorkflow(
   ctx: AppointmentCompanyContext = DEFAULT_APPOINTMENT_CONTEXT
 ): Promise<AppointmentWorkflowResult> {
   const lang = detectConversationLanguage(latestMessage, history);
+
+  if (isAppointmentStatusInquiry(latestMessage)) {
+    return handleAppointmentStatusInquiry(companyId, customerPhone, lang, ctx);
+  }
+
   const collected = parseCollectedFields(history, latestMessage);
   const slot = resolveCollectedSlot(history, latestMessage, ctx);
 
@@ -311,9 +387,13 @@ export async function runAppointmentWorkflow(
         appointment: null,
       };
     }
+    const message =
+      missing.length === 1
+        ? promptForMissingField(missing[0], lang)
+        : buildMissingFieldsMessage(missing, lang);
     return {
       handled: true,
-      message: buildMissingFieldsMessage(missing, lang),
+      message,
       appointment: null,
     };
   }

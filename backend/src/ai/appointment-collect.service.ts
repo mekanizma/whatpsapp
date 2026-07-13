@@ -85,9 +85,43 @@ function isAskingForName(aiMessage: string): boolean {
 function isAskingForServiceTopic(aiMessage: string): boolean {
   if (isAppointmentSummaryMessage(aiMessage)) return false;
   const ai = aiMessage.toLocaleLowerCase('tr');
-  return /hangi konu|hangi hizmet|hangi işlem|hangi islem|ne için randevu|ne icin randevu|konu\/hizmet|işlem veya ziyaret|islem veya ziyaret|işlem için|islem icin|hizmet için|hizmet icin|ziyaret sebebi|what.*(service|for|about)|which service|topic for/.test(
+  return /hangi konu|hangi hizmet|hangi işlem|hangi islem|ne için randevu|ne icin randevu|konu\/hizmet|randevu konusu|işlem veya ziyaret|islem veya ziyaret|işlem için|islem icin|hizmet için|hizmet icin|ziyaret sebebi|what.*(service|for|about)|which service|topic for/.test(
     ai
   );
+}
+
+function isRequestingAppointmentFields(aiMessage: string): boolean {
+  const ai = aiMessage.toLocaleLowerCase('tr');
+  return (
+    isAskingForName(ai) ||
+    isAskingForPhone(ai) ||
+    isAskingForServiceTopic(ai) ||
+    /eksik|paylaşır mısınız|paylasir misiniz|oluşturabilmem|olusturabilmem|gerekli bilgi|tek bir mesajda/.test(ai)
+  );
+}
+
+const SUBJECT_NOISE_RE =
+  /\b(almak istiyorum|almak istiyoruz|istiyorum|randevu konusu|konu olarak|için randevu|icin randevu|randevu almak)\b/giu;
+
+const DATETIME_PHRASE_RE =
+  /\b(yarın|yarin|bugün|bugun|oburgun|öbürgün|haftaya|pazartesi|salı|sali|çarşamba|carsamba|perşembe|persembe|cuma|cumartesi|pazar)(?:\s+\d{1,2}\s*(ocak|şubat|subat|mart|nisan|mayıs|mayis|haziran|temmuz|ağustos|agustos|eylül|eylul|ekim|kasım|kasim|aralık|aralik))?\s*(saat\s*)?\d{1,2}([:.]\d{2})?\s*(a|da)?\b|\b\d{1,2}[./]\d{1,2}([./]\d{2,4})?\s*(saat\s*)?\d{1,2}([:.]\d{2})?\b/giu;
+
+/** Telefon ve tarih/saat parçalarını ayıklayıp randevu konusunu çıkarır */
+export function extractProcedureTitleFromMessage(text: string): string | null {
+  let working = text.trim();
+  if (!working || working.length < 3) return null;
+  if (isComplaintOrCorrectionMessage(working)) return null;
+  if (CONFIRM_WORDS_PATTERN.test(working)) return null;
+
+  working = working.replace(PHONE_RE, ' ').trim();
+  working = working.replace(APPOINTMENT_REQUEST_RE, ' ').trim();
+  if (hasDateTimeIntent(working)) {
+    working = working.replace(DATETIME_PHRASE_RE, ' ').trim();
+  }
+  working = working.replace(SUBJECT_NOISE_RE, ' ').replace(/\s+/g, ' ').trim();
+
+  if (!working || !isValidProcedureTitle(working)) return null;
+  return working;
 }
 
 function isAskingForPhone(aiMessage: string): boolean {
@@ -173,10 +207,9 @@ export function parseCollectedFields(
       const p = extractPhone(cust);
       if (p) customer_phone = p;
     }
-    if (isAskingForServiceTopic(ai)) {
-      if (!extractPhone(cust) && isValidProcedureTitle(cust)) {
-        title = cust;
-      }
+    if (isAskingForServiceTopic(ai) || isRequestingAppointmentFields(ai)) {
+      const topic = extractProcedureTitleFromMessage(cust) || (isValidProcedureTitle(cust) ? cust : null);
+      if (topic) title = topic;
     }
     if (isAskingForProvider(ai) && !/^(yok|hayır|hayir|farketmez|yoktur|no|none)$/i.test(cust)) {
       if (isValidStaffName(cust)) doctor_name = cust;
@@ -214,6 +247,18 @@ export function parseCollectedFields(
       if (prev && isAiSender(prev.sender_type) && isAskingForServiceTopic(prev.message)) continue;
       customer_name = candidate;
       break;
+    }
+  }
+
+  if (!title) {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.sender_type !== 'customer') continue;
+      const topic = extractProcedureTitleFromMessage(m.message);
+      if (topic) {
+        title = topic;
+        break;
+      }
     }
   }
 

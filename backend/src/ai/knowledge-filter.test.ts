@@ -130,6 +130,22 @@ describe('knowledge-filter', () => {
   it('saf randevu talebi randevu moduna girer', () => {
     assert.equal(isAppointmentIntent('Randevu almak istiyorum', []), true);
   });
+
+  it('aktif randevu akışında genel bilgi cevabı randevu modunda kalır', () => {
+    const history = [
+      {
+        sender_type: 'ai',
+        message:
+          'Randevuyu tamamlayabilmem için şu bilgilere ihtiyacım var:\n\n• Ad Soyad\n• Telefon Numarası',
+      },
+      { sender_type: 'customer', message: '05338398293 genel bilgi yarın saat 10 a' },
+    ];
+    assert.equal(isAppointmentIntent('genel bilgi almak istiyorum', history), true);
+  });
+
+  it('randevu durumu sorusu randevu moduna girer', () => {
+    assert.equal(isAppointmentIntent('oluşturdunmu?', []), true);
+  });
 });
 
 describe('kb-answer', () => {

@@ -324,12 +324,38 @@ export function buildMandatoryKnowledgeContext(
 const APPOINTMENT_CONFIRM_RE = CONFIRM_WORDS_PATTERN;
 const APPOINTMENT_PHONE_RE = /(?:\+?90|0)?[\s-]?5\d{2}[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}/;
 
+const APPOINTMENT_FLOW_AI_RE =
+  /randevu|appointment|termin|ad soyad|telefon numara|randevu konusu|istenilen tarih|eksik|oluşturabilmem|olusturabilmem|onaylıyor musunuz|onayliyor musunuz|do you confirm|randevunuzu oluştur|randevunuzu kaydet|müsait|musait/i;
+
+const APPOINTMENT_STATUS_RE =
+  /oluşturd|olusturd|kaydett|takvime\s*(işl|isl)|randevum\s*var|randevu\s*old[uü]|onaylad[ıi]n/i;
+
+/** Devam eden deterministik randevu akışı — LLM'e düşmeyi engellemek için */
+export function isInActiveAppointmentFlow(
+  history: { sender_type: string; message: string }[] = []
+): boolean {
+  const recent = history.slice(-12);
+  return recent.some(
+    (m) =>
+      (m.sender_type === 'ai' || m.sender_type === 'assistant') &&
+      APPOINTMENT_FLOW_AI_RE.test(m.message)
+  );
+}
+
+function isOffTopicDuringAppointmentFlow(message: string): boolean {
+  const n = message.toLowerCase().trim();
+  if (isPriceQuery(message) || isGeneralPriceListQuery(message)) return true;
+  if (/^(vizyon|misyon|fiyatlar|ücretler|ucretler)\b/.test(n)) return true;
+  return false;
+}
+
 /** Randevu süreci — bilgi bankası eşleşmesi olmasa da AI devreye girebilir */
 export function isAppointmentIntent(
   message: string,
   history: { sender_type: string; message: string }[] = []
 ): boolean {
   const trimmed = message.trim();
+  const inFlow = isInActiveAppointmentFlow(history);
 
   if (isComplaintOrCorrectionMessage(trimmed)) {
     const recent = history.slice(-8);
@@ -341,6 +367,13 @@ export function isAppointmentIntent(
     if (inAppointmentFlow) return true;
     return false;
   }
+
+  if (inFlow) {
+    if (isOffTopicDuringAppointmentFlow(trimmed)) return false;
+    return true;
+  }
+
+  if (APPOINTMENT_STATUS_RE.test(trimmed)) return true;
 
   if (looksLikeQuestion(trimmed)) {
     return false;

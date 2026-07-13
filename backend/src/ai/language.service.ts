@@ -191,6 +191,8 @@ type MessageKey =
   | 'appointment_summary_confirm'
   | 'appointment_request_all_fields'
   | 'appointment_request_missing_fields'
+  | 'appointment_status_found'
+  | 'appointment_status_not_found'
   | 'appointment_field_name'
   | 'appointment_field_phone'
   | 'appointment_field_subject'
@@ -860,22 +862,40 @@ Preguntas de ejemplo:
     es: '¿Confirma estos datos?',
   },
   appointment_request_all_fields: {
-    tr: 'Randevunuzu oluşturabilmem için lütfen aşağıdaki bilgileri tek bir mesajda gönderin:\n\n• Ad Soyad\n• Telefon Numarası\n• Randevu Konusu\n• İstenen Tarih\n• İstenen Saat',
-    en: 'To create your appointment, please send the following information in a single message:\n\n• Full Name\n• Phone Number\n• Appointment Subject\n• Desired Date\n• Desired Time',
-    de: 'Für Ihren Termin senden Sie bitte in einer Nachricht:\n\n• Vor- und Nachname\n• Telefonnummer\n• Termingrund\n• Gewünschtes Datum\n• Gewünschte Uhrzeit',
-    ar: 'لإنشاء موعدك، أرسل في رسالة واحدة:\n\n• الاسم الكامل\n• رقم الهاتف\n• موضوع الموعد\n• التاريخ المطلوب\n• الوقت المطلوب',
-    ru: 'Для записи отправьте в одном сообщении:\n\n• Имя и фамилия\n• Телефон\n• Тема визита\n• Желаемая дата\n• Желаемое время',
-    fr: 'Pour créer votre rendez-vous, envoyez en un seul message :\n\n• Nom complet\n• Téléphone\n• Objet du rendez-vous\n• Date souhaitée\n• Heure souhaitée',
-    es: 'Para crear su cita, envíe en un solo mensaje:\n\n• Nombre completo\n• Teléfono\n• Motivo de la cita\n• Fecha deseada\n• Hora deseada',
+    tr: 'Randevu oluşturabilmem için lütfen ad soyadınızı, telefon numaranızı, randevu konusunu ve istediğiniz tarih/saati paylaşır mısınız?',
+    en: 'To book your appointment, please share your full name, phone number, appointment subject, and preferred date/time.',
+    de: 'Für Ihren Termin senden Sie bitte Vor- und Nachname, Telefonnummer, Termingrund sowie gewünschtes Datum und Uhrzeit.',
+    ar: 'لإنشاء موعدك، يرجى إرسال الاسم الكامل ورقم الهاتف وموضوع الموعد والتاريخ والوقت المطلوبين.',
+    ru: 'Для записи отправьте, пожалуйста, имя и фамилию, телефон, тему визита и желаемые дату и время.',
+    fr: 'Pour créer votre rendez-vous, merci d’indiquer votre nom complet, téléphone, objet du rendez-vous et la date/heure souhaitées.',
+    es: 'Para crear su cita, comparta su nombre completo, teléfono, motivo de la cita y la fecha/hora deseadas.',
   },
   appointment_request_missing_fields: {
-    tr: 'Aşağıdaki bilgiler hâlâ eksik:\n\n{fields}\n\nLütfen eksik bilgileri gönderin.',
-    en: 'The following information is still missing:\n\n{fields}\n\nPlease send the missing details.',
-    de: 'Folgende Angaben fehlen noch:\n\n{fields}\n\nBitte senden Sie die fehlenden Informationen.',
-    ar: 'المعلومات التالية لا تزال ناقصة:\n\n{fields}\n\nيرجى إرسال البيانات الناقصة.',
-    ru: 'Не хватает следующих данных:\n\n{fields}\n\nПожалуйста, отправьте недостающую информацию.',
-    fr: 'Les informations suivantes manquent encore :\n\n{fields}\n\nVeuillez envoyer les détails manquants.',
-    es: 'Faltan los siguientes datos:\n\n{fields}\n\nEnvíe la información pendiente.',
+    tr: 'Randevuyu tamamlayabilmem için şu bilgilere ihtiyacım var:\n\n{fields}\n\nLütfen paylaşır mısınız?',
+    en: 'To complete your appointment, I still need:\n\n{fields}\n\nCould you share these details?',
+    de: 'Für Ihren Termin benötige ich noch:\n\n{fields}\n\nBitte senden Sie diese Angaben.',
+    ar: 'لإكمال موعدك، أحتاج إلى:\n\n{fields}\n\nيرجى إرسال هذه البيانات.',
+    ru: 'Для завершения записи мне нужны:\n\n{fields}\n\nПожалуйста, отправьте эти данные.',
+    fr: 'Pour finaliser votre rendez-vous, il me manque :\n\n{fields}\n\nPouvez-vous les envoyer ?',
+    es: 'Para completar su cita, necesito:\n\n{fields}\n\n¿Puede compartir estos datos?',
+  },
+  appointment_status_found: {
+    tr: 'Evet, randevunuz kayıtlı.\n\nTarih: {slot}\nKonu: {title}\nDurum: {status}',
+    en: 'Yes, your appointment is on file.\n\nDate: {slot}\nSubject: {title}\nStatus: {status}',
+    de: 'Ja, Ihr Termin ist eingetragen.\n\nDatum: {slot}\nThema: {title}\nStatus: {status}',
+    ar: 'نعم، موعدك مسجل.\n\nالتاريخ: {slot}\nالموضوع: {title}\nالحالة: {status}',
+    ru: 'Да, ваша запись есть в системе.\n\nДата: {slot}\nТема: {title}\nСтатус: {status}',
+    fr: 'Oui, votre rendez-vous est enregistré.\n\nDate : {slot}\nSujet : {title}\nStatut : {status}',
+    es: 'Sí, su cita está registrada.\n\nFecha: {slot}\nTema: {title}\nEstado: {status}',
+  },
+  appointment_status_not_found: {
+    tr: 'Sistemde henüz onaylı bir randevu kaydınız görünmüyor. Randevu oluşturmak isterseniz ad soyad, telefon, konu ve tarih/saat bilgilerinizi paylaşabilirsiniz.',
+    en: 'I don’t see a confirmed appointment on file yet. To book one, share your name, phone, subject, and preferred date/time.',
+    de: 'Ich finde noch keinen bestätigten Termin. Senden Sie für eine Buchung Name, Telefon, Thema und Wunschtermin.',
+    ar: 'لا يوجد موعد مؤكد مسجل بعد. لإنشاء موعد، أرسل الاسم والهاتف والموضوع والتاريخ والوقت.',
+    ru: 'Подтверждённой записи пока нет. Для записи отправьте имя, телефон, тему и желаемые дату и время.',
+    fr: 'Aucun rendez-vous confirmé n’apparaît pour l’instant. Pour en créer un, envoyez nom, téléphone, sujet et date/heure.',
+    es: 'Aún no hay una cita confirmada registrada. Para reservar, envíe nombre, teléfono, motivo y fecha/hora.',
   },
   appointment_field_name: {
     tr: 'Ad Soyad', en: 'Full Name', de: 'Vor- und Nachname', ar: 'الاسم الكامل', ru: 'Имя и фамилия', fr: 'Nom complet', es: 'Nombre completo',

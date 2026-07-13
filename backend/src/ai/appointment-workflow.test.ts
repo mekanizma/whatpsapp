@@ -17,11 +17,10 @@ describe('appointment-workflow.service', () => {
 
   it('ilk randevu talebinde tüm alanları ister', () => {
     const msg = buildAllRequiredFieldsMessage('tr');
-    assert.match(msg, /Ad Soyad/);
-    assert.match(msg, /Telefon/);
-    assert.match(msg, /Konu/);
-    assert.match(msg, /Tarih/);
-    assert.match(msg, /Saat/);
+    assert.match(msg, /ad soyad/i);
+    assert.match(msg, /telefon/i);
+    assert.match(msg, /randevu konusu/i);
+    assert.match(msg, /tarih/i);
     assert.doesNotMatch(msg, /müsait/i);
   });
 

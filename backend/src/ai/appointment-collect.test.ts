@@ -87,7 +87,28 @@ describe('appointment-collect.service', () => {
     const gate = blockBookingIfIncomplete(truncated, 'kurulum desteği yarın saat 10');
     assert.equal(gate.blocked, false);
     assert.equal(gate.collected.customer_name, 'gurcem semercioglu');
-    assert.equal(gate.collected.title, 'kurulum desteği yarın saat 10');
+    assert.equal(gate.collected.title, 'kurulum desteği');
+  });
+
+  it('tek mesajda telefon, konu ve tarih/saat ayıklanır', () => {
+    const history = [
+      {
+        sender_type: 'ai',
+        message:
+          'Randevuyu tamamlayabilmem için şu bilgilere ihtiyacım var:\n\n• Ad Soyad\n• Telefon Numarası\n• Randevu Konusu\n• İstenen Tarih ve Saat',
+      },
+    ];
+    const collected = parseCollectedFields(history, '05338398293 genel bilgi yarın saat 10 a');
+    assert.equal(collected.customer_phone, '905338398293');
+    assert.equal(collected.title, 'genel bilgi');
+  });
+
+  it('genel bilgi almak istiyorum konu olarak alınır', () => {
+    const history = [
+      { sender_type: 'ai', message: 'Randevu konusunu yazar mısınız?' },
+    ];
+    const collected = parseCollectedFields(history, 'genel bilgi almak istiyorum');
+    assert.equal(collected.title, 'genel bilgi');
   });
 
   it('sohbet cümleleri ad veya konu olarak alınmaz', () => {
