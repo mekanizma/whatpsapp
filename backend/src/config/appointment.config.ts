@@ -9,9 +9,8 @@ export type AppointmentSystemNoteKey =
   | 'SLOT_TAKEN'
   | 'SAVED_OK'
   | 'HANDOFF'
-  | 'NAME_CORRECTION'
-  | 'TOPIC_CAPTURED'
-  | 'TOPIC_CORRECTION';
+  | 'SAVE_FAILED'
+  | 'JSON_RETRY';
 
 function parseMode(raw: string | undefined): AppointmentMode {
   const v = (raw || 'llm').trim().toLowerCase();
@@ -26,21 +25,16 @@ function parseIntEnv(key: string, fallback: number): number {
 }
 
 export const appointmentConfig = {
-  /** llm = AI konuşur + kod kaydeder; rules = deterministik workflow */
   mode: parseMode(process.env.APPOINTMENT_MODE),
-
-  /** Tarih placeholder'ları için varsayılan saat dilimi */
   referenceTimezone: process.env.APPOINTMENT_TIMEZONE || 'Asia/Nicosia',
-
   maxDaysAhead: parseIntEnv('APPOINTMENT_MAX_DAYS_AHEAD', 60),
   maxTurns: parseIntEnv('APPOINTMENT_MAX_TURNS', 12),
   maxValidationFailures: parseIntEnv('APPOINTMENT_MAX_VALIDATION_FAILURES', 2),
   maxSlotTaken: parseIntEnv('APPOINTMENT_MAX_SLOT_TAKEN', 2),
-  maxMissingDataBlocks: parseIntEnv('APPOINTMENT_MAX_MISSING_DATA_BLOCKS', 2),
-
   slotDurationMinutes: parseIntEnv('APPOINTMENT_SLOT_DURATION_MINUTES', 30),
-
-  /** Kod → AI geri bildirim notları (prompt metni değil — sistem notu) */
+  handoffFallbackMessage:
+    process.env.APPOINTMENT_HANDOFF_FALLBACK_MESSAGE ||
+    'Randevu talebinizi şu an sistemde tamamlayamıyoruz. Sizi canlı temsilcimize aktarıyorum.',
   systemNotes: {
     INVALID_DATE:
       process.env.APPOINTMENT_NOTE_INVALID_DATE ||
@@ -54,14 +48,11 @@ export const appointmentConfig = {
     HANDOFF:
       process.env.APPOINTMENT_NOTE_HANDOFF ||
       'Randevu akışında teknik sorun oluştu; müşteriyi canlı temsilciye kibarca yönlendir ve mesajın sonuna transfer işaretini ekle.',
-    NAME_CORRECTION:
-      process.env.APPOINTMENT_NOTE_NAME_CORRECTION ||
-      'Müşteri adını düzeltti; appointment_data bloğunda müşterinin yazdığı adı AYNEN kullan, otomatik düzeltme veya Türkçe karakter ekleme yapma.',
-    TOPIC_CAPTURED:
-      process.env.APPOINTMENT_NOTE_TOPIC_CAPTURED ||
-      'Son müşteri mesajı bir bilgi sorusu değil, randevu konusu alanının cevabıdır. Konuyu kaydet; bilgi bankası eksikliği veya temsilci aktarımı teklif etmeden sıradaki eksik randevu bilgisini iste.',
-    TOPIC_CORRECTION:
-      process.env.APPOINTMENT_NOTE_TOPIC_CORRECTION ||
-      'Müşteri randevu konusunu düzeltti; appointment_data bloğunda müşterinin yazdığı konuyu AYNEN kullan, kısaltma veya tek kelimeye indirgeme yapma.',
+    SAVE_FAILED:
+      process.env.APPOINTMENT_NOTE_SAVE_FAILED ||
+      'Kayıt başarısız, sebep: {reason}; müşteriden düzeltme iste. action alanını "collect" yap.',
+    JSON_RETRY:
+      process.env.APPOINTMENT_NOTE_JSON_RETRY ||
+      'Önceki yanıt geçerli JSON formatında değildi. Yalnızca şemaya uygun JSON döndür; reply ve appointment alanlarını eksiksiz doldur.',
   } satisfies Record<AppointmentSystemNoteKey, string>,
 } as const;

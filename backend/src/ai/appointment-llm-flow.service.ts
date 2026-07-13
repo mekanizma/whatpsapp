@@ -1,5 +1,5 @@
 /**
- * Hibrit randevu akışı — AI konuşur, kod doğrular ve kaydeder
+ * Hibrit randevu akışı — yapılandırılmış LLM JSON + kod doğrulama/kayıt
  */
 
 import type OpenAI from 'openai';
@@ -17,10 +17,14 @@ import { stripTransferMarker } from './transfer.service';
 import { retrieveKnowledgeContext } from '../services/knowledge-retrieval.service';
 import { prepareConversationHistoryForChat } from './conversation-history.service';
 import type { AppointmentCompanyContext } from './appointment-company-context';
+import { appointmentResponseFormat } from './appointment-response-schema';
 import {
-  parseAppointmentDataFromResponse,
+  parseAppointmentResponse,
+  stateFromAppointmentResponse,
+  maskPhoneForLog,
   formatSystemNotePrefix,
-} from './appointment-data-parser.service';
+  type ParsedAppointmentResponse,
+} from './appointment-response-parser.service';
 import {
   buildLlmCollectedContext,
   getAppointmentSession,
@@ -29,13 +33,12 @@ import {
   applySlotTakenReset,
   markSessionHandedOff,
   incrementValidationFailure,
-  mergeAppointmentData,
+  resolveAppointmentState,
   isAppointmentSessionRestartMessage,
   resetAppointmentSessionForRetry,
   type AppointmentLlmState,
   type AppointmentSessionMeta,
 } from './appointment-state.service';
-import { hasDateTimeIntent } from './appointment-datetime-tokens';
 import {
   validateAppointmentDateTime,
   isReadyForBooking,
@@ -51,51 +54,9 @@ import { buildScheduleSummary } from '../services/working-hours.service';
 import { buildDateTimePlaceholders } from './appointment-datetime-context';
 import type { HistoryMsg } from './appointment-collect.service';
 import {
-  parseCollectedFields,
-  isValidFullName,
-  isValidProcedureTitle,
-} from './appointment-collect.service';
-import {
-  resolveAppointmentState,
-  mergeAiDataPreferCustomer,
-  extractCustomerFields,
-  shouldExpectAppointmentDataBlock,
-  hasNameCorrectionInMessage,
-  isAppointmentTopicReply,
-  hasTopicCorrectionInMessage,
-  hydrateDateTimeFromConversation,
-} from './appointment-customer-hydrate.service';
-import {
   buildAppointmentAvailabilityContext,
   mergeAppointmentSystemNotes,
 } from './appointment-llm-availability.service';
-import { isAppointmentConfirmation } from './appointment-confirm.service';
-import {
-  extractNumberedAlternative,
-  companyDateParts,
-  companyTimeParts,
-} from './appointment-slot.service';
-
-function patchStateFromNumberedSlot(
-  state: AppointmentLlmState,
-  history: HistoryMsg[],
-  latestMessage: string,
-  appointmentCtx: AppointmentCompanyContext
-): AppointmentLlmState {
-  if (!/^\d{1,2}$/.test(latestMessage.trim())) return state;
-  const slot = extractNumberedAlternative(history, latestMessage, {
-    timezone: appointmentCtx.timezone,
-    ref: appointmentCtx.parseRef,
-    dateAnchor: state.date ?? undefined,
-  });
-  if (!slot) return state;
-  const d = companyDateParts(new Date(slot.starts_at), appointmentCtx.timezone);
-  const tm = companyTimeParts(new Date(slot.starts_at), appointmentCtx.timezone);
-  return mergeAppointmentData(state, {
-    date: `${d.year}-${String(d.month).padStart(2, '0')}-${String(d.day).padStart(2, '0')}`,
-    time: `${String(tm.hour).padStart(2, '0')}:${String(tm.minute).padStart(2, '0')}`,
-  });
-}
 
 export interface AppointmentLlmFlowInput {
   companyId: string;
@@ -148,21 +109,40 @@ function buildAppointmentContextSection(
 
 function queueSystemNote(
   meta: AppointmentSessionMeta,
-  key: AppointmentSystemNoteKey
+  key: AppointmentSystemNoteKey,
+  overrideText?: string
 ): AppointmentSessionMeta {
   return {
     ...meta,
     pendingSystemNoteKey: key,
-    pendingSystemNote: appointmentConfig.systemNotes[key],
+    pendingSystemNote: overrideText ?? appointmentConfig.systemNotes[key],
+  };
+}
+
+function formatSaveFailedNote(reason: string): string {
+  return appointmentConfig.systemNotes.SAVE_FAILED.replace('{reason}', reason);
+}
+
+function mergeStateFromLlm(
+  state: AppointmentLlmState,
+  parsed: ParsedAppointmentResponse
+): AppointmentLlmState {
+  if (!parsed.payload) return state;
+  const fromLlm = stateFromAppointmentResponse(parsed.payload.appointment);
+  return {
+    ...state,
+    ...fromLlm,
+    status: state.status,
+    preferred_doctor: state.preferred_doctor,
   };
 }
 
 export type HandoffTrigger =
   | 'validation_failures'
   | 'slot_taken_twice'
-  | 'missing_data_block'
   | 'max_turns'
-  | 'db_error';
+  | 'db_error'
+  | 'json_parse_failed';
 
 export function allowAppointmentTransfer(
   requestedByAi: boolean,
@@ -176,12 +156,16 @@ export function evaluateHandoffTriggers(
   state: AppointmentLlmState,
   history: HistoryMsg[],
   options?: {
-    missingDataBlock?: boolean;
     dbError?: boolean;
+    jsonParseFailed?: boolean;
   }
 ): { shouldHandoff: boolean; reason: HandoffTrigger | null } {
   if (meta.status === 'handed_off') {
     return { shouldHandoff: true, reason: 'validation_failures' };
+  }
+
+  if (options?.jsonParseFailed) {
+    return { shouldHandoff: true, reason: 'json_parse_failed' };
   }
 
   if (options?.dbError) {
@@ -197,16 +181,8 @@ export function evaluateHandoffTriggers(
     return { shouldHandoff: true, reason: 'slot_taken_twice' };
   }
 
-  if (
-    options?.missingDataBlock &&
-    shouldExpectAppointmentDataBlock(state) &&
-    meta.missingDataBlockStreak >= appointmentConfig.maxMissingDataBlocks
-  ) {
-    return { shouldHandoff: true, reason: 'missing_data_block' };
-  }
-
   const turns = countAppointmentAiTurns(history) + 1;
-  if (turns > appointmentConfig.maxTurns && !state.confirmed && meta.status !== 'saved') {
+  if (turns > appointmentConfig.maxTurns && meta.status !== 'saved') {
     return { shouldHandoff: true, reason: 'max_turns' };
   }
 
@@ -261,25 +237,6 @@ async function tryBookAppointment(
   }
 }
 
-function customerAdvancedAppointmentState(
-  history: HistoryMsg[],
-  latestMessage: string,
-  state: AppointmentLlmState
-): boolean {
-  const trimmed = latestMessage.trim();
-  if (isAppointmentConfirmation(trimmed, history)) return true;
-  if (hasDateTimeIntent(trimmed) && state.date && state.time) return true;
-  if (isAppointmentTopicReply(history, trimmed)) return true;
-  if (hasNameCorrectionInMessage(trimmed)) return true;
-
-  const fromLatest = parseCollectedFields([], trimmed);
-  if (fromLatest.customer_phone) return true;
-  if (fromLatest.customer_name && isValidFullName(fromLatest.customer_name)) return true;
-  if (fromLatest.title && isValidProcedureTitle(fromLatest.title)) return true;
-
-  return false;
-}
-
 async function buildBookedConfirmationMessage(
   companyId: string,
   appointment: Appointment,
@@ -292,59 +249,31 @@ async function buildBookedConfirmationMessage(
 export function applyPostAiProcessing(
   meta: AppointmentSessionMeta,
   state: AppointmentLlmState,
-  parsed: ReturnType<typeof parseAppointmentDataFromResponse>,
-  history: HistoryMsg[],
-  latestMessage: string
+  parsed: ParsedAppointmentResponse
 ): { meta: AppointmentSessionMeta; state: AppointmentLlmState; handoff: HandoffTrigger | null } {
   let nextMeta = { ...meta };
   let nextState = { ...state };
-  const customer = extractCustomerFields(history, latestMessage);
 
-  if (isAppointmentConfirmation(latestMessage, history)) {
-    nextState = { ...nextState, confirmed: true };
-    nextMeta = { ...nextMeta, missingDataBlockStreak: 0 };
+  if (parsed.parseError || !parsed.payload) {
+    const handoffCheck = evaluateHandoffTriggers(nextMeta, nextState, [], { jsonParseFailed: true });
+    if (handoffCheck.shouldHandoff && handoffCheck.reason) {
+      nextMeta = markSessionHandedOff(nextMeta, handoffCheck.reason);
+      nextMeta = queueSystemNote(nextMeta, 'HANDOFF');
+      return { meta: nextMeta, state: nextState, handoff: handoffCheck.reason };
+    }
+    return { meta: nextMeta, state: nextState, handoff: null };
   }
 
-  const expectBlock = shouldExpectAppointmentDataBlock(nextState);
-  const codeCapturedTurn = customerAdvancedAppointmentState(history, latestMessage, nextState);
-
-  if (parsed.hadBlock && parsed.parseError) {
-    if (expectBlock && !codeCapturedTurn) {
-      nextMeta = { ...nextMeta, missingDataBlockStreak: nextMeta.missingDataBlockStreak + 1 };
-      logFlow('missing_data_block', { streak: nextMeta.missingDataBlockStreak });
-    } else if (codeCapturedTurn) {
-      nextMeta = { ...nextMeta, missingDataBlockStreak: 0 };
-    }
-  } else if (parsed.hadBlock && parsed.data) {
-    nextMeta = { ...nextMeta, missingDataBlockStreak: 0 };
-    nextState = mergeAiDataPreferCustomer(nextState, parsed.data, customer, history, latestMessage);
-    logFlow('state_merge', { state: nextState });
-  } else if (!parsed.hadBlock && expectBlock) {
-    if (codeCapturedTurn) {
-      nextMeta = { ...nextMeta, missingDataBlockStreak: 0 };
-      logFlow('missing_data_block_skipped', { reason: 'code_captured_turn' });
-    } else {
-      nextMeta = { ...nextMeta, missingDataBlockStreak: nextMeta.missingDataBlockStreak + 1 };
-      logFlow('missing_data_block', { streak: nextMeta.missingDataBlockStreak, expectBlock: true });
-    }
-  } else if (!parsed.hadBlock) {
-    nextMeta = { ...nextMeta, missingDataBlockStreak: 0 };
-  }
-
-  const handoffCheck = evaluateHandoffTriggers(nextMeta, nextState, history, {
-    missingDataBlock:
-      expectBlock && (!parsed.hadBlock || parsed.parseError),
+  nextState = mergeStateFromLlm(nextState, parsed);
+  logFlow('llm_parsed', {
+    action: parsed.payload.action,
+    phone: maskPhoneForLog(nextState.customer_phone),
   });
 
-  if (handoffCheck.shouldHandoff && handoffCheck.reason) {
-    nextMeta = markSessionHandedOff(nextMeta, handoffCheck.reason);
+  if (parsed.payload.action === 'handoff') {
+    nextMeta = markSessionHandedOff(nextMeta, 'validation_failures');
     nextMeta = queueSystemNote(nextMeta, 'HANDOFF');
-    logFlow('handoff_triggered', {
-      reason: handoffCheck.reason,
-      state: nextState,
-      collected: buildLlmCollectedContext(nextState),
-    });
-    return { meta: nextMeta, state: nextState, handoff: handoffCheck.reason };
+    return { meta: nextMeta, state: nextState, handoff: 'validation_failures' };
   }
 
   return { meta: nextMeta, state: nextState, handoff: null };
@@ -405,6 +334,7 @@ async function callAppointmentLlm(
   const completion = await appointmentLlmFlowDeps.createChatCompletion(chatMessages, {
     maxTokens: config.ai.maxTokens,
     temperature: config.ai.temperature,
+    responseFormat: appointmentResponseFormat(),
     usageLog: {
       companyId: input.companyId,
       customerPhone: input.customerPhone,
@@ -435,9 +365,74 @@ async function runHandoffAiTurn(
     state,
     appointmentCtx
   );
-  const handoffParsed = parseAppointmentDataFromResponse(handoffCall.raw);
-  const { message, shouldTransfer } = stripTransferMarker(handoffParsed.cleanMessage);
-  return { message, shouldTransfer, tokensUsed: handoffCall.tokensUsed };
+  const handoffParsed = parseAppointmentResponse(handoffCall.raw);
+  const reply = handoffParsed.payload?.reply || appointmentConfig.handoffFallbackMessage;
+  const { message, shouldTransfer } = stripTransferMarker(reply);
+  return {
+    message,
+    shouldTransfer: allowAppointmentTransfer(shouldTransfer, 'validation_failures'),
+    tokensUsed: handoffCall.tokensUsed,
+  };
+}
+
+async function parseLlmTurnWithRetry(
+  input: AppointmentLlmFlowInput,
+  systemNote: string | null,
+  lang: ConversationLang,
+  knowledge: string,
+  allKnowledge: KnowledgeItem[],
+  state: AppointmentLlmState,
+  appointmentCtx: AppointmentCompanyContext
+): Promise<{
+  parsed: ParsedAppointmentResponse;
+  tokensUsed: number;
+  handoffFallback: boolean;
+}> {
+  let totalTokens = 0;
+  let call = await callAppointmentLlm(
+    input,
+    systemNote,
+    lang,
+    knowledge,
+    allKnowledge,
+    state,
+    appointmentCtx
+  );
+  totalTokens += call.tokensUsed;
+  let parsed = parseAppointmentResponse(call.raw);
+
+  if (!parsed.parseError && parsed.payload) {
+    logFlow('llm_turn', {
+      action: parsed.payload.action,
+      phone: maskPhoneForLog(state.customer_phone),
+    });
+    return { parsed, tokensUsed: totalTokens, handoffFallback: false };
+  }
+
+  logFlow('json_parse_failed', { phone: maskPhoneForLog(state.customer_phone), retry: true });
+  const retryNote = mergeAppointmentSystemNotes(systemNote, appointmentConfig.systemNotes.JSON_RETRY);
+  call = await callAppointmentLlm(
+    input,
+    retryNote,
+    lang,
+    knowledge,
+    allKnowledge,
+    state,
+    appointmentCtx
+  );
+  totalTokens += call.tokensUsed;
+  parsed = parseAppointmentResponse(call.raw);
+
+  if (!parsed.parseError && parsed.payload) {
+    logFlow('llm_turn', {
+      action: parsed.payload.action,
+      phone: maskPhoneForLog(state.customer_phone),
+    });
+    return { parsed, tokensUsed: totalTokens, handoffFallback: false };
+  }
+
+  logFlow('json_parse_failed', { phone: maskPhoneForLog(state.customer_phone), retry: false });
+  return { parsed, tokensUsed: totalTokens, handoffFallback: true };
 }
 
 export async function runAppointmentLlmFlow(
@@ -445,29 +440,12 @@ export async function runAppointmentLlmFlow(
 ): Promise<AppointmentLlmFlowResult> {
   const lang = detectConversationLanguage(input.customerMessage, input.history);
   let meta = getAppointmentSession(input.companyId, input.customerPhone);
-  let state = resolveAppointmentState(
-    meta.llmState,
-    input.history,
-    input.customerMessage,
-    input.appointmentCtx
-  );
-  const topicCaptured = isAppointmentTopicReply(input.history, input.customerMessage);
-
-  if (hasNameCorrectionInMessage(input.customerMessage)) {
-    meta = queueSystemNote(meta, 'NAME_CORRECTION');
-    logFlow('name_correction', { message: input.customerMessage.slice(0, 80), state });
-  } else if (hasTopicCorrectionInMessage(input.customerMessage)) {
-    meta = queueSystemNote(meta, 'TOPIC_CORRECTION');
-    logFlow('topic_correction', { message: input.customerMessage.slice(0, 80), state });
-  } else if (topicCaptured) {
-    meta = queueSystemNote(meta, 'TOPIC_CAPTURED');
-    logFlow('topic_captured', { topic: state.title });
-  }
+  let state = resolveAppointmentState(meta.llmState);
 
   if (meta.status === 'handed_off') {
     if (isAppointmentSessionRestartMessage(input.customerMessage)) {
       meta = resetAppointmentSessionForRetry(input.companyId, input.customerPhone);
-      state = resolveAppointmentState(null, input.history, input.customerMessage, input.appointmentCtx);
+      state = resolveAppointmentState(null);
       logFlow('session_reset_after_handoff', { message: input.customerMessage.slice(0, 80) });
     } else {
       meta = queueSystemNote(meta, 'HANDOFF');
@@ -475,96 +453,40 @@ export async function runAppointmentLlmFlow(
   }
 
   meta = { ...meta, turnCount: meta.turnCount + 1 };
-  logFlow('turn_start', { turn: meta.turnCount, state, pendingNote: meta.pendingSystemNoteKey });
+  logFlow('turn_start', {
+    turn: meta.turnCount,
+    phone: maskPhoneForLog(state.customer_phone),
+    pendingNote: meta.pendingSystemNoteKey,
+  });
 
   const retrieval = await appointmentLlmFlowDeps.retrieveKnowledgeContext(
     input.companyId,
     input.customerMessage,
     input.allKnowledge
   );
-  // Randevu konusu bir bilgi sorusu değildir. Bu turda KB "eşleşmedi"
-  // talimatlarını LLM'e taşımak yanlış handoff teklifine neden olur.
-  const knowledge = topicCaptured ? '' : retrieval.context;
-  const appointmentKnowledge = topicCaptured ? [] : input.allKnowledge;
+  const knowledge = retrieval.context;
+  const appointmentKnowledge = input.allKnowledge;
 
   const pendingNote =
     meta.pendingSystemNote ||
     (meta.pendingSystemNoteKey ? appointmentConfig.systemNotes[meta.pendingSystemNoteKey] : null);
   meta = { ...meta, pendingSystemNote: null, pendingSystemNoteKey: null };
 
-  state = patchStateFromNumberedSlot(
-    state,
-    input.history,
-    input.customerMessage,
-    input.appointmentCtx
-  );
-  state = hydrateDateTimeFromConversation(
-    state,
-    input.history,
-    input.customerMessage,
-    input.appointmentCtx
-  );
-
   const availability = await buildAppointmentAvailabilityContext(
     input.companyId,
-    input.history,
-    input.customerMessage,
     input.appointmentCtx,
     lang,
     { date: state.date, time: state.time }
   );
-  if (availability.statePatch) {
-    state = mergeAppointmentData(state, availability.statePatch);
-    logFlow('availability_state_patch', { patch: availability.statePatch });
-  }
   if (availability.systemNote) {
     logFlow('availability_checked', { dbError: availability.dbError });
-  } else if (availability.dbError) {
-    logFlow('availability_db_error', {});
   }
 
   const noteForAi = mergeAppointmentSystemNotes(pendingNote, availability.systemNote);
 
-  if (meta.status !== 'saved' && isReadyForBooking(state)) {
-    const preBook = await tryBookAppointment(
-      input.companyId,
-      input.customerPhone,
-      state,
-      input.appointmentCtx,
-      lang
-    );
-    if (preBook.ok) {
-      meta = queueSystemNote({ ...meta, status: 'saved' }, 'SAVED_OK');
-      saveAppointmentSession(input.companyId, input.customerPhone, meta, state);
-      logFlow('book_success_pre_ai', { appointmentId: preBook.appointment.id });
-      const confirmMessage = await buildBookedConfirmationMessage(
-        input.companyId,
-        preBook.appointment,
-        lang
-      );
-      return {
-        message: confirmMessage,
-        shouldTransfer: false,
-        tokensUsed: 0,
-        appointmentBooked: true,
-        appointment: preBook.appointment,
-        skipReason: 'appointment_llm',
-      };
-    } else if (preBook.code === 'INVALID_DATE') {
-      meta = incrementValidationFailure(queueSystemNote(meta, 'INVALID_DATE'), 'INVALID_DATE');
-      state = preBook.state;
-    } else if (preBook.code === 'SLOT_TAKEN') {
-      meta = queueSystemNote(
-        { ...meta, slotTakenCount: meta.slotTakenCount + 1 },
-        'SLOT_TAKEN'
-      );
-      state = preBook.state;
-    } else if (preBook.code === 'DB_ERROR') {
-      meta = queueSystemNote(markSessionHandedOff(meta, 'db_error'), 'HANDOFF');
-    }
-  }
-
-  const preHandoff = evaluateHandoffTriggers(meta, state, input.history);
+  const preHandoff = evaluateHandoffTriggers(meta, state, input.history, {
+    dbError: availability.dbError,
+  });
   if (preHandoff.shouldHandoff && preHandoff.reason) {
     meta = queueSystemNote(markSessionHandedOff(meta, preHandoff.reason), 'HANDOFF');
   }
@@ -575,8 +497,7 @@ export async function runAppointmentLlmFlow(
       (meta.pendingSystemNoteKey ? appointmentConfig.systemNotes[meta.pendingSystemNoteKey] : null)
   );
 
-  let totalTokens = 0;
-  let { raw, tokensUsed } = await callAppointmentLlm(
+  const llmResult = await parseLlmTurnWithRetry(
     input,
     effectiveNote,
     lang,
@@ -585,21 +506,29 @@ export async function runAppointmentLlmFlow(
     state,
     input.appointmentCtx
   );
-  totalTokens += tokensUsed;
+  let totalTokens = llmResult.tokensUsed;
 
-  const parsed = parseAppointmentDataFromResponse(raw);
-  const post = applyPostAiProcessing(
-    meta,
-    state,
-    parsed,
-    input.history,
-    input.customerMessage
-  );
+  if (llmResult.handoffFallback) {
+    meta = markSessionHandedOff(meta, 'json_parse_failed');
+    saveAppointmentSession(input.companyId, input.customerPhone, meta, state);
+    const { message, shouldTransfer } = stripTransferMarker(appointmentConfig.handoffFallbackMessage);
+    return {
+      message,
+      shouldTransfer: allowAppointmentTransfer(shouldTransfer, 'json_parse_failed'),
+      tokensUsed: totalTokens,
+      appointmentBooked: false,
+      appointment: null,
+      skipReason: 'appointment_llm',
+    };
+  }
+
+  const post = applyPostAiProcessing(meta, state, llmResult.parsed);
   meta = post.meta;
   state = post.state;
 
-  let message: string;
-  let shouldTransfer: boolean;
+  const payload = llmResult.parsed.payload!;
+  let message = payload.reply;
+  let shouldTransfer = false;
 
   if (post.handoff) {
     const handoff = await runHandoffAiTurn(
@@ -614,83 +543,120 @@ export async function runAppointmentLlmFlow(
     message = handoff.message;
     shouldTransfer = handoff.shouldTransfer;
   } else {
-    ({ message, shouldTransfer } = stripTransferMarker(parsed.cleanMessage));
-    if (shouldTransfer) {
-      logFlow('unauthorized_transfer_suppressed', { state });
-      shouldTransfer = allowAppointmentTransfer(shouldTransfer, null);
+    const stripped = stripTransferMarker(message);
+    message = stripped.message;
+    if (stripped.shouldTransfer) {
+      logFlow('unauthorized_transfer_suppressed', { phone: maskPhoneForLog(state.customer_phone) });
+      shouldTransfer = allowAppointmentTransfer(stripped.shouldTransfer, null);
     }
   }
 
-  if (meta.status !== 'saved' && isReadyForBooking(state)) {
-    const validation = validateAppointmentDateTime(state, input.appointmentCtx, lang);
-    if (!validation.valid) {
-      meta = incrementValidationFailure(queueSystemNote(meta, 'INVALID_DATE'), 'INVALID_DATE');
-      logFlow('validation_failed', { code: 'INVALID_DATE', state });
-    } else {
-      const bookResult = await tryBookAppointment(
+  if (meta.status !== 'saved' && payload.action === 'save' && isReadyForBooking(state)) {
+    const bookResult = await tryBookAppointment(
+      input.companyId,
+      input.customerPhone,
+      state,
+      input.appointmentCtx,
+      lang
+    );
+    if (bookResult.ok) {
+      meta = queueSystemNote({ ...meta, status: 'saved' }, 'SAVED_OK');
+      logAppointmentEvent('llm_book_success', {
+        companyId: input.companyId,
+        appointmentId: bookResult.appointment.id,
+        phone: input.customerPhone,
+      });
+      saveAppointmentSession(input.companyId, input.customerPhone, meta, state);
+      const confirmMessage = await buildBookedConfirmationMessage(
         input.companyId,
-        input.customerPhone,
-        state,
-        input.appointmentCtx,
+        bookResult.appointment,
         lang
       );
-      if (bookResult.ok) {
-        meta = queueSystemNote({ ...meta, status: 'saved' }, 'SAVED_OK');
-        logAppointmentEvent('llm_book_success', {
-          companyId: input.companyId,
-          appointmentId: bookResult.appointment.id,
-          phone: input.customerPhone,
-        });
-        saveAppointmentSession(input.companyId, input.customerPhone, meta, state);
-        const confirmMessage = await buildBookedConfirmationMessage(
-          input.companyId,
-          bookResult.appointment,
-          lang
-        );
-        return {
-          message: confirmMessage,
-          shouldTransfer,
-          tokensUsed: totalTokens,
-          appointmentBooked: true,
-          appointment: bookResult.appointment,
-          skipReason: 'appointment_llm',
-        };
-      }
-
-      if (bookResult.code === 'SLOT_TAKEN') {
-        meta = queueSystemNote(
-          { ...meta, slotTakenCount: meta.slotTakenCount + 1 },
-          'SLOT_TAKEN'
-        );
-        state = bookResult.state;
-        logFlow('slot_taken', { count: meta.slotTakenCount });
-      } else if (bookResult.code === 'INVALID_DATE') {
-        meta = incrementValidationFailure(queueSystemNote(meta, 'INVALID_DATE'), 'INVALID_DATE');
-        state = bookResult.state;
-      } else if (bookResult.code === 'DB_ERROR') {
-        meta = queueSystemNote(markSessionHandedOff(meta, 'db_error'), 'HANDOFF');
-        const handoff = await runHandoffAiTurn(
-          input,
-          lang,
-          knowledge,
-          appointmentKnowledge,
-          state,
-          input.appointmentCtx
-        );
-        totalTokens += handoff.tokensUsed;
-        message = handoff.message;
-        shouldTransfer = handoff.shouldTransfer;
-      }
+      return {
+        message: confirmMessage,
+        shouldTransfer,
+        tokensUsed: totalTokens,
+        appointmentBooked: true,
+        appointment: bookResult.appointment,
+        skipReason: 'appointment_llm',
+      };
     }
+
+    if (bookResult.code === 'SLOT_TAKEN') {
+      meta = queueSystemNote(
+        { ...meta, slotTakenCount: meta.slotTakenCount + 1 },
+        'SLOT_TAKEN'
+      );
+      state = bookResult.state;
+      logFlow('book_rejected', { code: 'SLOT_TAKEN', phone: maskPhoneForLog(state.customer_phone) });
+      const failNote = formatSaveFailedNote('SLOT_TAKEN');
+      const retry = await parseLlmTurnWithRetry(
+        input,
+        failNote,
+        lang,
+        knowledge,
+        appointmentKnowledge,
+        state,
+        input.appointmentCtx
+      );
+      totalTokens += retry.tokensUsed;
+      if (!retry.handoffFallback && retry.parsed.payload) {
+        state = mergeStateFromLlm(state, retry.parsed);
+        message = retry.parsed.payload.reply;
+        logFlow('model_turn_after_save_fail', {
+          action: retry.parsed.payload.action,
+          phone: maskPhoneForLog(state.customer_phone),
+        });
+      }
+    } else if (bookResult.code === 'INVALID_DATE') {
+      meta = incrementValidationFailure(queueSystemNote(meta, 'INVALID_DATE'), 'INVALID_DATE');
+      state = bookResult.state;
+      logFlow('book_rejected', { code: 'INVALID_DATE', phone: maskPhoneForLog(state.customer_phone) });
+      const failNote = formatSaveFailedNote('INVALID_DATE');
+      const retry = await parseLlmTurnWithRetry(
+        input,
+        failNote,
+        lang,
+        knowledge,
+        appointmentKnowledge,
+        state,
+        input.appointmentCtx
+      );
+      totalTokens += retry.tokensUsed;
+      if (!retry.handoffFallback && retry.parsed.payload) {
+        state = mergeStateFromLlm(state, retry.parsed);
+        message = retry.parsed.payload.reply;
+        logFlow('model_turn_after_save_fail', {
+          action: retry.parsed.payload.action,
+          phone: maskPhoneForLog(state.customer_phone),
+        });
+      }
+    } else if (bookResult.code === 'DB_ERROR') {
+      meta = queueSystemNote(markSessionHandedOff(meta, 'db_error'), 'HANDOFF');
+      const handoff = await runHandoffAiTurn(
+        input,
+        lang,
+        knowledge,
+        appointmentKnowledge,
+        state,
+        input.appointmentCtx
+      );
+      totalTokens += handoff.tokensUsed;
+      message = handoff.message;
+      shouldTransfer = handoff.shouldTransfer;
+    }
+  } else if (payload.action === 'save' && !isReadyForBooking(state)) {
+    meta = queueSystemNote(meta, 'SAVE_FAILED');
+    logFlow('save_incomplete', { phone: maskPhoneForLog(state.customer_phone) });
   }
 
   const postHandoff = evaluateHandoffTriggers(meta, state, [
     ...input.history,
-    { sender_type: 'ai', message: raw },
+    { sender_type: 'ai', message: payload.reply },
   ]);
-  if (postHandoff.shouldHandoff && !shouldTransfer) {
+  if (postHandoff.shouldHandoff && !shouldTransfer && meta.status !== 'saved') {
     meta = markSessionHandedOff(meta, postHandoff.reason || 'max_turns');
-    logFlow('handoff_triggered_post', { reason: postHandoff.reason, state });
+    logFlow('handoff_triggered_post', { reason: postHandoff.reason, phone: maskPhoneForLog(state.customer_phone) });
     const handoff = await runHandoffAiTurn(
       input,
       lang,
@@ -707,7 +673,7 @@ export async function runAppointmentLlmFlow(
   saveAppointmentSession(input.companyId, input.customerPhone, meta, state);
   logFlow('turn_end', {
     status: meta.status,
-    state,
+    phone: maskPhoneForLog(state.customer_phone),
     shouldTransfer,
     pendingNext: meta.pendingSystemNoteKey,
   });

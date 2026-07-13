@@ -698,7 +698,40 @@ export function extractNumberedAlternative(
   return null;
 }
 
-const HOUR_CHOICE_REPLY_RE = /^(\d{1,2})\s*(?:olur|uygun|iyi|olsun|kabul|lütfen|lutfen)?\s*$/i;
+const HOUR_CHOICE_REPLY_RE =
+  /^(\d{1,2})(?::|\.)(?:00|30)\s*(?:olur|uygun|iyi|olsun|kabul)?\s*$|^(\d{1,2})\s+(?:olur|uygun|iyi|olsun|kabul|lütfen|lutfen)\s*$|^(\d{1,2})\s*(?:de|da|te|ta)\s*(?:olur|uygun|iyi|olsun)?\s*$|^saat\s*(\d{1,2})(?::|\.?)(\d{2})?\s*(?:olur|uygun|iyi)?\s*$/i;
+
+export function isHourChoiceReply(message: string): boolean {
+  const trimmed = message.trim();
+  if (!trimmed || isNumberedSlotReply(trimmed)) return false;
+  return HOUR_CHOICE_REPLY_RE.test(trimmed);
+}
+
+function parseHourChoiceMessage(message: string): { hour: number; minute: number } | null {
+  const trimmed = message.trim();
+
+  const withMinutes = trimmed.match(/^(\d{1,2})[:.](\d{2})\s*(?:olur|uygun|iyi|olsun|kabul)?\s*$/i);
+  if (withMinutes) {
+    const hour = parseInt(withMinutes[1], 10);
+    const minute = parseInt(withMinutes[2], 10);
+    if (hour <= 23 && minute <= 59) return { hour, minute };
+  }
+
+  const saatMatch = trimmed.match(/^saat\s*(\d{1,2})(?::|\.?)(\d{2})?\s*(?:olur|uygun|iyi)?\s*$/i);
+  if (saatMatch) {
+    const hour = parseInt(saatMatch[1], 10);
+    const minute = saatMatch[2] ? parseInt(saatMatch[2], 10) : 0;
+    if (hour <= 23 && minute <= 59) return { hour, minute };
+  }
+
+  const m = trimmed.match(HOUR_CHOICE_REPLY_RE);
+  if (!m) return null;
+  const hourStr = m[1] ?? m[2] ?? m[3] ?? m[4];
+  if (!hourStr) return null;
+  const hour = parseInt(hourStr, 10);
+  if (hour < 0 || hour > 23) return null;
+  return { hour, minute: 0 };
+}
 
 /** "17 olur" gibi saat seçimlerini AI slot listesinden veya tarih bağlamından çöz */
 export function extractHourChoiceFromSlotList(
@@ -708,10 +741,10 @@ export function extractHourChoiceFromSlotList(
 ): ParsedSlot | null {
   const options = normalizeSlotOptions(refOrOptions);
   const trimmed = latestMessage.trim();
-  const m = trimmed.match(HOUR_CHOICE_REPLY_RE);
-  if (!m) return null;
-  const chosenHour = parseInt(m[1], 10);
-  if (chosenHour < 0 || chosenHour > 23) return null;
+  const hourChoice = parseHourChoiceMessage(trimmed);
+  if (!hourChoice) return null;
+  const chosenHour = hourChoice.hour;
+  const chosenMinute = hourChoice.minute;
 
   let startMatch: ParsedSlot | null = null;
   let endMatch: ParsedSlot | null = null;
@@ -732,10 +765,10 @@ export function extractHourChoiceFromSlotList(
       const tz = options.timezone ?? DEFAULT_COMPANY_TIMEZONE;
       const tm = companyTimeParts(new Date(slot.starts_at), tz);
       const endTm = companyTimeParts(new Date(slot.ends_at), tz);
-      if (tm.hour === chosenHour && tm.minute === 0) {
+      if (tm.hour === chosenHour && tm.minute === chosenMinute) {
         startMatch = slot;
       }
-      if (endTm.hour === chosenHour && endTm.minute === 0) {
+      if (endTm.hour === chosenHour && endTm.minute === 0 && chosenMinute === 0) {
         endMatch = slot;
       }
     }
@@ -761,7 +794,11 @@ export function extractHourChoiceFromSlotList(
     })();
 
   if (anchor) {
-    const bare = parseSlotFromText(`${anchor} ${chosenHour}:00`, { ...options, dateAnchor: anchor });
+    const timeLabel = `${String(chosenHour).padStart(2, '0')}:${String(chosenMinute).padStart(2, '0')}`;
+    const bare = parseSlotFromText(`${anchor} ${timeLabel}`, {
+      ...options,
+      dateAnchor: anchor,
+    });
     if (bare) return bare;
   }
 
@@ -824,7 +861,7 @@ export function extractCustomerSlotFromConversation(
   const fromHour = extractHourChoiceFromSlotList(history, latestMessage, options);
   if (fromHour) return fromHour;
 
-  if (hasDateTimeIntent(latestMessage) || HOUR_CHOICE_REPLY_RE.test(latestMessage.trim())) {
+  if (hasDateTimeIntent(latestMessage) || isHourChoiceReply(latestMessage)) {
     const fromLatest = parseSlotFromText(latestMessage, options);
     if (fromLatest) return fromLatest;
   }

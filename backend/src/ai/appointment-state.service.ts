@@ -1,12 +1,8 @@
 /**
- * LLM randevu akışı state yönetimi — geçmiş + oturum meta verisi
+ * LLM randevu akışı state yönetimi — oturum meta verisi
  */
 
 import type { AppointmentSystemNoteKey } from '../config/appointment.config';
-import {
-  type AppointmentDataPayload,
-  extractAppointmentDataBlocksFromHistory,
-} from './appointment-data-parser.service';
 import type { HistoryMsg } from './appointment-collect.service';
 
 export type AppointmentFlowStatus = 'collecting' | 'saved' | 'handed_off';
@@ -19,7 +15,6 @@ export interface AppointmentLlmState {
   preferred_doctor: string | null;
   date: string | null;
   time: string | null;
-  confirmed: boolean;
 }
 
 export interface AppointmentSessionMeta {
@@ -27,11 +22,9 @@ export interface AppointmentSessionMeta {
   turnCount: number;
   validationFailures: Partial<Record<AppointmentSystemNoteKey, number>>;
   slotTakenCount: number;
-  missingDataBlockStreak: number;
   pendingSystemNote: string | null;
   pendingSystemNoteKey: AppointmentSystemNoteKey | null;
   lastHandoffReason: string | null;
-  /** Oturum boyunca biriken randevu alanları — DB mesajlarında appointment_data saklanmaz */
   llmState: AppointmentLlmState | null;
   expires: number;
 }
@@ -52,50 +45,22 @@ export function createEmptyAppointmentState(): AppointmentLlmState {
     preferred_doctor: null,
     date: null,
     time: null,
-    confirmed: false,
   };
 }
 
-export function mergeAppointmentData(
-  state: AppointmentLlmState,
-  data: AppointmentDataPayload
-): AppointmentLlmState {
-  const next = { ...state };
-  if (data.customer_name !== undefined) next.customer_name = data.customer_name ?? null;
-  if (data.customer_phone !== undefined) next.customer_phone = data.customer_phone ?? null;
-  if (data.title !== undefined) next.title = data.title ?? null;
-  if (data.preferred_doctor !== undefined) next.preferred_doctor = data.preferred_doctor ?? null;
-  if (data.date !== undefined) next.date = data.date ?? null;
-  if (data.time !== undefined) next.time = data.time ?? null;
-  if (data.confirmed !== undefined) next.confirmed = data.confirmed === true;
-  return next;
-}
-
-/** Geçmiş AI yanıtlarındaki appointment_data bloklarından state üretir */
-export function rebuildStateFromHistory(history: HistoryMsg[]): AppointmentLlmState {
-  let state = createEmptyAppointmentState();
-  const blocks = extractAppointmentDataBlocksFromHistory(history);
-  for (const block of blocks) {
-    state = mergeAppointmentData(state, block);
-  }
-  return state;
+export function resolveAppointmentState(sessionState: AppointmentLlmState | null): AppointmentLlmState {
+  if (!sessionState) return createEmptyAppointmentState();
+  return { ...sessionState };
 }
 
 export function buildLlmCollectedContext(state: AppointmentLlmState): string {
-  const onay = state.confirmed ? 'evet' : 'hayır';
-  const parts = [
-    'Şu ana kadar toplanan:',
-    `Ad Soyad: ${state.customer_name ?? 'null'}`,
-    `Telefon: ${state.customer_phone ?? 'null'}`,
-    `Konu: ${state.title ?? 'null'}`,
-    `Tarih: ${state.date ?? 'null'}`,
-    `Saat: ${state.time ?? 'null'}`,
-    `Onay: ${onay}`,
-  ];
-  if (state.customer_name) {
-    parts.push(`NOT: Adı müşterinin yazdığı gibi AYNEN kullan — otomatik düzeltme yapma.`);
-  }
-  return parts.join(' | ');
+  return JSON.stringify({
+    name: state.customer_name,
+    phone: state.customer_phone,
+    topic: state.title,
+    date: state.date,
+    time: state.time,
+  });
 }
 
 export function getAppointmentSession(
@@ -112,7 +77,6 @@ export function getAppointmentSession(
     turnCount: 0,
     validationFailures: {},
     slotTakenCount: 0,
-    missingDataBlockStreak: 0,
     pendingSystemNote: null,
     pendingSystemNoteKey: null,
     lastHandoffReason: null,
@@ -140,7 +104,6 @@ export function clearAppointmentSession(companyId: string, customerPhone: string
   sessionStore.delete(sessionKey(companyId, customerPhone));
 }
 
-/** Handoff sonrası müşteri yeni randevu istediğinde oturumu sıfırla */
 export function isAppointmentSessionRestartMessage(message: string): boolean {
   const trimmed = message.trim().toLocaleLowerCase('tr');
   return /randevu\s*al|randevu\s*istem|yeni\s*randevu|appointment\s*book|make\s*appointment/i.test(
@@ -163,7 +126,6 @@ export function countAppointmentAiTurns(history: HistoryMsg[]): number {
 export function applySlotTakenReset(state: AppointmentLlmState): AppointmentLlmState {
   return {
     ...state,
-    confirmed: false,
     date: null,
     time: null,
   };
@@ -193,7 +155,6 @@ export function incrementValidationFailure(
   };
 }
 
-/** Test hook */
 export function _resetAppointmentSessionsForTest(): void {
   sessionStore.clear();
 }

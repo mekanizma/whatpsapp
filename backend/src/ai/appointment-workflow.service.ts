@@ -19,6 +19,7 @@ import {
   validateSlotWorkingHours,
   buildWorkingHoursRejectionMessage,
   parseDateAnchorFromText,
+  extractDateTimeFromRecentAiSummary,
   ParsedSlot,
   companyDateParts,
   slotWeekday,
@@ -41,6 +42,7 @@ import {
 } from './appointment-collect.service';
 import { localToUtcInTimezone } from './appointment-slot.service';
 import { parseHm, weekdayToDayKey } from '../services/working-hours.service';
+import { buildSlotFromState } from './appointment-llm-validation.service';
 
 const SLOT_STEP_MINUTES = 30;
 
@@ -166,7 +168,28 @@ function resolveCollectedSlot(
   latestMessage: string,
   ctx: AppointmentCompanyContext
 ): ParsedSlot | null {
-  return extractCustomerSlotFromConversation(history, latestMessage, slotOptions(ctx));
+  const options = slotOptions(ctx);
+  const fromCustomer = extractCustomerSlotFromConversation(history, latestMessage, options);
+  if (fromCustomer) return fromCustomer;
+
+  const fromAi = extractDateTimeFromRecentAiSummary(history, options);
+  if (fromAi) {
+    return buildSlotFromState(
+      {
+        status: 'collecting',
+        customer_name: null,
+        customer_phone: null,
+        title: null,
+        preferred_doctor: null,
+        date: fromAi.date,
+        time: fromAi.time,
+        confirmed: false,
+      },
+      ctx
+    );
+  }
+
+  return null;
 }
 
 async function safeHasConflict(
