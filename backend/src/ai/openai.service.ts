@@ -22,6 +22,8 @@ import { isAppointmentIntent } from './knowledge-filter.service';
 import { buildKnowledgeNoMatchHint } from './kb-answer.service';
 import { prepareConversationHistoryForChat } from './conversation-history.service';
 import { runAppointmentWorkflow } from './appointment-workflow.service';
+import { runAppointmentLlmFlow } from './appointment-llm-flow.service';
+import { appointmentConfig } from '../config/appointment.config';
 import { shouldRecordUnknownQuestion, isKnowledgeMissAiResponse } from './knowledge-miss.service';
 import { buildAppointmentCompanyContext } from './appointment-company-context';
 import {
@@ -223,39 +225,79 @@ export async function generateAIResponse(
   const appointmentMode = isAppointmentIntent(trimmed, history);
 
   if (appointmentMode) {
-    const workflow = await runAppointmentWorkflow(
+    if (appointmentConfig.mode === 'rules') {
+      const workflow = await runAppointmentWorkflow(
+        companyId,
+        customerPhone,
+        history,
+        trimmed,
+        appointmentCtx
+      );
+
+      await logAIUsage({
+        companyId,
+        customerPhone,
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        cached: false,
+        skipped: true,
+        skipReason: 'appointment_workflow',
+        model: config.openai.model,
+      });
+
+      if (workflow.appointment) {
+        console.log(
+          `[Randevu] WhatsApp kaydı: ${workflow.appointment.id} | ${workflow.appointment.customer_name}`
+        );
+      }
+
+      return {
+        message: workflow.message,
+        shouldTransfer: false,
+        skippedAI: true,
+        skipReason: 'appointment_workflow',
+        tokensUsed: 0,
+        appointmentBooked: !!workflow.appointment,
+        knowledgeMiss: false,
+      };
+    }
+
+    const llmFlow = await runAppointmentLlmFlow({
       companyId,
       customerPhone,
+      customerMessage: trimmed,
       history,
-      trimmed,
-      appointmentCtx
-    );
+      company,
+      allKnowledge,
+      appointmentCtx,
+    });
 
     await logAIUsage({
       companyId,
       customerPhone,
       promptTokens: 0,
       completionTokens: 0,
-      totalTokens: 0,
+      totalTokens: llmFlow.tokensUsed,
       cached: false,
-      skipped: true,
-      skipReason: 'appointment_workflow',
+      skipped: false,
+      skipReason: llmFlow.skipReason,
       model: config.openai.model,
     });
 
-    if (workflow.appointment) {
+    if (llmFlow.appointment) {
       console.log(
-        `[Randevu] WhatsApp kaydı: ${workflow.appointment.id} | ${workflow.appointment.customer_name}`
+        `[Randevu:llm] WhatsApp kaydı: ${llmFlow.appointment.id} | ${llmFlow.appointment.customer_name}`
       );
     }
 
     return {
-      message: workflow.message,
-      shouldTransfer: false,
-      skippedAI: true,
-      skipReason: 'appointment_workflow',
-      tokensUsed: 0,
-      appointmentBooked: !!workflow.appointment,
+      message: llmFlow.message,
+      shouldTransfer: llmFlow.shouldTransfer,
+      skippedAI: false,
+      skipReason: llmFlow.skipReason,
+      tokensUsed: llmFlow.tokensUsed,
+      appointmentBooked: llmFlow.appointmentBooked,
       knowledgeMiss: false,
     };
   }

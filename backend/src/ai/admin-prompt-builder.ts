@@ -12,6 +12,8 @@ import {
 import { getCompanyCategoryLabel } from '../constants/company-categories';
 import { ConversationLang, DEFAULT_LANGUAGE_BLOCK_FALLBACK, getLanguageHintName } from './language.service';
 import { TRANSFER_MARKER } from './system-prompt';
+import type { AppointmentCompanyContext } from './appointment-company-context';
+import { buildDateTimePlaceholders } from './appointment-datetime-context';
 
 export interface AdminPromptContext {
   knowledge?: string;
@@ -29,6 +31,7 @@ export interface DynamicPromptContext {
   ecommerceContext?: string;
   lang?: ConversationLang;
   languageBlock?: string;
+  appointmentCtx?: AppointmentCompanyContext;
 }
 
 const TOPIC_RECALL_INSTRUCTION =
@@ -189,6 +192,40 @@ export function buildDynamicUserMessage(
 
   sections.push(`### Müşteri Mesajı\n${customerMessage}`);
   return sections.join('\n\n');
+}
+
+/** Randevu LLM akışı — DB'deki appointment rol promptunu placeholder'larla doldurur */
+export async function buildAppointmentRolePrompt(
+  company: Company,
+  ctx: DynamicPromptContext & { appointmentCtx?: AppointmentCompanyContext }
+): Promise<string> {
+  const activePrompts = await getAllActivePromptContentsForAI();
+  const appointmentPrompt = activePrompts.find((p) => p.prompt_role === 'appointment');
+  if (!appointmentPrompt?.content.trim()) return '';
+
+  const lang = ctx.lang || 'tr';
+  const tz = ctx.appointmentCtx?.timezone || company.timezone || 'Asia/Nicosia';
+  const datePlaceholders = buildDateTimePlaceholders(tz, lang, ctx.appointmentCtx?.parseRef);
+
+  const vars: Record<string, string> = {
+    companyName: company.company_name,
+    category: getCompanyCategoryLabel(company.category || '', 'tr') || company.category || '',
+    transferMarker: TRANSFER_MARKER,
+    collectedContext: ctx.collectedContext?.trim() || '',
+    appointmentContext: ctx.appointmentContext?.trim() || '',
+    knowledge: ctx.knowledge?.trim() || '',
+    kbEmptySuffix: ctx.knowledge?.trim() ? '' : ' (boş)',
+    languageBlock:
+      ctx.languageBlock?.trim() ||
+      renderPromptTemplate(DEFAULT_LANGUAGE_BLOCK_FALLBACK, {
+        langName: getLanguageHintName(lang),
+      }),
+    currentDate: datePlaceholders.currentDate,
+    currentDayName: datePlaceholders.currentDayName,
+    currentTime: datePlaceholders.currentTime,
+  };
+
+  return renderPromptTemplate(appointmentPrompt.content, vars).trim();
 }
 
 /**

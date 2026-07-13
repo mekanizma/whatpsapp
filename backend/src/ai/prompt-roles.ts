@@ -58,6 +58,9 @@ export const PROMPT_ROLE_META: Record<
       'knowledge',
       'languageBlock',
       'transferMarker',
+      'currentDate',
+      'currentDayName',
+      'currentTime',
     ],
   },
   language: {

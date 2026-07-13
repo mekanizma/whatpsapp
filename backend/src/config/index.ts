@@ -133,6 +133,10 @@ export const config = {
     appointmentProviderLabel: process.env.APPOINTMENT_PROVIDER_LABEL || '',
   },
 
+  appointment: {
+    mode: (process.env.APPOINTMENT_MODE || 'llm') as 'llm' | 'rules',
+  },
+
   whatsapp: {
     verifyToken: requireEnv('WHATSAPP_VERIFY_TOKEN'),
     appSecret: process.env.WHATSAPP_APP_SECRET?.trim() || '',
