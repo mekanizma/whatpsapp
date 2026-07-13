@@ -5,8 +5,10 @@ import {
   resolveAppointmentState,
   detectTopicCorrection,
   extractCustomerFields,
+  hydrateDateTimeFromConversation,
 } from './appointment-customer-hydrate.service';
 import { createEmptyAppointmentState, mergeAppointmentData } from './appointment-state.service';
+import { DEFAULT_APPOINTMENT_CONTEXT } from './appointment-company-context';
 import {
   parseInlineAppointmentFields,
   isValidProcedureTitle,
@@ -110,6 +112,46 @@ describe('resolveAppointmentState gurcem akışı', () => {
       extended,
       'evet'
     );
+    assert.equal(state.confirmed, true);
+  });
+
+  it('17 olur ve AI özeti sonrası onaylıyorum tarih/saat hydrate eder', () => {
+    const extended = [
+      ...history,
+      { sender_type: 'customer', message: '14 temmuz' },
+      {
+        sender_type: 'ai',
+        message:
+          'Müsait saatler:\n1) 09:00-09:30\n8) 16:30-17:00\n\nHangi saati tercih edersiniz?',
+      },
+      { sender_type: 'customer', message: '17 olur' },
+      {
+        sender_type: 'ai',
+        message: 'Randevu için 14 Temmuz 2026 saat 17:00 not alıyorum, doğru mu?',
+      },
+      {
+        sender_type: 'ai',
+        message:
+          'Randevu özeti:\nAd Soyad: İdris Yıldırım\nTarih: 14 Temmuz 2026\nSaat: 17:00\n\nBu bilgileri onaylıyor musunuz?',
+      },
+    ];
+    const ctx = {
+      ...DEFAULT_APPOINTMENT_CONTEXT,
+      timezone: 'Europe/Istanbul',
+      parseRef: new Date('2026-07-13T12:00:00Z'),
+    };
+    const state = resolveAppointmentState(
+      mergeAppointmentData(createEmptyAppointmentState(), {
+        customer_name: 'idris yıldırım',
+        customer_phone: '905338398293',
+        title: 'üniversite öğrenci işleri bilgi almak',
+      }),
+      extended,
+      'onaylıyorum',
+      ctx
+    );
+    assert.equal(state.date, '2026-07-14');
+    assert.equal(state.time, '17:00');
     assert.equal(state.confirmed, true);
   });
 });

@@ -34,6 +34,7 @@ export function shouldQueryAppointmentAvailability(
 ): boolean {
   if (hasAvailabilityQuery(message) || hasDateTimeIntent(message)) return true;
   if (isNumberedSlotReply(message) && hasRecentNumberedSlotList(history)) return true;
+  if (/^(\d{1,2})\s+(?:olur|uygun|iyi|olsun|kabul)\s*$/i.test(message.trim())) return true;
   return false;
 }
 

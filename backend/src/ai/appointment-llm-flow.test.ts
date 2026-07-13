@@ -218,6 +218,25 @@ describe('safety net handoff triggers', () => {
       'Özet <appointment_data>{bad</appointment_data>'
     );
     const post = applyPostAiProcessing(meta, state, broken, GURCEM_HISTORY, 'onaylıyorum');
+    assert.equal(post.handoff, null);
+    assert.equal(post.state.confirmed, true);
+    assert.equal(post.meta.missingDataBlockStreak, 0);
+  });
+
+  it('onay verilmeden 2x bozuk blok handoff tetikler', () => {
+    let meta = getAppointmentSession('co1', '905551112233');
+    meta = { ...meta, missingDataBlockStreak: 1 };
+    const state = mergeAppointmentData(createEmptyAppointmentState(), {
+      customer_name: 'gurcem semercioglu',
+      customer_phone: '905338507761',
+      title: 'demo talebi',
+      date: '2026-07-15',
+      time: '10:00',
+    });
+    const broken = parseAppointmentDataFromResponse(
+      'Özet <appointment_data>{bad</appointment_data>'
+    );
+    const post = applyPostAiProcessing(meta, state, broken, GURCEM_HISTORY, 'peki');
     assert.equal(post.handoff, 'missing_data_block');
   });
 

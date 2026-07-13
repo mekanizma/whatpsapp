@@ -17,6 +17,15 @@ import {
 } from './appointment-state.service';
 import type { AppointmentDataPayload } from './appointment-data-parser.service';
 import { isAppointmentConfirmation } from './appointment-confirm.service';
+import type { AppointmentCompanyContext } from './appointment-company-context';
+import {
+  extractCustomerSlotFromConversation,
+  extractDateTimeFromRecentAiSummary,
+  extractHourChoiceFromSlotList,
+  extractNumberedAlternative,
+  parseDateAnchorFromText,
+  slotToAppointmentStateFields,
+} from './appointment-slot.service';
 
 const NAME_CORRECTION_RE =
   /ismim|adım|adin|adim|yanlış|yanlis|yanli[sş]|doğru\s*ad|dogru\s*ad|isim\s*bu|adım\s*bu/i;
@@ -183,7 +192,67 @@ export function hydrateStateFromCustomerMessages(
   return next;
 }
 
-/** AI data bloğunu merge et; müşteri mesajındaki alanlar öncelikli */
+function resolveDateAnchorFromHistory(
+  history: HistoryMsg[],
+  latestMessage: string,
+  ctx: AppointmentCompanyContext,
+  stateDate: string | null
+): string | undefined {
+  if (stateDate) return stateDate;
+  const options = { timezone: ctx.timezone, ref: ctx.parseRef };
+  const messages = [...history, { sender_type: 'customer', message: latestMessage }];
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const anchor = parseDateAnchorFromText(messages[i].message, options);
+    if (anchor) {
+      const d = new Date(anchor);
+      const parts = {
+        year: d.getUTCFullYear(),
+        month: d.getUTCMonth() + 1,
+        day: d.getUTCDate(),
+      };
+      return `${parts.year}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`;
+    }
+  }
+  return undefined;
+}
+
+/** Müşteri mesajları ve AI özetlerinden tarih/saat state hydrate */
+export function hydrateDateTimeFromConversation(
+  state: AppointmentLlmState,
+  history: HistoryMsg[],
+  latestMessage: string,
+  ctx: AppointmentCompanyContext
+): AppointmentLlmState {
+  let next = { ...state };
+  const dateAnchor = resolveDateAnchorFromHistory(history, latestMessage, ctx, next.date);
+  const options = {
+    timezone: ctx.timezone,
+    ref: ctx.parseRef,
+    dateAnchor,
+  };
+
+  const applySlot = (slot: { starts_at: string; ends_at: string } | null) => {
+    if (!slot) return;
+    const patch = slotToAppointmentStateFields(slot, ctx.timezone);
+    next = mergeAppointmentData(next, patch);
+  };
+
+  if (!next.date || !next.time) {
+    applySlot(extractNumberedAlternative(history, latestMessage, options));
+  }
+  if (!next.date || !next.time) {
+    applySlot(extractHourChoiceFromSlotList(history, latestMessage, options));
+  }
+  if (!next.date || !next.time) {
+    applySlot(extractCustomerSlotFromConversation(history, latestMessage, options));
+  }
+  if (!next.date || !next.time) {
+    const fromAi = extractDateTimeFromRecentAiSummary(history, options);
+    if (fromAi) next = mergeAppointmentData(next, fromAi);
+  }
+
+  return next;
+}
 export function mergeAiDataPreferCustomer(
   state: AppointmentLlmState,
   aiData: AppointmentDataPayload,
@@ -239,8 +308,13 @@ export function hasNameCorrectionInMessage(message: string): boolean {
 export function resolveAppointmentState(
   persisted: AppointmentLlmState | null,
   history: HistoryMsg[],
-  latestMessage: string
+  latestMessage: string,
+  ctx?: AppointmentCompanyContext
 ): AppointmentLlmState {
   const base = persisted ? { ...persisted } : createEmptyAppointmentState();
-  return hydrateStateFromCustomerMessages(base, history, latestMessage);
+  let state = hydrateStateFromCustomerMessages(base, history, latestMessage);
+  if (ctx) {
+    state = hydrateDateTimeFromConversation(state, history, latestMessage, ctx);
+  }
+  return state;
 }

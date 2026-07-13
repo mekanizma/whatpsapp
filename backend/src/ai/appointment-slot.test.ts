@@ -5,6 +5,7 @@ import {
   extractCustomerSlotFromConversation,
   extractSlotFromConversation,
   extractNumberedAlternative,
+  extractHourChoiceFromSlotList,
   formatSlotTurkish,
 } from './appointment-slot.service';
 
@@ -146,5 +147,23 @@ describe('appointment-slot.service', () => {
     });
     assert.ok(slot);
     assert.match(formatSlotTurkish(slot!.starts_at, slot!.ends_at), /10:00/);
+  });
+
+  it('17 olur saat seçimini parse eder', () => {
+    const history = [
+      { sender_type: 'customer', message: '14 temmuz' },
+      {
+        sender_type: 'ai',
+        message:
+          'Müsait saatler:\n1) 09:00-09:30\n8) 16:30-17:00\n\nHangi saati tercih edersiniz?',
+      },
+    ];
+    const slot = extractHourChoiceFromSlotList(history, '17 olur', {
+      ref: REF,
+      timezone: 'Europe/Istanbul',
+      dateAnchor: '2026-07-14',
+    });
+    assert.ok(slot);
+    assert.match(formatSlotTurkish(slot!.starts_at, slot!.ends_at), /14\.07\.2026 17:00/);
   });
 });

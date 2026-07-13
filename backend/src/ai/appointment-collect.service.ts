@@ -382,7 +382,7 @@ export function isValidProcedureTitle(title: string): boolean {
   if (/^\p{L}{3,14}(yoruz|iyoruz|uyoruz|ıyoruz|yorum|iyorum)$/iu.test(text) && !looksLikeSubject(text)) {
     return false;
   }
-  if (/sorduğum|sordugum|cevap ver|verdim|zaten|hey|merhaba|tamam|ne kadar|fiyat|ücret|ucret|vizyon|kodlad/i.test(text)) {
+  if (/sorduğum|sordugum|cevap ver|verdim|zaten|hey|merhaba|tamam|peki|hmm|ne kadar|fiyat|ücret|ucret|vizyon|kodlad/i.test(text)) {
     return false;
   }
   if (isValidFullName(text) && !looksLikeSubject(text) && text.split(/\s+/).filter(Boolean).length <= 2) {

@@ -124,5 +124,10 @@ export function validateAppointmentFields(state: AppointmentLlmState): boolean {
 }
 
 export function isReadyForBooking(state: AppointmentLlmState): boolean {
-  return state.confirmed && validateAppointmentFields(state);
+  return (
+    state.confirmed &&
+    validateAppointmentFields(state) &&
+    !!state.date &&
+    !!state.time
+  );
 }

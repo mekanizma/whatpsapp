@@ -63,6 +63,7 @@ import {
   hasNameCorrectionInMessage,
   isAppointmentTopicReply,
   hasTopicCorrectionInMessage,
+  hydrateDateTimeFromConversation,
 } from './appointment-customer-hydrate.service';
 import {
   buildAppointmentAvailabilityContext,
@@ -266,7 +267,7 @@ function customerAdvancedAppointmentState(
   state: AppointmentLlmState
 ): boolean {
   const trimmed = latestMessage.trim();
-  if (isAppointmentConfirmation(trimmed, history)) return false;
+  if (isAppointmentConfirmation(trimmed, history)) return true;
   if (hasDateTimeIntent(trimmed) && state.date && state.time) return true;
   if (isAppointmentTopicReply(history, trimmed)) return true;
   if (hasNameCorrectionInMessage(trimmed)) return true;
@@ -298,6 +299,12 @@ export function applyPostAiProcessing(
   let nextMeta = { ...meta };
   let nextState = { ...state };
   const customer = extractCustomerFields(history, latestMessage);
+
+  if (isAppointmentConfirmation(latestMessage, history)) {
+    nextState = { ...nextState, confirmed: true };
+    nextMeta = { ...nextMeta, missingDataBlockStreak: 0 };
+  }
+
   const expectBlock = shouldExpectAppointmentDataBlock(nextState);
   const codeCapturedTurn = customerAdvancedAppointmentState(history, latestMessage, nextState);
 
@@ -438,7 +445,12 @@ export async function runAppointmentLlmFlow(
 ): Promise<AppointmentLlmFlowResult> {
   const lang = detectConversationLanguage(input.customerMessage, input.history);
   let meta = getAppointmentSession(input.companyId, input.customerPhone);
-  let state = resolveAppointmentState(meta.llmState, input.history, input.customerMessage);
+  let state = resolveAppointmentState(
+    meta.llmState,
+    input.history,
+    input.customerMessage,
+    input.appointmentCtx
+  );
   const topicCaptured = isAppointmentTopicReply(input.history, input.customerMessage);
 
   if (hasNameCorrectionInMessage(input.customerMessage)) {
@@ -455,7 +467,7 @@ export async function runAppointmentLlmFlow(
   if (meta.status === 'handed_off') {
     if (isAppointmentSessionRestartMessage(input.customerMessage)) {
       meta = resetAppointmentSessionForRetry(input.companyId, input.customerPhone);
-      state = resolveAppointmentState(null, input.history, input.customerMessage);
+      state = resolveAppointmentState(null, input.history, input.customerMessage, input.appointmentCtx);
       logFlow('session_reset_after_handoff', { message: input.customerMessage.slice(0, 80) });
     } else {
       meta = queueSystemNote(meta, 'HANDOFF');
@@ -481,6 +493,12 @@ export async function runAppointmentLlmFlow(
   meta = { ...meta, pendingSystemNote: null, pendingSystemNoteKey: null };
 
   state = patchStateFromNumberedSlot(
+    state,
+    input.history,
+    input.customerMessage,
+    input.appointmentCtx
+  );
+  state = hydrateDateTimeFromConversation(
     state,
     input.history,
     input.customerMessage,

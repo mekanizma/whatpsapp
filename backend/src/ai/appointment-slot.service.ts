@@ -354,6 +354,14 @@ function extractTimeFromText(text: string): { hour: number; minute: number } | n
   }
 
   if (hour === null) {
+    const hourReply = text.match(/^(\d{1,2})\s+(?:olur|uygun|iyi|olsun|kabul|lütfen|lutfen)\s*$/i);
+    if (hourReply) {
+      hour = parseInt(hourReply[1], 10);
+      minute = 0;
+    }
+  }
+
+  if (hour === null) {
     const atHour = text.match(/\b(\d{1,2})\s*['']?(de|da|te|ta)\b/i);
     if (atHour) {
       hour = parseInt(atHour[1], 10);
@@ -690,6 +698,111 @@ export function extractNumberedAlternative(
   return null;
 }
 
+const HOUR_CHOICE_REPLY_RE = /^(\d{1,2})\s*(?:olur|uygun|iyi|olsun|kabul|lütfen|lutfen)?\s*$/i;
+
+/** "17 olur" gibi saat seçimlerini AI slot listesinden veya tarih bağlamından çöz */
+export function extractHourChoiceFromSlotList(
+  history: HistoryMsg[],
+  latestMessage: string,
+  refOrOptions: Date | SlotParseOptions = {}
+): ParsedSlot | null {
+  const options = normalizeSlotOptions(refOrOptions);
+  const trimmed = latestMessage.trim();
+  const m = trimmed.match(HOUR_CHOICE_REPLY_RE);
+  if (!m) return null;
+  const chosenHour = parseInt(m[1], 10);
+  if (chosenHour < 0 || chosenHour > 23) return null;
+
+  let startMatch: ParsedSlot | null = null;
+  let endMatch: ParsedSlot | null = null;
+
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i].sender_type !== 'ai' && history[i].sender_type !== 'assistant') continue;
+    const aiMessage = history[i].message;
+    const dateAnchor = resolveNumberedListDateAnchor(aiMessage, history.slice(0, i), options);
+    const parseOptions = dateAnchor ? { ...options, dateAnchor } : options;
+
+    let foundList = false;
+    for (const line of aiMessage.split('\n')) {
+      const lm = line.trim().match(NUMBERED_SLOT_LINE_RE);
+      if (!lm) continue;
+      foundList = true;
+      const slot = parseNumberedSlotLine(lm[2], parseOptions);
+      if (!slot) continue;
+      const tz = options.timezone ?? DEFAULT_COMPANY_TIMEZONE;
+      const tm = companyTimeParts(new Date(slot.starts_at), tz);
+      const endTm = companyTimeParts(new Date(slot.ends_at), tz);
+      if (tm.hour === chosenHour && tm.minute === 0) {
+        startMatch = slot;
+      }
+      if (endTm.hour === chosenHour && endTm.minute === 0) {
+        endMatch = slot;
+      }
+    }
+    if (foundList) break;
+  }
+
+  if (startMatch) return startMatch;
+
+  const anchor =
+    options.dateAnchor ||
+    (() => {
+      for (let i = history.length - 1; i >= 0; i--) {
+        const parts = extractDateParts(
+          history[i].message,
+          options.ref ?? new Date(),
+          options.timezone ?? DEFAULT_COMPANY_TIMEZONE
+        );
+        if (parts) {
+          return `${parts.year}-${String(parts.month).padStart(2, '0')}-${String(parts.day).padStart(2, '0')}`;
+        }
+      }
+      return undefined;
+    })();
+
+  if (anchor) {
+    const bare = parseSlotFromText(`${anchor} ${chosenHour}:00`, { ...options, dateAnchor: anchor });
+    if (bare) return bare;
+  }
+
+  if (endMatch) return endMatch;
+  return null;
+}
+
+export function slotToAppointmentStateFields(
+  slot: ParsedSlot,
+  timezone: string
+): { date: string; time: string } {
+  const d = companyDateParts(new Date(slot.starts_at), timezone);
+  const tm = companyTimeParts(new Date(slot.starts_at), timezone);
+  return {
+    date: `${d.year}-${String(d.month).padStart(2, '0')}-${String(d.day).padStart(2, '0')}`,
+    time: `${String(tm.hour).padStart(2, '0')}:${String(tm.minute).padStart(2, '0')}`,
+  };
+}
+
+/** Son AI özet mesajlarından tarih/saat çıkarır */
+export function extractDateTimeFromRecentAiSummary(
+  history: HistoryMsg[],
+  refOrOptions: Date | SlotParseOptions = {}
+): { date: string; time: string } | null {
+  const options = normalizeSlotOptions(refOrOptions);
+  const tz = options.timezone ?? DEFAULT_COMPANY_TIMEZONE;
+  let aiSeen = 0;
+
+  for (let i = history.length - 1; i >= 0; i--) {
+    const m = history[i];
+    if (m.sender_type !== 'ai' && m.sender_type !== 'assistant') continue;
+    aiSeen += 1;
+    if (aiSeen > 6) break;
+
+    const slot = parseSlotFromText(m.message, options);
+    if (slot) return slotToAppointmentStateFields(slot, tz);
+  }
+
+  return null;
+}
+
 export function extractSlotFromConversation(
   history: HistoryMsg[],
   latestMessage: string,
@@ -708,7 +821,10 @@ export function extractCustomerSlotFromConversation(
   const fromNumber = extractNumberedAlternative(history, latestMessage, options);
   if (fromNumber) return fromNumber;
 
-  if (hasDateTimeIntent(latestMessage)) {
+  const fromHour = extractHourChoiceFromSlotList(history, latestMessage, options);
+  if (fromHour) return fromHour;
+
+  if (hasDateTimeIntent(latestMessage) || HOUR_CHOICE_REPLY_RE.test(latestMessage.trim())) {
     const fromLatest = parseSlotFromText(latestMessage, options);
     if (fromLatest) return fromLatest;
   }
