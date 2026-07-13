@@ -53,6 +53,10 @@ import {
   hasNameCorrectionInMessage,
   isAppointmentTopicReply,
 } from './appointment-customer-hydrate.service';
+import {
+  buildAppointmentAvailabilityContext,
+  mergeAppointmentSystemNotes,
+} from './appointment-llm-availability.service';
 
 export interface AppointmentLlmFlowInput {
   companyId: string;
@@ -389,10 +393,29 @@ export async function runAppointmentLlmFlow(
   const knowledge = topicCaptured ? '' : retrieval.context;
   const appointmentKnowledge = topicCaptured ? [] : input.allKnowledge;
 
-  const noteForAi =
+  const pendingNote =
     meta.pendingSystemNote ||
     (meta.pendingSystemNoteKey ? appointmentConfig.systemNotes[meta.pendingSystemNoteKey] : null);
   meta = { ...meta, pendingSystemNote: null, pendingSystemNoteKey: null };
+
+  const availability = await buildAppointmentAvailabilityContext(
+    input.companyId,
+    input.history,
+    input.customerMessage,
+    input.appointmentCtx,
+    lang
+  );
+  if (availability.statePatch) {
+    state = mergeAppointmentData(state, availability.statePatch);
+    logFlow('availability_state_patch', { patch: availability.statePatch });
+  }
+  if (availability.systemNote) {
+    logFlow('availability_checked', { dbError: availability.dbError });
+  } else if (availability.dbError) {
+    logFlow('availability_db_error', {});
+  }
+
+  const noteForAi = mergeAppointmentSystemNotes(pendingNote, availability.systemNote);
 
   if (meta.status !== 'saved' && isReadyForBooking(state)) {
     const preBook = await tryBookAppointment(
@@ -425,9 +448,11 @@ export async function runAppointmentLlmFlow(
     meta = queueSystemNote(markSessionHandedOff(meta, preHandoff.reason), 'HANDOFF');
   }
 
-  const effectiveNote =
+  const effectiveNote = mergeAppointmentSystemNotes(
+    noteForAi,
     meta.pendingSystemNote ||
-    (meta.pendingSystemNoteKey ? appointmentConfig.systemNotes[meta.pendingSystemNoteKey] : null);
+      (meta.pendingSystemNoteKey ? appointmentConfig.systemNotes[meta.pendingSystemNoteKey] : null)
+  );
 
   let totalTokens = 0;
   let { raw, tokensUsed } = await callAppointmentLlm(
