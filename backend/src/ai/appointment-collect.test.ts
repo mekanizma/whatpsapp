@@ -4,6 +4,7 @@ import {
   parseCollectedFields,
   blockBookingIfIncomplete,
   getMissingRequiredFields,
+  isValidFullName,
 } from './appointment-collect.service';
 
 describe('appointment-collect.service', () => {
@@ -109,6 +110,19 @@ describe('appointment-collect.service', () => {
     ];
     const collected = parseCollectedFields(history, 'genel bilgi almak istiyorum');
     assert.equal(collected.title, 'genel bilgi');
+  });
+
+  it('virgülle ayrılmış formattan alanları çıkarır', () => {
+    const msg =
+      'gurcem semercioglu, 05338507761, demo yapılması. bugün en erken hangi saate randevu alabilirim?';
+    const collected = parseCollectedFields([], msg);
+    assert.equal(collected.customer_name, 'gurcem semercioglu');
+    assert.equal(collected.customer_phone, '905338507761');
+    assert.equal(collected.title, 'demo yapılması');
+  });
+
+  it('konuşma cümlesi ad sayılmaz', () => {
+    assert.equal(isValidFullName('sen bana yardımcı'), false);
   });
 
   it('tek mesajda ad, telefon, konu ve tarih ayıklanır (idris senaryosu)', () => {

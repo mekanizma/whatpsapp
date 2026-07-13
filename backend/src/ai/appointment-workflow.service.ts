@@ -18,10 +18,12 @@ import {
   formatSlotLocalized,
   validateSlotWorkingHours,
   buildWorkingHoursRejectionMessage,
+  parseDateAnchorFromText,
   ParsedSlot,
   companyDateParts,
   slotWeekday,
 } from './appointment-slot.service';
+import { hasAvailabilityQuery } from './appointment-datetime-tokens';
 import { isAppointmentConfirmation } from './appointment-confirm.service';
 import { ConversationLang, detectConversationLanguage, t } from './language.service';
 import {
@@ -119,9 +121,40 @@ export interface AppointmentWorkflowResult {
 }
 
 export function isAvailabilityInquiry(message: string): boolean {
-  return /müsait\s*(saat|zaman|saatler)|musait\s*(saat|zaman|saatler)|uygun\s*(saat|zaman|saatler)|boş\s*saat|bos\s*saat|available\s*(time|times|slot|slots|hour|hours)|hangi\s*saatler|are\s+there\s+any\s+available|müsaitlik|musaitlik/i.test(
-    message
-  );
+  const n = message.toLocaleLowerCase('tr');
+  const hasAvailability =
+    hasAvailabilityQuery(message) ||
+    /en erken|earliest|früheste|plus tôt/i.test(message);
+
+  if (!hasAvailability) return false;
+
+  // Belirli saat verilmiş randevu talebi — müsaitlik listesi değil
+  if (
+    /\b(?:saat\s*)?\d{1,2}([:.]\d{2})?\s*(a|da)?\b/.test(n) &&
+    !/hangi\s*saat|müsait|musait|uygun|boş|bos|en erken|available/i.test(n)
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function resolveAvailabilityDateIso(
+  history: HistoryMsg[],
+  latestMessage: string,
+  ctx: AppointmentCompanyContext
+): string | null {
+  const options = slotOptions(ctx);
+  const messages = [...history, { sender_type: 'customer', message: latestMessage }];
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.sender_type !== 'customer') continue;
+    const slot = extractCustomerSlotFromConversation([m], m.message, options);
+    if (slot) return slot.starts_at;
+    const anchor = parseDateAnchorFromText(m.message, options);
+    if (anchor) return anchor;
+  }
+  return null;
 }
 
 function slotOptions(ctx: AppointmentCompanyContext) {
@@ -265,9 +298,9 @@ async function handleAvailabilityInquiry(
   lang: ConversationLang,
   ctx: AppointmentCompanyContext
 ): Promise<AppointmentWorkflowResult> {
-  const slot = resolveCollectedSlot(history, latestMessage, ctx);
+  const dateIso = resolveAvailabilityDateIso(history, latestMessage, ctx);
 
-  if (!slot) {
+  if (!dateIso) {
     return {
       handled: true,
       message: t(lang, 'appointment_date_needed_for_availability'),
@@ -276,8 +309,14 @@ async function handleAvailabilityInquiry(
   }
 
   try {
-    const available = await listAvailableSlotsForDate(companyId, slot.starts_at, ctx);
-    const dateLabel = formatSlotLocalized(slot.starts_at, slot.ends_at, lang, ctx.timezone).split(' ')[0];
+    const available = await listAvailableSlotsForDate(companyId, dateIso, ctx);
+    const parts = companyDateParts(new Date(dateIso), ctx.timezone);
+    const dateLabel = formatSlotLocalized(
+      localToUtcInTimezone(parts.year, parts.month, parts.day, 9, 0, ctx.timezone).toISOString(),
+      localToUtcInTimezone(parts.year, parts.month, parts.day, 9, 30, ctx.timezone).toISOString(),
+      lang,
+      ctx.timezone
+    ).split(' ')[0];
     const list = formatAvailableSlotsList(available, lang, ctx.timezone);
     return {
       handled: true,
@@ -374,7 +413,17 @@ export async function runAppointmentWorkflow(
   const slot = resolveCollectedSlot(history, latestMessage, ctx);
 
   if (isAvailabilityInquiry(latestMessage)) {
-    return handleAvailabilityInquiry(companyId, history, latestMessage, lang, ctx);
+    const missingForAvailability = getMissingRequiredFields(
+      collected,
+      undefined,
+      history,
+      latestMessage,
+      ctx
+    ).filter((f) => f !== 'datetime');
+
+    if (missingForAvailability.length === 0) {
+      return handleAvailabilityInquiry(companyId, history, latestMessage, lang, ctx);
+    }
   }
 
   const missing = getMissingRequiredFields(collected, undefined, history, latestMessage, ctx);

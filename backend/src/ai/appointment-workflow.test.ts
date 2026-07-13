@@ -12,6 +12,7 @@ describe('appointment-workflow.service', () => {
   it('müsaitlik sorusunu tanır', () => {
     assert.equal(isAvailabilityInquiry('müsait saatler var mı'), true);
     assert.equal(isAvailabilityInquiry('are there any available times'), true);
+    assert.equal(isAvailabilityInquiry('bugün en erken hangi saate randevu alabilirim'), true);
     assert.equal(isAvailabilityInquiry('pazartesi saat 10 randevu'), false);
   });
 

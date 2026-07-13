@@ -524,6 +524,18 @@ function extractDateParts(
   return null;
 }
 
+/** Yalnızca gün referansı (bugün, yarın, pazartesi) — saat olmadan müsaitlik listesi için */
+export function parseDateAnchorFromText(
+  text: string,
+  options: SlotParseOptions = {}
+): string | null {
+  const ref = options.ref ?? new Date();
+  const timeZone = options.timezone ?? DEFAULT_COMPANY_TIMEZONE;
+  const parts = extractDateParts(text, ref, timeZone);
+  if (!parts) return null;
+  return localToUtcInTimezone(parts.year, parts.month, parts.day, 12, 0, timeZone).toISOString();
+}
+
 /** Tek bir metinden tarih/saat çıkar (TR + EN) */
 export function parseSlotFromText(
   text: string,

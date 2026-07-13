@@ -116,7 +116,7 @@ const TOPIC_WORDS = new Set([
 
 export function looksLikeSubject(text: string): boolean {
   const n = text.toLocaleLowerCase('tr');
-  if (/hakkında|hakkinda|üzerine|uzere|için|icin|konusu|hakkında bilgi|bilgi almak|görüşmek|gorusmek/i.test(n)) {
+  if (/hakkında|hakkinda|üzerine|uzere|için|icin|konusu|hakkında bilgi|bilgi almak|görüşmek|gorusmek|yapılması|yapilmasi|yapılması|demo\b/i.test(n)) {
     return true;
   }
   return [...TOPIC_WORDS].some((w) => n.includes(w));
@@ -149,8 +149,83 @@ function stripDateTimePhrases(text: string): string {
 function extractNameBeforePhone(text: string): string | null {
   const phoneMatch = text.match(PHONE_RE);
   if (!phoneMatch || phoneMatch.index === undefined || phoneMatch.index <= 0) return null;
-  const before = text.slice(0, phoneMatch.index).trim();
+  const before = cleanFieldToken(text.slice(0, phoneMatch.index));
   return isValidFullName(before) ? before : null;
+}
+
+const AVAILABILITY_TAIL_RE =
+  /[.?!]?\s*\b(bugün|bugun|yarin|yarın|en erken|hangi saat(e)?|müsait|musait|uygun|randevu alabilir|alabilir miyim|alabilirmiyim|ne zaman).*$/iu;
+
+function cleanFieldToken(token: string): string {
+  return token.replace(/^[\s,.;:!?'"()-]+|[\s,.;:!?'"()-]+$/g, '').trim();
+}
+
+function stripAvailabilityQuestion(text: string): string {
+  return text.replace(AVAILABILITY_TAIL_RE, '').trim();
+}
+
+function cleanSubjectTitle(title: string): string {
+  return cleanFieldToken(
+    stripAvailabilityQuestion(title)
+      .replace(DATETIME_PHRASE_RE, ' ')
+      .replace(SUBJECT_NOISE_RE, ' ')
+      .replace(/\s+/g, ' ')
+  );
+}
+
+function extractSubjectFromSegment(segment: string): string | null {
+  let working = stripAvailabilityQuestion(segment);
+  working = working.replace(APPOINTMENT_REQUEST_RE, ' ').trim();
+  working = stripDateTimePhrases(working);
+  working = cleanSubjectTitle(working);
+  if (!working || !isValidProcedureTitle(working)) return null;
+  return working;
+}
+
+function parseCommaSeparatedAppointmentFields(text: string): Partial<CollectedAppointmentFields> {
+  if (!/[,;]/.test(text) || !extractPhone(text)) return {};
+
+  const segments = text.split(/[,;]+/).map(cleanFieldToken).filter(Boolean);
+  let customer_name: string | null = null;
+  let customer_phone: string | null = null;
+  let title: string | null = null;
+  const subjectCandidates: string[] = [];
+
+  for (const seg of segments) {
+    const phoneOnly = extractPhone(seg);
+    if (phoneOnly && seg.replace(PHONE_RE, '').trim().length < 4) {
+      customer_phone = phoneOnly;
+      continue;
+    }
+
+    const embeddedPhone = extractPhone(seg);
+    if (embeddedPhone && seg.length > 12) {
+      customer_phone = embeddedPhone;
+      const rest = cleanFieldToken(seg.replace(PHONE_RE, ''));
+      if (rest) subjectCandidates.push(rest);
+      continue;
+    }
+
+    const nameCandidate = cleanFieldToken(seg);
+    if (!customer_name && isValidFullName(nameCandidate)) {
+      customer_name = nameCandidate;
+      continue;
+    }
+
+    subjectCandidates.push(seg);
+  }
+
+  for (const candidate of subjectCandidates) {
+    const parts = candidate.split(/[.!?]+/).map(cleanFieldToken).filter(Boolean);
+    for (const part of parts) {
+      const topic = extractSubjectFromSegment(part);
+      if (topic && (!title || scoreTitleCandidate(topic, customer_name) > scoreTitleCandidate(title, customer_name))) {
+        title = topic;
+      }
+    }
+  }
+
+  return { customer_name, customer_phone, title };
 }
 
 function extractLeadingName(text: string): { name: string | null; remainder: string } {
@@ -175,9 +250,21 @@ export function parseInlineAppointmentFields(text: string): Partial<CollectedApp
   if (isComplaintOrCorrectionMessage(trimmed)) return {};
   if (CONFIRM_WORDS_PATTERN.test(trimmed)) return {};
 
+  const commaParsed = parseCommaSeparatedAppointmentFields(trimmed);
+  if (commaParsed.customer_phone || commaParsed.customer_name || commaParsed.title) {
+    return {
+      customer_name: commaParsed.customer_name || null,
+      customer_phone: commaParsed.customer_phone || null,
+      title: commaParsed.title ? cleanSubjectTitle(commaParsed.title) : null,
+    };
+  }
+
   const phone = extractPhone(trimmed);
   let customer_name = extractNameBeforePhone(trimmed);
+  if (customer_name) customer_name = cleanFieldToken(customer_name);
+
   let working = stripDateTimePhrases(trimmed.replace(PHONE_RE, ' ').trim());
+  working = stripAvailabilityQuestion(working);
   working = working.replace(APPOINTMENT_REQUEST_RE, ' ').trim();
   working = working.replace(SUBJECT_NOISE_RE, ' ').replace(/\s+/g, ' ').trim();
 
@@ -193,7 +280,7 @@ export function parseInlineAppointmentFields(text: string): Partial<CollectedApp
 
   let title: string | null = null;
   if (working) {
-    const normalized = working.replace(SUBJECT_KEEP_ALMAK_RE, (m) => m.replace(/\s+almak\b/i, '')).trim();
+    const normalized = cleanSubjectTitle(working.replace(SUBJECT_KEEP_ALMAK_RE, (m) => m.replace(/\s+almak\b/i, '')));
     if (isValidProcedureTitle(normalized) && !isNameOnlyPhrase(normalized, customer_name)) {
       title = normalized;
     }
@@ -236,6 +323,8 @@ export function isValidFullName(name: string): boolean {
   ) {
     return false;
   }
+  if (/^(sen|siz|ben|beni|bana|sana|size)\b/i.test(trimmed)) return false;
+  if (/\b(yardımcı|yardimci|olur\s*musun|olur\s*müsün)\b/i.test(trimmed)) return false;
   const parts = trimmed.split(/\s+/).filter(Boolean);
   if (parts.length < 2) return false;
   if (/hakkında|hakkinda|üzerine|uzere/i.test(trimmed)) return false;
@@ -252,7 +341,10 @@ export function isValidFullName(name: string): boolean {
   ]);
   if (parts.every((p) => junk.has(p.toLowerCase()) || p.length < 3)) return false;
   if (parts.some((p) => junk.has(p.toLowerCase()))) return false;
-  return parts.every((p) => p.length >= 2 && /^[\p{L}'-]+$/u.test(p));
+  return parts.every((p) => {
+    const clean = p.replace(/[,.;:!?'"()-]+$/g, '');
+    return clean.length >= 2 && /^[\p{L}'-]+$/u.test(clean);
+  });
 }
 
 export function isValidProcedureTitle(title: string): boolean {
