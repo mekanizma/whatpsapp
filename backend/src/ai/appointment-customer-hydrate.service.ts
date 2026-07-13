@@ -16,6 +16,7 @@ import {
   createEmptyAppointmentState,
 } from './appointment-state.service';
 import type { AppointmentDataPayload } from './appointment-data-parser.service';
+import { isAppointmentConfirmation } from './appointment-confirm.service';
 
 const NAME_CORRECTION_RE =
   /ismim|adım|adin|adim|yanlış|yanlis|yanli[sş]|doğru\s*ad|dogru\s*ad|isim\s*bu|adım\s*bu/i;
@@ -28,7 +29,8 @@ export function extractTopicFromLatestTurn(
   latestMessage: string
 ): string | null {
   const trimmed = latestMessage.trim();
-  if (!trimmed || !isValidProcedureTitle(trimmed)) return null;
+  if (!trimmed || isAppointmentConfirmation(trimmed, history)) return null;
+  if (!isValidProcedureTitle(trimmed)) return null;
   if (isValidFullName(trimmed) && !looksLikeSubject(trimmed)) return null;
   if (NAME_CORRECTION_RE.test(trimmed)) return null;
 
@@ -130,13 +132,12 @@ export function mergeAiDataPreferCustomer(
 }
 
 export function shouldExpectAppointmentDataBlock(state: AppointmentLlmState): boolean {
-  return !!(
-    state.customer_name &&
-    state.customer_phone &&
-    state.title &&
-    isValidFullName(state.customer_name) &&
-    isValidProcedureTitle(state.title)
-  );
+  if (!state.customer_name || !state.customer_phone || !state.title) return false;
+  if (!isValidFullName(state.customer_name) || !isValidProcedureTitle(state.title)) return false;
+  // Ad/telefon/konu aşamasında kod müşteri mesajından hydrate eder — AI bloğu zorunlu değil.
+  if (!state.date || !state.time) return false;
+  // Onay öncesi güncel appointment_data beklenir; tarih/saat kod tarafından da parse edilir.
+  return !state.confirmed;
 }
 
 export function hasNameCorrectionInMessage(message: string): boolean {

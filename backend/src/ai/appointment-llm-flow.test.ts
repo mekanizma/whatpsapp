@@ -12,6 +12,9 @@ import {
   saveAppointmentSession,
   createEmptyAppointmentState,
   _resetAppointmentSessionsForTest,
+  markSessionHandedOff,
+  isAppointmentSessionRestartMessage,
+  resetAppointmentSessionForRetry,
 } from './appointment-state.service';
 import {
   validateAppointmentDateTime,
@@ -156,7 +159,7 @@ describe('safety net handoff triggers', () => {
     assert.equal(post.meta.missingDataBlockStreak, 0);
   });
 
-  it('temel alanlar doluyken 2x bozuk blok handoff tetikler', () => {
+  it('ad/telefon/konu doluyken eksik blok handoff tetiklemez', () => {
     let meta = getAppointmentSession('co1', '905551112233');
     meta = { ...meta, missingDataBlockStreak: 1 };
     const state = mergeAppointmentData(createEmptyAppointmentState(), {
@@ -164,11 +167,57 @@ describe('safety net handoff triggers', () => {
       customer_phone: '905338507761',
       title: 'demo talebi',
     });
+    assert.equal(shouldExpectAppointmentDataBlock(state), false);
+    const parsed = parseAppointmentDataFromResponse('Hangi tarihte randevu almak istersiniz?');
+    const post = applyPostAiProcessing(meta, state, parsed, GURCEM_HISTORY, 'demo');
+    assert.equal(post.handoff, null);
+    assert.equal(post.meta.missingDataBlockStreak, 0);
+  });
+
+  it('tarih/saat kod tarafından parse edildiyse eksik AI bloğu handoff tetiklemez', () => {
+    let meta = getAppointmentSession('co1', '905551112233');
+    meta = { ...meta, missingDataBlockStreak: 1 };
+    const state = mergeAppointmentData(createEmptyAppointmentState(), {
+      customer_name: 'İdris yıldırım',
+      customer_phone: '905338398293',
+      title: 'Sistemleriniz hakkında bilgi',
+      date: '2026-07-14',
+      time: '16:00',
+    });
+    assert.equal(shouldExpectAppointmentDataBlock(state), true);
+    const parsed = parseAppointmentDataFromResponse(
+      'Yarın saat 16:00 müsait görünüyor, onaylıyor musunuz?'
+    );
+    const post = applyPostAiProcessing(
+      meta,
+      state,
+      parsed,
+      [
+        ...GURCEM_HISTORY,
+        { sender_type: 'customer', message: 'Sistemleriniz hakkında bilgi' },
+        { sender_type: 'ai', message: 'Hangi tarihte randevu almak istersiniz?' },
+      ],
+      'Yarın saat 4 de'
+    );
+    assert.equal(post.handoff, null);
+    assert.equal(post.meta.missingDataBlockStreak, 0);
+  });
+
+  it('onay aşamasında 2x bozuk blok handoff tetikler', () => {
+    let meta = getAppointmentSession('co1', '905551112233');
+    meta = { ...meta, missingDataBlockStreak: 1 };
+    const state = mergeAppointmentData(createEmptyAppointmentState(), {
+      customer_name: 'gurcem semercioglu',
+      customer_phone: '905338507761',
+      title: 'demo talebi',
+      date: '2026-07-15',
+      time: '10:00',
+    });
     assert.equal(shouldExpectAppointmentDataBlock(state), true);
     const broken = parseAppointmentDataFromResponse(
       'Özet <appointment_data>{bad</appointment_data>'
     );
-    const post = applyPostAiProcessing(meta, state, broken, GURCEM_HISTORY, 'demo');
+    const post = applyPostAiProcessing(meta, state, broken, GURCEM_HISTORY, 'onaylıyorum');
     assert.equal(post.handoff, 'missing_data_block');
   });
 
@@ -177,6 +226,21 @@ describe('safety net handoff triggers', () => {
     meta = { ...meta, slotTakenCount: 2 };
     const result = evaluateHandoffTriggers(meta, createEmptyAppointmentState(), []);
     assert.equal(result.reason, 'slot_taken_twice');
+  });
+
+  it('handoff sonrası randevu yeniden başlatma mesajını algılar', () => {
+    assert.equal(isAppointmentSessionRestartMessage('randevu almak istiyorum'), true);
+    assert.equal(isAppointmentSessionRestartMessage('Randevu almak istiyor'), true);
+    assert.equal(isAppointmentSessionRestartMessage('merhaba'), false);
+  });
+
+  it('handoff sonrası oturum sıfırlanır', () => {
+    let meta = getAppointmentSession('co1', '905551112233');
+    meta = markSessionHandedOff(meta, 'missing_data_block');
+    saveAppointmentSession('co1', '905551112233', meta, createEmptyAppointmentState());
+    meta = resetAppointmentSessionForRetry('co1', '905551112233');
+    assert.equal(meta.status, 'collecting');
+    assert.equal(meta.lastHandoffReason, null);
   });
 });
 

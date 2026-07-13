@@ -30,9 +30,12 @@ import {
   markSessionHandedOff,
   incrementValidationFailure,
   mergeAppointmentData,
+  isAppointmentSessionRestartMessage,
+  resetAppointmentSessionForRetry,
   type AppointmentLlmState,
   type AppointmentSessionMeta,
 } from './appointment-state.service';
+import { hasDateTimeIntent } from './appointment-datetime-tokens';
 import {
   validateAppointmentDateTime,
   isReadyForBooking,
@@ -46,6 +49,11 @@ import { buildScheduleSummary } from '../services/working-hours.service';
 import { buildDateTimePlaceholders } from './appointment-datetime-context';
 import type { HistoryMsg } from './appointment-collect.service';
 import {
+  parseCollectedFields,
+  isValidFullName,
+  isValidProcedureTitle,
+} from './appointment-collect.service';
+import {
   resolveAppointmentState,
   mergeAiDataPreferCustomer,
   extractCustomerFields,
@@ -57,6 +65,7 @@ import {
   buildAppointmentAvailabilityContext,
   mergeAppointmentSystemNotes,
 } from './appointment-llm-availability.service';
+import { isAppointmentConfirmation } from './appointment-confirm.service';
 
 export interface AppointmentLlmFlowInput {
   companyId: string;
@@ -222,6 +231,25 @@ async function tryBookAppointment(
   }
 }
 
+function customerAdvancedAppointmentState(
+  history: HistoryMsg[],
+  latestMessage: string,
+  state: AppointmentLlmState
+): boolean {
+  const trimmed = latestMessage.trim();
+  if (isAppointmentConfirmation(trimmed, history)) return false;
+  if (hasDateTimeIntent(trimmed) && state.date && state.time) return true;
+  if (isAppointmentTopicReply(history, trimmed)) return true;
+  if (hasNameCorrectionInMessage(trimmed)) return true;
+
+  const fromLatest = parseCollectedFields([], trimmed);
+  if (fromLatest.customer_phone) return true;
+  if (fromLatest.customer_name && isValidFullName(fromLatest.customer_name)) return true;
+  if (fromLatest.title && isValidProcedureTitle(fromLatest.title)) return true;
+
+  return false;
+}
+
 export function applyPostAiProcessing(
   meta: AppointmentSessionMeta,
   state: AppointmentLlmState,
@@ -233,21 +261,28 @@ export function applyPostAiProcessing(
   let nextState = { ...state };
   const customer = extractCustomerFields(history, latestMessage);
   const expectBlock = shouldExpectAppointmentDataBlock(nextState);
+  const codeCapturedTurn = customerAdvancedAppointmentState(history, latestMessage, nextState);
 
   if (parsed.hadBlock && parsed.parseError) {
-    if (expectBlock) {
+    if (expectBlock && !codeCapturedTurn) {
       nextMeta = { ...nextMeta, missingDataBlockStreak: nextMeta.missingDataBlockStreak + 1 };
       logFlow('missing_data_block', { streak: nextMeta.missingDataBlockStreak });
+    } else if (codeCapturedTurn) {
+      nextMeta = { ...nextMeta, missingDataBlockStreak: 0 };
     }
   } else if (parsed.hadBlock && parsed.data) {
     nextMeta = { ...nextMeta, missingDataBlockStreak: 0 };
     nextState = mergeAiDataPreferCustomer(nextState, parsed.data, customer, history, latestMessage);
     logFlow('state_merge', { state: nextState });
   } else if (!parsed.hadBlock && expectBlock) {
-    nextMeta = { ...nextMeta, missingDataBlockStreak: nextMeta.missingDataBlockStreak + 1 };
-    logFlow('missing_data_block', { streak: nextMeta.missingDataBlockStreak, expectBlock: true });
+    if (codeCapturedTurn) {
+      nextMeta = { ...nextMeta, missingDataBlockStreak: 0 };
+      logFlow('missing_data_block_skipped', { reason: 'code_captured_turn' });
+    } else {
+      nextMeta = { ...nextMeta, missingDataBlockStreak: nextMeta.missingDataBlockStreak + 1 };
+      logFlow('missing_data_block', { streak: nextMeta.missingDataBlockStreak, expectBlock: true });
+    }
   } else if (!parsed.hadBlock) {
-    // Bilgi toplama aşamasında blok beklenmez — streak artırma
     nextMeta = { ...nextMeta, missingDataBlockStreak: 0 };
   }
 
@@ -377,7 +412,13 @@ export async function runAppointmentLlmFlow(
   }
 
   if (meta.status === 'handed_off') {
-    meta = queueSystemNote(meta, 'HANDOFF');
+    if (isAppointmentSessionRestartMessage(input.customerMessage)) {
+      meta = resetAppointmentSessionForRetry(input.companyId, input.customerPhone);
+      state = resolveAppointmentState(null, input.history, input.customerMessage);
+      logFlow('session_reset_after_handoff', { message: input.customerMessage.slice(0, 80) });
+    } else {
+      meta = queueSystemNote(meta, 'HANDOFF');
+    }
   }
 
   meta = { ...meta, turnCount: meta.turnCount + 1 };

@@ -140,6 +140,22 @@ export function clearAppointmentSession(companyId: string, customerPhone: string
   sessionStore.delete(sessionKey(companyId, customerPhone));
 }
 
+/** Handoff sonrası müşteri yeni randevu istediğinde oturumu sıfırla */
+export function isAppointmentSessionRestartMessage(message: string): boolean {
+  const trimmed = message.trim().toLocaleLowerCase('tr');
+  return /randevu\s*al|randevu\s*istem|yeni\s*randevu|appointment\s*book|make\s*appointment/i.test(
+    trimmed
+  );
+}
+
+export function resetAppointmentSessionForRetry(
+  companyId: string,
+  customerPhone: string
+): AppointmentSessionMeta {
+  clearAppointmentSession(companyId, customerPhone);
+  return getAppointmentSession(companyId, customerPhone);
+}
+
 export function countAppointmentAiTurns(history: HistoryMsg[]): number {
   return history.filter((m) => m.sender_type === 'ai' || m.sender_type === 'assistant').length;
 }
