@@ -5,6 +5,7 @@
 
 import path from 'path';
 import dotenv from 'dotenv';
+import { messagingPolicyConfig } from './messaging-policy.config';
 
 dotenv.config();
 
@@ -181,6 +182,8 @@ export const config = {
   sessionsDir: process.env.SESSIONS_DIR || path.join(process.cwd(), 'sessions'),
 
   demoMode: process.env.DEMO_MODE === 'true',
+
+  messagingPolicy: messagingPolicyConfig,
 } as const;
 
 if (config.nodeEnv === 'production' && config.demoMode) {

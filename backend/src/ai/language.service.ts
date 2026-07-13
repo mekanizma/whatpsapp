@@ -135,6 +135,8 @@ type MessageKey =
   | 'complaint'
   | 'transfer_offer'
   | 'frustration'
+  | 'anger_handoff'
+  | 'transferred_waiting'
   | 'transfer_connect'
   | 'quota_exceeded'
   | 'appointment_name'
@@ -318,6 +320,24 @@ const MESSAGES: Record<MessageKey, Record<TemplateLang, string>> = {
     ru: 'Сожалею о негативном опыте. Соединяю с живой поддержкой. С вами свяжутся в ближайшее время.',
     fr: 'Je suis désolé pour cette expérience. Je vous mets en relation avec le support. Vous serez contacté bientôt.',
     es: 'Lamento su mala experiencia. Le conecto con soporte en vivo. Le contactarán pronto.',
+  },
+  anger_handoff: {
+    tr: 'Üzgünüm, sizi hemen canlı temsilcimize aktarıyorum.',
+    en: 'I am sorry — I am connecting you to a live representative right away.',
+    de: 'Es tut mir leid — ich verbinde Sie sofort mit einem Live-Mitarbeiter.',
+    ar: 'أنا آسف — سأحوّلك فوراً إلى ممثل مباشر.',
+    ru: 'Извините — сейчас соединю вас с живым представителем.',
+    fr: 'Je suis désolé — je vous mets tout de suite en relation avec un conseiller.',
+    es: 'Lo siento — le conecto de inmediato con un representante en vivo.',
+  },
+  transferred_waiting: {
+    tr: 'Temsilcimiz en kısa sürede sizinle iletişime geçecek.',
+    en: 'Our representative will contact you as soon as possible.',
+    de: 'Unser Mitarbeiter wird sich in Kürze bei Ihnen melden.',
+    ar: 'سيتواصل معك ممثلنا في أقرب وقت.',
+    ru: 'Наш представитель свяжется с вами в ближайшее время.',
+    fr: 'Notre conseiller vous contactera dans les plus brefs délais.',
+    es: 'Nuestro representante se pondrá en contacto con usted lo antes posible.',
   },
   transfer_connect: {
     tr: 'Sizi canlı destek temsilcimize bağlıyorum.',

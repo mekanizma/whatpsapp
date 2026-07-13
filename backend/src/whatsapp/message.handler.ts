@@ -30,6 +30,22 @@ import {
 import { detectConversationLanguage, t, type ConversationLang } from '../ai/language.service';
 import { uploadMessageMedia } from '../services/message-media.service';
 import { isCompanyAiEnabled } from '../services/company-ai-settings.service';
+import { detectAngerPrefilter } from '../ai/anger-prefilter.service';
+import {
+  buildDedupKey,
+  isDedupExempt,
+  markDedupReplySent,
+  shouldSkipDedupReply,
+  clearDedupForConversation,
+} from './ai-reply-dedup.service';
+import {
+  getConversationState,
+  markConversationTransferred,
+  markTransferredWaitingMessageSent,
+  incrementDedupSkipCount,
+  resetDedupSkipCount,
+  clearConversationState,
+} from './conversation-state.service';
 import type { WAMessage } from '@whiskeysockets/baileys';
 import crypto from 'crypto';
 
@@ -38,7 +54,6 @@ const TRANSFER_REPLY_COOLDOWN_MS = 60_000;
 /** Yalnızca bu süre içindeki gelen mesajlara yanıt ver (eski sohbet senkronunu atlar) */
 export const INBOUND_MAX_AGE_SEC = 600;
 const INBOUND_CLOCK_SKEW_SEC = 120;
-const DUPLICATE_AI_REPLY_COOLDOWN_MS = 60 * 60 * 1000;
 
 const recentMessages = new Map<string, { text: string; time: number }>();
 const processedWaIds = new Set<string>();
@@ -133,24 +148,135 @@ export function isRecentInboundMessage(
   return ageSec >= 0 && ageSec <= maxAgeSec;
 }
 
-async function shouldSkipDuplicateAiReply(
+interface ForcedHandoffOptions {
+  companyId: string;
+  phone: string;
+  customerName: string | null;
+  customerMessage: string;
+  whatsappAccountId?: string | null;
+  replyMessage: string;
+  skipReason: string;
+  skippedAI?: boolean;
+}
+
+/** Kritik handoff — dedup ve transfer cooldown kontrollerinden muaf */
+async function deliverForcedHandoff(options: ForcedHandoffOptions): Promise<string> {
+  const {
+    companyId,
+    phone,
+    customerName,
+    customerMessage,
+    whatsappAccountId,
+    replyMessage,
+    skipReason,
+    skippedAI = true,
+  } = options;
+
+  const convState = getConversationState(companyId, phone);
+  if (convState.status === 'transferred') {
+    if (!convState.waitingMessageSent) {
+      const lang = detectConversationLanguage(customerMessage);
+      const waitMsg = t(lang, 'transferred_waiting');
+      markTransferredWaitingMessageSent(companyId, phone);
+
+      await adminClient.from('messages').insert({
+        company_id: companyId,
+        customer_phone: phone,
+        customer_name: customerName,
+        message: waitMsg,
+        sender_type: 'ai',
+        status: 'transferred',
+      });
+
+      return waitMsg;
+    }
+    return '';
+  }
+
+  const transferResult = await handleTransferWithDepartment(
+    companyId,
+    phone,
+    customerName,
+    customerMessage,
+    buildTransferTicketSubject(customerMessage, skipReason),
+    whatsappAccountId
+  );
+
+  let finalReply = replyMessage;
+  if (transferResult.reply) {
+    finalReply = transferResult.reply;
+  }
+
+  let messageStatus: 'open' | 'transferred' = 'open';
+  if (transferResult.ticketCreated) {
+    messageStatus = 'transferred';
+    markConversationTransferred(companyId, phone);
+
+    await adminClient
+      .from('messages')
+      .update({ status: 'transferred' })
+      .eq('company_id', companyId)
+      .eq('customer_phone', phone)
+      .eq('status', 'open');
+
+    markTransferReply(companyId, phone);
+
+    await logActivity({
+      companyId,
+      action: 'conversation_transferred',
+      entityType: 'ticket',
+      metadata: {
+        customer_phone: phone,
+        skip_reason: skipReason,
+        skipped_ai: skippedAI,
+        forced_handoff: true,
+      },
+    });
+
+    console.log(`[WhatsApp] Temsilciye aktarıldı → ${phone} (sebep=${skipReason})`);
+  }
+
+  await adminClient.from('messages').insert({
+    company_id: companyId,
+    customer_phone: phone,
+    customer_name: customerName,
+    message: finalReply,
+    sender_type: 'ai',
+    status: messageStatus,
+  });
+
+  return finalReply;
+}
+
+async function handleTransferredInbound(
   companyId: string,
   phone: string,
-  replyText: string
-): Promise<boolean> {
-  const { data } = await adminClient
-    .from('messages')
-    .select('created_at')
-    .eq('company_id', companyId)
-    .eq('customer_phone', phone)
-    .eq('sender_type', 'ai')
-    .eq('message', replyText)
-    .order('created_at', { ascending: false })
-    .limit(1);
+  customerName: string | null,
+  messageText: string
+): Promise<string | null> {
+  const convState = getConversationState(companyId, phone);
+  if (convState.status !== 'transferred') return null;
 
-  const last = data?.[0];
-  if (!last?.created_at) return false;
-  return Date.now() - new Date(last.created_at).getTime() < DUPLICATE_AI_REPLY_COOLDOWN_MS;
+  if (!convState.waitingMessageSent) {
+    const lang = detectConversationLanguage(messageText);
+    const waitMsg = t(lang, 'transferred_waiting');
+    markTransferredWaitingMessageSent(companyId, phone);
+
+    await adminClient.from('messages').insert({
+      company_id: companyId,
+      customer_phone: phone,
+      customer_name: customerName,
+      message: waitMsg,
+      sender_type: 'ai',
+      status: 'transferred',
+    });
+
+    console.log(`[WhatsApp] Transferred bekleme mesajı gönderildi → ${phone}`);
+    return waitMsg;
+  }
+
+  console.log(`[WhatsApp] Transferred durumda — sessiz → ${phone}`);
+  return '';
 }
 
 async function isMessageAlreadyStored(companyId: string, messageId: string): Promise<boolean> {
@@ -309,6 +435,8 @@ export function clearTransferState(companyId: string, customerPhone: string): vo
   recentTransferReplies.delete(`${companyId}:${phone}`);
   recentMessages.delete(`${companyId}:${phone}`);
   clearPendingDepartmentSelection(companyId, phone);
+  clearConversationState(companyId, phone);
+  clearDedupForConversation(companyId, phone);
 }
 
 export interface InboundImagePayload {
@@ -434,6 +562,7 @@ export async function processInboundImage(
           .eq('status', 'open');
 
         markTransferReply(companyId, phone);
+        markConversationTransferred(companyId, phone);
 
         const lang = detectConversationLanguage(caption);
         const confirmMsg = t(lang, 'dept_forwarded', { department: matched.name });
@@ -493,6 +622,7 @@ export async function processInboundImage(
         .eq('status', 'open');
 
       markTransferReply(companyId, phone);
+      markConversationTransferred(companyId, phone);
 
       await logActivity({
         companyId,
@@ -616,6 +746,16 @@ export async function processInboundMessage(
       return handleAiDisabledInbound(companyId, phone, customerName, trimmed);
     }
 
+    const transferredReply = await handleTransferredInbound(
+      companyId,
+      phone,
+      customerName,
+      trimmed
+    );
+    if (transferredReply !== null) {
+      return transferredReply;
+    }
+
     if (await hasActiveTransferTicket(companyId, phone, { excludeAiDisabled: true })) {
       console.log(`[WhatsApp] Aktif ticket — AI yanıt atlandı → ${phone}`);
       return '';
@@ -642,6 +782,7 @@ export async function processInboundMessage(
           .eq('status', 'open');
 
         markTransferReply(companyId, phone);
+        markConversationTransferred(companyId, phone);
 
         const lang = detectConversationLanguage(trimmed);
         const confirmMsg = t(lang, 'dept_forwarded', { department: matched.name });
@@ -692,6 +833,24 @@ export async function processInboundMessage(
       }
     }
 
+    const recentHistory = await fetchRecentHistory(companyId, phone);
+    const anger = detectAngerPrefilter(trimmed, recentHistory);
+    if (anger.triggered && anger.message) {
+      console.log(
+        `[WhatsApp] Ön-filtre handoff tetiklendi → ${phone} (sebep=${anger.reason})`
+      );
+      return deliverForcedHandoff({
+        companyId,
+        phone,
+        customerName,
+        customerMessage: trimmed,
+        whatsappAccountId,
+        replyMessage: anger.message,
+        skipReason: anger.reason || 'anger_prefilter',
+        skippedAI: true,
+      });
+    }
+
     let aiResponse;
     try {
       aiResponse = await generateAIResponse(companyId, trimmed, phone, customerName);
@@ -704,9 +863,40 @@ export async function processInboundMessage(
     let replyMessage = aiResponse.message;
     if (!replyMessage) return '';
 
-    if (await shouldSkipDuplicateAiReply(companyId, phone, replyMessage)) {
-      console.log(`[WhatsApp] Yinelenen AI yanıtı atlandı → ${phone}`);
+    const dedupKey = buildDedupKey(companyId, phone, replyMessage);
+    const dedupExempt = isDedupExempt({
+      text: replyMessage,
+      shouldTransfer: aiResponse.shouldTransfer,
+    });
+
+    if (!dedupExempt && shouldSkipDedupReply(dedupKey)) {
+      const skipCount = incrementDedupSkipCount(companyId, phone);
+      console.log(
+        `[WhatsApp] Dedup skip (sebep=duplicate_reply, key=${dedupKey}) → ${phone}`
+      );
+      if (skipCount >= config.messagingPolicy.dedupSkipHandoffThreshold) {
+        console.log(
+          `[WhatsApp] dedupSkipCount eşiği aşıldı (${skipCount}) → otomatik handoff → ${phone}`
+        );
+        resetDedupSkipCount(companyId, phone);
+        const lang = detectConversationLanguage(trimmed, recentHistory);
+        return deliverForcedHandoff({
+          companyId,
+          phone,
+          customerName,
+          customerMessage: trimmed,
+          whatsappAccountId,
+          replyMessage: t(lang, 'anger_handoff'),
+          skipReason: 'dedup_skip_threshold',
+          skippedAI: true,
+        });
+      }
       return '';
+    }
+
+    resetDedupSkipCount(companyId, phone);
+    if (!dedupExempt) {
+      markDedupReplySent(dedupKey);
     }
 
     let messageStatus: 'open' | 'transferred' = 'open';
@@ -732,6 +922,7 @@ export async function processInboundMessage(
 
       if (transferResult.ticketCreated) {
         messageStatus = 'transferred';
+        markConversationTransferred(companyId, phone);
 
         await adminClient
           .from('messages')
