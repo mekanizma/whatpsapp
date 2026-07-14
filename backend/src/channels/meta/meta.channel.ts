@@ -26,25 +26,25 @@ async function resolveSendCredentials(
     return { error: 'Sayfa erişim jetonu eksik' as const };
   }
 
-  // Instagram Send API requires the IG Business Account id, not the Facebook Page id.
-  // Messenger uses the Page id.
-  const graphActorId =
-    channel === 'instagram_dm'
-      ? conn.external_ig_user_id || conn.external_page_id
-      : conn.external_page_id;
+  // Facebook Login + Page token: hem Messenger hem Instagram DM
+  // POST /{page-id}/messages ile gider. Instagram Login user token yolu
+  // POST /{ig-user-id}/messages ister; page token ile #3 (capability) döner.
+  const graphActorId = conn.external_page_id || (
+    channel === 'instagram_dm' ? conn.external_ig_user_id : null
+  );
 
   if (!graphActorId) {
     return {
       error:
         channel === 'instagram_dm'
-          ? 'Instagram hesap id (external_ig_user_id) eksik — sayfayı yeniden bağlayın'
+          ? 'Facebook Page id eksik — Instagram DM gönderimi için sayfayı yeniden bağlayın'
           : 'Facebook Page id eksik',
     } as const;
   }
 
-  if (channel === 'instagram_dm' && !conn.external_ig_user_id) {
+  if (channel === 'instagram_dm' && !conn.external_page_id && conn.external_ig_user_id) {
     console.warn(
-      `[Meta] Instagram bağlantısında external_ig_user_id yok; page id ile denenecek → ${connectionId}`
+      `[Meta] Page id yok; IG user id ile denenecek (Instagram Login) → ${connectionId}`
     );
   }
 
