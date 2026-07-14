@@ -61,6 +61,7 @@ export function KnowledgePage() {
   const [uploadInfo, setUploadInfo] = useState<ParsedKnowledgeFile | null>(null);
   const [uploadError, setUploadError] = useState('');
   const [contentView, setContentView] = useState<ContentView>('edit');
+  const [deleteTarget, setDeleteTarget] = useState<KnowledgeItem | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
@@ -121,7 +122,10 @@ export function KnowledgePage() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/knowledge/${id}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['knowledge'] }),
+    onSuccess: () => {
+      setDeleteTarget(null);
+      queryClient.invalidateQueries({ queryKey: ['knowledge'] });
+    },
   });
 
   const reindexMutation = useMutation({
@@ -406,7 +410,14 @@ export function KnowledgePage() {
                     <button type="button" onClick={() => openEdit(item)} className="rounded p-1 hover:bg-gray-100">
                       <Pencil className="h-4 w-4 text-gray-500" />
                     </button>
-                    <button type="button" onClick={() => deleteMutation.mutate(item.id)} className="rounded p-1 hover:bg-red-50">
+                    <button
+                      type="button"
+                      onClick={() => setDeleteTarget(item)}
+                      className="rounded p-1 hover:bg-red-50"
+                      title={t('knowledge.delete')}
+                      aria-label={t('knowledge.delete')}
+                      disabled={deleteMutation.isPending}
+                    >
                       <Trash2 className="h-4 w-4 text-red-500" />
                     </button>
                   </div>
@@ -438,6 +449,71 @@ export function KnowledgePage() {
               </CardContent>
             </Card>
           ))}
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 p-0 sm:items-center sm:p-4"
+          role="presentation"
+          onClick={() => !deleteMutation.isPending && setDeleteTarget(null)}
+        >
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="knowledge-delete-title"
+            aria-describedby="knowledge-delete-desc"
+            className="w-full max-w-md rounded-t-2xl border border-slate-200/80 bg-white p-5 shadow-xl sm:rounded-2xl sm:p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-50 ring-1 ring-red-100">
+                <Trash2 className="h-5 w-5 text-red-600" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 id="knowledge-delete-title" className="text-base font-semibold text-slate-900 sm:text-lg">
+                  {t('knowledge.deleteTitle')}
+                </h3>
+                <p id="knowledge-delete-desc" className="mt-2 text-sm leading-relaxed text-slate-600">
+                  {t('knowledge.deleteConfirm', { title: deleteTarget.title })}
+                </p>
+                <p className="mt-2 text-xs leading-relaxed text-slate-500">
+                  {t('knowledge.deleteHint')}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                aria-label={t('common.cancel')}
+                disabled={deleteMutation.isPending}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full sm:w-auto"
+                onClick={() => setDeleteTarget(null)}
+                disabled={deleteMutation.isPending}
+              >
+                {t('common.cancel')}
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                className="w-full sm:w-auto"
+                onClick={() => deleteMutation.mutate(deleteTarget.id)}
+                disabled={deleteMutation.isPending}
+              >
+                {deleteMutation.isPending ? <Spinner className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
+                {t('knowledge.deleteAction')}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>

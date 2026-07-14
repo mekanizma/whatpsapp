@@ -3,17 +3,18 @@
  */
 
 import { useState } from 'react';
-import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { Outlet, useNavigate, useLocation, NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   LayoutDashboard, MessageSquare, BookOpen, Users, Ticket,
   CreditCard, Smartphone, Settings, CalendarDays, UserRound, HelpCircle, Headphones,
-  Sparkles, UserCog, PackageSearch, Truck, ShoppingCart, RefreshCcw, Globe,
+  Sparkles, UserCog, PackageSearch, Truck, ShoppingCart, RefreshCcw, Globe, ChevronRight,
 } from 'lucide-react';
 import { PanelNotificationBell } from '@/components/PanelNotificationBell';
 import { useAuthStore } from '@/store/authStore';
 import { planHasModule, type PlanModuleKey } from '@/lib/plan-capabilities';
 import { canSeeNavItem } from '@/lib/staff-permissions';
+import { localizePlan, resolvePlanI18nKey } from '@/lib/plan-localize';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { CompanyLogo } from '@/components/CompanyLogo';
 import { ImpersonationBanner } from '@/components/ImpersonationBanner';
@@ -122,7 +123,7 @@ function filterNavItem(
 }
 
 export function CompanyLayout() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { user, company, companyPlan, logout, isImpersonating } = useAuthStore();
   const navigate = useNavigate();
@@ -130,6 +131,26 @@ export function CompanyLayout() {
 
   const planType = companyPlan?.plan_type || company?.subscription_plan;
   const isStaff = user?.role === 'staff';
+  const locale = i18n.language?.startsWith('en') ? 'en-US' : 'tr-TR';
+
+  const planKey = planType ? resolvePlanI18nKey(planType) : '';
+  const planName = companyPlan
+    ? localizePlan(companyPlan, i18n.language).name
+    : planKey
+      ? t(`pricing.planCatalog.${planKey}.name`, {
+          defaultValue: t(`common.plans.${planKey}`, { defaultValue: planType || '' }).replace(
+            /\s*\([^)]*\)\s*$/,
+            ''
+          ),
+        })
+      : '';
+  const messageLimit = companyPlan?.message_limit ?? companyPlan?.messages_limit ?? null;
+  const planQuotaLabel =
+    messageLimit == null
+      ? null
+      : messageLimit >= 999999
+        ? t('subscription.unlimitedMessages')
+        : t('layout.planAiQuota', { count: messageLimit.toLocaleString(locale) });
 
   const visibleGroups: PremiumNavGroup[] = navGroups
     .map((group) => ({
@@ -198,19 +219,33 @@ export function CompanyLayout() {
           }
           badge={
             isStaff ? (
-              <div className="sidebar-premium-plan mt-2.5 flex items-center gap-2 rounded-xl px-3 py-2">
-                <UserCog className="h-3.5 w-3.5 shrink-0 text-accent" />
-                <span className="truncate text-[11px] font-semibold capitalize text-emerald-300">
-                  {roleLabel}
-                </span>
+              <div className="sidebar-premium-plan mt-2.5">
+                <div className="sidebar-premium-plan-icon">
+                  <UserCog className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="sidebar-premium-plan-label">{t('layout.staffRole')}</p>
+                  <p className="sidebar-premium-plan-name capitalize">{roleLabel}</p>
+                </div>
               </div>
             ) : planType ? (
-              <div className="sidebar-premium-plan mt-2.5 flex items-center gap-2 rounded-xl px-3 py-2">
-                <Sparkles className="h-3.5 w-3.5 shrink-0 text-accent" />
-                <span className="truncate text-[11px] font-semibold text-emerald-300">
-                  {t(`common.plans.${planType}`, { defaultValue: planType })}
-                </span>
-              </div>
+              <NavLink
+                to="/panel/subscription"
+                onClick={() => setSidebarOpen(false)}
+                className="sidebar-premium-plan mt-2.5 group"
+              >
+                <div className="sidebar-premium-plan-icon">
+                  <Sparkles className="h-4 w-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="sidebar-premium-plan-label">{t('layout.activePlan')}</p>
+                  <p className="sidebar-premium-plan-name">{planName}</p>
+                  {planQuotaLabel && (
+                    <p className="sidebar-premium-plan-meta">{planQuotaLabel}</p>
+                  )}
+                </div>
+                <ChevronRight className="h-4 w-4 shrink-0 text-slate-500 transition-colors group-hover:text-emerald-300" />
+              </NavLink>
             ) : null
           }
           groups={visibleGroups}
@@ -218,9 +253,13 @@ export function CompanyLayout() {
             <>
               <div className="flex items-center gap-3">
                 <div className="relative">
-                  <div className="sidebar-premium-avatar">
-                    {user?.full_name?.charAt(0)?.toUpperCase() || '?'}
-                  </div>
+                  <CompanyLogo
+                    logo={company?.logo}
+                    companyName={company?.company_name || user?.full_name}
+                    size="sm"
+                    className="!h-10 !w-10 !rounded-xl !text-xs"
+                    showFallbackIcon={false}
+                  />
                   <span className="sidebar-premium-status absolute -bottom-0.5 -right-0.5" aria-hidden />
                 </div>
                 <div className="min-w-0 flex-1">

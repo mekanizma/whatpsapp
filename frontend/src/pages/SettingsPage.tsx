@@ -65,7 +65,6 @@ export function SettingsPage() {
 
   const isAdmin = user?.role === 'company_admin';
   const roleLabel = user?.role ? t(`common.roles.${user.role}`, { defaultValue: user.role }) : '';
-  const profileInitials = getInitials(fullName || user?.full_name || email || '?');
   const notifyEnabledCount = notificationUsers.filter((u) => u.notify_enabled).length;
 
   const tabs = useMemo(() => {
@@ -305,9 +304,13 @@ export function SettingsPage() {
               )}
 
               <div className="flex flex-col gap-4 rounded-2xl border border-slate-200/80 bg-gradient-to-br from-white to-slate-50/80 p-5 ring-1 ring-slate-100 sm:flex-row sm:items-center">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-primary/10 text-lg font-bold text-primary ring-1 ring-primary/10">
-                  {profileInitials}
-                </div>
+                <CompanyLogo
+                  logo={company?.logo}
+                  companyName={company?.company_name || fullName || user?.full_name}
+                  size="md"
+                  className="!h-14 !w-14 !rounded-2xl !text-lg"
+                  showFallbackIcon={false}
+                />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-lg font-semibold text-slate-900">{fullName || t('settings.fullName')}</p>
                   <p className="truncate text-sm text-slate-500">{email || '—'}</p>
@@ -758,11 +761,4 @@ export function SettingsPage() {
       </div>
     </div>
   );
-}
-
-function getInitials(value: string): string {
-  const parts = value.trim().split(/\s+/).filter(Boolean);
-  if (!parts.length) return '?';
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
 }

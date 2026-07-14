@@ -499,6 +499,9 @@
     "customerPanel": "Müşteri Paneli",
     "staffPanel": "Personel Paneli",
     "accountSettings": "Hesap ayarları →",
+    "activePlan": "Aktif paket",
+    "staffRole": "Rol",
+    "planAiQuota": "{{count}} AI görüşme / ay",
     "notifications": "Bildirimler",
     "browserNotificationsOn": "Tarayıcı bildirimleri açık",
     "browserNotificationsOff": "Tarayıcı bildirimlerini aç",
@@ -514,7 +517,7 @@
       "account": "Hesap"
     },
     "nav": {
-      "dashboard": "Dashboard",
+      "dashboard": "Anasayfa",
       "messages": "Mesajlar",
       "customers": "Aktif Müşteriler",
       "knowledge": "Bilgi Bankası",
@@ -546,7 +549,7 @@
       "companyDetail": "Şirket Detayı"
     },
     "titles": {
-      "dashboard": "Dashboard",
+      "dashboard": "Anasayfa",
       "messages": "Mesajlar",
       "todayActivity": "Bugünkü Aktivite",
       "aiInsights": "AI Asistan Özeti",
@@ -972,6 +975,11 @@
     "inactive": "Pasif",
     "setActive": "Aktif Yap",
     "setInactive": "Pasif Yap",
+    "delete": "Sil",
+    "deleteTitle": "Bilgi kaydını sil",
+    "deleteConfirm": "“{{title}}” adlı kayıt kalıcı olarak silinecek.",
+    "deleteHint": "Bu içerik AI yanıtlarında artık kullanılmaz. İşlem geri alınamaz.",
+    "deleteAction": "Evet, sil",
     "indexStatus": {
       "pending": "Bekliyor",
       "indexing": "İndeksleniyor",
