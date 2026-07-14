@@ -37,6 +37,49 @@ export async function getStaffRecord(
   return data || null;
 }
 
+/** Aktif taleplerde personele atanan müşteri telefonları */
+export async function getAssignedCustomerPhones(
+  companyId: string,
+  staffId: string
+): Promise<string[]> {
+  const { data } = await adminClient
+    .from('tickets')
+    .select('customer_phone')
+    .eq('company_id', companyId)
+    .eq('assigned_staff', staffId)
+    .in('status', ['open', 'in_progress']);
+
+  return [
+    ...new Set(
+      (data || [])
+        .map((row) => row.customer_phone as string | null)
+        .filter((phone): phone is string => !!phone)
+    ),
+  ];
+}
+
+/** Personel yalnızca kendisine atanmış müşteri konuşmasına erişebilir */
+export async function staffCanAccessCustomerPhone(
+  companyId: string,
+  profileId: string | undefined,
+  customerPhone: string
+): Promise<boolean> {
+  const staff = await getStaffRecord(companyId, profileId);
+  if (!staff) return false;
+
+  const { data } = await adminClient
+    .from('tickets')
+    .select('id')
+    .eq('company_id', companyId)
+    .eq('assigned_staff', staff.id)
+    .eq('customer_phone', customerPhone)
+    .in('status', ['open', 'in_progress'])
+    .limit(1)
+    .maybeSingle();
+
+  return !!data;
+}
+
 /** Profile'a bağlı staff kaydını bulur; yoksa profilden otomatik oluşturur (claim/atama için). */
 export async function resolveStaffIdForProfile(
   companyId: string,

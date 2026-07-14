@@ -29,6 +29,8 @@ export function MessagesPage() {
   const phoneParam = searchParams.get('phone');
   const ticketParam = searchParams.get('ticket');
   const companyId = useAuthStore((s) => s.company?.id);
+  const userRole = useAuthStore((s) => s.user?.role);
+  const isStaff = userRole === 'staff';
 
   const [selectedPhone, setSelectedPhone] = useState<string | null>(phoneParam);
   const [replyText, setReplyText] = useState('');
@@ -91,11 +93,22 @@ export function MessagesPage() {
     };
   }, [companyId, selectedPhone, invalidateMessageQueries]);
 
-  const { data: conversations, isLoading } = useQuery({
-    queryKey: ['conversations'],
+  const { data: conversations, isLoading, isFetched: conversationsFetched } = useQuery({
+    queryKey: ['conversations', userRole],
     queryFn: () => api.get<Conversation[]>('/messages'),
     refetchInterval: supabaseConfigured ? false : 10000,
   });
+
+  // Personel yalnızca kendisine atanan konuşmaları görebilir; yetkisiz deep-link'i kapat
+  // ticketParam varken claim/navigasyon sonrası liste henüz güncellenmemiş olabilir
+  useEffect(() => {
+    if (!isStaff || !selectedPhone || !conversationsFetched || isLoading || ticketParam) return;
+    const allowed = conversations?.some((c) => c.customer_phone === selectedPhone);
+    if (!allowed) {
+      setSelectedPhone(null);
+      setSearchParams({});
+    }
+  }, [isStaff, selectedPhone, conversations, conversationsFetched, isLoading, ticketParam, setSearchParams]);
 
   const encodedPhone = selectedPhone ? encodeURIComponent(selectedPhone) : '';
 
@@ -150,7 +163,9 @@ export function MessagesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['active-ticket', selectedPhone] });
       queryClient.invalidateQueries({ queryKey: ['tickets'] });
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
       setSearchParams({});
+      if (isStaff) setSelectedPhone(null);
     },
   });
 
@@ -216,7 +231,12 @@ export function MessagesPage() {
           {isLoading ? (
             <div className="flex justify-center p-8"><Spinner /></div>
           ) : filtered?.length === 0 ? (
-            <EmptyState icon={MessageSquare} title={t('messages.empty')} description={t('messages.emptyDesc')} className="m-2 border-none bg-transparent" />
+            <EmptyState
+              icon={MessageSquare}
+              title={t(isStaff ? 'messages.emptyAssigned' : 'messages.empty')}
+              description={t(isStaff ? 'messages.emptyAssignedDesc' : 'messages.emptyDesc')}
+              className="m-2 border-none bg-transparent"
+            />
           ) : (
             filtered?.map((conv) => (
               <button
@@ -305,7 +325,13 @@ export function MessagesPage() {
                     compact
                     onSuccess={() => {
                       queryClient.invalidateQueries({ queryKey: ['active-ticket', selectedPhone] });
-                      setSearchParams({ phone: selectedPhone! });
+                      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+                      if (isStaff) {
+                        setSelectedPhone(null);
+                        setSearchParams({});
+                      } else {
+                        setSearchParams({ phone: selectedPhone! });
+                      }
                     }}
                   />
                 </div>
@@ -404,7 +430,9 @@ export function MessagesPage() {
               <MessageSquare className="h-8 w-8 text-slate-300" />
             </div>
             <p className="mt-4 font-medium text-slate-600">{t('messages.selectChat')}</p>
-            <p className="mt-1 text-sm text-slate-400">{t('messages.selectChatDesc')}</p>
+            <p className="mt-1 max-w-xs text-center text-sm text-slate-400">
+              {t(isStaff ? 'messages.selectChatAssignedDesc' : 'messages.selectChatDesc')}
+            </p>
           </div>
         )}
       </div>

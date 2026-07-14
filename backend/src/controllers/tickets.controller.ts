@@ -102,15 +102,25 @@ export async function getActiveTicketByPhone(req: AuthRequest, res: Response): P
   const phone = normalizePhoneNumber(req.params.phone as string)
     || (req.params.phone as string).replace(/\D/g, '');
 
-  const { data, error } = await adminClient
+  let query = adminClient
     .from('tickets')
     .select(TICKET_SELECT)
     .eq('company_id', req.companyId)
     .eq('customer_phone', phone)
     .in('status', ['open', 'in_progress'])
     .order('created_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .limit(1);
+
+  if (req.role === 'staff') {
+    const staffId = await getStaffIdForProfile(req.companyId!, req.profile?.id);
+    if (!staffId) {
+      res.json({ success: true, data: null });
+      return;
+    }
+    query = query.eq('assigned_staff', staffId);
+  }
+
+  const { data, error } = await query.maybeSingle();
 
   if (error) {
     res.status(400).json({ success: false, error: error.message });

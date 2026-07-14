@@ -16,6 +16,11 @@ import {
   uploadMessageMedia,
 } from '../services/message-media.service';
 import { buildContentDisposition } from '../utils/content-disposition';
+import {
+  getAssignedCustomerPhones,
+  getStaffRecord,
+  staffCanAccessCustomerPhone,
+} from '../services/department-access.service';
 
 function resolvePhoneParam(phone: string): string {
   return normalizePhoneNumber(phone) || phone.replace(/\D/g, '');
@@ -28,18 +33,59 @@ function formatLastMessagePreview(message: string, mediaType?: string | null): s
   return message;
 }
 
+/** Personel için konuşma erişim kontrolü; admin her zaman geçer */
+async function assertStaffConversationAccess(
+  req: AuthRequest,
+  phone: string
+): Promise<true | { status: number; error: string }> {
+  if (req.role !== 'staff') return true;
+  if (!req.companyId) {
+    return { status: 403, error: 'Şirket bilgisi bulunamadı' };
+  }
+
+  const allowed = await staffCanAccessCustomerPhone(
+    req.companyId,
+    req.profile?.id,
+    phone
+  );
+  if (!allowed) {
+    return { status: 403, error: 'Bu konuşmaya erişim yetkiniz yok' };
+  }
+  return true;
+}
+
 export async function getConversations(req: AuthRequest, res: Response): Promise<void> {
   if (isDemoSession(req)) {
     res.json({ success: true, data: [] });
     return;
   }
 
-  const { data: messages, error } = await adminClient
+  let assignedPhones: string[] | null = null;
+  if (req.role === 'staff') {
+    const staff = await getStaffRecord(req.companyId!, req.profile?.id);
+    if (!staff) {
+      res.json({ success: true, data: [] });
+      return;
+    }
+    assignedPhones = await getAssignedCustomerPhones(req.companyId!, staff.id);
+    if (assignedPhones.length === 0) {
+      res.json({ success: true, data: [] });
+      return;
+    }
+  }
+
+  let query = adminClient
     .from('messages')
     .select('*')
     .eq('company_id', req.companyId)
     .order('created_at', { ascending: false })
     .limit(500);
+
+  if (assignedPhones) {
+    query = query.in('customer_phone', assignedPhones);
+  }
+
+  const { data: messages, error } = await query;
 
   if (error) {
     res.status(400).json({ success: false, error: error.message });
@@ -80,6 +126,12 @@ export async function getConversations(req: AuthRequest, res: Response): Promise
 export async function getConversationMessages(req: AuthRequest, res: Response): Promise<void> {
   const phone = resolvePhoneParam(req.params.phone as string);
 
+  const access = await assertStaffConversationAccess(req, phone);
+  if (access !== true) {
+    res.status(access.status).json({ success: false, error: access.error });
+    return;
+  }
+
   const { data, error } = await adminClient
     .from('messages')
     .select('*, staff:staff_id(name)')
@@ -104,13 +156,19 @@ export async function getMessageMedia(req: AuthRequest, res: Response): Promise<
 
   const { data: msg, error } = await adminClient
     .from('messages')
-    .select('id, company_id, media_path, media_type, media_filename')
+    .select('id, company_id, customer_phone, media_path, media_type, media_filename')
     .eq('id', messageId)
     .eq('company_id', req.companyId)
     .maybeSingle();
 
   if (error || !msg?.media_path) {
     res.status(404).json({ success: false, error: 'Medya bulunamadı' });
+    return;
+  }
+
+  const access = await assertStaffConversationAccess(req, msg.customer_phone);
+  if (access !== true) {
+    res.status(access.status).json({ success: false, error: access.error });
     return;
   }
 
@@ -193,6 +251,12 @@ export async function replyToConversation(req: AuthRequest, res: Response): Prom
     return;
   }
 
+  const access = await assertStaffConversationAccess(req, phone);
+  if (access !== true) {
+    res.status(access.status).json({ success: false, error: access.error });
+    return;
+  }
+
   const { data: staffRecord } = await adminClient
     .from('staff')
     .select('id, name')
@@ -254,6 +318,12 @@ export async function replyWithImage(req: AuthRequest, res: Response): Promise<v
 
   if (!req.companyId) {
     res.status(403).json({ success: false, error: 'Şirket bilgisi bulunamadı' });
+    return;
+  }
+
+  const access = await assertStaffConversationAccess(req, phone);
+  if (access !== true) {
+    res.status(access.status).json({ success: false, error: access.error });
     return;
   }
 

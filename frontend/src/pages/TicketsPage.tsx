@@ -49,6 +49,7 @@ export function TicketsPage() {
     mutationFn: (ticket: TicketType) => api.patch<TicketType>(`/tickets/${ticket.id}/claim`, {}),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['tickets'] });
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
       navigate(`/panel/messages?phone=${encodeURIComponent(data.customer_phone)}&ticket=${data.id}`);
     },
   });
