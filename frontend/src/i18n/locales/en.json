@@ -530,6 +530,7 @@
       "returns": "Returns & Exchanges",
       "staff": "Staff",
       "whatsapp": "WhatsApp",
+      "meta": "Meta (IG / Messenger)",
       "website": "Website",
       "subscription": "Subscription",
       "platformSupport": "Platform Support",
@@ -564,6 +565,7 @@
       "returns": "Returns & Exchanges",
       "staff": "Staff",
       "whatsapp": "WhatsApp",
+      "meta": "Meta (IG / Messenger)",
       "website": "Website",
       "subscription": "Subscription",
       "platformSupport": "Platform Support",
@@ -986,6 +988,62 @@
       "ready": "Ready",
       "failed": "Failed"
     }
+  },
+  "meta": {
+    "title": "Meta Integration",
+    "description": "Connect Facebook Messenger and Instagram DM via OAuth. Messages use the same AI pipeline as WhatsApp.",
+    "descriptionSimple": "Sign in with your Facebook account; Messenger and Instagram DM connect automatically. Messages use the same AI as WhatsApp.",
+    "connectTitle": "Quick connect",
+    "connectDesc": "One login links every Facebook Page you manage and any linked Instagram Business accounts.",
+    "connectHint": "No webhook or App ID setup — the platform Meta app is used.",
+    "accountsTitle": "Connected accounts",
+    "accountsDesc": "Toggle inbound messages or disconnect accounts.",
+    "noConnectionsSimple": "No accounts yet. Click Connect with Meta above.",
+    "statusMessengerOn": "Messenger connected",
+    "statusMessengerOff": "Messenger not connected",
+    "statusInstagramOn": "Instagram connected",
+    "statusInstagramOff": "Instagram not connected",
+    "reconnectOAuth": "Reconnect / refresh accounts",
+    "oauthAutoSuccess": "Done: {{messenger}} Messenger, {{instagram}} Instagram account(s) linked.",
+    "messenger": "Messenger",
+    "instagram": "Instagram DM",
+    "messengerTitle": "Facebook Messenger",
+    "messengerDesc": "Route Page messages into the WAAI assistant.",
+    "instagramTitle": "Instagram DM",
+    "instagramDesc": "Handle Instagram Business DMs with the same knowledge base and handoff.",
+    "connectOAuth": "Connect with Meta",
+    "oauthNotConfigured": "META_APP_ID, META_APP_SECRET and META_REDIRECT_URI are not set on the server.",
+    "oauthSuccess": "Meta OAuth succeeded. Select the page to link.",
+    "oauthError": "Meta OAuth failed: {{reason}}",
+    "selectPage": "Select page / Instagram account",
+    "linkSuccess": "Account linked.",
+    "noConnections": "No connected accounts for this channel yet.",
+    "unnamed": "Unnamed account",
+    "connected": "Connected",
+    "disconnected": "Disconnected",
+    "disconnect": "Disconnect",
+    "deleteConfirm": "Permanently delete this Meta connection?",
+    "inboundOn": "Inbound on",
+    "inboundOff": "Inbound off",
+    "testSection": "Test message",
+    "recipientId": "Recipient ID (PSID / IGSID)",
+    "testMessage": "Message",
+    "defaultTestMessage": "WAAI Meta integration test message",
+    "sendTest": "Send test",
+    "testSent": "Test message sent.",
+    "webhookTitle": "Webhook verification",
+    "webhookDesc": "Meta Developer Console → Webhooks → use the callback URL below. Objects: page and instagram.",
+    "webhookUrl": "Callback URL",
+    "verifyToken": "Verify Token",
+    "webhookSteps": [
+      "Open Meta App → Messenger / Instagram → Webhooks",
+      "Paste the callback URL above",
+      "Enter the verify token from this panel",
+      "Subscribe to messages; link your page / IG account"
+    ],
+    "channelMessenger": "Messenger",
+    "channelInstagram": "Instagram",
+    "channelWhatsapp": "WhatsApp"
   },
   "whatsapp": {
     "title": "WhatsApp Connection",
@@ -1785,6 +1843,232 @@
       "in_progress": "In Progress",
       "resolved": "Resolved",
       "closed": "Closed"
+    }
+  },
+  "legal": {
+    "label": "Legal",
+    "backHome": "Back to home",
+    "navLabel": "Legal documents",
+    "contactTitle": "Contact",
+    "contactBody": "If you have questions about these documents, you can reach us using the details below.",
+    "terms": {
+      "nav": "Terms of Service",
+      "title": "Terms of Service",
+      "updated": "Last updated: 14 July 2026",
+      "intro": "These Terms of Service govern your use of the Waai (WhatsApp AI Agent) platform operated by Mekanizma. By using the platform, you agree to these terms.",
+      "sections": [
+        {
+          "heading": "1. Parties and Definitions",
+          "paragraphs": [
+            "Service provider: Mekanizma (\"Mekanizma\", \"we\", \"us\"). Product name: Waai / WhatsApp AI Agent. Website: https://waai.mekanizma.com.",
+            "\"User\" or \"Customer\" means any individual or legal entity that registers, subscribes, or otherwise uses the service. \"End user\" means people who message the Customer via WhatsApp, Messenger, or Instagram."
+          ]
+        },
+        {
+          "heading": "2. Scope of the Service",
+          "paragraphs": [
+            "Waai provides AI-assisted customer messaging across WhatsApp, Meta Messenger, Instagram DM and related channels, plus knowledge base tools, live handoff, appointment/ticket workflows, and a subscription panel.",
+            "Available features depend on the selected plan. Mekanizma may update features reasonably as the service evolves."
+          ]
+        },
+        {
+          "heading": "3. Account and Responsibilities",
+          "paragraphs": [
+            "You are responsible for the accuracy and security of your account. Notify us promptly of any unauthorized access."
+          ],
+          "list": [
+            "Use the platform lawfully and in line with third-party terms (including Meta/WhatsApp) and these documents",
+            "Inform end users as required and obtain necessary consents",
+            "Do not send harmful, misleading, illegal, or spam content",
+            "Do not reverse engineer, overload, or attempt unauthorized access to the service"
+          ]
+        },
+        {
+          "heading": "4. Subscription and Payment",
+          "paragraphs": [
+            "Paid plans are billed monthly or yearly as selected. Fees, taxes, and currency terms are stated at order or contract time.",
+            "Non-payment may lead to suspension or restricted access. Refunds follow the applicable plan terms unless otherwise agreed in writing."
+          ]
+        },
+        {
+          "heading": "5. Third-Party Services",
+          "paragraphs": [
+            "The service may depend on WhatsApp, Meta (Facebook/Instagram), payment providers, and cloud infrastructure. Mekanizma is not liable for outages, policy changes, or account restrictions by those parties, but will provide reasonable support."
+          ]
+        },
+        {
+          "heading": "6. Intellectual Property",
+          "paragraphs": [
+            "Platform software, UI, brands, and documentation belong to Mekanizma. Customers retain rights in their uploaded content (knowledge base, logos, etc.) and grant us a limited license to process that content to provide the service."
+          ]
+        },
+        {
+          "heading": "7. Limitation of Liability",
+          "paragraphs": [
+            "The service is provided \"as is\". AI responses may be imperfect; human review is recommended for critical actions.",
+            "To the extent permitted by law, Mekanizma is not liable for indirect, incidental, or lost-profit damages, or for third-party acts. Aggregate liability is limited to fees paid for the relevant service in the prior 12 months."
+          ]
+        },
+        {
+          "heading": "8. Termination",
+          "paragraphs": [
+            "You may request account closure at any time. We may suspend or terminate for breach, payment issues, or legal requirements. After termination, data is handled under the Privacy Policy and Data Deletion page."
+          ]
+        },
+        {
+          "heading": "9. Governing Law",
+          "paragraphs": [
+            "These terms apply in the context of Mekanizma operating in the TRNC. Disputes should first be negotiated in good faith; otherwise Girne/TRNC authorities have jurisdiction (mandatory consumer rights reserved)."
+          ]
+        },
+        {
+          "heading": "10. Changes",
+          "paragraphs": [
+            "We may update these terms by revising this page. For material changes we aim to notify you by email or in-panel notice. Continued use after an update means you accept the changes."
+          ]
+        }
+      ]
+    },
+    "privacy": {
+      "nav": "Privacy Policy",
+      "title": "Privacy Policy",
+      "updated": "Last updated: 14 July 2026",
+      "intro": "This Privacy Policy explains which personal data Mekanizma collects when you use Waai, how it is processed, and what rights you have.",
+      "sections": [
+        {
+          "heading": "1. Data Controller",
+          "paragraphs": [
+            "The data controller is Mekanizma. Address: Beşparmaklar Caddesi, No: 6, Çatalköy, Kyrenia, TRNC. Email: info@mekanizma.com. Phone: +90 533 850 77 61."
+          ]
+        },
+        {
+          "heading": "2. Data We Collect",
+          "paragraphs": [
+            "To provide the service we may process the following categories of data:"
+          ],
+          "list": [
+            "Account data: name, email, company name, role, contact details",
+            "Subscription and billing data: plan, payment status, invoices",
+            "Messaging data: inbound/outbound message content via WhatsApp / Messenger / Instagram, media, timestamps, customer identifiers (e.g. phone numbers)",
+            "Technical data: IP address, device/browser info, session and security logs",
+            "Meta/Facebook connection data: page/account IDs, access tokens (stored securely), page/account names",
+            "Support tickets and panel usage records"
+          ]
+        },
+        {
+          "heading": "3. Purposes of Processing",
+          "paragraphs": [
+            "We process data to provide and improve the service; generate AI replies; protect security and prevent fraud; bill and support customers; meet legal duties; and run product analytics (we do not sell data for personalized advertising)."
+          ]
+        },
+        {
+          "heading": "4. Legal Bases",
+          "paragraphs": [
+            "Processing is based on contract performance, legitimate interests (security, product improvement), consent where required, and legal obligations."
+          ]
+        },
+        {
+          "heading": "5. Sharing",
+          "paragraphs": [
+            "We do not sell your data. It may be shared only as needed with:"
+          ],
+          "list": [
+            "Infrastructure and hosting providers (e.g. cloud database)",
+            "Meta / WhatsApp APIs (to deliver messages)",
+            "Payment processors",
+            "Competent authorities when legally required"
+          ]
+        },
+        {
+          "heading": "6. Retention",
+          "paragraphs": [
+            "Data is kept while the account is active and as required by law. After account closure or a deletion request, data is deleted or anonymized within a reasonable time unless legal retention applies. See the Data Deletion page for details."
+          ]
+        },
+        {
+          "heading": "7. Security",
+          "paragraphs": [
+            "We apply access controls, encrypted connections (HTTPS), secure token storage, and role restrictions. No system is 100% secure; we will notify you if a breach is suspected as required."
+          ]
+        },
+        {
+          "heading": "8. Your Rights",
+          "paragraphs": [
+            "Subject to applicable law, you may request access, correction, deletion, restriction, or objection. Contact info@mekanizma.com to exercise these rights."
+          ]
+        },
+        {
+          "heading": "9. Cookies",
+          "paragraphs": [
+            "We use essential cookies for session and security. Any analytics cookies are anonymized where practicable. You can manage cookies in your browser settings."
+          ]
+        },
+        {
+          "heading": "10. Children",
+          "paragraphs": [
+            "The service is not directed at anyone under 18. We do not knowingly collect children’s data."
+          ]
+        }
+      ]
+    },
+    "deletion": {
+      "nav": "Data Deletion",
+      "title": "Data Deletion Instructions",
+      "updated": "Last updated: 14 July 2026",
+      "intro": "This page explains how to delete data collected through Waai, including for Meta (Facebook / Instagram) app review and general user rights.",
+      "sections": [
+        {
+          "heading": "1. What data can be deleted?",
+          "paragraphs": [
+            "Upon request we can delete account details, company panel records, message history, support tickets, Meta connection tokens, and related profile/page mappings.",
+            "Data retained for legal reasons (e.g. invoices) or security may be kept only as long as the law requires."
+          ]
+        },
+        {
+          "heading": "2. Deletion via the panel (business users)",
+          "paragraphs": [
+            "If you can sign in to Waai:"
+          ],
+          "list": [
+            "Permanently remove Meta / WhatsApp connections from Settings or the Meta Integrations page",
+            "Open a Platform Support ticket or email info@mekanizma.com to request account closure or full data deletion",
+            "Use the subject line \"Data Deletion Request\" and include your registered email and company name"
+          ]
+        },
+        {
+          "heading": "3. Requests from Meta / Facebook users",
+          "paragraphs": [
+            "If you want data from your Facebook or Instagram interactions with Waai deleted, email us with:"
+          ],
+          "list": [
+            "Your Facebook / Instagram user ID or profile link (if available)",
+            "Related phone number or chat identifier (if any)",
+            "The business or page name involved",
+            "The phrase \"Meta data deletion request\""
+          ]
+        },
+        {
+          "heading": "4. How to submit a request",
+          "paragraphs": [
+            "Email: info@mekanizma.com",
+            "Subject: Data Deletion Request — Waai",
+            "We may ask you to write from your registered email or provide enough identifiers to verify your identity. Requests are usually completed within 30 days; complex cases may take longer and we will notify you."
+          ]
+        },
+        {
+          "heading": "5. After deletion",
+          "paragraphs": [
+            "When deletion is complete, access tokens are revoked and related message/account data is removed or anonymized. Copies in backups may remain until the backup cycle ends, then are purged.",
+            "Deletion is irreversible. Reusing the service may require a new account or reconnection."
+          ]
+        },
+        {
+          "heading": "6. Contact",
+          "paragraphs": [
+            "Questions: info@mekanizma.com · +90 533 850 77 61 · Beşparmaklar Caddesi, No: 6, Çatalköy, Kyrenia, TRNC"
+          ]
+        }
+      ]
     }
   }
 }

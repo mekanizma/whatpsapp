@@ -6,9 +6,10 @@ import { Response } from 'express';
 import crypto from 'crypto';
 import { adminClient } from '../database/supabase';
 import { AuthRequest, isDemoSession } from '../middleware/auth.middleware';
-import { sendMessageToCustomer, sendImageToCustomer } from '../whatsapp/whatsapp.service';
+import { sendChannelText, sendChannelImage } from '../channels/outbound.service';
 import { logActivity } from '../services/log.service';
 import { normalizePhoneNumber } from '../whatsapp/message.handler';
+import { isChannelCustomerId, parseCustomerExternalId } from '../channels/customer-id';
 import { mapMessageRow } from '../utils/supabase-join';
 import {
   attachSignedMediaUrls,
@@ -23,7 +24,9 @@ import {
 } from '../services/department-access.service';
 
 function resolvePhoneParam(phone: string): string {
-  return normalizePhoneNumber(phone) || phone.replace(/\D/g, '');
+  const decoded = decodeURIComponent(phone);
+  if (isChannelCustomerId(decoded)) return decoded.trim();
+  return normalizePhoneNumber(decoded) || decoded.replace(/\D/g, '');
 }
 
 function formatLastMessagePreview(message: string, mediaType?: string | null): string {
@@ -99,6 +102,7 @@ export async function getConversations(req: AuthRequest, res: Response): Promise
     last_message_at: string;
     unread_count: number;
     status: string;
+    channel: string;
   }>();
 
   for (const msg of messages || []) {
@@ -111,6 +115,7 @@ export async function getConversations(req: AuthRequest, res: Response): Promise
         last_message_at: msg.created_at,
         unread_count: msg.sender_type === 'customer' && msg.status === 'open' ? 1 : 0,
         status: msg.status,
+        channel: msg.channel || 'whatsapp',
       });
       continue;
     }
@@ -266,14 +271,16 @@ export async function replyToConversation(req: AuthRequest, res: Response): Prom
 
   const senderName = staffRecord?.name?.trim() || req.profile?.full_name?.trim() || null;
 
-  const sendResult = await sendMessageToCustomer(req.companyId, phone, message.trim());
+  const sendResult = await sendChannelText(req.companyId, phone, message.trim());
   if (!sendResult.success) {
     res.status(502).json({
       success: false,
-      error: sendResult.error || 'WhatsApp mesajı müşteriye iletilemedi',
+      error: sendResult.error || 'Mesaj müşteriye iletilemedi',
     });
     return;
   }
+
+  const { channel } = parseCustomerExternalId(phone);
 
   const { data: msg, error } = await adminClient
     .from('messages')
@@ -285,6 +292,7 @@ export async function replyToConversation(req: AuthRequest, res: Response): Prom
       status: 'open',
       staff_id: staffRecord?.id || null,
       sender_name: senderName,
+      channel,
     })
     .select('*, staff:staff_id(name)')
     .single();
@@ -358,7 +366,7 @@ export async function replyWithImage(req: AuthRequest, res: Response): Promise<v
     return;
   }
 
-  const sendResult = await sendImageToCustomer(
+  const sendResult = await sendChannelImage(
     req.companyId,
     phone,
     file.buffer,
@@ -370,10 +378,12 @@ export async function replyWithImage(req: AuthRequest, res: Response): Promise<v
   if (!sendResult.success) {
     res.status(502).json({
       success: false,
-      error: sendResult.error || 'WhatsApp resmi müşteriye iletilemedi',
+      error: sendResult.error || 'Resim müşteriye iletilemedi',
     });
     return;
   }
+
+  const { channel } = parseCustomerExternalId(phone);
 
   const { data: msg, error } = await adminClient
     .from('messages')
@@ -381,7 +391,7 @@ export async function replyWithImage(req: AuthRequest, res: Response): Promise<v
       id: messageId,
       company_id: req.companyId,
       customer_phone: phone,
-      message: caption,
+      message: caption || null,
       sender_type: 'staff',
       status: 'open',
       staff_id: staffRecord?.id || null,
@@ -389,6 +399,7 @@ export async function replyWithImage(req: AuthRequest, res: Response): Promise<v
       media_path: mediaPath,
       media_type: file.mimetype,
       media_filename: mediaFilename,
+      channel,
     })
     .select('*, staff:staff_id(name)')
     .single();

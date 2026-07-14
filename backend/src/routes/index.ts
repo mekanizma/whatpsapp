@@ -23,6 +23,7 @@ import * as ecommerceCtrl from '../controllers/ecommerce.controller';
 import * as platformSupportCtrl from '../controllers/platform-support.controller';
 import * as referenceLogosCtrl from '../controllers/reference-logos.controller';
 import * as signupApplicationCtrl from '../controllers/signup-application.controller';
+import * as metaCtrl from '../controllers/meta.controller';
 import { getPublicCompanyCategories } from '../controllers/public-company-categories.controller';
 import { companyLogoUpload, knowledgeFileUpload, messageImageUpload, referenceLogoUpload } from '../middleware/upload.middleware';
 
@@ -128,6 +129,17 @@ router.post('/whatsapp/accounts/:accountId/disconnect', authenticate, requireRol
 router.put('/whatsapp/accounts/:accountId/config', authenticate, requireRole('company_admin'), requireCompany, whatsappCtrl.updateAccountCloudConfig);
 router.post('/whatsapp/accounts/:accountId/test', authenticate, requireRole('company_admin'), requireCompany, whatsappCtrl.sendAccountTest);
 router.get('/whatsapp/limits', authenticate, requireCompany, whatsappCtrl.getWhatsAppLimits);
+
+// Meta (Messenger + Instagram DM) — channel-agnostic connections
+router.get('/meta/connections', authenticate, requireRole('company_admin'), requireCompany, asyncHandler(metaCtrl.listMetaConnections));
+router.post('/meta/oauth/start', authenticate, requireRole('company_admin'), requireCompany, asyncHandler(metaCtrl.startMetaOAuth));
+router.get('/meta/oauth/callback', asyncHandler(metaCtrl.metaOAuthCallback));
+router.get('/meta/oauth/pages', authenticate, requireRole('company_admin'), requireCompany, asyncHandler(metaCtrl.getPendingMetaPages));
+router.post('/meta/oauth/link', authenticate, requireRole('company_admin'), requireCompany, asyncHandler(metaCtrl.linkMetaPage));
+router.patch('/meta/connections/:connectionId', authenticate, requireRole('company_admin'), requireCompany, asyncHandler(metaCtrl.updateMetaConnection));
+router.post('/meta/connections/:connectionId/disconnect', authenticate, requireRole('company_admin'), requireCompany, asyncHandler(metaCtrl.disconnectMetaConnection));
+router.delete('/meta/connections/:connectionId', authenticate, requireRole('company_admin'), requireCompany, asyncHandler(metaCtrl.deleteMetaConnection));
+router.post('/meta/connections/:connectionId/test', authenticate, requireRole('company_admin'), requireCompany, asyncHandler(metaCtrl.sendMetaTestMessage));
 
 // Departments
 router.get('/departments', authenticate, requireCompany, whatsappCtrl.getDepartments);

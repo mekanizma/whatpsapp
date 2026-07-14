@@ -149,6 +149,26 @@ export const config = {
     staffTicketTemplateLang: process.env.WHATSAPP_STAFF_TICKET_TEMPLATE_LANG || 'tr',
   },
 
+  /** Messenger + Instagram DM (aynı Meta App; WhatsApp Cloud API'den ayrı webhook) */
+  meta: {
+    appId: process.env.META_APP_ID || '',
+    appSecret:
+      process.env.META_APP_SECRET?.trim() ||
+      process.env.WHATSAPP_APP_SECRET?.trim() ||
+      '',
+    apiVersion: process.env.META_API_VERSION || process.env.WHATSAPP_API_VERSION || 'v21.0',
+    baseUrl: `https://graph.facebook.com/${process.env.META_API_VERSION || process.env.WHATSAPP_API_VERSION || 'v21.0'}`,
+    redirectUri: (() => {
+      if (process.env.META_REDIRECT_URI?.trim()) return process.env.META_REDIRECT_URI.trim();
+      const pub = getPublicUrl();
+      return pub ? `${pub}/api/v1/meta/oauth/callback` : '';
+    })(),
+    verifyToken:
+      process.env.META_VERIFY_TOKEN?.trim() ||
+      process.env.WHATSAPP_VERIFY_TOKEN ||
+      '',
+  },
+
   platform: {
     /** Başvuru bildirimi gönderilecek şirket (WhatsApp hattı) */
     companyId: process.env.PLATFORM_COMPANY_ID?.trim() || '',

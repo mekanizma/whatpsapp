@@ -11,6 +11,7 @@ import helmet from 'helmet';
 import { config } from './config';
 import apiRoutes from './routes';
 import { verifyWebhook, handleWebhook } from './controllers/webhook.controller';
+import { verifyMetaWebhook, handleMetaWebhook } from './controllers/meta-webhook.controller';
 import { errorHandler, notFoundHandler } from './middleware/error.middleware';
 import { applyApiRateLimit } from './middleware/rate-limit.middleware';
 
@@ -70,6 +71,9 @@ app.get('/health', (_req, res) => {
 
 app.get('/webhook/whatsapp', verifyWebhook);
 app.post('/webhook/whatsapp', handleWebhook);
+
+app.get('/webhook/meta', verifyMetaWebhook);
+app.post('/webhook/meta', handleMetaWebhook);
 
 app.use('/api/v1', apiRoutes);
 

@@ -300,6 +300,7 @@ export interface Conversation {
   last_message_at: string;
   unread_count: number;
   status: string;
+  channel?: 'whatsapp' | 'facebook_messenger' | 'instagram_dm' | string;
 }
 
 export interface Message {

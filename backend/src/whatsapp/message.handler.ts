@@ -48,6 +48,7 @@ import {
 } from './conversation-state.service';
 import type { WAMessage } from '@whiskeysockets/baileys';
 import crypto from 'crypto';
+import { isChannelCustomerId } from '../channels/customer-id';
 
 const DEBOUNCE_MS = 3000;
 const TRANSFER_REPLY_COOLDOWN_MS = 60_000;
@@ -91,6 +92,8 @@ export function normalizePhoneNumber(phone: string): string | null {
 }
 
 function resolveCustomerPhone(phone: string): string {
+  // Meta / future channels use prefixed IDs (fb:, ig:) — never phone-normalize them
+  if (isChannelCustomerId(phone)) return phone.trim();
   return normalizePhoneNumber(phone) || phone.replace(/\D/g, '');
 }
 

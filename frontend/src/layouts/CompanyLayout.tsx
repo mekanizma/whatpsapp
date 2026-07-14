@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import {
   LayoutDashboard, MessageSquare, BookOpen, Users, Ticket,
   CreditCard, Smartphone, Settings, CalendarDays, UserRound, HelpCircle, Headphones,
-  Sparkles, UserCog, PackageSearch, Truck, ShoppingCart, RefreshCcw, Globe, ChevronRight,
+  Sparkles, UserCog, PackageSearch, Truck, ShoppingCart, RefreshCcw, Globe, ChevronRight, Share2,
 } from 'lucide-react';
 import { PanelNotificationBell } from '@/components/PanelNotificationBell';
 import { useAuthStore } from '@/store/authStore';
@@ -63,6 +63,7 @@ const navGroups: { sectionKey: string; items: NavItem[] }[] = [
     items: [
       { to: '/panel/staff', icon: Users, labelKey: 'layout.nav.staff', roles: ['company_admin'], module: 'staff' },
       { to: '/panel/whatsapp', icon: Smartphone, labelKey: 'layout.nav.whatsapp', roles: ['company_admin'], module: 'whatsapp' },
+      { to: '/panel/meta', icon: Share2, labelKey: 'layout.nav.meta', roles: ['company_admin'], module: 'whatsapp' },
       { to: '/panel/subscription', icon: CreditCard, labelKey: 'layout.nav.subscription', roles: ['company_admin'], module: 'subscription' },
       { to: '/panel/platform-support', icon: Headphones, labelKey: 'layout.nav.platformSupport', roles: ['company_admin'], module: 'settings' },
     ],
@@ -92,6 +93,7 @@ const pageTitleKeys: Record<string, string> = {
   '/panel/returns': 'layout.titles.returns',
   '/panel/staff': 'layout.titles.staff',
   '/panel/whatsapp': 'layout.titles.whatsapp',
+  '/panel/meta': 'layout.titles.meta',
   '/panel/subscription': 'layout.titles.subscription',
   '/panel/platform-support': 'layout.titles.platformSupport',
   '/panel/settings': 'layout.titles.settings',

@@ -60,6 +60,27 @@ const TR_PAGES: Record<string, PageSeoConfig> = {
     ogType: 'website',
     includeSoftwareSchema: true,
   },
+  terms: {
+    title: `Kullanım Şartları | ${SITE_BRAND.productName}`,
+    description:
+      'Waai WhatsApp AI platformu kullanım şartları. Mekanizma tarafından sunulan hizmet koşulları.',
+    canonicalPath: '/terms',
+    ogType: 'website',
+  },
+  privacy: {
+    title: `Gizlilik Politikası | ${SITE_BRAND.productName}`,
+    description:
+      'Waai Gizlilik Politikası — toplanan veriler, işleme amaçları ve kullanıcı hakları.',
+    canonicalPath: '/privacy',
+    ogType: 'website',
+  },
+  deletion: {
+    title: `Veri Silme Talimatları | ${SITE_BRAND.productName}`,
+    description:
+      'Waai ve Meta (Facebook/Instagram) verilerinizin nasıl silineceğine dair talimatlar.',
+    canonicalPath: '/deletion',
+    ogType: 'website',
+  },
   login: {
     title: `Giriş | ${SITE_BRAND.productName}`,
     description: 'KKTC işletme paneli girişi — WhatsApp AI müşteri temsilci yönetimi.',
@@ -108,6 +129,24 @@ const EN_PAGES: Record<string, PageSeoConfig> = {
     ogType: 'website',
     includeSoftwareSchema: true,
   },
+  terms: {
+    title: `Terms of Service | ${SITE_BRAND.productName}`,
+    description: 'Terms of Service for the Waai WhatsApp AI platform operated by Mekanizma.',
+    canonicalPath: '/terms',
+    ogType: 'website',
+  },
+  privacy: {
+    title: `Privacy Policy | ${SITE_BRAND.productName}`,
+    description: 'Waai Privacy Policy — data we collect, how we process it, and your rights.',
+    canonicalPath: '/privacy',
+    ogType: 'website',
+  },
+  deletion: {
+    title: `Data Deletion Instructions | ${SITE_BRAND.productName}`,
+    description: 'How to delete your Waai and Meta (Facebook/Instagram) data.',
+    canonicalPath: '/deletion',
+    ogType: 'website',
+  },
   login: {
     title: `Sign in | ${SITE_BRAND.productName}`,
     description: 'Business panel sign-in for WhatsApp AI customer support.',
@@ -138,6 +177,9 @@ const EN_PAGES: Record<string, PageSeoConfig> = {
 function resolvePageKey(pathname: string): keyof typeof TR_PAGES {
   if (pathname === '/' || pathname === '/welcome') return 'home';
   if (pathname === '/pricing') return 'pricing';
+  if (pathname === '/terms') return 'terms';
+  if (pathname === '/privacy') return 'privacy';
+  if (pathname === '/deletion') return 'deletion';
   if (pathname === '/login') return 'login';
   if (pathname === '/register') return 'register';
   if (pathname === '/admin/login') return 'adminLogin';

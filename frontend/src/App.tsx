@@ -17,6 +17,7 @@ import { AdminLayout } from '@/layouts/AdminLayout';
 import { CompanyLayout } from '@/layouts/CompanyLayout';
 import { OnboardingPage } from '@/pages/OnboardingPage';
 import { PricingPage } from '@/pages/PricingPage';
+import { LegalPage } from '@/pages/LegalPage';
 import { LoginPage } from '@/pages/LoginPage';
 import { AdminLoginPage } from '@/pages/AdminLoginPage';
 import { RegisterPage } from '@/pages/RegisterPage';
@@ -26,6 +27,7 @@ import { KnowledgePage } from '@/pages/KnowledgePage';
 import { TicketsPage } from '@/pages/TicketsPage';
 import { StaffPage } from '@/pages/StaffPage';
 import { WhatsAppPage } from '@/pages/WhatsAppPage';
+import { MetaIntegrationsPage } from '@/pages/MetaIntegrationsPage';
 import { SubscriptionPage } from '@/pages/SubscriptionPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { CalendarPage } from '@/pages/CalendarPage';
@@ -70,6 +72,9 @@ function AppRoutes() {
       <Route path="/" element={<OnboardingPage />} />
       <Route path="/welcome" element={<OnboardingPage />} />
       <Route path="/pricing" element={<PricingPage />} />
+      <Route path="/terms" element={<LegalPage doc="terms" />} />
+      <Route path="/privacy" element={<LegalPage doc="privacy" />} />
+      <Route path="/deletion" element={<LegalPage doc="deletion" />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/admin/login" element={<AdminLoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
@@ -123,6 +128,7 @@ function AppRoutes() {
         <Route path="returns" element={<PlanModuleRoute module="returns"><AdminOnlyRoute><ReturnsPage /></AdminOnlyRoute></PlanModuleRoute>} />
         <Route path="staff" element={<PlanModuleRoute module="staff"><AdminOnlyRoute><StaffPage /></AdminOnlyRoute></PlanModuleRoute>} />
         <Route path="whatsapp" element={<PlanModuleRoute module="whatsapp"><AdminOnlyRoute><WhatsAppPage /></AdminOnlyRoute></PlanModuleRoute>} />
+        <Route path="meta" element={<PlanModuleRoute module="whatsapp"><AdminOnlyRoute><MetaIntegrationsPage /></AdminOnlyRoute></PlanModuleRoute>} />
         <Route path="website" element={<PlanModuleRoute module="website"><AdminOnlyRoute><WebsitePage /></AdminOnlyRoute></PlanModuleRoute>} />
         <Route path="subscription" element={<PlanModuleRoute module="subscription"><AdminOnlyRoute><SubscriptionPage /></AdminOnlyRoute></PlanModuleRoute>} />
         <Route path="settings" element={<PlanModuleRoute module="settings"><SettingsPage /></PlanModuleRoute>} />

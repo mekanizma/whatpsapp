@@ -530,6 +530,7 @@
       "returns": "İade ve Değişim",
       "staff": "Personel",
       "whatsapp": "WhatsApp",
+      "meta": "Meta (IG / Messenger)",
       "website": "Web Sitesi",
       "subscription": "Abonelik",
       "platformSupport": "Platform Desteği",
@@ -564,6 +565,7 @@
       "returns": "İade ve Değişim",
       "staff": "Personel",
       "whatsapp": "WhatsApp",
+      "meta": "Meta (IG / Messenger)",
       "website": "Web Sitesi",
       "subscription": "Abonelik",
       "platformSupport": "Platform Desteği",
@@ -986,6 +988,62 @@
       "ready": "Hazır",
       "failed": "Hata"
     }
+  },
+  "meta": {
+    "title": "Meta Entegrasyonu",
+    "description": "Facebook Messenger ve Instagram DM hesaplarını OAuth ile bağlayın. Mesajlar WhatsApp ile aynı AI pipeline’ına akar.",
+    "descriptionSimple": "Kendi Facebook hesabınızla giriş yapın; Messenger ve Instagram DM otomatik bağlanır. Mesajlar WhatsApp ile aynı yapay zekâya gider.",
+    "connectTitle": "Hızlı bağlantı",
+    "connectDesc": "Tek girişte yetkili olduğunuz Facebook Sayfaları ve bağlı Instagram hesapları sisteme eklenir.",
+    "connectHint": "Webhook veya App ID girmenize gerek yok — platform Meta uygulaması kullanılır.",
+    "accountsTitle": "Bağlı hesaplar",
+    "accountsDesc": "Gelen mesajları açıp kapatabilir veya bağlantıyı kesebilirsiniz.",
+    "noConnectionsSimple": "Henüz bağlı hesap yok. Yukarıdan Meta ile Bağlan’a tıklayın.",
+    "statusMessengerOn": "Messenger bağlı",
+    "statusMessengerOff": "Messenger bağlı değil",
+    "statusInstagramOn": "Instagram bağlı",
+    "statusInstagramOff": "Instagram bağlı değil",
+    "reconnectOAuth": "Yeniden bağla / hesapları güncelle",
+    "oauthAutoSuccess": "Bağlantı tamam: {{messenger}} Messenger, {{instagram}} Instagram hesabı eklendi.",
+    "messenger": "Messenger",
+    "instagram": "Instagram DM",
+    "messengerTitle": "Facebook Messenger",
+    "messengerDesc": "Sayfa mesajlarınızı WAAI asistanına bağlayın.",
+    "instagramTitle": "Instagram DM",
+    "instagramDesc": "Instagram Business DM’lerini aynı bilgi bankası ve handoff ile yönetin.",
+    "connectOAuth": "Meta ile Bağlan",
+    "oauthNotConfigured": "META_APP_ID, META_APP_SECRET ve META_REDIRECT_URI sunucu ortamında tanımlı değil. Bağlantı için yöneticinize danışın.",
+    "oauthSuccess": "Meta OAuth başarılı. Bağlanacak sayfayı seçin.",
+    "oauthError": "Meta OAuth başarısız: {{reason}}",
+    "selectPage": "Bağlanacak sayfa / Instagram hesabı",
+    "linkSuccess": "Hesap bağlandı.",
+    "noConnections": "Bu kanal için henüz bağlı hesap yok.",
+    "unnamed": "İsimsiz hesap",
+    "connected": "Bağlı",
+    "disconnected": "Bağlantı kesildi",
+    "disconnect": "Bağlantıyı Kes",
+    "deleteConfirm": "Bu Meta bağlantısını kalıcı silmek istiyor musunuz?",
+    "inboundOn": "Gelen mesajlar açık",
+    "inboundOff": "Gelen mesajlar kapalı",
+    "testSection": "Test mesajı",
+    "recipientId": "Alıcı ID (PSID / IGSID)",
+    "testMessage": "Mesaj",
+    "defaultTestMessage": "WAAI Meta entegrasyon test mesajı",
+    "sendTest": "Test Gönder",
+    "testSent": "Test mesajı gönderildi.",
+    "webhookTitle": "Webhook doğrulama",
+    "webhookDesc": "Meta Developer Console → Webhooks → Callback URL olarak aşağıyı ekleyin. object: page ve instagram.",
+    "webhookUrl": "Callback URL",
+    "verifyToken": "Verify Token",
+    "webhookSteps": [
+      "Meta App → Messenger / Instagram → Webhooks bölümünü açın",
+      "Callback URL olarak yukarıdaki adresi yapıştırın",
+      "Verify Token olarak paneldeki token’ı girin",
+      "messages alanını abone edin; sayfa/IG hesabını bağlayın"
+    ],
+    "channelMessenger": "Messenger",
+    "channelInstagram": "Instagram",
+    "channelWhatsapp": "WhatsApp"
   },
   "whatsapp": {
     "title": "WhatsApp Bağlantısı",
@@ -1785,6 +1843,232 @@
       "in_progress": "İşlemde",
       "resolved": "Çözüldü",
       "closed": "Kapatıldı"
+    }
+  },
+  "legal": {
+    "label": "Yasal",
+    "backHome": "Ana sayfaya dön",
+    "navLabel": "Yasal belgeler",
+    "contactTitle": "İletişim",
+    "contactBody": "Bu belgelerle ilgili sorularınız için bizimle iletişime geçebilirsiniz.",
+    "terms": {
+      "nav": "Kullanım Şartları",
+      "title": "Kullanım Şartları",
+      "updated": "Son güncelleme: 14 Temmuz 2026",
+      "intro": "Bu Kullanım Şartları, Mekanizma tarafından işletilen Waai (WhatsApp AI Temsilci) platformunun kullanımına ilişkin koşulları belirler. Platformu kullanarak bu şartları kabul etmiş sayılırsınız.",
+      "sections": [
+        {
+          "heading": "1. Taraflar ve Tanımlar",
+          "paragraphs": [
+            "Hizmet sağlayıcı: Mekanizma (\"Mekanizma\", \"biz\"). Ürün adı: Waai / WhatsApp AI Temsilci. Web sitesi: https://waai.mekanizma.com.",
+            "\"Kullanıcı\" veya \"Müşteri\", platforma kayıt olan, abone olan veya hizmetlerden yararlanan gerçek veya tüzel kişiyi ifade eder. \"Son kullanıcı\", Müşterinin WhatsApp, Messenger veya Instagram üzerinden iletişim kurduğu kişileri ifade eder."
+          ]
+        },
+        {
+          "heading": "2. Hizmetin Kapsamı",
+          "paragraphs": [
+            "Waai; WhatsApp, Meta Messenger, Instagram DM ve ilgili kanallar üzerinden yapay zeka destekli müşteri iletişimi, bilgi bankası, canlı aktarım, randevu/talep yönetimi ve abonelik paneli sunar.",
+            "Özellikler seçilen abonelik planına göre değişebilir. Mekanizma, hizmeti geliştirmek amacıyla özellikleri makul ölçüde değiştirme hakkını saklı tutar."
+          ]
+        },
+        {
+          "heading": "3. Hesap ve Yükümlülükler",
+          "paragraphs": [
+            "Hesap bilgilerinizin doğruluğundan ve güvenliğinden siz sorumlusunuz. Yetkisiz erişimi fark ederseniz derhal bizi bilgilendirmelisiniz."
+          ],
+          "list": [
+            "Platformu yasalara, üçüncü taraf şartlarına (Meta/WhatsApp dahil) ve bu belgelere uygun kullanmak",
+            "Son kullanıcılara gerekli bilgilendirmeleri yapmak ve gerekli izinleri almak",
+            "Zararlı, yanıltıcı, yasa dışı veya spam içerik göndermemek",
+            "Hizmeti tersine mühendislik, aşırı yükleme veya yetkisiz erişim amacıyla kullanmamak"
+          ]
+        },
+        {
+          "heading": "4. Abonelik ve Ödeme",
+          "paragraphs": [
+            "Ücretli planlar, seçilen döneme (aylık/yıllık) göre faturalandırılır. Ücretler, vergi ve döviz koşulları sipariş veya sözleşme anında belirtilir.",
+            "Ödemenin yapılmaması durumunda hesap askıya alınabilir veya erişim kısıtlanabilir. İade politikası, aksi yazılı olarak kararlaştırılmadıkça geçerli plan şartlarına tabidir."
+          ]
+        },
+        {
+          "heading": "5. Üçüncü Taraf Hizmetleri",
+          "paragraphs": [
+            "Hizmet; WhatsApp, Meta (Facebook/Instagram), ödeme sağlayıcıları ve bulut altyapısı gibi üçüncü taraflara bağlı olabilir. Bu tarafların kesinti, politika değişikliği veya hesap kısıtlamalarından Mekanizma sorumlu tutulamaz; makul ölçüde destek sağlanır."
+          ]
+        },
+        {
+          "heading": "6. Fikri Mülkiyet",
+          "paragraphs": [
+            "Platform yazılımı, arayüz, marka ve belgeler Mekanizma’ya aittir. Müşteri, kendi yüklediği içerik (bilgi bankası, logo vb.) üzerinde haklarını saklı tutar ve bu içeriği hizmeti sunmak için bize sınırlı bir lisans verir."
+          ]
+        },
+        {
+          "heading": "7. Sorumluluk Sınırı",
+          "paragraphs": [
+            "Hizmet \"olduğu gibi\" sunulur. Yapay zeka yanıtları her zaman hatasız olmayabilir; kritik işlemlerde insan kontrolü önerilir.",
+            "Yasaların izin verdiği ölçüde Mekanizma; dolaylı, arızi veya kar kaybı gibi zararlardan ve üçüncü taraf eylemlerinden sorumlu değildir. Toplam sorumluluk, son 12 ayda ilgili hizmet için ödenen ücretlerle sınırlıdır."
+          ]
+        },
+        {
+          "heading": "8. Fesih",
+          "paragraphs": [
+            "Hesabınızı istediğiniz zaman kapatmayı talep edebilirsiniz. Şartların ihlali, ödeme sorunları veya yasal zorunluluk halinde hizmeti askıya alabilir veya sonlandırabiliriz. Fesih sonrası verileriniz Gizlilik Politikası ve Veri Silme sayfasındaki sürelere göre işlenir."
+          ]
+        },
+        {
+          "heading": "9. Uygulanacak Hukuk",
+          "paragraphs": [
+            "Bu şartlar, KKTC’de faaliyet gösteren Mekanizma bağlamında uygulanır. Uyuşmazlıklarda öncelikle iyiniyetli müzakere aranır; çözülemezse Girne/KKTC yetkili mercileri yetkilidir (zorunlu tüketici hakları saklıdır)."
+          ]
+        },
+        {
+          "heading": "10. Değişiklikler",
+          "paragraphs": [
+            "Bu sayfayı güncelleyerek şartları değiştirebiliriz. Önemli değişikliklerde e-posta veya panel bildirimi ile bilgilendirme yapılmaya çalışılır. Güncelleme sonrası hizmeti kullanmaya devam etmeniz değişiklikleri kabul ettiğiniz anlamına gelir."
+          ]
+        }
+      ]
+    },
+    "privacy": {
+      "nav": "Gizlilik Politikası",
+      "title": "Gizlilik Politikası",
+      "updated": "Son güncelleme: 14 Temmuz 2026",
+      "intro": "Bu Gizlilik Politikası, Waai platformunu kullanırken Mekanizma’nın hangi kişisel verileri topladığını, nasıl işlediğini ve haklarınızı açıklar.",
+      "sections": [
+        {
+          "heading": "1. Veri Sorumlusu",
+          "paragraphs": [
+            "Veri sorumlusu Mekanizma’dır. Adres: Beşparmaklar Caddesi, No: 6, Çatalköy, Girne, KKTC. E-posta: info@mekanizma.com. Telefon: +90 533 850 77 61."
+          ]
+        },
+        {
+          "heading": "2. Topladığımız Veriler",
+          "paragraphs": [
+            "Hizmeti sağlamak için şu kategorilerde veri işleyebiliriz:"
+          ],
+          "list": [
+            "Hesap verileri: ad, e-posta, şirket adı, rol, iletişim bilgileri",
+            "Abonelik ve faturalama verileri: plan, ödeme durumu, fatura kayıtları",
+            "Mesajlaşma verileri: WhatsApp / Messenger / Instagram üzerinden gelen-giden mesaj içerikleri, medya, zaman damgaları, müşteri kimlikleri (telefon numarası vb.)",
+            "Teknik veriler: IP, cihaz/tarayıcı bilgisi, oturum ve güvenlik günlükleri",
+            "Meta/Facebook bağlantı verileri: sayfa/hesap kimlikleri, erişim jetonları (güvenli saklanır), sayfa/hesap adları",
+            "Destek talepleri ve panel kullanım kayıtları"
+          ]
+        },
+        {
+          "heading": "3. İşleme Amaçları",
+          "paragraphs": [
+            "Veriler şu amaçlarla işlenir: hizmetin sunulması ve iyileştirilmesi; yapay zeka yanıtlarının üretilmesi; güvenlik ve dolandırıcılık önleme; faturalama; destek; yasal yükümlülükler; ürün analitiği (kişiselleştirilmiş reklam için satılmaz)."
+          ]
+        },
+        {
+          "heading": "4. Hukuki Dayanak",
+          "paragraphs": [
+            "İşleme; sözleşmenin ifası, meşru menfaat (güvenlik, ürün geliştirme), açık rıza (gerektiğinde) ve yasal yükümlülükler temelinde yürütülür."
+          ]
+        },
+        {
+          "heading": "5. Paylaşım",
+          "paragraphs": [
+            "Verilerinizi satmayız. Yalnızca hizmet için gerekli durumlarda şu taraflarla paylaşılabilir:"
+          ],
+          "list": [
+            "Altyapı ve barındırma sağlayıcıları (ör. bulut veritabanı)",
+            "Meta / WhatsApp API’leri (mesajların iletilmesi için)",
+            "Ödeme işleyicileri",
+            "Yasal zorunluluk halinde yetkili kurumlar"
+          ]
+        },
+        {
+          "heading": "6. Saklama Süresi",
+          "paragraphs": [
+            "Veriler, hesap aktif olduğu sürece ve yasal saklama yükümlülükleri çerçevesinde tutulur. Hesap kapatma veya silme talebinden sonra, yasal saklama zorunluluğu yoksa makul süre içinde silinir veya anonimleştirilir. Ayrıntılar için Veri Silme sayfasına bakın."
+          ]
+        },
+        {
+          "heading": "7. Güvenlik",
+          "paragraphs": [
+            "Erişim kontrolü, şifreli bağlantılar (HTTPS), jetonların güvenli saklanması ve yetki kısıtlamaları uygulanır. Hiçbir sistem %100 güvenli değildir; ihlal şüphesinde bilgilendirme yapılır."
+          ]
+        },
+        {
+          "heading": "8. Haklarınız",
+          "paragraphs": [
+            "Uygulanabilir hukuk kapsamında erişim, düzeltme, silme, işlemeyi kısıtlama ve itiraz taleplerinde bulunabilirsiniz. Taleplerinizi info@mekanizma.com adresine iletebilirsiniz."
+          ]
+        },
+        {
+          "heading": "9. Çerezler",
+          "paragraphs": [
+            "Oturum ve güvenlik için zorunlu çerezler kullanılır. Analitik çerezler kullanılıyorsa, mümkün olduğunca anonimleştirilir. Tarayıcı ayarlarından çerezleri yönetebilirsiniz."
+          ]
+        },
+        {
+          "heading": "10. Çocuklar",
+          "paragraphs": [
+            "Hizmet 18 yaş altındaki kişilere yönelik değildir. Bilerek çocuk verisi toplamayız."
+          ]
+        }
+      ]
+    },
+    "deletion": {
+      "nav": "Veri Silme",
+      "title": "Veri Silme Talimatları",
+      "updated": "Son güncelleme: 14 Temmuz 2026",
+      "intro": "Bu sayfa, Meta (Facebook / Instagram) uygulama incelemesi ve genel kullanıcı hakları kapsamında Waai üzerinden toplanan verilerin nasıl silineceğini açıklar.",
+      "sections": [
+        {
+          "heading": "1. Ne tür veriler silinebilir?",
+          "paragraphs": [
+            "Talep üzerine silinebilecek veriler şunları içerebilir: hesap bilgileri, şirket paneli kayıtları, mesaj geçmişi, destek talepleri, Meta bağlantı jetonları ve ilgili profil/sayfa eşlemeleri.",
+            "Yasal saklama (ör. fatura kayıtları) veya güvenlik gerekçesiyle zorunlu tutulan veriler, yasa izin verdiği sürece saklanabilir."
+          ]
+        },
+        {
+          "heading": "2. Panel üzerinden silme (işletme kullanıcıları)",
+          "paragraphs": [
+            "Waai paneline giriş yapabiliyorsanız:"
+          ],
+          "list": [
+            "Meta / WhatsApp bağlantılarını Ayarlar veya Meta Entegrasyonları sayfasından kalıcı olarak kaldırın",
+            "Hesap kapatma veya veri silme talebi için Platform Destek üzerinden talep açın veya info@mekanizma.com adresine yazın",
+            "Konu satırına \"Veri Silme Talebi\" yazın; kayıtlı e-posta ve şirket adınızı belirtin"
+          ]
+        },
+        {
+          "heading": "3. Meta / Facebook üzerinden gelen istekler",
+          "paragraphs": [
+            "Facebook veya Instagram hesabınız üzerinden Waai ile etkileşim verilerinizin silinmesini istiyorsanız, aşağıdaki bilgileri e-posta ile gönderin:"
+          ],
+          "list": [
+            "Facebook / Instagram kullanıcı kimliği veya profil bağlantısı (mümkünse)",
+            "İlişkili telefon numarası veya sohbet tanımlayıcı (varsa)",
+            "İlgili işletmenin adı veya sayfa adı",
+            "\"Meta veri silme talebi\" ifadesi"
+          ]
+        },
+        {
+          "heading": "4. Talep nasıl gönderilir?",
+          "paragraphs": [
+            "E-posta: info@mekanizma.com",
+            "Konu: Veri Silme Talebi — Waai",
+            "Kimliğinizi doğrulamak için kayıtlı e-posta adresinizden yazmanızı veya yeterli tanımlayıcı bilgi sağlamanızı isteyebiliriz. Talepler genellikle 30 gün içinde tamamlanır; karmaşık durumlarda süre uzayabilir ve size bildirilir."
+          ]
+        },
+        {
+          "heading": "5. Silme sonrası",
+          "paragraphs": [
+            "Silme tamamlandığında erişim jetonları iptal edilir, ilgili mesaj ve hesap verileri sistemlerimizden kaldırılır veya anonimleştirilir. Yedeklerdeki kopyalar, yedek döngüsü sonuna kadar tutulabilir ve ardından temizlenir.",
+            "Silme işlemi geri alınamaz. Aynı hizmeti yeniden kullanmak için yeni bir hesap veya bağlantı gerekebilir."
+          ]
+        },
+        {
+          "heading": "6. İletişim",
+          "paragraphs": [
+            "Sorularınız için: info@mekanizma.com · +90 533 850 77 61 · Beşparmaklar Caddesi, No: 6, Çatalköy, Girne, KKTC"
+          ]
+        }
+      ]
     }
   }
 }

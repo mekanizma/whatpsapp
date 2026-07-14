@@ -22,6 +22,18 @@ import type { Conversation, Message, Ticket } from '@/types';
 const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif';
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 
+function channelBadgeLabel(channel: string, t: (key: string) => string): string {
+  if (channel === 'facebook_messenger') return t('meta.channelMessenger');
+  if (channel === 'instagram_dm') return t('meta.channelInstagram');
+  return t('meta.channelWhatsapp');
+}
+
+function formatCustomerLabel(phone: string, t: (key: string) => string): string {
+  if (phone.startsWith('fb:')) return `${t('meta.channelMessenger')} ${phone.slice(3)}`;
+  if (phone.startsWith('ig:')) return `${t('meta.channelInstagram')} ${phone.slice(3)}`;
+  return phone;
+}
+
 export function MessagesPage() {
   const { t, i18n } = useTranslation();
   const locale = i18n.language?.startsWith('en') ? 'en-US' : 'tr-TR';
@@ -254,7 +266,14 @@ export function MessagesPage() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2">
-                    <p className="truncate text-sm font-semibold text-slate-900">{conv.customer_name || conv.customer_phone}</p>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-slate-900">{conv.customer_name || formatCustomerLabel(conv.customer_phone, t)}</p>
+                      {conv.channel && conv.channel !== 'whatsapp' && (
+                        <span className="mt-0.5 inline-block rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+                          {channelBadgeLabel(conv.channel, t)}
+                        </span>
+                      )}
+                    </div>
                     {conv.unread_count > 0 && <Badge variant="success">{conv.unread_count}</Badge>}
                   </div>
                   <p className="truncate text-xs text-slate-500">{conv.last_message}</p>
@@ -280,8 +299,13 @@ export function MessagesPage() {
                   <Phone className="h-4 w-4 text-primary" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold text-slate-900">{selectedConv?.customer_name || selectedPhone}</p>
-                  <p className="text-xs text-slate-500">{selectedPhone}</p>
+                  <p className="truncate font-semibold text-slate-900">{selectedConv?.customer_name || formatCustomerLabel(selectedPhone, t)}</p>
+                  <p className="text-xs text-slate-500">
+                    {selectedConv?.channel && selectedConv.channel !== 'whatsapp'
+                      ? `${channelBadgeLabel(selectedConv.channel, t)} · `
+                      : ''}
+                    {formatCustomerLabel(selectedPhone, t)}
+                  </p>
                 </div>
                 {hasActiveTicket && ticketId && (
                   <Button
