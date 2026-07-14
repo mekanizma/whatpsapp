@@ -19,6 +19,7 @@ import {
   type MetaOAuthMode,
 } from '../channels/meta/meta-oauth.service';
 import { getMetaMessageChannel } from '../channels/meta/meta.channel';
+import { sanitizeMetaRecipientId } from '../channels/meta/meta-graph.service';
 import { buildCustomerExternalId } from '../channels/customer-id';
 import type { MessagingChannel } from '../channels/types';
 
@@ -79,6 +80,12 @@ export async function metaOAuthCallback(req: AuthRequest, res: Response): Promis
   const code = typeof req.query.code === 'string' ? req.query.code : '';
   const state = typeof req.query.state === 'string' ? req.query.state : '';
   const error = typeof req.query.error === 'string' ? req.query.error : '';
+  const errorReason =
+    typeof req.query.error_reason === 'string' ? req.query.error_reason : '';
+  const errorDescription =
+    typeof req.query.error_description === 'string'
+      ? req.query.error_description.replace(/\+/g, ' ')
+      : '';
 
   const frontendBase =
     config.cors.origins.find((o) => !o.includes('localhost') || config.isDev) ||
@@ -86,8 +93,25 @@ export async function metaOAuthCallback(req: AuthRequest, res: Response): Promis
     'http://localhost:5173';
 
   if (error || !code || !state) {
+    let reason = 'missing_code';
+    if (error) {
+      reason = errorDescription || errorReason || error;
+    } else if (!state) {
+      reason = 'missing_state';
+    } else if (!code) {
+      reason =
+        'missing_code — Meta Valid OAuth Redirect URIs alanına META_REDIRECT_URI ile birebir aynı adresi ekleyin';
+    }
+    console.warn('[Meta OAuth callback]', {
+      error: error || null,
+      errorReason: errorReason || null,
+      errorDescription: errorDescription || null,
+      hasCode: Boolean(code),
+      hasState: Boolean(state),
+      redirectUri: config.meta.redirectUri || null,
+    });
     res.redirect(
-      `${frontendBase}/panel/meta?oauth=error&reason=${encodeURIComponent(error || 'missing_code')}`
+      `${frontendBase}/panel/meta?oauth=error&reason=${encodeURIComponent(reason)}`
     );
     return;
   }
@@ -218,11 +242,21 @@ export async function sendMetaTestMessage(req: AuthRequest, res: Response): Prom
     return;
   }
 
+  const cleanedRecipient = sanitizeMetaRecipientId(recipientId);
+  if (!cleanedRecipient) {
+    res.status(400).json({
+      success: false,
+      error:
+        'recipient_id geçersiz. Kullanıcı mesaj attığında webhook’tan gelen sayısal PSID/IGSID’yi yapıştırın (Facebook kullanıcı adı veya profil URL’si olmaz).',
+    });
+    return;
+  }
+
   const adapter = getMetaMessageChannel(conn.channel);
   const result = await adapter.sendText({
     connectionId: conn.id,
     companyId: req.companyId!,
-    toExternalId: recipientId.replace(/^(fb|ig):/i, ''),
+    toExternalId: cleanedRecipient,
     text: message,
   });
 
@@ -232,7 +266,7 @@ export async function sendMetaTestMessage(req: AuthRequest, res: Response): Prom
   }
 
   // Store test as outbound staff note in conversation thread
-  const customerId = buildCustomerExternalId(conn.channel, recipientId.replace(/^(fb|ig):/i, ''));
+  const customerId = buildCustomerExternalId(conn.channel, cleanedRecipient);
   const { adminClient } = await import('../database/supabase');
   await adminClient.from('messages').insert({
     company_id: req.companyId!,

@@ -5,20 +5,51 @@
 import {
   getChannelConnection,
 } from '../channel-connection.service';
-import { sendMessengerText, sendMessengerImageUrl } from './meta-graph.service';
+import {
+  sanitizeMetaRecipientId,
+  sendMessengerText,
+  sendMessengerImageUrl,
+} from './meta-graph.service';
 import type { MessageChannel, MessagingChannel, OutboundSendResult } from '../types';
 import { config } from '../../config';
 
-async function resolvePageCredentials(connectionId: string, companyId: string) {
+async function resolveSendCredentials(
+  connectionId: string,
+  companyId: string,
+  channel: MessagingChannel
+) {
   const conn = await getChannelConnection(companyId, connectionId);
   if (!conn || conn.status !== 'connected' || !conn.is_active) {
     return { error: 'Kanal bağlantısı aktif değil' as const };
   }
-  if (!conn.access_token || !conn.external_page_id) {
-    return { error: 'Sayfa erişim jetonu veya page id eksik' as const };
+  if (!conn.access_token) {
+    return { error: 'Sayfa erişim jetonu eksik' as const };
   }
+
+  // Instagram Send API requires the IG Business Account id, not the Facebook Page id.
+  // Messenger uses the Page id.
+  const graphActorId =
+    channel === 'instagram_dm'
+      ? conn.external_ig_user_id || conn.external_page_id
+      : conn.external_page_id;
+
+  if (!graphActorId) {
+    return {
+      error:
+        channel === 'instagram_dm'
+          ? 'Instagram hesap id (external_ig_user_id) eksik — sayfayı yeniden bağlayın'
+          : 'Facebook Page id eksik',
+    } as const;
+  }
+
+  if (channel === 'instagram_dm' && !conn.external_ig_user_id) {
+    console.warn(
+      `[Meta] Instagram bağlantısında external_ig_user_id yok; page id ile denenecek → ${connectionId}`
+    );
+  }
+
   return {
-    pageId: conn.external_page_id,
+    graphActorId,
     token: conn.access_token,
   };
 }
@@ -28,9 +59,17 @@ function createMetaChannel(channel: MessagingChannel): MessageChannel {
     channel,
 
     async sendText({ connectionId, companyId, toExternalId, text }): Promise<OutboundSendResult> {
-      const creds = await resolvePageCredentials(connectionId, companyId);
+      const recipientId = sanitizeMetaRecipientId(toExternalId);
+      if (!recipientId) {
+        return {
+          success: false,
+          error:
+            'Geçersiz alıcı id — webhook’tan gelen PSID/IGSID kullanılmalı (ör. 1234567890)',
+        };
+      }
+      const creds = await resolveSendCredentials(connectionId, companyId, channel);
       if ('error' in creds) return { success: false, error: creds.error };
-      return sendMessengerText(creds.pageId, creds.token, toExternalId, text);
+      return sendMessengerText(creds.graphActorId, creds.token, recipientId, text);
     },
 
     async sendImage({
@@ -42,7 +81,15 @@ function createMetaChannel(channel: MessagingChannel): MessageChannel {
       caption,
       filename,
     }): Promise<OutboundSendResult> {
-      const creds = await resolvePageCredentials(connectionId, companyId);
+      const recipientId = sanitizeMetaRecipientId(toExternalId);
+      if (!recipientId) {
+        return {
+          success: false,
+          error:
+            'Geçersiz alıcı id — webhook’tan gelen PSID/IGSID kullanılmalı (ör. 1234567890)',
+        };
+      }
+      const creds = await resolveSendCredentials(connectionId, companyId, channel);
       if ('error' in creds) return { success: false, error: creds.error };
 
       // Messenger requires a public URL for attachments — upload to temp storage if publicUrl set.
@@ -50,7 +97,7 @@ function createMetaChannel(channel: MessagingChannel): MessageChannel {
       const publicBase = config.publicUrl;
       if (!publicBase) {
         if (caption?.trim()) {
-          await sendMessengerText(creds.pageId, creds.token, toExternalId, caption.trim());
+          await sendMessengerText(creds.graphActorId, creds.token, recipientId, caption.trim());
         }
         return {
           success: false,
@@ -87,17 +134,17 @@ function createMetaChannel(channel: MessagingChannel): MessageChannel {
         }
 
         if (caption?.trim()) {
-          await sendMessengerText(creds.pageId, creds.token, toExternalId, caption.trim());
+          await sendMessengerText(creds.graphActorId, creds.token, recipientId, caption.trim());
         }
 
-        const res = await fetch(`${config.meta.baseUrl}/${creds.pageId}/messages`, {
+        const res = await fetch(`${config.meta.baseUrl}/${creds.graphActorId}/messages`, {
           method: 'POST',
           headers: {
             Authorization: `Bearer ${creds.token}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            recipient: { id: toExternalId },
+            recipient: { id: recipientId },
             messaging_type: 'RESPONSE',
             message: {
               attachment: {

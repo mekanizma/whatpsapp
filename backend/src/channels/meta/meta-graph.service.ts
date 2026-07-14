@@ -97,21 +97,41 @@ export async function subscribePageToWebhooks(
   }
 }
 
+/** Meta PSID / IGSID — fb:/ig: önekini ve boşlukları temizler; yalnızca sayısal id. */
+export function sanitizeMetaRecipientId(raw: string): string | null {
+  const cleaned = raw
+    .trim()
+    .replace(/^(fb|ig|tg|web):/i, '')
+    .replace(/[\s,]/g, '');
+  if (!cleaned) return null;
+  // Graph "valid ID string" = numeric page-scoped / IG-scoped id
+  if (!/^\d{5,}$/.test(cleaned)) return null;
+  return cleaned;
+}
+
 export async function sendMessengerText(
-  pageId: string,
+  graphActorId: string,
   pageAccessToken: string,
   recipientId: string,
   text: string
 ): Promise<OutboundSendResult> {
+  const safeRecipient = sanitizeMetaRecipientId(recipientId);
+  if (!safeRecipient) {
+    return {
+      success: false,
+      error: `Geçersiz recipient id: "${recipientId}" (sadece webhook PSID/IGSID, ör. 1234567890)`,
+    };
+  }
+
   try {
-    const res = await fetch(`${graphBase()}/${pageId}/messages`, {
+    const res = await fetch(`${graphBase()}/${graphActorId}/messages`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${pageAccessToken}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        recipient: { id: recipientId },
+        recipient: { id: safeRecipient },
         messaging_type: 'RESPONSE',
         message: { text },
       }),
@@ -131,12 +151,20 @@ export async function sendMessengerText(
 }
 
 export async function sendMessengerImageUrl(
-  pageId: string,
+  graphActorId: string,
   pageAccessToken: string,
   recipientId: string,
   imageUrl: string,
   caption?: string
 ): Promise<OutboundSendResult> {
+  const safeRecipient = sanitizeMetaRecipientId(recipientId);
+  if (!safeRecipient) {
+    return {
+      success: false,
+      error: `Geçersiz recipient id: "${recipientId}"`,
+    };
+  }
+
   try {
     const message: Record<string, unknown> = {
       attachment: {
@@ -146,17 +174,17 @@ export async function sendMessengerImageUrl(
     };
     // Caption as separate text when present (Messenger image attachments have no caption field)
     if (caption?.trim()) {
-      await sendMessengerText(pageId, pageAccessToken, recipientId, caption.trim());
+      await sendMessengerText(graphActorId, pageAccessToken, safeRecipient, caption.trim());
     }
 
-    const res = await fetch(`${graphBase()}/${pageId}/messages`, {
+    const res = await fetch(`${graphBase()}/${graphActorId}/messages`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${pageAccessToken}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        recipient: { id: recipientId },
+        recipient: { id: safeRecipient },
         messaging_type: 'RESPONSE',
         message,
       }),

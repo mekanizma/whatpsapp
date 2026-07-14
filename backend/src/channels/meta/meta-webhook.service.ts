@@ -90,10 +90,11 @@ async function processMessagingEvent(
     return;
   }
 
-  // Prefer connection.channel when set (page webhook also delivers IG)
+  // Webhook object wins: Instagram envelope must stay IG even if only a Messenger
+  // page connection row was found (otherwise IGSID is sent via Page /messages → #100).
   const effectiveChannel: MessagingChannel =
-    connection.channel === 'instagram_dm' || channel === 'instagram_dm'
-      ? connection.channel
+    channel === 'instagram_dm' || connection.channel === 'instagram_dm'
+      ? 'instagram_dm'
       : 'facebook_messenger';
 
   const customerExternalId = buildCustomerExternalId(effectiveChannel, senderId);
