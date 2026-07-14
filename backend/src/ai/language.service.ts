@@ -27,13 +27,50 @@ export const LANG_NAMES: Record<ConversationLang, string> = {
 };
 
 const MIN_STICKY_LENGTH = 15;
+const MIN_SHORT_HIGH_ACCURACY_LENGTH = 4;
 const HIGH_CONFIDENCE_ACCURACY = 0.5;
+const SHORT_HIGH_ACCURACY = 0.85;
 const MIN_RELATIVE_CONFIDENCE_RATIO = 1.5;
 const MIN_ABSOLUTE_ACCURACY_LONG = 0.12;
 
 const TURKISH_CHAR_RE = /[ğüşıİĞÜŞ]/;
 const ARABIC_SCRIPT_RE = /[\u0600-\u06FF]/;
 const CYRILLIC_SCRIPT_RE = /[\u0400-\u04FF]/;
+
+/** Kısa selam / teşekkür ifadeleri — tinyld bunlarda sık yanılır (Hello→it, Merhaba→id). */
+const SHORT_PHRASE_LANG: Array<{ re: RegExp; lang: ConversationLang }> = [
+  {
+    re: /^(hi|hello|hey|good\s*(morning|afternoon|evening)|thanks|thank\s*you|thx|cheers)[\s!.?]*$/i,
+    lang: 'en',
+  },
+  {
+    re: /^(merhaba|selam|slm|mrb|mraba|gunaydin|günaydın|iyi\s*gunler|iyi\s*günler|tunaydin|tünaydın|sa|tesekkurler?|teşekkürler?|sagol|sağol|eyvallah)[\s!.?]*$/i,
+    lang: 'tr',
+  },
+  {
+    re: /^(hallo|guten\s*(tag|morgen|abend)|danke|dankesch[oö]n)[\s!.?]*$/i,
+    lang: 'de',
+  },
+  {
+    re: /^(bonjour|salut|bonsoir|merci|merci\s*beaucoup)[\s!.?]*$/i,
+    lang: 'fr',
+  },
+  {
+    re: /^(hola|buenos?\s*d[ií]as|buenas\s*(tardes|noches)|gracias)[\s!.?]*$/i,
+    lang: 'es',
+  },
+];
+
+const EN_WORD_HINT_RE =
+  /\b(the|and|you|your|what|where|when|how|why|is|are|do|does|did|have|has|can|could|please|need|help|want|book|appointment|price|prices|hours|open|closed|thanks|thank|hello|hi|hey|with|for|about|from|this|that|would|should|available|schedule|doctor|clinic)\b/i;
+const TR_WORD_HINT_RE =
+  /\b(ve|bir|bu|ne|nasil|nasıl|nedir|var|yok|istiyorum|lutfen|lütfen|merhaba|selam|randevu|saat|fiyat|tesekkur|teşekkür|misiniz|musunuz|mısınız|müsünüz|yardim|yardım|acil|açık|kapali|kapalı|doktor|klinik)\b/i;
+const DE_WORD_HINT_RE =
+  /\b(und|Sie|ihr|was|wo|wann|wie|bitte|danke|Termin|Öffnungszeiten|Arzt|Klinik)\b/i;
+const FR_WORD_HINT_RE =
+  /\b(et|vous|votre|quoi|où|quand|comment|s'il|merci|rendez-vous|horaires|docteur|clinique)\b/i;
+const ES_WORD_HINT_RE =
+  /\b(y|usted|su|qué|dónde|cuándo|cómo|por\s*favor|gracias|cita|horario|doctor|clínica)\b/i;
 
 function isTemplateLang(code: string): code is TemplateLang {
   return (TEMPLATE_LANGS as readonly string[]).includes(code);
@@ -48,6 +85,38 @@ interface MessageLanguageDetection {
   confident: boolean;
 }
 
+function detectShortPhraseLanguage(text: string): ConversationLang | null {
+  const trimmed = text.trim();
+  for (const entry of SHORT_PHRASE_LANG) {
+    if (entry.re.test(trimmed)) return entry.lang;
+  }
+  return null;
+}
+
+function countWordHints(text: string, re: RegExp): number {
+  return (text.match(new RegExp(re.source, 'gi')) || []).length;
+}
+
+/** Latin script kısa/orta mesajlarda yaygın kelime ipuçları (tinyld yetersiz kalınca). */
+function detectWordHintLanguage(text: string): ConversationLang | null {
+  if (TURKISH_CHAR_RE.test(text)) return 'tr';
+
+  const scores: Array<{ lang: ConversationLang; score: number }> = [
+    { lang: 'en', score: countWordHints(text, EN_WORD_HINT_RE) },
+    { lang: 'tr', score: countWordHints(text, TR_WORD_HINT_RE) },
+    { lang: 'de', score: countWordHints(text, DE_WORD_HINT_RE) },
+    { lang: 'fr', score: countWordHints(text, FR_WORD_HINT_RE) },
+    { lang: 'es', score: countWordHints(text, ES_WORD_HINT_RE) },
+  ].filter((s) => s.score > 0);
+
+  if (!scores.length) return null;
+  scores.sort((a, b) => b.score - a.score);
+  const best = scores[0];
+  const second = scores[1]?.score ?? 0;
+  if (best.score >= 1 && best.score > second) return best.lang;
+  return null;
+}
+
 function isConfidentDetection(
   text: string,
   topLang: string,
@@ -55,21 +124,38 @@ function isConfidentDetection(
   secondAccuracy: number
 ): boolean {
   const len = text.trim().length;
-  if (len < MIN_STICKY_LENGTH) return false;
-
   const mapped = mapDetectedIsoLang(topLang);
+  const strongRelative =
+    secondAccuracy <= 0 || topAccuracy >= secondAccuracy * MIN_RELATIVE_CONFIDENCE_RATIO;
+
+  // Yüksek doğrulukta kısa ifadeler (ör. "Good morning", "Where are you?")
+  if (
+    len >= MIN_SHORT_HIGH_ACCURACY_LENGTH &&
+    topAccuracy >= SHORT_HIGH_ACCURACY &&
+    strongRelative
+  ) {
+    return mapped !== 'other' || topAccuracy >= 0.95;
+  }
+
+  if (len < MIN_STICKY_LENGTH) {
+    // Orta uzunluk + net lider dil (ör. "I need help", "Thanks")
+    if (
+      len >= 6 &&
+      mapped !== 'other' &&
+      topAccuracy >= MIN_ABSOLUTE_ACCURACY_LONG &&
+      strongRelative
+    ) {
+      return true;
+    }
+    return false;
+  }
+
   if (mapped === 'other') {
-    return (
-      topAccuracy >= 0.05 &&
-      (secondAccuracy <= 0 || topAccuracy >= secondAccuracy * MIN_RELATIVE_CONFIDENCE_RATIO)
-    );
+    return topAccuracy >= 0.05 && strongRelative;
   }
 
   if (topAccuracy >= HIGH_CONFIDENCE_ACCURACY) return true;
-  return (
-    topAccuracy >= MIN_ABSOLUTE_ACCURACY_LONG &&
-    (secondAccuracy <= 0 || topAccuracy >= secondAccuracy * MIN_RELATIVE_CONFIDENCE_RATIO)
-  );
+  return topAccuracy >= MIN_ABSOLUTE_ACCURACY_LONG && strongRelative;
 }
 
 /** Tek mesaj için offline dil algılama — konuşma yapışkanlığı uygulanmaz */
@@ -84,8 +170,21 @@ function detectSingleMessageLanguage(text: string): MessageLanguageDetection {
     return { lang: 'ru', confident: true };
   }
 
+  const phraseLang = detectShortPhraseLanguage(trimmed);
+  if (phraseLang) {
+    return { lang: phraseLang, confident: true };
+  }
+
+  const wordHintLang = detectWordHintLanguage(trimmed);
+  if (wordHintLang && trimmed.length < MIN_STICKY_LENGTH) {
+    return { lang: wordHintLang, confident: true };
+  }
+
   const ranked = detectAll(trimmed);
-  if (!ranked.length) return { lang: 'tr', confident: false };
+  if (!ranked.length) {
+    if (wordHintLang) return { lang: wordHintLang, confident: true };
+    return { lang: 'tr', confident: false };
+  }
 
   let top = ranked[0];
   const second = ranked[1]?.accuracy ?? 0;
@@ -99,7 +198,16 @@ function detectSingleMessageLanguage(text: string): MessageLanguageDetection {
     }
   }
 
+  // tinyld kısa İngilizceyi yanlış dile map ederse kelime ipucunu tercih et
   const lang = mapDetectedIsoLang(top.lang);
+  if (
+    wordHintLang &&
+    wordHintLang !== lang &&
+    !isConfidentDetection(trimmed, top.lang, top.accuracy, second)
+  ) {
+    return { lang: wordHintLang, confident: true };
+  }
+
   return {
     lang,
     confident: isConfidentDetection(trimmed, top.lang, top.accuracy, second),
@@ -1109,7 +1217,8 @@ export function detectConversationLanguage(
 export const DEFAULT_LANGUAGE_BLOCK_FALLBACK =
   'LANGUAGE — PRIMARY RULE:\n' +
   "- Always reply in the same language as the customer's most recent message, regardless of the knowledge base language.\n" +
-  '- Detected language hint: {{langName}}. Use this only as a hint; mirror the customer\'s actual wording language.\n' +
+  "- If the customer's last message is in English, reply fully in English. If Turkish, reply fully in Turkish. Never mix languages.\n" +
+  '- Detected language hint: {{langName}}. Prefer the customer\'s actual wording over this hint if they conflict.\n' +
   '- If the customer switches language, switch immediately.\n' +
   "- Pass knowledge base content in the customer's language; do not add information in another language.";
 

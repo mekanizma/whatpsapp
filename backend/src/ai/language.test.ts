@@ -90,11 +90,25 @@ describe('language.service', () => {
     assert.match(getLanguageHintName('other'), /mirror naturally/i);
   });
 
-  it('belirsiz kısa ilk mesaj iş varsayılanı tr', () => {
-    assert.equal(detectConversationLanguage('Hello', []), 'tr');
+  it('kısa İngilizce/Türkçe selamları ilk mesajda doğru algılar', () => {
+    assert.equal(detectConversationLanguage('Hello', []), 'en');
+    assert.equal(detectConversationLanguage('Hi', []), 'en');
+    assert.equal(detectConversationLanguage('Good morning', []), 'en');
+    assert.equal(detectConversationLanguage('I need help', []), 'en');
+    assert.equal(detectConversationLanguage('Merhaba', []), 'tr');
+    assert.equal(detectConversationLanguage('Selam', []), 'tr');
   });
 
-  it('preAIGate İngilizce konuşmada İngilizce selam şablonu verir', () => {
+  it('belirsiz kısa ilk mesaj iş varsayılanı tr', () => {
+    assert.equal(detectConversationLanguage('ok', []), 'tr');
+    assert.equal(detectConversationLanguage('?', []), 'tr');
+  });
+
+  it('preAIGate İngilizce selamı ilk mesajda İngilizce şablonla verir', () => {
+    const first = preAIGate('Hello', []);
+    assert.equal(first.reason, 'greeting_template');
+    assert.match(first.response!, /Hello/i);
+
     const g = preAIGate('Hello', englishHistory);
     assert.equal(g.reason, 'greeting_template');
     assert.match(g.response!, /Hello/i);
