@@ -101,14 +101,14 @@ function countWordHints(text: string, re: RegExp): number {
 function detectWordHintLanguage(text: string): ConversationLang | null {
   if (TURKISH_CHAR_RE.test(text)) return 'tr';
 
-  const scores: Array<{ lang: ConversationLang; score: number }> = [
+  const candidates: Array<{ lang: ConversationLang; score: number }> = [
     { lang: 'en', score: countWordHints(text, EN_WORD_HINT_RE) },
     { lang: 'tr', score: countWordHints(text, TR_WORD_HINT_RE) },
     { lang: 'de', score: countWordHints(text, DE_WORD_HINT_RE) },
     { lang: 'fr', score: countWordHints(text, FR_WORD_HINT_RE) },
     { lang: 'es', score: countWordHints(text, ES_WORD_HINT_RE) },
-  ].filter((s) => s.score > 0);
-
+  ];
+  const scores = candidates.filter((s) => s.score > 0);
   if (!scores.length) return null;
   scores.sort((a, b) => b.score - a.score);
   const best = scores[0];
