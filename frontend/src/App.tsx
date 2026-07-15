@@ -28,6 +28,7 @@ import { TicketsPage } from '@/pages/TicketsPage';
 import { StaffPage } from '@/pages/StaffPage';
 import { WhatsAppPage } from '@/pages/WhatsAppPage';
 import { MetaIntegrationsPage } from '@/pages/MetaIntegrationsPage';
+import { META_CHANNELS_UI_ENABLED } from '@/lib/features';
 import { SubscriptionPage } from '@/pages/SubscriptionPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { CalendarPage } from '@/pages/CalendarPage';
@@ -128,7 +129,20 @@ function AppRoutes() {
         <Route path="returns" element={<PlanModuleRoute module="returns"><AdminOnlyRoute><ReturnsPage /></AdminOnlyRoute></PlanModuleRoute>} />
         <Route path="staff" element={<PlanModuleRoute module="staff"><AdminOnlyRoute><StaffPage /></AdminOnlyRoute></PlanModuleRoute>} />
         <Route path="whatsapp" element={<PlanModuleRoute module="whatsapp"><AdminOnlyRoute><WhatsAppPage /></AdminOnlyRoute></PlanModuleRoute>} />
-        <Route path="meta" element={<PlanModuleRoute module="whatsapp"><AdminOnlyRoute><MetaIntegrationsPage /></AdminOnlyRoute></PlanModuleRoute>} />
+        <Route
+          path="meta"
+          element={
+            META_CHANNELS_UI_ENABLED ? (
+              <PlanModuleRoute module="whatsapp">
+                <AdminOnlyRoute>
+                  <MetaIntegrationsPage />
+                </AdminOnlyRoute>
+              </PlanModuleRoute>
+            ) : (
+              <Navigate to="/panel/whatsapp" replace />
+            )
+          }
+        />
         <Route path="website" element={<PlanModuleRoute module="website"><AdminOnlyRoute><WebsitePage /></AdminOnlyRoute></PlanModuleRoute>} />
         <Route path="subscription" element={<PlanModuleRoute module="subscription"><AdminOnlyRoute><SubscriptionPage /></AdminOnlyRoute></PlanModuleRoute>} />
         <Route path="settings" element={<PlanModuleRoute module="settings"><SettingsPage /></PlanModuleRoute>} />

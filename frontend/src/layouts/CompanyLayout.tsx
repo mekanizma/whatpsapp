@@ -15,6 +15,7 @@ import { useAuthStore } from '@/store/authStore';
 import { planHasModule, type PlanModuleKey } from '@/lib/plan-capabilities';
 import { canSeeNavItem } from '@/lib/staff-permissions';
 import { localizePlan, resolvePlanI18nKey } from '@/lib/plan-localize';
+import { META_CHANNELS_UI_ENABLED } from '@/lib/features';
 import { LanguageSwitcher } from '@/components/LanguageSwitcher';
 import { CompanyLogo } from '@/components/CompanyLogo';
 import { ImpersonationBanner } from '@/components/ImpersonationBanner';
@@ -63,7 +64,10 @@ const navGroups: { sectionKey: string; items: NavItem[] }[] = [
     items: [
       { to: '/panel/staff', icon: Users, labelKey: 'layout.nav.staff', roles: ['company_admin'], module: 'staff' },
       { to: '/panel/whatsapp', icon: Smartphone, labelKey: 'layout.nav.whatsapp', roles: ['company_admin'], module: 'whatsapp' },
-      { to: '/panel/meta', icon: Share2, labelKey: 'layout.nav.meta', roles: ['company_admin'], module: 'whatsapp' },
+      // META_CHANNELS_UI_ENABLED=true olunca tekrar göster (features.ts)
+      ...(META_CHANNELS_UI_ENABLED
+        ? [{ to: '/panel/meta', icon: Share2, labelKey: 'layout.nav.meta', roles: ['company_admin'] as UserRole[], module: 'whatsapp' as const }]
+        : []),
       { to: '/panel/subscription', icon: CreditCard, labelKey: 'layout.nav.subscription', roles: ['company_admin'], module: 'subscription' },
       { to: '/panel/platform-support', icon: Headphones, labelKey: 'layout.nav.platformSupport', roles: ['company_admin'], module: 'settings' },
     ],
