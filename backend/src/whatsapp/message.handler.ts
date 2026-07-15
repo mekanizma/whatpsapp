@@ -402,6 +402,7 @@ async function handleAiDisabledInbound(
   customerName: string | null,
   messageText: string
 ): Promise<string> {
+  // Sonraki mesajlar: ticket açıkken sessiz kal (bilgi mesajı yalnızca 1 kez)
   if (await hasActiveTransferTicket(companyId, phone)) {
     console.log(`[WhatsApp] AI kapalı — aktif ticket, sessiz kayıt → ${phone}`);
     return '';
@@ -417,6 +418,21 @@ async function handleAiDisabledInbound(
     .eq('customer_phone', phone)
     .eq('status', 'open');
 
+  markConversationTransferred(companyId, phone);
+  markTransferReply(companyId, phone);
+
+  const lang = detectConversationLanguage(messageText);
+  const replyMessage = t(lang, 'ai_disabled_handoff');
+
+  await adminClient.from('messages').insert({
+    company_id: companyId,
+    customer_phone: phone,
+    customer_name: customerName,
+    message: replyMessage,
+    sender_type: 'ai',
+    status: 'transferred',
+  });
+
   await logActivity({
     companyId,
     action: 'conversation_transferred',
@@ -425,12 +441,13 @@ async function handleAiDisabledInbound(
       customer_phone: phone,
       skip_reason: 'ai_disabled',
       skipped_ai: true,
-      silent_handoff: true,
+      silent_handoff: false,
+      one_time_notice: true,
     },
   });
 
-  console.log(`[WhatsApp] AI kapalı — otomatik talep açıldı (yanıt yok) → ${phone}`);
-  return '';
+  console.log(`[WhatsApp] AI kapalı — talep açıldı + tek seferlik bildirim → ${phone}`);
+  return replyMessage;
 }
 
 export function clearTransferState(companyId: string, customerPhone: string): void {

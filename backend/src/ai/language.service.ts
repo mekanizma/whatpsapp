@@ -244,6 +244,7 @@ type MessageKey =
   | 'transfer_offer'
   | 'frustration'
   | 'anger_handoff'
+  | 'ai_disabled_handoff'
   | 'transferred_waiting'
   | 'transfer_connect'
   | 'quota_exceeded'
@@ -438,6 +439,15 @@ const MESSAGES: Record<MessageKey, Record<TemplateLang, string>> = {
     ru: 'Извините — сейчас соединю вас с живым представителем.',
     fr: 'Je suis désolé — je vous mets tout de suite en relation avec un conseiller.',
     es: 'Lo siento — le conecto de inmediato con un representante en vivo.',
+  },
+  ai_disabled_handoff: {
+    tr: 'Talebiniz temsilcimize iletildi. En kısa sürede size yardımcı olunacaktır.',
+    en: 'Your request has been forwarded to a representative. You will be helped as soon as possible.',
+    de: 'Ihre Anfrage wurde an einen Mitarbeiter weitergeleitet. Sie werden so schnell wie möglich unterstützt.',
+    ar: 'تم تحويل طلبك إلى ممثل. سيتم مساعدتك في أقرب وقت ممكن.',
+    ru: 'Ваш запрос передан представителю. Вам помогут в ближайшее время.',
+    fr: 'Votre demande a été transmise à un conseiller. Vous serez aidé dans les plus brefs délais.',
+    es: 'Su solicitud fue enviada a un representante. Le ayudaremos lo antes posible.',
   },
   transferred_waiting: {
     tr: 'Temsilcimiz en kısa sürede sizinle iletişime geçecek.',
