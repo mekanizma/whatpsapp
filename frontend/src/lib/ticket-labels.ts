@@ -8,6 +8,7 @@ const SUBJECT_KEY_BY_EN: Record<string, string> = {
   'Security — sensitive data': 'sensitive_data',
   'Opt-out request': 'opt_out',
   'AI handoff to agent': 'ai_transfer',
+  'AI off — customer message': 'ai_disabled',
   'Live support request': 'live_support_request',
 };
 

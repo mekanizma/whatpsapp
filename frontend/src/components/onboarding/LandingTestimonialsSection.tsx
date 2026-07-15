@@ -102,10 +102,6 @@ function TestimonialCard({ item, variant }: { item: Testimonial; variant: number
         <div>
           <p className="landing-testimonial-name">{item.author}</p>
           <p className="landing-testimonial-role">{item.role}</p>
-          <p className="landing-testimonial-business">
-            {item.business}
-            <span className="landing-testimonial-sector">{item.sector}</span>
-          </p>
         </div>
       </footer>
     </article>
@@ -165,7 +161,7 @@ export function LandingTestimonialsSection() {
         <div className="landing-testimonials-track">
           {looped.map((item, i) => (
             <TestimonialCard
-              key={`${item.business}-${i}`}
+              key={`${item.author}-${i}`}
               item={item}
               variant={(i % testimonials.length) % 3 + 1}
             />

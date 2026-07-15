@@ -35,14 +35,6 @@ export function OnboardingPage() {
     }
   }, [location.hash]);
 
-  const slides = t('onboarding.slides', { returnObjects: true }) as {
-    badge: string;
-    title: string;
-    description: string;
-    highlights: string[];
-  }[];
-
-  const hero = slides[0];
   const marquee = t('showcase.customerMarquee', { returnObjects: true }) as string[];
 
   return (
@@ -72,8 +64,10 @@ export function OnboardingPage() {
                   lead={t('onboarding.heroTitleLead')}
                   accent={t('onboarding.heroTitleAccent')}
                 />
-                <p className="mt-5 max-w-lg text-base leading-relaxed text-slate-400 sm:text-lg">
-                  {hero.description}
+                <p className="landing-hero-lead">
+                  {(
+                    t('onboarding.slides', { returnObjects: true }) as Array<{ description: string }>
+                  )[0]?.description}
                 </p>
                 <div className="landing-hero-actions mt-8">
                   <Button
@@ -85,7 +79,7 @@ export function OnboardingPage() {
                     {t('auth.login')}
                     <ArrowRight className="h-4 w-4 transition group-hover:translate-x-0.5" />
                   </Button>
-                  <LiveDemoButton variant="card" className="w-full max-w-lg" />
+                  <LiveDemoButton variant="card" className="w-full max-w-sm" />
                 </div>
               </div>
               <div className="flex justify-center lg:justify-end">

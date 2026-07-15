@@ -396,18 +396,37 @@
     ],
     "knowledgeDocs": ["Frequently Asked Questions", "Product & Service Info", "Price List", "Company Policies"],
     "cta": {
-      "badge": "Final Step",
-      "titleLead": "Set up your WhatsApp AI agent",
-      "titleAccent": "in just a few minutes",
-      "description": "When customers message you on WhatsApp, AI replies in seconds. Your business stays available around the clock.",
-      "buttonHint": "Sign in if you already have an account"
+      "kicker": "Missed message = missed customer & sales lead",
+      "titleLead": "When they write at 2:14 AM,",
+      "titleAccent": "get an answer.",
+      "description": "Don't leave the first message hanging while you sleep. Try the live demo or submit your application now.",
+      "primary": "Get started",
+      "buttonHint": "Sign in if you already have an account — setup takes minutes.",
+      "stakesLabel": "Highlights",
+      "stakes": [
+        "After-hours questions don't slip",
+        "First reply in seconds",
+        "One-tap handoff to a human"
+      ],
+      "sceneClock": "02:14",
+      "sceneLive": "AI on",
+      "sceneMessages": [
+        { "from": "customer", "text": "Hi, are you open?" },
+        { "from": "ai", "text": "Hi! Yes — we’re here 24/7 👋" },
+        { "from": "customer", "text": "Any appointments tomorrow?" },
+        { "from": "ai", "text": "Yes — 10:30, 14:00 and 16:30 are free." },
+        { "from": "customer", "text": "Can you book 14:00?" },
+        { "from": "ai", "text": "Done — 14:00 noted. What’s your name?" }
+      ],
+      "sceneSpeedValue": "<3s",
+      "sceneSpeedLabel": "avg first reply"
     },
     "liveDemo": {
       "button": "Live Demo",
       "badge": "Live Experience",
       "prefillMessage": "Hello",
       "hintLead": "We don't just explain WAAI — we let you experience it.",
-      "hintBody": "Talk to a real AI customer representative now and see how it works in seconds."
+      "hintBody": "No brochure — message the real AI on WhatsApp and get a reply in seconds."
     },
     "chatBotAriaLabel": "Contact us on WhatsApp about Waai Systems",
     "chatBotMessage": "I would like to get information about Waai Systems.",
@@ -489,6 +508,38 @@
       { "from": "ai", "text": "Sure! Which day works for you?" },
       { "from": "customer", "text": "Tomorrow afternoon" },
       { "from": "ai", "text": "2:30 PM or 4:00 PM available. Which do you prefer?" }
+    ],
+    "chatScenarios": [
+      {
+        "label": "Sales",
+        "messages": [
+          { "from": "customer", "text": "Hi, can I get your pricing?" },
+          { "from": "ai", "text": "Sure! Basic is $29/mo, Pro is $79/mo." },
+          { "from": "customer", "text": "What’s included in Pro?" },
+          { "from": "ai", "text": "Unlimited AI replies plus live agent handoff." },
+          { "from": "customer", "text": "I’d like to try Pro." }
+        ]
+      },
+      {
+        "label": "Appointment",
+        "messages": [
+          { "from": "customer", "text": "Hi, can I book an appointment?" },
+          { "from": "ai", "text": "Sure! Which day works for you?" },
+          { "from": "customer", "text": "Tomorrow afternoon" },
+          { "from": "ai", "text": "2:30 PM or 4:00 PM available. Which do you prefer?" },
+          { "from": "customer", "text": "2:30 PM works — thanks!" }
+        ]
+      },
+      {
+        "label": "Info",
+        "messages": [
+          { "from": "customer", "text": "What are your business hours?" },
+          { "from": "ai", "text": "We’re open weekdays, 9 AM to 6 PM." },
+          { "from": "customer", "text": "Where are you located?" },
+          { "from": "ai", "text": "6 Beshparmaklar St, Kyrenia — we’d love to see you." },
+          { "from": "customer", "text": "Perfect, I’ll stop by tomorrow." }
+        ]
+      }
     ]
   },
   "layout": {
@@ -706,6 +757,7 @@
       "sensitive_data": "Security — sensitive data",
       "opt_out": "Opt-out request",
       "ai_transfer": "AI handoff to agent",
+      "ai_disabled": "AI off — customer message",
       "live_support_request": "Live support request"
     }
   },
@@ -899,6 +951,11 @@
     "sourceAi": "AI",
     "weekdaysShort": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
     "upcoming": "Upcoming Appointments",
+    "upcomingHint": "Appointments in the coming days",
+    "today": "Today",
+    "goToToday": "Go to today",
+    "daySchedule": "Day schedule",
+    "monthSummary": "{{count}} appointments this month",
     "prevMonth": "Previous month",
     "nextMonth": "Next month",
     "status": {

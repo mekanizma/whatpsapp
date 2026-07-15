@@ -163,6 +163,13 @@ export function CalendarPage() {
 
   const selectedKey = toDateInputValue(selectedDate);
   const dayAppointments = appointmentsByDay.get(selectedKey) || [];
+  const sortedDayAppointments = useMemo(
+    () =>
+      [...dayAppointments].sort(
+        (a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime(),
+      ),
+    [dayAppointments],
+  );
 
   const calendarCells = useMemo(() => {
     const first = startOfMonth(viewMonth);
@@ -272,9 +279,17 @@ export function CalendarPage() {
   const selectedLabel = selectedDate.toLocaleDateString(locale, {
     weekday: 'long', day: 'numeric', month: 'long',
   });
+  const monthCount = appointments?.length ?? 0;
+  const isSelectedToday = sameDay(selectedDate, new Date());
+
+  function goToToday() {
+    const today = new Date();
+    setViewMonth(startOfMonth(today));
+    setSelectedDate(today);
+  }
 
   return (
-    <div className="space-y-6">
+    <div className="cal-page">
       <PageHeader
         title={t('calendar.title')}
         description={t('calendar.description')}
@@ -288,54 +303,63 @@ export function CalendarPage() {
       />
 
       {(upcomingLoading || (upcoming && upcoming.length > 0)) && (
-        <Card>
-          <CardContent className="p-4 sm:p-5">
-            <h3 className="mb-3 text-sm font-semibold text-slate-800">{t('calendar.upcoming')}</h3>
-            {upcomingLoading ? (
-              <div className="flex justify-center py-4"><Spinner className="h-6 w-6" /></div>
-            ) : (
-              <div className="space-y-2">
-                {upcoming?.slice(0, 8).map((a) => {
-                  const start = new Date(a.starts_at);
-                  const end = new Date(a.ends_at);
-                  const displayTitle = resolveAppointmentDisplayTitle(a);
-                  return (
-                    <button
-                      key={a.id}
-                      type="button"
-                      onClick={() => {
-                        setViewMonth(startOfMonth(start));
-                        setSelectedDate(start);
-                      }}
-                      className="flex w-full items-center gap-3 rounded-xl border border-slate-100 bg-slate-50/80 p-3 text-left transition-colors hover:border-primary/25 hover:bg-white"
-                    >
-                      <div className="flex h-10 w-10 shrink-0 flex-col items-center justify-center rounded-lg bg-primary/10 text-primary">
-                        <span className="text-xs font-bold leading-none">{start.getDate()}</span>
-                        <span className="text-[10px] uppercase">{start.toLocaleDateString(locale, { month: 'short' })}</span>
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate font-medium text-slate-900">{displayTitle}</p>
-                        <p className="text-xs text-slate-500">
-                          {a.customer_name || a.customer_phone} ·{' '}
-                          {start.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
-                          {' – '}
-                          {end.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                      </div>
-                      {a.source === 'ai' && <Badge variant="info">{t('calendar.sourceAi')}</Badge>}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <section className="cal-upcoming" aria-label={t('calendar.upcoming')}>
+          <div className="cal-upcoming-head">
+            <div>
+              <h3>{t('calendar.upcoming')}</h3>
+              <p>{t('calendar.upcomingHint')}</p>
+            </div>
+          </div>
+          {upcomingLoading ? (
+            <div className="flex justify-center py-6"><Spinner className="h-6 w-6" /></div>
+          ) : (
+            <div className="cal-upcoming-track">
+              {upcoming?.slice(0, 8).map((a) => {
+                const start = new Date(a.starts_at);
+                const end = new Date(a.ends_at);
+                const displayTitle = resolveAppointmentDisplayTitle(a);
+                return (
+                  <button
+                    key={a.id}
+                    type="button"
+                    onClick={() => {
+                      setViewMonth(startOfMonth(start));
+                      setSelectedDate(start);
+                    }}
+                    className="cal-upcoming-card"
+                  >
+                    <div className="cal-upcoming-date">
+                      <span className="day">{start.getDate()}</span>
+                      <span className="mon">{start.toLocaleDateString(locale, { month: 'short' })}</span>
+                    </div>
+                    <div className="cal-upcoming-body">
+                      <p className="title">{displayTitle}</p>
+                      <p className="meta">
+                        {a.customer_name || a.customer_phone}
+                      </p>
+                      <p className="meta">
+                        {start.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
+                        {' – '}
+                        {end.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                      {a.source === 'ai' && (
+                        <span className="mt-1 w-fit">
+                          <Badge variant="info">{t('calendar.sourceAi')}</Badge>
+                        </span>
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </section>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-5">
-        <Card className="lg:col-span-3">
-          <CardContent className="p-4 sm:p-5">
-            <div className="mb-4 flex items-center justify-between gap-2">
+      <div className="cal-layout">
+        <section className="cal-month" aria-label={monthLabel}>
+          <div className="cal-month-toolbar">
+            <div className="cal-month-nav">
               <Button
                 variant="ghost"
                 size="icon"
@@ -344,7 +368,7 @@ export function CalendarPage() {
               >
                 <ChevronLeft className="h-5 w-5" />
               </Button>
-              <h3 className="text-sm font-semibold capitalize text-slate-900 sm:text-base">{monthLabel}</h3>
+              <h3 className="cal-month-label">{monthLabel}</h3>
               <Button
                 variant="ghost"
                 size="icon"
@@ -354,158 +378,180 @@ export function CalendarPage() {
                 <ChevronRight className="h-5 w-5" />
               </Button>
             </div>
-
-            <div className="grid grid-cols-7 gap-1 text-center text-[10px] font-semibold uppercase tracking-wide text-slate-400 sm:text-xs">
-              {weekdays.map((w) => (
-                <div key={w} className="py-1">{w}</div>
-              ))}
+            <div className="cal-month-meta">
+              <span className="cal-month-summary">
+                {t('calendar.monthSummary', { count: monthCount })}
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={goToToday}
+                aria-label={t('calendar.goToToday')}
+              >
+                {t('calendar.today')}
+              </Button>
             </div>
+          </div>
 
-            <div className="mt-1 grid grid-cols-7 gap-1">
-              {calendarCells.map(({ date, inMonth }) => {
-                const key = toDateInputValue(date);
-                const count = appointmentsByDay.get(key)?.length || 0;
-                const isSelected = sameDay(date, selectedDate);
-                const isToday = sameDay(date, new Date());
+          <div className="cal-weekdays">
+            {weekdays.map((w) => (
+              <div key={w}>{w}</div>
+            ))}
+          </div>
 
-                return (
-                  <button
-                    key={key + inMonth}
-                    type="button"
-                    onClick={() => {
-                      setSelectedDate(date);
-                      if (!inMonth) setViewMonth(startOfMonth(date));
-                    }}
-                    className={cn(
-                      'relative flex min-h-[2.75rem] flex-col items-center justify-center rounded-xl py-1.5 text-sm transition-colors sm:min-h-[3rem]',
-                      !inMonth && 'text-slate-300',
-                      inMonth && 'text-slate-700 hover:bg-slate-100',
-                      isSelected && 'bg-primary text-white hover:bg-primary-dark',
-                      isToday && !isSelected && 'ring-2 ring-primary/30'
-                    )}
-                  >
-                    <span className="font-medium">{date.getDate()}</span>
-                    {count > 0 && (
-                      <span
-                        className={cn(
-                          'mt-0.5 h-1.5 w-1.5 rounded-full',
-                          isSelected ? 'bg-white/90' : 'bg-primary'
-                        )}
-                      />
-                    )}
-                  </button>
-                );
-              })}
+          <div className="cal-grid">
+            {calendarCells.map(({ date, inMonth }) => {
+              const key = toDateInputValue(date);
+              const count = appointmentsByDay.get(key)?.length || 0;
+              const isSelected = sameDay(date, selectedDate);
+              const isToday = sameDay(date, new Date());
+              const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+
+              return (
+                <button
+                  key={key + String(inMonth)}
+                  type="button"
+                  onClick={() => {
+                    setSelectedDate(date);
+                    if (!inMonth) setViewMonth(startOfMonth(date));
+                  }}
+                  className={cn(
+                    'cal-day',
+                    !inMonth && 'is-out',
+                    isWeekend && 'is-weekend',
+                    isToday && 'is-today',
+                    isSelected && 'is-selected',
+                  )}
+                >
+                  <span className="cal-day-num">{date.getDate()}</span>
+                  {count > 0 && (
+                    count > 1 ? (
+                      <span className="cal-day-count">{count}</span>
+                    ) : (
+                      <span className="cal-day-dots" aria-hidden>
+                        <span className="cal-day-dot" />
+                      </span>
+                    )
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        <section className="cal-day-panel" aria-label={selectedLabel}>
+          <div className="cal-day-panel-head">
+            <div>
+              <h3>{selectedLabel}</h3>
+              <p className="sub">
+                {isSelectedToday ? t('calendar.today') : t('calendar.daySchedule')}
+              </p>
             </div>
-          </CardContent>
-        </Card>
-
-        <div className="space-y-4 lg:col-span-2">
-          <div className="flex items-center justify-between gap-2">
-            <h3 className="text-sm font-semibold text-slate-900 sm:text-base">{selectedLabel}</h3>
             <Badge variant="info">{t('calendar.count', { count: dayAppointments.length })}</Badge>
           </div>
 
-          {isLoading ? (
-            <div className="flex justify-center py-12"><Spinner className="h-8 w-8" /></div>
-          ) : dayAppointments.length === 0 ? (
-            <div className="space-y-4">
-              <EmptyState
-                icon={CalendarDays}
-                title={t('calendar.emptyDay')}
-                description={t('calendar.emptyDayDesc')}
-              />
-              <Button size="sm" className="w-full sm:w-auto" onClick={openCreate}>
-                <Plus className="h-4 w-4" />
-                {t('calendar.newAppointment')}
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {dayAppointments
-                .sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime())
-                .map((a) => {
-                  const SourceIcon = sourceIcon[a.source] || CalendarDays;
-                  const start = new Date(a.starts_at);
-                  const end = new Date(a.ends_at);
-                  const displayTitle = resolveAppointmentDisplayTitle(a);
-                  const showNotes = a.notes?.trim() && a.notes.trim() !== displayTitle && !isGenericAppointmentTitle(a.notes);
-                  return (
-                    <Card key={a.id} className="overflow-hidden">
-                      <CardContent className="p-4">
-                        <div className="flex gap-3">
-                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-50 text-sky-600">
-                            <SourceIcon className="h-5 w-5" />
-                          </div>
-                          <div className="min-w-0 flex-1 space-y-1">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <p className="font-semibold text-slate-900">{displayTitle}</p>
-                              <Badge variant={statusBadge[a.status] || 'default'}>
-                                {t(`calendar.status.${a.status}`, { defaultValue: a.status })}
-                              </Badge>
-                              {a.source === 'ai' && (
-                                <Badge variant="info">{t('calendar.sourceAi')}</Badge>
-                              )}
-                            </div>
-                            <p className="text-sm font-medium text-slate-600">
-                              {a.customer_name || a.customer_phone}
-                            </p>
-                            <div className="flex flex-wrap items-center gap-3 text-xs text-slate-400">
-                              <span className="inline-flex items-center gap-1">
-                                <Clock className="h-3 w-3" />
-                                {start.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
-                                {' – '}
-                                {end.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
-                              </span>
-                              <span className="inline-flex items-center gap-1">
-                                <Phone className="h-3 w-3" />
-                                {a.customer_phone}
-                              </span>
-                            </div>
-                            {askProvider && a.preferred_doctor && (
-                              <p className="text-xs font-medium text-sky-700">
-                                {providerLabelKey ? t(providerLabelKey) : t('calendar.doctor')}: {a.preferred_doctor}
-                              </p>
-                            )}
-                            {showNotes && (
-                              <p className="text-xs text-slate-500 line-clamp-2">{a.notes}</p>
-                            )}
-                          </div>
-                        </div>
-                        <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
-                          <Button size="sm" variant="outline" onClick={() => openEdit(a)}>
-                            <Pencil className="h-3.5 w-3.5" />
-                            {t('common.edit')}
+          <div className="cal-day-panel-body">
+            {isLoading ? (
+              <div className="flex justify-center py-12"><Spinner className="h-8 w-8" /></div>
+            ) : sortedDayAppointments.length === 0 ? (
+              <div className="cal-empty">
+                <EmptyState
+                  icon={CalendarDays}
+                  title={t('calendar.emptyDay')}
+                  description={t('calendar.emptyDayDesc')}
+                />
+                <Button size="sm" className="w-full sm:w-auto" onClick={openCreate}>
+                  <Plus className="h-4 w-4" />
+                  {t('calendar.newAppointment')}
+                </Button>
+              </div>
+            ) : (
+              sortedDayAppointments.map((a) => {
+                const SourceIcon = sourceIcon[a.source] || CalendarDays;
+                const start = new Date(a.starts_at);
+                const end = new Date(a.ends_at);
+                const displayTitle = resolveAppointmentDisplayTitle(a);
+                const showNotes =
+                  a.notes?.trim() &&
+                  a.notes.trim() !== displayTitle &&
+                  !isGenericAppointmentTitle(a.notes);
+                return (
+                  <article key={a.id} className="cal-appt">
+                    <div className="cal-appt-time">
+                      <div className="clock">
+                        <SourceIcon className="h-4 w-4" />
+                      </div>
+                      <span className="range">
+                        {start.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
+                        <br />
+                        {end.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    <div className="cal-appt-main">
+                      <div className="cal-appt-title-row">
+                        <p className="title">{displayTitle}</p>
+                        <Badge variant={statusBadge[a.status] || 'default'}>
+                          {t(`calendar.status.${a.status}`, { defaultValue: a.status })}
+                        </Badge>
+                        {a.source === 'ai' && (
+                          <Badge variant="info">{t('calendar.sourceAi')}</Badge>
+                        )}
+                      </div>
+                      <p className="cal-appt-customer">
+                        {a.customer_name || a.customer_phone}
+                      </p>
+                      <div className="cal-appt-meta">
+                        <span>
+                          <Clock className="h-3 w-3" />
+                          {start.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
+                          {' – '}
+                          {end.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        <span>
+                          <Phone className="h-3 w-3" />
+                          {a.customer_phone}
+                        </span>
+                      </div>
+                      {askProvider && a.preferred_doctor && (
+                        <p className="text-xs font-medium text-sky-700">
+                          {providerLabelKey ? t(providerLabelKey) : t('calendar.doctor')}: {a.preferred_doctor}
+                        </p>
+                      )}
+                      {showNotes && <p className="cal-appt-note">{a.notes}</p>}
+                      <div className="cal-appt-actions">
+                        <Button size="sm" variant="outline" onClick={() => openEdit(a)}>
+                          <Pencil className="h-3.5 w-3.5" />
+                          {t('common.edit')}
+                        </Button>
+                        {a.status !== 'cancelled' && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => cancelMutation.mutate(a.id)}
+                            disabled={cancelMutation.isPending}
+                          >
+                            {t('calendar.cancel')}
                           </Button>
-                          {a.status !== 'cancelled' && (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => cancelMutation.mutate(a.id)}
-                              disabled={cancelMutation.isPending}
-                            >
-                              {t('calendar.cancel')}
-                            </Button>
-                          )}
-                          {isAdmin && (
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => deleteMutation.mutate(a.id)}
-                              disabled={deleteMutation.isPending}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                              {t('common.delete')}
-                            </Button>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-            </div>
-          )}
-        </div>
+                        )}
+                        {isAdmin && (
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => deleteMutation.mutate(a.id)}
+                            disabled={deleteMutation.isPending}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            {t('common.delete')}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </article>
+                );
+              })
+            )}
+          </div>
+        </section>
       </div>
 
       {showForm && (

@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import {
-  Bot, ArrowRightLeft, Users, Zap, Database, SkipForward, ChevronLeft, MessageSquare,
+  Bot, ArrowRightLeft, Users, ChevronLeft, MessageSquare,
 } from 'lucide-react';
 import { api } from '@/services/api';
 import { PageHeader } from '@/components/PageHeader';
@@ -34,37 +34,6 @@ export function AiInsightsPage() {
   const transferred = stats?.transferred ?? 0;
   const totalHandled = aiResponses + transferred;
   const autoReplyPercent = totalHandled > 0 ? Math.round((aiResponses / totalHandled) * 100) : 0;
-
-  const metrics = [
-    {
-      label: t('aiInsights.apiCalls'),
-      value: stats?.ai_api_calls ?? 0,
-      icon: Zap,
-      color: 'text-violet-600',
-      bg: 'bg-violet-50',
-    },
-    {
-      label: t('aiInsights.cached'),
-      value: stats?.ai_cached_hits ?? 0,
-      icon: Database,
-      color: 'text-sky-600',
-      bg: 'bg-sky-50',
-    },
-    {
-      label: t('aiInsights.skipped'),
-      value: stats?.ai_skipped ?? 0,
-      icon: SkipForward,
-      color: 'text-amber-600',
-      bg: 'bg-amber-50',
-    },
-    {
-      label: t('aiInsights.tokens'),
-      value: (stats?.ai_tokens_used ?? 0).toLocaleString(locale),
-      icon: Bot,
-      color: 'text-emerald-600',
-      bg: 'bg-emerald-50',
-    },
-  ];
 
   return (
     <div className="space-y-6">
@@ -96,20 +65,6 @@ export function AiInsightsPage() {
             )}
           </div>
         </div>
-      </div>
-
-      <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
-        {metrics.map((m) => (
-          <Card key={m.label}>
-            <CardContent className="p-4 sm:p-5">
-              <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-xl ${m.bg}`}>
-                <m.icon className={`h-5 w-5 ${m.color}`} />
-              </div>
-              <p className="text-xl font-bold tabular-nums text-slate-900 sm:text-2xl">{m.value}</p>
-              <p className="mt-1 text-xs text-slate-500 sm:text-sm">{m.label}</p>
-            </CardContent>
-          </Card>
-        ))}
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">

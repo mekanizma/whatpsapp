@@ -396,18 +396,37 @@
     ],
     "knowledgeDocs": ["Sık Sorulan Sorular", "Ürün & Hizmet Bilgileri", "Fiyat Listesi", "Şirket Politikaları"],
     "cta": {
-      "badge": "Son Adım",
-      "titleLead": "WhatsApp AI temsilcinizi",
-      "titleAccent": "birkaç dakikada kurun",
-      "description": "Müşterileriniz WhatsApp'tan yazdığında yapay zeka saniyeler içinde yanıt verir. Gece gündüz demeden işletmeniz müşterilerinize ulaşır.",
-      "buttonHint": "Hesabınız varsa hemen giriş yapın"
+      "kicker": "Kaçırılan mesaj = kaçırılan müşteri & satış talebi",
+      "titleLead": "Gece 02:14’te yazan",
+      "titleAccent": "cevap bulsun.",
+      "description": "Siz uyurken bile ilk mesaj boşta kalmasın. Canlı demo ile deneyin veya hemen başvurunuzu yapın.",
+      "primary": "Hemen başla",
+      "buttonHint": "Hesabınız varsa giriş yapın — kurulum birkaç dakika.",
+      "stakesLabel": "Öne çıkanlar",
+      "stakes": [
+        "Mesai dışı sorular kaçmaz",
+        "İlk yanıt saniyeler içinde",
+        "Temsilciye tek dokunuşla aktarım"
+      ],
+      "sceneClock": "02:14",
+      "sceneLive": "AI açık",
+      "sceneMessages": [
+        { "from": "customer", "text": "Merhaba, açık mısınız?" },
+        { "from": "ai", "text": "Merhaba! Evet, 7/24 buradayız 👋" },
+        { "from": "customer", "text": "Yarın için randevu var mı?" },
+        { "from": "ai", "text": "Var — 10:30, 14:00 ve 16:30 uygun." },
+        { "from": "customer", "text": "14:00’ü ayırır mısınız?" },
+        { "from": "ai", "text": "Tamam, 14:00 için not aldım. Adınızı yazar mısınız?" }
+      ],
+      "sceneSpeedValue": "<3 sn",
+      "sceneSpeedLabel": "ortalama ilk yanıt"
     },
     "liveDemo": {
       "button": "Canlı Demo",
       "badge": "Canlı Deneyim",
       "prefillMessage": "Merhaba",
       "hintLead": "WAAI'yi Anlatmıyoruz, Deneyimletiyoruz.",
-      "hintBody": "Gerçek AI müşteri temsilcisiyle şimdi konuşun ve saniyeler içinde nasıl çalıştığını görün."
+      "hintBody": "Rehber yok — WhatsApp'tan yazın, gerçek AI saniyeler içinde cevaplasın."
     },
     "chatBotAriaLabel": "WhatsApp üzerinden Waai Sistemleri hakkında bilgi alın",
     "chatBotMessage": "Waai Sistemleri Hakkında Bilgi Almak İstiyorum.",
@@ -489,6 +508,38 @@
       { "from": "ai", "text": "Tabii! Hangi gün size uygun?" },
       { "from": "customer", "text": "Yarın öğleden sonra" },
       { "from": "ai", "text": "14:30 veya 16:00 müsait. Hangisini tercih edersiniz?" }
+    ],
+    "chatScenarios": [
+      {
+        "label": "Satış",
+        "messages": [
+          { "from": "customer", "text": "Merhaba, fiyatları öğrenebilir miyim?" },
+          { "from": "ai", "text": "Tabii! Temel paket 990₺/ay, Pro 2490₺/ay." },
+          { "from": "customer", "text": "Pro'da neler var?" },
+          { "from": "ai", "text": "Sınırsız AI yanıt ve canlı temsilci aktarımı dahil." },
+          { "from": "customer", "text": "Pro'yu denemek istiyorum." }
+        ]
+      },
+      {
+        "label": "Randevu",
+        "messages": [
+          { "from": "customer", "text": "Merhaba, randevu alabilir miyim?" },
+          { "from": "ai", "text": "Tabii! Hangi gün size uygun?" },
+          { "from": "customer", "text": "Yarın öğleden sonra" },
+          { "from": "ai", "text": "14:30 veya 16:00 müsait. Hangisini istersiniz?" },
+          { "from": "customer", "text": "14:30 olsun, teşekkürler." }
+        ]
+      },
+      {
+        "label": "Bilgi",
+        "messages": [
+          { "from": "customer", "text": "Çalışma saatleriniz nedir?" },
+          { "from": "ai", "text": "Hafta içi 09:00–18:00 arası hizmet veriyoruz." },
+          { "from": "customer", "text": "Adresiniz neresi?" },
+          { "from": "ai", "text": "Beşparmaklar Cad. No:6, Girne — sizi bekleriz." },
+          { "from": "customer", "text": "Tamam, yarın uğrarım." }
+        ]
+      }
     ]
   },
   "layout": {
@@ -706,6 +757,7 @@
       "sensitive_data": "Güvenlik — hassas veri",
       "opt_out": "Vazgeçme talebi",
       "ai_transfer": "Yapay zekadan temsilciye aktarım",
+      "ai_disabled": "AI kapalı — müşteri mesajı",
       "live_support_request": "Canlı destek talebi"
     }
   },
@@ -899,6 +951,11 @@
     "sourceAi": "AI",
     "weekdaysShort": ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"],
     "upcoming": "Yaklaşan Randevular",
+    "upcomingHint": "Önümüzdeki günlerdeki randevular",
+    "today": "Bugün",
+    "goToToday": "Bugüne git",
+    "daySchedule": "Günün programı",
+    "monthSummary": "{{count}} randevu bu ay",
     "prevMonth": "Önceki ay",
     "nextMonth": "Sonraki ay",
     "status": {

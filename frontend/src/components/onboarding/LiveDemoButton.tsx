@@ -67,7 +67,7 @@ export function LiveDemoButton({
 
       <span className="landing-live-demo-card-inner">
         <span className="landing-live-demo-badge">
-          <Sparkles className="h-3 w-3 text-[#6ee7b7]" aria-hidden />
+          <Sparkles className="h-2.5 w-2.5 text-[#6ee7b7]" aria-hidden />
           <span className="landing-live-demo-live-dot" aria-hidden />
           {t('onboarding.liveDemo.badge')}
         </span>
@@ -81,11 +81,11 @@ export function LiveDemoButton({
 
         <span className="landing-live-demo-cta">
           <span className="landing-live-demo-cta-icon">
-            <WhatsAppIcon className="h-4 w-4" />
+            <WhatsAppIcon className="h-3.5 w-3.5" />
           </span>
           <span className="landing-live-demo-cta-label">{label}</span>
           <ArrowUpRight
-            className="landing-live-demo-cta-arrow h-4 w-4"
+            className="landing-live-demo-cta-arrow h-3.5 w-3.5"
             aria-hidden
           />
         </span>
@@ -100,7 +100,9 @@ export function LiveDemoHint({ className }: { className?: string }) {
   return (
     <p className={cn('landing-live-demo-hint', className)}>
       <span className="block font-medium text-slate-300">{t('onboarding.liveDemo.hintLead')}</span>
-      <span className="mt-1 block">{t('onboarding.liveDemo.hintBody')}</span>
+      <span className="landing-live-demo-hint-body mt-1 block">
+        {t('onboarding.liveDemo.hintBody')}
+      </span>
     </p>
   );
 }
