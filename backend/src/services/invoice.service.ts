@@ -1,5 +1,5 @@
 /**
- * E-Fatura PDF oluşturma — MEKANİZMA
+ * Ödeme Bilgi Formu PDF oluşturma — MEKANİZMA
  */
 
 import PDFDocument from 'pdfkit';
@@ -25,7 +25,7 @@ export interface InvoiceLineItem {
 
 export interface InvoiceOptions {
   billingPeriod?: BillingPeriod;
-  /** Faturaya özel tek seferlik kurulum ücreti */
+  /** Forma özel tek seferlik kurulum ücreti */
   setupFee?: number;
   setupFeeDescription?: string;
 }
@@ -137,7 +137,7 @@ export async function buildInvoiceData(
   options: InvoiceOptions = {}
 ): Promise<InvoiceData> {
   const setupFee = Math.max(0, Number(options.setupFee) || 0);
-  const setupFeeDescription = options.setupFeeDescription?.trim() || 'Kurulum Ücreti (tek seferlik)';
+  const setupFeeDescription = options.setupFeeDescription?.trim() || 'Tek Seferlik Kurulum';
 
   const { data: company, error: companyError } = await adminClient
     .from('companies')
@@ -357,12 +357,11 @@ export function generateInvoicePdf(data: InvoiceData): Promise<Buffer> {
     // Header band
     doc.rect(0, 0, 595.28, 90).fill('#0f172a');
     doc.fillColor('#ffffff').font(INVOICE_FONT_BOLD).fontSize(26).text(data.issuer.name, 40, 28);
-    doc.font(INVOICE_FONT).fontSize(10).text('E-FATURA / E-ARŞİV FATURA', 40, 62);
+    doc.font(INVOICE_FONT).fontSize(10).text('ÖDEME BİLGİ FORMU', 40, 62);
 
-    let metaY = 20;
-    metaY = drawMetaLine(doc, `Fatura No: ${data.invoiceNumber}`, metaX, metaY, metaW, { bold: true });
-    metaY = drawMetaLine(doc, `Tarih: ${formatDate(data.issueDate)}`, metaX, metaY, metaW);
-    drawMetaLine(doc, 'Senaryo: TEMELFATURA', metaX, metaY, metaW);
+    let metaY = 26;
+    metaY = drawMetaLine(doc, `Tarih: ${formatDate(data.issueDate)}`, metaX, metaY, metaW, { bold: true });
+    drawMetaLine(doc, 'Senaryo: BİLGİ FORMU', metaX, metaY, metaW);
 
     let y = 110;
 
@@ -412,7 +411,7 @@ export function generateInvoicePdf(data: InvoiceData): Promise<Buffer> {
     }
 
     // Line items table
-    doc.fillColor('#0f172a').font(INVOICE_FONT_BOLD).fontSize(11).text('FATURA KALEMLERİ', 40, y);
+    doc.fillColor('#0f172a').font(INVOICE_FONT_BOLD).fontSize(11).text('PAKET ÖDEME DETAYLARI', 40, y);
     y += 14;
 
     y = drawTableRow(
@@ -451,7 +450,7 @@ export function generateInvoicePdf(data: InvoiceData): Promise<Buffer> {
 
     y += 10;
     const totalsTop = y;
-    doc.rect(330, totalsTop, 225, 62).stroke('#e2e8f0');
+    doc.rect(330, totalsTop, 225, 52).stroke('#e2e8f0');
     let totalsY = totalsTop + 10;
     totalsY = drawTotalRow(doc, totalsY, 'Ara Toplam:', formatMoney(data.subtotal, data.currency));
 
@@ -462,17 +461,11 @@ export function generateInvoicePdf(data: InvoiceData): Promise<Buffer> {
       align: 'right',
       lineBreak: false,
     });
-    doc.fillColor('#64748b').font(INVOICE_FONT).fontSize(7.5);
-    doc.text('(KDV Hariç)', 340, totalsY + 13, { width: 95, lineBreak: false });
 
-    y = totalsTop + 72;
+    y = totalsTop + 62;
+    // Alt bilgi notu (yasal fatura metni yok) — yalnızca iletişim
     doc.font(INVOICE_FONT).fontSize(7.5).fillColor('#94a3b8');
-    const footerText =
-      data.issuer.footerNote ||
-      'Bu belge elektronik ortamda oluşturulmuş olup 5070 sayılı Elektronik İmza Kanunu kapsamında geçerlidir. ' +
-        `${data.issuer.name} WhatsApp AI SaaS abonelik hizmeti faturasıdır.`;
-    doc.text(footerText, 40, y, { width: 515, align: 'center' });
-    doc.text(`${data.issuer.website} · ${data.issuer.email}`, 40, y + 24, { width: 515, align: 'center' });
+    doc.text(`${data.issuer.website} · ${data.issuer.email}`, 40, y, { width: 515, align: 'center' });
 
     doc.end();
   });
@@ -491,7 +484,7 @@ export async function createCompanyInvoicePdf(
     .trim()
     .replace(/\s+/g, '-')
     .slice(0, 40);
-  const filename = `MEKANIZMA-Fatura-${data.invoiceNumber}-${safeName || 'sirket'}.pdf`;
+  const filename = `MEKANIZMA-Odeme-Bilgi-Formu-${data.invoiceNumber}-${safeName || 'sirket'}.pdf`;
 
   return { buffer, filename, invoiceNumber: data.invoiceNumber };
 }

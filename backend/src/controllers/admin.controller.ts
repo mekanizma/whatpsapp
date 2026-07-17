@@ -149,7 +149,7 @@ export async function downloadCompanyInvoice(req: AuthRequest, res: Response): P
   const setupFeeDescription = (req.query.setupFeeDescription as string) || undefined;
 
   if (isDemoSession(req)) {
-    res.status(400).json({ success: false, error: 'Demo modda fatura oluşturulamaz' });
+    res.status(400).json({ success: false, error: 'Demo modda ödeme bilgi formu oluşturulamaz' });
     return;
   }
 
@@ -172,7 +172,7 @@ export async function downloadCompanyInvoice(req: AuthRequest, res: Response): P
   } catch (err) {
     res.status(400).json({
       success: false,
-      error: err instanceof Error ? err.message : 'Fatura oluşturulamadı',
+      error: err instanceof Error ? err.message : 'Ödeme bilgi formu oluşturulamadı',
     });
   }
 }
