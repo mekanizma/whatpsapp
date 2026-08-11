@@ -42,7 +42,10 @@ export function MessagesPage() {
   const ticketParam = searchParams.get('ticket');
   const companyId = useAuthStore((s) => s.company?.id);
   const userRole = useAuthStore((s) => s.user?.role);
+  const isImpersonating = useAuthStore((s) => s.isImpersonating);
   const isStaff = userRole === 'staff';
+  const canSeeKbSources =
+    userRole === 'company_admin' || (userRole === 'super_admin' && isImpersonating);
 
   const [selectedPhone, setSelectedPhone] = useState<string | null>(phoneParam);
   const [replyText, setReplyText] = useState('');
@@ -392,6 +395,39 @@ export function MessagesPage() {
                     ) : (
                       <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.message}</p>
                     )}
+
+                    {canSeeKbSources &&
+                      msg.sender_type === 'ai' &&
+                      Array.isArray(msg.rag_sources) &&
+                      msg.rag_sources.length > 0 && (
+                        <div className="mt-2 space-y-0.5 border-t border-emerald-200/60 pt-1.5">
+                          <p className="text-[10px] font-medium text-emerald-800/70">
+                            {t('messages.kbSources')}
+                          </p>
+                          {msg.rag_sources.map((src, idx) => {
+                            let label = t('messages.kbSourceTitle', { title: src.title });
+                            if (src.line_start != null) {
+                              label = t('messages.kbSourceLine', {
+                                title: src.title,
+                                line: src.line_start,
+                              });
+                            } else if (typeof src.chunk_index === 'number') {
+                              label = t('messages.kbSourceChunk', {
+                                title: src.title,
+                                chunk: src.chunk_index + 1,
+                              });
+                            }
+                            return (
+                              <p
+                                key={`${src.knowledge_base_id}-${src.chunk_index ?? 'x'}-${idx}`}
+                                className="text-[10px] leading-snug text-emerald-700/80 break-words"
+                              >
+                                {label}
+                              </p>
+                            );
+                          })}
+                        </div>
+                      )}
 
                     <p className={cn('mt-1.5 text-[10px] text-right', msg.sender_type === 'staff' ? 'text-white/60' : 'text-slate-400')}>
                       {new Date(msg.created_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}

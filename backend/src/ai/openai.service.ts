@@ -6,7 +6,7 @@ import type OpenAI from 'openai';
 import { config } from '../config';
 import { createChatCompletion } from './openai-client';
 import { adminClient } from '../database/supabase';
-import { Company, KnowledgeItem } from '../types';
+import { Company, KnowledgeItem, KnowledgeSourceRef } from '../types';
 import {
   buildStaticSystemPrompt,
   buildDynamicUserMessage,
@@ -17,7 +17,10 @@ import { logAIUsage } from './ai-quota.service';
 import { getAllActivePromptContentsForAI } from '../services/prompt.service';
 import { preAIGate } from './ai-gate.service';
 import { stripTransferMarker } from './transfer.service';
-import { retrieveKnowledgeContext } from '../services/knowledge-retrieval.service';
+import {
+  buildKnowledgeSources,
+  retrieveKnowledgeContext,
+} from '../services/knowledge-retrieval.service';
 import { isAppointmentIntent } from './knowledge-filter.service';
 import { buildKnowledgeNoMatchHint } from './kb-answer.service';
 import { prepareConversationHistoryForChat } from './conversation-history.service';
@@ -104,7 +107,7 @@ async function fetchGenerateAIContext(
       getCompany(companyId),
       adminClient
         .from('knowledge_base')
-        .select('title, content, category')
+        .select('id, title, content, category')
         .eq('company_id', companyId)
         .eq('is_active', true)
         .limit(200),
@@ -157,6 +160,8 @@ export interface AIResponse {
   tokensUsed: number;
   appointmentBooked?: boolean;
   knowledgeMiss?: boolean;
+  /** Bilgi bankası kaynakları — yalnızca şirket yöneticisine gösterilir */
+  knowledgeSources?: KnowledgeSourceRef[];
 }
 
 const companyCache = new Map<string, { data: Company; expires: number }>();
@@ -477,6 +482,13 @@ export async function generateAIResponse(
     void setCachedResponse(companyId, trimmed, message, shouldTransfer);
   }
 
+  const knowledgeSources = buildKnowledgeSources(
+    retrieval.chunks,
+    allKnowledge,
+    retrieval.fallbackItems,
+    retrieval.usedLexicalFallback
+  );
+
   return {
     message,
     shouldTransfer,
@@ -485,5 +497,6 @@ export async function generateAIResponse(
     tokensUsed: totalTokens,
     appointmentBooked: false,
     knowledgeMiss,
+    knowledgeSources,
   };
 }

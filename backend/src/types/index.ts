@@ -112,6 +112,17 @@ export interface RetrievedKnowledgeChunk {
   combined_score: number;
 }
 
+/** AI yanıtında kullanılan bilgi bankası kaynağı (yönetici görünümü) */
+export interface KnowledgeSourceRef {
+  knowledge_base_id: string;
+  title: string;
+  /** 0-based chunk sırası; lexical fallback'te null */
+  chunk_index: number | null;
+  /** Bilgi bankası metnindeki yaklaşık başlangıç satırı (1-based) */
+  line_start: number | null;
+  heading?: string | null;
+}
+
 export interface Message {
   id: string;
   company_id: string;
@@ -127,6 +138,7 @@ export interface Message {
   media_path?: string | null;
   media_type?: string | null;
   media_filename?: string | null;
+  rag_sources?: KnowledgeSourceRef[];
   created_at: string;
 }
 

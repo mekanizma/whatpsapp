@@ -152,7 +152,16 @@ export async function getConversationMessages(req: AuthRequest, res: Response): 
   const mapped = (data || []).map(mapMessageRow);
   const withMedia = await attachSignedMediaUrls(mapped);
 
-  res.json({ success: true, data: withMedia });
+  // Bilgi bankası kaynakları yalnızca şirket yöneticisine (ve impersonation) görünür
+  const canSeeRagSources =
+    req.role === 'company_admin' ||
+    (req.role === 'super_admin' && !!req.isImpersonating);
+
+  const payload = canSeeRagSources
+    ? withMedia
+    : withMedia.map(({ rag_sources: _rag, ...rest }) => ({ ...rest, rag_sources: undefined }));
+
+  res.json({ success: true, data: payload });
 }
 
 export async function getMessageMedia(req: AuthRequest, res: Response): Promise<void> {

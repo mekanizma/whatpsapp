@@ -318,6 +318,16 @@ export interface Message {
   media_url?: string | null;
   media_type?: string | null;
   media_filename?: string | null;
+  /** Yalnızca şirket yöneticisine dönen AI bilgi bankası kaynakları */
+  rag_sources?: KnowledgeSourceRef[];
+}
+
+export interface KnowledgeSourceRef {
+  knowledge_base_id: string;
+  title: string;
+  chunk_index: number | null;
+  line_start: number | null;
+  heading?: string | null;
 }
 
 export interface KnowledgeItem {

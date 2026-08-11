@@ -10,7 +10,7 @@ import {
   buildKnowledgeContextForAI,
   filterRelevantKnowledge,
 } from '../ai/knowledge-filter.service';
-import type { KnowledgeItem, RetrievedKnowledgeChunk } from '../types';
+import type { KnowledgeItem, KnowledgeSourceRef, RetrievedKnowledgeChunk } from '../types';
 
 /** Test / override hooks for embedding + RPC (see webhookDeps pattern) */
 export const knowledgeRetrievalDeps = {
@@ -135,6 +135,89 @@ export function buildContextFromChunks(chunks: RetrievedKnowledgeChunk[]): strin
     context = `${context.slice(0, config.rag.maxContextChars)}\n...[kısaltıldı]`;
   }
   return context;
+}
+
+/** Chunk içeriğinden "Konu:" önekini temizle; satır araması için gövdeyi al */
+function chunkBodyForLineSearch(chunkContent: string): string {
+  const trimmed = chunkContent.trim();
+  const konu = trimmed.match(/^Konu:\s*[^\n]+\n\n([\s\S]*)$/);
+  return (konu?.[1] || trimmed).trim();
+}
+
+/** Bilgi bankası metninde chunk'ın yaklaşık başlangıç satırı (1-based) */
+export function estimateChunkStartLine(
+  kbContent: string | null | undefined,
+  chunkContent: string
+): number | null {
+  if (!kbContent?.trim() || !chunkContent?.trim()) return null;
+
+  const body = chunkBodyForLineSearch(chunkContent);
+  const probe =
+    body
+      .split(/\n+/)
+      .map((l) => l.trim())
+      .find((l) => l.length >= 24) || body.slice(0, 120).trim();
+
+  if (!probe || probe.length < 12) return null;
+
+  const idx = kbContent.indexOf(probe);
+  if (idx < 0) return null;
+
+  return kbContent.slice(0, idx).split('\n').length;
+}
+
+/**
+ * RAG / lexical sonuçlarından yöneticiye gösterilecek kaynak listesi.
+ * Aynı KB + chunk tekrarlarını tekilleştirir.
+ */
+export function buildKnowledgeSources(
+  chunks: RetrievedKnowledgeChunk[],
+  allKnowledge: KnowledgeItem[],
+  fallbackItems: KnowledgeItem[] = [],
+  usedLexicalFallback = false
+): KnowledgeSourceRef[] {
+  const byId = new Map(allKnowledge.map((k) => [k.id, k]));
+
+  if (chunks.length) {
+    const seen = new Set<string>();
+    const sources: KnowledgeSourceRef[] = [];
+
+    for (const chunk of chunks) {
+      const key = `${chunk.knowledge_base_id}:${chunk.chunk_index}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+
+      const kb = byId.get(chunk.knowledge_base_id);
+      sources.push({
+        knowledge_base_id: chunk.knowledge_base_id,
+        title: kb?.title?.trim() || 'Bilgi Bankası',
+        chunk_index: chunk.chunk_index,
+        line_start: estimateChunkStartLine(kb?.content, chunk.content),
+        heading: chunk.heading,
+      });
+    }
+
+    return sources;
+  }
+
+  if (usedLexicalFallback && fallbackItems.length) {
+    const seen = new Set<string>();
+    const sources: KnowledgeSourceRef[] = [];
+    for (const item of fallbackItems) {
+      if (seen.has(item.id)) continue;
+      seen.add(item.id);
+      sources.push({
+        knowledge_base_id: item.id,
+        title: item.title?.trim() || 'Bilgi Bankası',
+        chunk_index: null,
+        line_start: null,
+        heading: null,
+      });
+    }
+    return sources;
+  }
+
+  return [];
 }
 
 /** Top-k sıralama; eşik üstü yoksa en iyi K chunk yine döner (LLM seçer) */

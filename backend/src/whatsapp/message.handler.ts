@@ -975,6 +975,9 @@ export async function processInboundMessage(
       message: replyMessage,
       sender_type: 'ai',
       status: messageStatus,
+      rag_sources: aiResponse.knowledgeSources?.length
+        ? aiResponse.knowledgeSources
+        : [],
     });
 
     if (aiResponse.knowledgeMiss) {
