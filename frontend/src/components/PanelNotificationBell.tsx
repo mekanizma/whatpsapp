@@ -4,10 +4,13 @@ import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import {
+  bindNotificationAudioUnlock,
   getBrowserNotificationsEnabled,
   isBrowserNotificationSupported,
   requestBrowserNotificationPermission,
   setBrowserNotificationsEnabled,
+  stopNotificationSound,
+  unlockNotificationAudio,
 } from '@/lib/browser-notifications';
 import { usePanelRealtimeNotifications } from '@/hooks/usePanelRealtimeNotifications';
 import { useAuthStore } from '@/store/authStore';
@@ -31,7 +34,21 @@ export function PanelNotificationBell({ companyId }: PanelNotificationBellProps)
     if (!supported || !companyId) return;
     setEnabled(getBrowserNotificationsEnabled());
     setPermission(Notification.permission);
+    bindNotificationAudioUnlock();
   }, [supported, companyId]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    const muteOnReturn = () => {
+      if (!document.hidden) stopNotificationSound();
+    };
+    window.addEventListener('focus', muteOnReturn);
+    document.addEventListener('visibilitychange', muteOnReturn);
+    return () => {
+      window.removeEventListener('focus', muteOnReturn);
+      document.removeEventListener('visibilitychange', muteOnReturn);
+    };
+  }, [enabled]);
 
   useEffect(() => {
     if (!supported || !companyId) return;
@@ -45,6 +62,7 @@ export function PanelNotificationBell({ companyId }: PanelNotificationBellProps)
       if (nextPermission === 'granted') {
         setBrowserNotificationsEnabled(true);
         setEnabled(true);
+        unlockNotificationAudio();
       }
     })();
   }, [companyId, supported]);
@@ -70,6 +88,7 @@ export function PanelNotificationBell({ companyId }: PanelNotificationBellProps)
     if (!supported) return;
 
     if (permission === 'granted' && enabled) {
+      stopNotificationSound();
       setBrowserNotificationsEnabled(false);
       setEnabled(false);
       return;
@@ -81,6 +100,7 @@ export function PanelNotificationBell({ companyId }: PanelNotificationBellProps)
     if (nextPermission === 'granted') {
       setBrowserNotificationsEnabled(true);
       setEnabled(true);
+      unlockNotificationAudio();
       return;
     }
 
