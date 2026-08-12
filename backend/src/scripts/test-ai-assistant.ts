@@ -39,9 +39,9 @@ const gateCases: Case[] = [
     expect: { skipAI: false, reason: 'needs_ai' },
   },
   {
-    name: 'Ödeme işlemi',
-    message: 'Ödeme yaptım kontrol eder misiniz',
-    expect: { skipAI: true, shouldTransfer: false, reason: 'payment_inquiry', responseIncludes: ['aktarabilirim'] },
+    name: 'Ödeme bilgi sorusu',
+    message: 'online ödeme yapabilirmiyim',
+    expect: { skipAI: false, reason: 'needs_ai' },
   },
   {
     name: 'İade talebi',

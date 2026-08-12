@@ -45,4 +45,17 @@ describe('preAIGate Turkish transfer', () => {
     assert.equal(g.skipAI, false);
     assert.equal(g.reason, 'needs_ai');
   });
+
+  it('ödeme / IBAN sorularını ön filtrede engellemez', () => {
+    for (const msg of [
+      'online ödeme yapabilirmiyim',
+      'IBAN bilgisi nedir',
+      'Havale ile ödeme yapabilir miyim?',
+      'Kredi kartı ile ödeme var mı?',
+    ]) {
+      const g = preAIGate(msg, []);
+      assert.equal(g.skipAI, false, msg);
+      assert.equal(g.reason, 'needs_ai', msg);
+    }
+  });
 });

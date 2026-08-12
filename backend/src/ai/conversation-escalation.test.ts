@@ -40,9 +40,29 @@ describe('conversation-escalation', () => {
     assert.equal(g.reason, 'transfer_confirmed');
   });
 
-  it('ödeme sorusunda yumuşak teklif, otomatik aktarım yok', () => {
+  it('ödeme bilgi sorusu AI’ye gider, otomatik aktarım yok', () => {
     const g = preAIGate('Ödeme yaptım kontrol eder misiniz', []);
-    assert.equal(g.shouldTransfer, false);
-    assert.match(g.response!, /aktarabilirim/i);
+    assert.equal(g.skipAI, false);
+    assert.equal(g.shouldTransfer, undefined);
+    assert.equal(g.reason, 'needs_ai');
+  });
+
+  it('online ödeme sorusu AI’ye gider', () => {
+    const g = preAIGate('online ödeme yapabilirmiyim', []);
+    assert.equal(g.skipAI, false);
+    assert.equal(g.reason, 'needs_ai');
+  });
+
+  it('IBAN / havale sorusu AI’ye gider', () => {
+    const g = preAIGate('Havale için IBAN numaranız nedir?', []);
+    assert.equal(g.skipAI, false);
+    assert.equal(g.reason, 'needs_ai');
+  });
+
+  it('kart numarası paylaşılınca hassas veri olarak yakalanır', () => {
+    const g = preAIGate('Kartım 4111 1111 1111 1111', []);
+    assert.equal(g.skipAI, true);
+    assert.equal(g.shouldTransfer, true);
+    assert.equal(g.reason, 'sensitive_data');
   });
 });

@@ -69,15 +69,14 @@ const HUMAN_TRANSFER_PATTERNS = [
   /i want (a |an )?(human|agent|representative)/,
 ];
 
-const PAYMENT_PATTERNS =
-  /odeme|fatura|dekont|para transfer|havale|eft|iban|kart numara|cvv|sifre|hesap islem/;
 const REFUND_PATTERNS = /iade|geri odeme|iptal et|para iadesi/;
 const COMPLAINT_PATTERNS =
   /sikayet|memnun degil|kotu hizmet|berbat|rezalet/;
 const OPT_OUT_PATTERNS =
   /^(stop|dur|iptal|unsubscribe|mesaj almak istemiyorum|verilerimi sil|beni sil)[\s!.?]*$/;
+/** Yalnızca gerçekten paylaşılan kart/şifre/OTP — IBAN/havale/online ödeme soruları AI'ye gider */
 const SENSITIVE_DATA_PATTERNS =
-  /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b|\bcvv\b|\b\d{3,4}\s*cvv\b|\bapi\s*key\b/i;
+  /\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b|\bcvv\b|\b\d{3,4}\s*cvv\b|\bapi\s*key\b|(kart\s*(no|numara|numarasi)|card\s*(number|no))\s*[:=]?\s*\d{4}|(sifre|password|otp|pin)\s*[:=]\s*\S+/i;
 const PROMPT_INJECTION_PATTERNS =
   /sistem prompt|kurallari unut|onceki kurallar|admin sifre|api key.*ver|veritabanini goster|sql sorgu|gizli talimat|olusturan kurallar/;
 
@@ -211,14 +210,9 @@ export function preAIGate(
     };
   }
 
-  if (PAYMENT_PATTERNS.test(normalized)) {
-    return {
-      skipAI: true,
-      shouldTransfer: false,
-      response: t(conversationLang, 'payment'),
-      reason: 'payment_inquiry',
-    };
-  }
+  // Ödeme bilgi soruları (IBAN, havale, online ödeme, kredi kartı seçeneği vb.)
+  // AI + bilgi bankasına bırakılır. Kart numarası / CVV / şifre paylaşımı
+  // yukarıdaki SENSITIVE_DATA_PATTERNS ile yakalanır.
 
   if (REFUND_PATTERNS.test(normalized) && !options?.ecommerceReturnsEnabled) {
     return {
