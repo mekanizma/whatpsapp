@@ -734,6 +734,13 @@
     "pending": "{{count}} pending",
     "empty": "No open support tickets",
     "emptyDesc": "Tickets appear here when customers request a human agent",
+    "emptyResolved": "No resolved tickets",
+    "emptyResolvedDesc": "Tickets marked as resolved appear here",
+    "filters": {
+      "label": "Ticket status",
+      "open": "Open",
+      "resolved": "Resolved"
+    },
     "assigned": "Assigned: {{name}}",
     "lastAssigned": "Last assigned: {{name}}",
     "unassigned": "Not assigned to staff yet",

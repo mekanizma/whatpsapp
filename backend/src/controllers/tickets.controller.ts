@@ -61,30 +61,63 @@ export async function getTickets(req: AuthRequest, res: Response): Promise<void>
     return;
   }
 
-  const status = req.query.status as string;
+  const status = typeof req.query.status === 'string' ? req.query.status : '';
+  const view = typeof req.query.view === 'string' ? req.query.view : '';
+
   let query = adminClient
     .from('tickets')
     .select(TICKET_SELECT)
     .eq('company_id', req.companyId)
     .order('created_at', { ascending: false });
 
-  if (status) query = query.eq('status', status);
+  if (view === 'open') {
+    query = query.in('status', ['open', 'in_progress']);
+  } else if (view === 'resolved') {
+    query = query.in('status', ['resolved', 'closed']);
+  } else if (status) {
+    query = query.eq('status', status);
+  }
 
   if (req.role === 'staff') {
     const staffDeptId = await getStaffDepartmentId(req.companyId!, req.profile?.id);
     const staffId = await getStaffIdForProfile(req.companyId!, req.profile?.id);
 
-    if (staffDeptId) {
-      query = query.eq('department_id', staffDeptId);
-      if (staffId) {
-        query = query.or(`status.eq.open,and(assigned_staff.eq.${staffId},status.eq.in_progress)`);
+    const wantsResolved =
+      view === 'resolved' || status === 'resolved' || status === 'closed';
+
+    if (wantsResolved) {
+      // Personel yalnızca kendi çözdüğü / atandığı geçmiş talepleri görür
+      if (!staffId) {
+        res.json({ success: true, data: [] });
+        return;
+      }
+      query = query.or(`assigned_staff.eq.${staffId},last_assigned_staff.eq.${staffId}`);
+    } else if (view === 'open' || !status) {
+      // Açık + işlemdeki talepler (departman / atama kuralları)
+      if (staffDeptId) {
+        query = query.eq('department_id', staffDeptId);
+        if (staffId) {
+          query = query.or(
+            `status.eq.open,and(assigned_staff.eq.${staffId},status.eq.in_progress)`
+          );
+        } else {
+          query = query.eq('status', 'open');
+        }
+      } else if (staffId) {
+        query = query.or(
+          `status.eq.open,and(assigned_staff.eq.${staffId},status.eq.in_progress)`
+        );
       } else {
         query = query.eq('status', 'open');
       }
-    } else if (staffId) {
-      query = query.or(`status.eq.open,and(assigned_staff.eq.${staffId},status.eq.in_progress)`);
-    } else {
-      query = query.eq('status', 'open');
+    } else if (status === 'open') {
+      if (staffDeptId) query = query.eq('department_id', staffDeptId);
+    } else if (status === 'in_progress') {
+      if (!staffId) {
+        res.json({ success: true, data: [] });
+        return;
+      }
+      query = query.eq('assigned_staff', staffId);
     }
   }
 

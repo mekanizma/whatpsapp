@@ -734,6 +734,13 @@
     "pending": "{{count}} bekleyen",
     "empty": "Açık destek talebi yok",
     "emptyDesc": "Müşteriler insan temsilcisi istediğinde talepler burada listelenir",
+    "emptyResolved": "Çözülmüş talep yok",
+    "emptyResolvedDesc": "Çözüldü olarak işaretlenen talepler burada görünür",
+    "filters": {
+      "label": "Talep durumu",
+      "open": "Açık",
+      "resolved": "Çözüldü"
+    },
     "assigned": "Atanan: {{name}}",
     "lastAssigned": "Son atanan: {{name}}",
     "unassigned": "Henüz personele atanmadı",
