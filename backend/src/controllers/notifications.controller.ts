@@ -18,6 +18,8 @@ const DEMO_NOTIFICATION_USERS = [
     email: 'firma@demo.com',
     phone: '+905551234567',
     notify_enabled: true,
+    whatsapp_enabled: true,
+    email_enabled: false,
   },
   {
     id: '00000000-0000-0000-0000-000000000030',
@@ -26,6 +28,8 @@ const DEMO_NOTIFICATION_USERS = [
     email: 'personel@demo.com',
     phone: '+905559876543',
     notify_enabled: false,
+    whatsapp_enabled: false,
+    email_enabled: false,
   },
 ];
 

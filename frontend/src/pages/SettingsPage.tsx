@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { User, Building2, Lock, Save, Eye, EyeOff, Bell, ImagePlus, Trash2, Bot } from 'lucide-react';
+import { User, Building2, Lock, Save, Eye, EyeOff, Bell, ImagePlus, Trash2, Bot, Mail, MessageCircle } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
 import { CompanyLogo } from '@/components/CompanyLogo';
 import { SettingsTabNav, type SettingsTabId, type SettingsTabItem } from '@/components/settings/SettingsTabNav';
@@ -28,6 +28,51 @@ import { isDemoMode } from '@/lib/env';
 import type { Company, NotificationUser } from '@/types';
 
 const CUSTOM_INSTRUCTIONS_MAX_LENGTH = 1500;
+
+function ChannelSwitch({
+  id,
+  label,
+  icon: Icon,
+  checked,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  icon: typeof MessageCircle;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      id={id}
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={`flex min-h-[44px] flex-1 items-center justify-between gap-3 rounded-xl px-3.5 py-2.5 ring-1 transition-colors ${
+        checked
+          ? 'bg-primary/10 text-primary ring-primary/20'
+          : 'bg-white text-slate-600 ring-slate-200'
+      }`}
+    >
+      <span className="flex items-center gap-2 text-sm font-medium">
+        <Icon className="h-4 w-4 shrink-0" aria-hidden />
+        {label}
+      </span>
+      <span
+        className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+          checked ? 'bg-primary' : 'bg-slate-300'
+        }`}
+      >
+        <span
+          className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${
+            checked ? 'translate-x-[1.35rem]' : 'translate-x-0.5'
+          }`}
+        />
+      </span>
+    </button>
+  );
+}
 
 export function SettingsPage() {
   const { t } = useTranslation();
@@ -65,7 +110,7 @@ export function SettingsPage() {
 
   const isAdmin = user?.role === 'company_admin';
   const roleLabel = user?.role ? t(`common.roles.${user.role}`, { defaultValue: user.role }) : '';
-  const notifyEnabledCount = notificationUsers.filter((u) => u.notify_enabled).length;
+  const notifyEnabledCount = notificationUsers.filter((u) => u.whatsapp_enabled || u.email_enabled).length;
 
   const tabs = useMemo(() => {
     const items: SettingsTabItem[] = [
@@ -220,7 +265,14 @@ export function SettingsPage() {
 
   useEffect(() => {
     if (notificationData) {
-      setNotificationUsers(notificationData);
+      setNotificationUsers(
+        notificationData.map((u) => ({
+          ...u,
+          whatsapp_enabled: !!u.whatsapp_enabled,
+          email_enabled: !!u.email_enabled,
+          notify_enabled: !!(u.whatsapp_enabled || u.email_enabled || u.notify_enabled),
+        }))
+      );
     }
   }, [notificationData]);
 
@@ -230,7 +282,8 @@ export function SettingsPage() {
         users: notificationUsers.map((u) => ({
           profile_id: u.id,
           phone: u.phone,
-          notify_enabled: u.notify_enabled,
+          whatsapp_enabled: u.whatsapp_enabled,
+          email_enabled: u.email_enabled,
         })),
       }),
     onSuccess: (data) => {
@@ -675,36 +728,63 @@ export function SettingsPage() {
                   <div className="space-y-3">
                     {notificationUsers.map((member) => {
                       const roleText = t(`common.roles.${member.role}`, { defaultValue: member.role });
-                      const missingPhone = member.notify_enabled && !member.phone?.trim();
+                      const missingPhone = member.whatsapp_enabled && !member.phone?.trim();
+                      const missingEmail = member.email_enabled && !member.email?.trim();
 
                       return (
                         <div
                           key={member.id}
                           className="rounded-2xl border border-slate-200/80 bg-slate-50/40 p-4 ring-1 ring-slate-100"
                         >
-                          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                            <label className="flex min-h-[44px] min-w-0 flex-1 cursor-pointer items-start gap-3">
-                              <input
-                                type="checkbox"
-                                checked={member.notify_enabled}
-                                onChange={(e) => {
-                                  const checked = e.target.checked;
+                          <div className="flex flex-col gap-4">
+                            <div className="min-w-0">
+                              <p className="font-medium text-slate-900">{member.full_name}</p>
+                              <p className="truncate text-sm text-slate-500">{member.email || '—'}</p>
+                              <Badge variant="info" className="mt-1.5 capitalize">{roleText}</Badge>
+                            </div>
+
+                            <div className="flex flex-col gap-2 sm:flex-row">
+                              <ChannelSwitch
+                                id={`notify-wa-${member.id}`}
+                                label={t('settings.notifyWhatsApp')}
+                                icon={MessageCircle}
+                                checked={member.whatsapp_enabled}
+                                onChange={(checked) => {
                                   setNotificationUsers((prev) =>
                                     prev.map((u) =>
-                                      u.id === member.id ? { ...u, notify_enabled: checked } : u
+                                      u.id === member.id
+                                        ? {
+                                            ...u,
+                                            whatsapp_enabled: checked,
+                                            notify_enabled: checked || u.email_enabled,
+                                          }
+                                        : u
                                     )
                                   );
                                 }}
-                                className="mt-1 h-5 w-5 shrink-0 rounded border-slate-300 text-primary focus:ring-primary/30"
                               />
-                              <div className="min-w-0">
-                                <p className="font-medium text-slate-900">{member.full_name}</p>
-                                <p className="truncate text-sm text-slate-500">{member.email || '—'}</p>
-                                <Badge variant="info" className="mt-1.5 capitalize">{roleText}</Badge>
-                              </div>
-                            </label>
+                              <ChannelSwitch
+                                id={`notify-email-${member.id}`}
+                                label={t('settings.notifyEmail')}
+                                icon={Mail}
+                                checked={member.email_enabled}
+                                onChange={(checked) => {
+                                  setNotificationUsers((prev) =>
+                                    prev.map((u) =>
+                                      u.id === member.id
+                                        ? {
+                                            ...u,
+                                            email_enabled: checked,
+                                            notify_enabled: u.whatsapp_enabled || checked,
+                                          }
+                                        : u
+                                    )
+                                  );
+                                }}
+                              />
+                            </div>
 
-                            <div className="w-full space-y-1 lg:max-w-xs lg:shrink-0">
+                            <div className="w-full space-y-1">
                               <Label htmlFor={`notify-phone-${member.id}`} className="text-xs">
                                 {t('settings.phone')}
                               </Label>
@@ -725,6 +805,9 @@ export function SettingsPage() {
                               />
                               {missingPhone && (
                                 <p className="text-xs text-amber-600">{t('settings.noPhoneWarning')}</p>
+                              )}
+                              {missingEmail && (
+                                <p className="text-xs text-amber-600">{t('settings.noEmailWarning')}</p>
                               )}
                             </div>
                           </div>

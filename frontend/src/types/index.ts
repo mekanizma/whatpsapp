@@ -599,6 +599,8 @@ export interface NotificationUser {
   email: string | null;
   phone: string | null;
   notify_enabled: boolean;
+  whatsapp_enabled: boolean;
+  email_enabled: boolean;
 }
 
 export interface WhatsAppConfig {
