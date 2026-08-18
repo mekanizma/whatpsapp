@@ -1,19 +1,18 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  CUSTOM_INSTRUCTIONS_MAX_LENGTH,
   sanitizeCustomInstructions,
   validateCustomInstructionsForWrite,
 } from './custom-instructions.service';
 import { TRANSFER_MARKER } from '../ai/system-prompt';
 
 describe('custom-instructions.service', () => {
-  it('rejects input longer than the max length after trim with Turkish error', () => {
-    const tooLong = 'a'.repeat(CUSTOM_INSTRUCTIONS_MAX_LENGTH + 1);
-    const result = validateCustomInstructionsForWrite(tooLong);
-    assert.equal(result.ok, false);
-    if (result.ok) return;
-    assert.match(result.error, new RegExp(`${CUSTOM_INSTRUCTIONS_MAX_LENGTH} karakter`));
+  it('accepts long custom instructions while the length limit is disabled', () => {
+    const longText = 'a'.repeat(8000);
+    const result = validateCustomInstructionsForWrite(longText);
+    assert.equal(result.ok, true);
+    if (!result.ok || !result.provided) return;
+    assert.equal(result.value?.length, 8000);
   });
 
   it('strips template braces and transfer marker literal', () => {

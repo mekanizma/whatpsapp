@@ -4,8 +4,6 @@
 
 import { TRANSFER_MARKER } from '../ai/system-prompt';
 
-export const CUSTOM_INSTRUCTIONS_MAX_LENGTH = 5000;
-
 const CONTROL_CHARS_EXCEPT_NEWLINE = /[\x00-\x09\x0B\x0C\x0E-\x1F\x7F]/g;
 const EXCESS_NEWLINES = /\n{3,}/g;
 
@@ -36,13 +34,6 @@ export function validateCustomInstructionsForWrite(
   }
 
   const trimmed = raw.trim();
-  if (trimmed.length > CUSTOM_INSTRUCTIONS_MAX_LENGTH) {
-    return {
-      ok: false,
-      error: `Özel talimatlar en fazla ${CUSTOM_INSTRUCTIONS_MAX_LENGTH} karakter olabilir.`,
-    };
-  }
-
   const sanitized = sanitizeCustomInstructions(trimmed);
   return { ok: true, value: sanitized || null, provided: true };
 }

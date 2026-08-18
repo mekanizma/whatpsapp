@@ -27,8 +27,6 @@ import { DEFAULT_COMPANY_CATEGORY } from '@/lib/company-categories';
 import { isDemoMode } from '@/lib/env';
 import type { Company, NotificationUser } from '@/types';
 
-const CUSTOM_INSTRUCTIONS_MAX_LENGTH = 5000;
-
 function ChannelSwitch({
   id,
   label,
@@ -92,7 +90,6 @@ export function SettingsPage() {
   const [customInstructions, setCustomInstructions] = useState(company?.custom_instructions || '');
 
   const customInstructionsTrimmed = customInstructions.trim();
-  const customInstructionsOverLimit = customInstructionsTrimmed.length > CUSTOM_INSTRUCTIONS_MAX_LENGTH;
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -679,12 +676,8 @@ export function SettingsPage() {
                     placeholder={t('settings.customInstructionsPlaceholder')}
                     className="min-h-[120px] resize-y"
                   />
-                  <p
-                    className={`text-right text-xs tabular-nums ${
-                      customInstructionsOverLimit ? 'text-red-600' : 'text-slate-500'
-                    }`}
-                  >
-                    {customInstructionsTrimmed.length}/{CUSTOM_INSTRUCTIONS_MAX_LENGTH}
+                  <p className="text-right text-xs tabular-nums text-slate-500">
+                    {customInstructionsTrimmed.length}
                   </p>
                 </div>
               </SettingsSection>
@@ -695,7 +688,7 @@ export function SettingsPage() {
                     setCompanyMsg(null);
                     companyMutation.mutate();
                   }}
-                  disabled={companyMutation.isPending || !companyName.trim() || customInstructionsOverLimit}
+                  disabled={companyMutation.isPending || !companyName.trim()}
                   className="h-11 w-full sm:w-auto"
                 >
                   <Save className="h-4 w-4" />
