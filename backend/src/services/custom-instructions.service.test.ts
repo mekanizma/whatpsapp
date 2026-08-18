@@ -8,12 +8,12 @@ import {
 import { TRANSFER_MARKER } from '../ai/system-prompt';
 
 describe('custom-instructions.service', () => {
-  it('rejects input longer than 1500 characters after trim with Turkish error', () => {
+  it('rejects input longer than the max length after trim with Turkish error', () => {
     const tooLong = 'a'.repeat(CUSTOM_INSTRUCTIONS_MAX_LENGTH + 1);
     const result = validateCustomInstructionsForWrite(tooLong);
     assert.equal(result.ok, false);
     if (result.ok) return;
-    assert.match(result.error, /1500 karakter/);
+    assert.match(result.error, new RegExp(`${CUSTOM_INSTRUCTIONS_MAX_LENGTH} karakter`));
   });
 
   it('strips template braces and transfer marker literal', () => {

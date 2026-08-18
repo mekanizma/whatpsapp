@@ -4,7 +4,7 @@
 
 import { TRANSFER_MARKER } from '../ai/system-prompt';
 
-export const CUSTOM_INSTRUCTIONS_MAX_LENGTH = 1500;
+export const CUSTOM_INSTRUCTIONS_MAX_LENGTH = 5000;
 
 const CONTROL_CHARS_EXCEPT_NEWLINE = /[\x00-\x09\x0B\x0C\x0E-\x1F\x7F]/g;
 const EXCESS_NEWLINES = /\n{3,}/g;

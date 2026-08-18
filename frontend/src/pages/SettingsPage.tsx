@@ -27,7 +27,7 @@ import { DEFAULT_COMPANY_CATEGORY } from '@/lib/company-categories';
 import { isDemoMode } from '@/lib/env';
 import type { Company, NotificationUser } from '@/types';
 
-const CUSTOM_INSTRUCTIONS_MAX_LENGTH = 1500;
+const CUSTOM_INSTRUCTIONS_MAX_LENGTH = 5000;
 
 function ChannelSwitch({
   id,
