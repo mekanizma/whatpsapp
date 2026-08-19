@@ -17,6 +17,14 @@ function parseMode(raw: string | undefined): AppointmentMode {
   return v === 'rules' ? 'rules' : 'llm';
 }
 
+function parseEnabled(raw: string | undefined): boolean {
+  if (raw === undefined || raw.trim() === '') return false;
+  const v = raw.trim().toLowerCase();
+  if (['1', 'true', 'yes', 'on'].includes(v)) return true;
+  if (['0', 'false', 'no', 'off'].includes(v)) return false;
+  return false;
+}
+
 function parseIntEnv(key: string, fallback: number): number {
   const raw = process.env[key];
   if (!raw) return fallback;
@@ -25,6 +33,8 @@ function parseIntEnv(key: string, fallback: number): number {
 }
 
 export const appointmentConfig = {
+  /** Şimdilik kapalı. Açmak için APPOINTMENT_ENABLED=true */
+  enabled: parseEnabled(process.env.APPOINTMENT_ENABLED),
   mode: parseMode(process.env.APPOINTMENT_MODE),
   referenceTimezone: process.env.APPOINTMENT_TIMEZONE || 'Asia/Nicosia',
   maxDaysAhead: parseIntEnv('APPOINTMENT_MAX_DAYS_AHEAD', 60),

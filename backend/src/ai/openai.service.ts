@@ -233,34 +233,37 @@ export async function generateAIResponse(
     };
   }
 
-  const apptSession = getAppointmentSession(companyId, customerPhone);
-  if (apptSession.status === 'saved' && !isAppointmentSessionRestartMessage(trimmed)) {
-    clearSavedAppointmentSession(companyId, customerPhone);
-    if (isPostAppointmentClosureMessage(trimmed)) {
-      await logAIUsage({
-        companyId,
-        customerPhone,
-        promptTokens: 0,
-        completionTokens: 0,
-        totalTokens: 0,
-        cached: false,
-        skipped: true,
-        skipReason: 'appointment_closed',
-        model: config.openai.model,
-      });
-      return {
-        message: t(conversationLang, 'appointment_flow_closed'),
-        shouldTransfer: false,
-        skippedAI: true,
-        skipReason: 'appointment_closed',
-        tokensUsed: 0,
-        appointmentBooked: false,
-        knowledgeMiss: false,
-      };
+  if (appointmentConfig.enabled) {
+    const apptSession = getAppointmentSession(companyId, customerPhone);
+    if (apptSession.status === 'saved' && !isAppointmentSessionRestartMessage(trimmed)) {
+      clearSavedAppointmentSession(companyId, customerPhone);
+      if (isPostAppointmentClosureMessage(trimmed)) {
+        await logAIUsage({
+          companyId,
+          customerPhone,
+          promptTokens: 0,
+          completionTokens: 0,
+          totalTokens: 0,
+          cached: false,
+          skipped: true,
+          skipReason: 'appointment_closed',
+          model: config.openai.model,
+        });
+        return {
+          message: t(conversationLang, 'appointment_flow_closed'),
+          shouldTransfer: false,
+          skippedAI: true,
+          skipReason: 'appointment_closed',
+          tokensUsed: 0,
+          appointmentBooked: false,
+          knowledgeMiss: false,
+        };
+      }
     }
   }
 
-  const appointmentMode = isAppointmentIntent(trimmed, history);
+  const appointmentMode =
+    appointmentConfig.enabled && isAppointmentIntent(trimmed, history);
 
   if (appointmentMode) {
     if (appointmentConfig.mode === 'rules') {

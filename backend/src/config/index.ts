@@ -134,6 +134,7 @@ export const config = {
   },
 
   appointment: {
+    enabled: process.env.APPOINTMENT_ENABLED === 'true',
     mode: (process.env.APPOINTMENT_MODE || 'llm') as 'llm' | 'rules',
   },
 
