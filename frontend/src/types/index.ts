@@ -498,6 +498,10 @@ export interface Ticket {
   staff?: { name: string; email?: string } | null;
   last_staff?: { name: string; email?: string } | null;
   created_at: string;
+  /** Açık talepte müşteri mesajından sonra 24 saatlik cevap penceresi */
+  reply_window_open?: boolean;
+  last_customer_message_at?: string | null;
+  reply_window_closes_at?: string | null;
 }
 
 export interface PlatformSupportMessage {

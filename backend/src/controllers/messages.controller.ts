@@ -22,6 +22,7 @@ import {
   getStaffRecord,
   staffCanAccessCustomerPhone,
 } from '../services/department-access.service';
+import { getSupportReplyWindowBlockReason } from '../services/support-reply-window.service';
 
 function resolvePhoneParam(phone: string): string {
   const decoded = decodeURIComponent(phone);
@@ -271,6 +272,12 @@ export async function replyToConversation(req: AuthRequest, res: Response): Prom
     return;
   }
 
+  const windowBlock = await getSupportReplyWindowBlockReason(req.companyId, phone);
+  if (windowBlock) {
+    res.status(403).json({ success: false, error: windowBlock });
+    return;
+  }
+
   const { data: staffRecord } = await adminClient
     .from('staff')
     .select('id, name')
@@ -341,6 +348,12 @@ export async function replyWithImage(req: AuthRequest, res: Response): Promise<v
   const access = await assertStaffConversationAccess(req, phone);
   if (access !== true) {
     res.status(access.status).json({ success: false, error: access.error });
+    return;
+  }
+
+  const windowBlock = await getSupportReplyWindowBlockReason(req.companyId, phone);
+  if (windowBlock) {
+    res.status(403).json({ success: false, error: windowBlock });
     return;
   }
 

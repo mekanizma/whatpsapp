@@ -8,6 +8,7 @@ import { AuthRequest, isDemoSession } from '../middleware/auth.middleware';
 import { logActivity } from '../services/log.service';
 import { clearTransferState, normalizePhoneNumber } from '../whatsapp/message.handler';
 import { createTicketAndNotify, notifyTicketRecipients } from '../services/ticket-notification.service';
+import { getSupportReplyWindowStatus } from '../services/support-reply-window.service';
 import {
   getStaffDepartmentId,
   getStaffRecord,
@@ -160,7 +161,21 @@ export async function getActiveTicketByPhone(req: AuthRequest, res: Response): P
     return;
   }
 
-  res.json({ success: true, data: data ? mapTicketRow(data) : null });
+  if (!data) {
+    res.json({ success: true, data: null });
+    return;
+  }
+
+  const replyWindow = await getSupportReplyWindowStatus(req.companyId!, phone);
+  res.json({
+    success: true,
+    data: {
+      ...mapTicketRow(data),
+      reply_window_open: replyWindow.canReply,
+      last_customer_message_at: replyWindow.lastCustomerMessageAt,
+      reply_window_closes_at: replyWindow.windowClosesAt,
+    },
+  });
 }
 
 export async function createTicket(req: AuthRequest, res: Response): Promise<void> {

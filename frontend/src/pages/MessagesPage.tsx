@@ -21,6 +21,7 @@ import type { Conversation, Message, Ticket } from '@/types';
 
 const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif';
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
+const SUPPORT_REPLY_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 function channelBadgeLabel(channel: string, t: (key: string) => string): string {
   if (channel === 'facebook_messenger') return t('meta.channelMessenger');
@@ -32,6 +33,42 @@ function formatCustomerLabel(phone: string, t: (key: string) => string): string 
   if (phone.startsWith('fb:')) return `${t('meta.channelMessenger')} ${phone.slice(3)}`;
   if (phone.startsWith('ig:')) return `${t('meta.channelInstagram')} ${phone.slice(3)}`;
   return phone;
+}
+
+function dayKey(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+function formatChatDayLabel(
+  iso: string,
+  locale: string,
+  t: (key: string) => string
+): string {
+  const date = new Date(iso);
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfMsg = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const diffDays = Math.round((startOfToday.getTime() - startOfMsg.getTime()) / 86_400_000);
+
+  if (diffDays === 0) return t('messages.dateToday');
+  if (diffDays === 1) return t('messages.dateYesterday');
+
+  return date.toLocaleDateString(locale, {
+    day: 'numeric',
+    month: 'long',
+    year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
+  });
+}
+
+function formatMessageTimestamp(iso: string, locale: string): string {
+  return new Date(iso).toLocaleString(locale, {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 export function MessagesPage() {
@@ -146,6 +183,33 @@ export function MessagesPage() {
     refetchInterval: supabaseConfigured ? false : 5000,
   });
 
+  // 24 saat penceresi dolunca UI'yi güncelle (müşteri yeni mesaj atınca sorgu zaten yenilenir)
+  useEffect(() => {
+    if (!selectedPhone || !activeTicket) return;
+
+    const closesAt =
+      activeTicket.reply_window_closes_at ||
+      (activeTicket.last_customer_message_at
+        ? new Date(
+            new Date(activeTicket.last_customer_message_at).getTime() + SUPPORT_REPLY_WINDOW_MS
+          ).toISOString()
+        : null);
+
+    if (!closesAt) return;
+
+    const msLeft = new Date(closesAt).getTime() - Date.now();
+    if (msLeft <= 0) {
+      queryClient.invalidateQueries({ queryKey: ['active-ticket', selectedPhone] });
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      queryClient.invalidateQueries({ queryKey: ['active-ticket', selectedPhone] });
+    }, Math.min(msLeft + 250, 2_147_000_000));
+
+    return () => window.clearTimeout(timer);
+  }, [selectedPhone, activeTicket, queryClient]);
+
   const replyMutation = useMutation({
     mutationFn: (text: string) => api.post(`/messages/${encodedPhone}/reply`, { message: text }),
     onSuccess: () => {
@@ -211,6 +275,20 @@ export function MessagesPage() {
   const ticketId = activeTicket?.id || ticketParam;
   const hasActiveTicket = !!activeTicket;
   const isSending = replyMutation.isPending || imageMutation.isPending;
+
+  const lastCustomerMessageAt =
+    activeTicket?.last_customer_message_at ||
+    [...(messages || [])].reverse().find((m) => m.sender_type === 'customer')?.created_at ||
+    null;
+
+  const isReplyWindowClosed = (() => {
+    if (!hasActiveTicket || !activeTicket) return false;
+    if (typeof activeTicket.reply_window_open === 'boolean') {
+      return !activeTicket.reply_window_open;
+    }
+    if (!lastCustomerMessageAt) return false;
+    return Date.now() - new Date(lastCustomerMessageAt).getTime() >= SUPPORT_REPLY_WINDOW_MS;
+  })();
 
   const selectConversation = (phone: string) => {
     setSelectedPhone(phone);
@@ -365,123 +443,160 @@ export function MessagesPage() {
               )}
             </div>
 
-            <div className="flex-1 overflow-y-auto bg-chat-bg p-4 space-y-3 scrollbar-thin">
-              {messages?.map((msg) => (
-                <div key={msg.id} className={cn('flex', msg.sender_type === 'customer' ? 'justify-start' : 'justify-end')}>
-                  <div className={cn('max-w-[82%] rounded-2xl px-4 py-2.5', bubbleStyles[msg.sender_type] || bubbleStyles.ai)}>
-                    <div className="mb-1 flex items-center gap-1.5">
-                      {msg.sender_type === 'ai' && <Bot className="h-3 w-3 text-violet-500" />}
-                      {msg.sender_type === 'staff' && <User className="h-3 w-3 text-white/80" />}
-                      <span
-                        className={cn(
-                          'text-[10px] font-semibold',
-                          msg.sender_type === 'staff'
-                            ? 'text-white/90'
-                            : 'uppercase tracking-wide text-slate-400'
-                        )}
-                      >
-                        {senderLabel(msg)}
-                      </span>
-                    </div>
+            <div className="flex-1 overflow-y-auto bg-chat-bg p-3 space-y-3 scrollbar-thin sm:p-4">
+              {messages?.map((msg, index) => {
+                const prev = index > 0 ? messages[index - 1] : null;
+                const showDateSeparator = !prev || dayKey(prev.created_at) !== dayKey(msg.created_at);
 
-                    {hasImage(msg) && msg.media_url ? (
-                      <MessageImage
-                        messageId={msg.id}
-                        mediaUrl={msg.media_url}
-                        filename={msg.media_filename}
-                        caption={msg.message || undefined}
-                        isStaffBubble={msg.sender_type === 'staff'}
-                      />
-                    ) : (
-                      <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.message}</p>
+                return (
+                  <div key={msg.id} className="space-y-3">
+                    {showDateSeparator && (
+                      <div className="flex justify-center py-1">
+                        <span className="rounded-full bg-white/90 px-3 py-1 text-[11px] font-medium text-slate-600 shadow-sm ring-1 ring-slate-200/70">
+                          {formatChatDayLabel(msg.created_at, locale, t)}
+                        </span>
+                      </div>
                     )}
-
-                    {canSeeKbSources &&
-                      msg.sender_type === 'ai' &&
-                      Array.isArray(msg.rag_sources) &&
-                      msg.rag_sources.length > 0 && (
-                        <div className="mt-2 space-y-0.5 border-t border-emerald-200/60 pt-1.5">
-                          <p className="text-[10px] font-medium text-emerald-800/70">
-                            {t('messages.kbSources')}
-                          </p>
-                          {msg.rag_sources.map((src, idx) => {
-                            let label = t('messages.kbSourceTitle', { title: src.title });
-                            if (src.line_start != null) {
-                              label = t('messages.kbSourceLine', {
-                                title: src.title,
-                                line: src.line_start,
-                              });
-                            } else if (typeof src.chunk_index === 'number') {
-                              label = t('messages.kbSourceChunk', {
-                                title: src.title,
-                                chunk: src.chunk_index + 1,
-                              });
-                            }
-                            return (
-                              <p
-                                key={`${src.knowledge_base_id}-${src.chunk_index ?? 'x'}-${idx}`}
-                                className="text-[10px] leading-snug text-emerald-700/80 break-words"
-                              >
-                                {label}
-                              </p>
-                            );
-                          })}
+                    <div className={cn('flex', msg.sender_type === 'customer' ? 'justify-start' : 'justify-end')}>
+                      <div className={cn('max-w-[85%] rounded-2xl px-3 py-2.5 sm:max-w-[82%] sm:px-4', bubbleStyles[msg.sender_type] || bubbleStyles.ai)}>
+                        <div className="mb-1 flex items-center gap-1.5">
+                          {msg.sender_type === 'ai' && <Bot className="h-3 w-3 text-violet-500" />}
+                          {msg.sender_type === 'staff' && <User className="h-3 w-3 text-white/80" />}
+                          <span
+                            className={cn(
+                              'text-[10px] font-semibold',
+                              msg.sender_type === 'staff'
+                                ? 'text-white/90'
+                                : 'uppercase tracking-wide text-slate-400'
+                            )}
+                          >
+                            {senderLabel(msg)}
+                          </span>
                         </div>
-                      )}
 
-                    <p className={cn('mt-1.5 text-[10px] text-right', msg.sender_type === 'staff' ? 'text-white/60' : 'text-slate-400')}>
-                      {new Date(msg.created_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}
-                    </p>
+                        {hasImage(msg) && msg.media_url ? (
+                          <MessageImage
+                            messageId={msg.id}
+                            mediaUrl={msg.media_url}
+                            filename={msg.media_filename}
+                            caption={msg.message || undefined}
+                            isStaffBubble={msg.sender_type === 'staff'}
+                          />
+                        ) : (
+                          <p className="text-sm leading-relaxed whitespace-pre-wrap">{msg.message}</p>
+                        )}
+
+                        {canSeeKbSources &&
+                          msg.sender_type === 'ai' &&
+                          Array.isArray(msg.rag_sources) &&
+                          msg.rag_sources.length > 0 && (
+                            <div className="mt-2 space-y-0.5 border-t border-emerald-200/60 pt-1.5">
+                              <p className="text-[10px] font-medium text-emerald-800/70">
+                                {t('messages.kbSources')}
+                              </p>
+                              {msg.rag_sources.map((src, idx) => {
+                                let label = t('messages.kbSourceTitle', { title: src.title });
+                                if (src.line_start != null) {
+                                  label = t('messages.kbSourceLine', {
+                                    title: src.title,
+                                    line: src.line_start,
+                                  });
+                                } else if (typeof src.chunk_index === 'number') {
+                                  label = t('messages.kbSourceChunk', {
+                                    title: src.title,
+                                    chunk: src.chunk_index + 1,
+                                  });
+                                }
+                                return (
+                                  <p
+                                    key={`${src.knowledge_base_id}-${src.chunk_index ?? 'x'}-${idx}`}
+                                    className="text-[10px] leading-snug text-emerald-700/80 break-words"
+                                  >
+                                    {label}
+                                  </p>
+                                );
+                              })}
+                            </div>
+                          )}
+
+                        <p
+                          className={cn(
+                            'mt-1.5 text-[10px] text-right tabular-nums',
+                            msg.sender_type === 'staff' ? 'text-white/60' : 'text-slate-400'
+                          )}
+                          title={formatMessageTimestamp(msg.created_at, locale)}
+                        >
+                          {formatMessageTimestamp(msg.created_at, locale)}
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
               <div ref={messagesEndRef} />
             </div>
 
-            <div className="border-t border-slate-100 bg-white p-4">
-              {replyError && (
-                <p className="mb-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 ring-1 ring-red-100">
-                  {replyError}
-                </p>
+            <div className="border-t border-slate-100 bg-white p-3 sm:p-4">
+              {isReplyWindowClosed ? (
+                <div
+                  role="status"
+                  className="rounded-xl bg-amber-50 px-3 py-3 text-sm leading-relaxed text-amber-950 ring-1 ring-amber-200/80 sm:px-4"
+                >
+                  {t('messages.replyWindowClosed')}
+                </div>
+              ) : (
+                <>
+                  {replyError && (
+                    <p className="mb-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 ring-1 ring-red-100">
+                      {replyError}
+                    </p>
+                  )}
+                  <div className="flex gap-2">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept={IMAGE_ACCEPT}
+                      className="hidden"
+                      onChange={handleImageSelect}
+                    />
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      className="shrink-0 rounded-xl"
+                      disabled={isSending}
+                      onClick={() => fileInputRef.current?.click()}
+                      aria-label={t('messages.sendImage')}
+                    >
+                      <ImagePlus className="h-4 w-4" />
+                    </Button>
+                    <Input
+                      className="min-w-0 flex-1"
+                      placeholder={hasActiveTicket ? t('messages.replyPlaceholder') : t('messages.messagePlaceholder')}
+                      value={replyText}
+                      onChange={(e) => {
+                        setReplyText(e.target.value);
+                        if (replyError) setReplyError(null);
+                      }}
+                      onKeyDown={(e) =>
+                        e.key === 'Enter' &&
+                        !e.shiftKey &&
+                        replyText.trim() &&
+                        !isSending &&
+                        replyMutation.mutate(replyText)
+                      }
+                    />
+                    <Button
+                      size="icon"
+                      className="shrink-0 rounded-xl"
+                      disabled={!replyText.trim() || isSending}
+                      onClick={() => replyMutation.mutate(replyText)}
+                    >
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </>
               )}
-              <div className="flex gap-2">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept={IMAGE_ACCEPT}
-                  className="hidden"
-                  onChange={handleImageSelect}
-                />
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="outline"
-                  className="shrink-0 rounded-xl"
-                  disabled={isSending}
-                  onClick={() => fileInputRef.current?.click()}
-                  aria-label={t('messages.sendImage')}
-                >
-                  <ImagePlus className="h-4 w-4" />
-                </Button>
-                <Input
-                  className="flex-1"
-                  placeholder={hasActiveTicket ? t('messages.replyPlaceholder') : t('messages.messagePlaceholder')}
-                  value={replyText}
-                  onChange={(e) => {
-                    setReplyText(e.target.value);
-                    if (replyError) setReplyError(null);
-                  }}
-                  onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && replyText.trim() && !isSending && replyMutation.mutate(replyText)}
-                />
-                <Button
-                  size="icon"
-                  className="shrink-0 rounded-xl"
-                  disabled={!replyText.trim() || isSending}
-                  onClick={() => replyMutation.mutate(replyText)}
-                >
-                  <Send className="h-4 w-4" />
-                </Button>
-              </div>
             </div>
           </>
         ) : (

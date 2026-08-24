@@ -726,7 +726,10 @@
     "imagePreview": "Fotoğraf önizleme",
     "imageSendFailed": "Resim gönderilemedi",
     "imageTypeError": "Yalnızca JPEG, PNG, WebP veya GIF yükleyebilirsiniz",
-    "imageSizeError": "Resim en fazla 5 MB olabilir"
+    "imageSizeError": "Resim en fazla 5 MB olabilir",
+    "replyWindowClosed": "24 saat cevap verilmediğinden talep kapatılmıştır. Lütfen telefon numarasından arayarak ulaşınız",
+    "dateToday": "Bugün",
+    "dateYesterday": "Dün"
   },
   "tickets": {
     "title": "Destek Talepleri",
