@@ -189,6 +189,7 @@ export async function updateCompany(req: AuthRequest, res: Response): Promise<vo
   if (customInstructionsProvided || categoryChanged) {
     invalidateStaticSystemPromptCache(companyId as string);
     invalidateCompanyCache(companyId as string);
+    invalidateCompanyAiSettingsCache(companyId as string);
     await clearCompanyCache(companyId as string);
   }
 

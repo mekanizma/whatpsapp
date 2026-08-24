@@ -8,16 +8,18 @@ import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Smartphone, Wifi, WifiOff, QrCode, Send, Unplug, Cloud, Copy, Check,
-  Plus, Trash2, RefreshCw, Building2, Star, Power, ChevronDown, Link2, Save,
+  Plus, Trash2, RefreshCw, Building2, Star, Power, ChevronDown, Link2, Save, Bot,
 } from 'lucide-react';
 import { api } from '@/services/api';
 import {
-  Button, Input, Label, Card, CardContent, CardHeader, CardTitle, CardDescription, Spinner, Badge,
+  Button, Input, Label, Textarea, Card, CardContent, CardHeader, CardTitle, CardDescription, Spinner, Badge,
 } from '@/components/ui';
 import { PageHeader } from '@/components/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
 import { cn } from '@/lib/utils';
 import { getWhatsAppLineLimit } from '@/lib/plan-capabilities';
+import { useAuthStore } from '@/store/authStore';
+import type { KnowledgeItem } from '@/types';
 
 interface Department {
   id: string;
@@ -49,6 +51,10 @@ interface WhatsAppAccount {
   updated_at?: string | null;
   connection_type: 'qr' | 'api' | null;
   departments: Department[];
+  /** null = şirket ayarını miras al */
+  ai_enabled?: boolean | null;
+  custom_instructions?: string | null;
+  knowledge_base_ids?: string[];
   live_connected?: boolean;
   reconnecting?: boolean;
 }
@@ -74,6 +80,7 @@ interface CloudApiFormState {
 export function WhatsAppPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const companyAiEnabled = useAuthStore((s) => s.company?.ai_enabled !== false);
   const [activeQr, setActiveQr] = useState<{ accountId: string; session: QrSession } | null>(null);
   const [expandedAccount, setExpandedAccount] = useState<string | null>(null);
   const [newDeptName, setNewDeptName] = useState('');
@@ -98,6 +105,11 @@ export function WhatsAppPage() {
   const { data: departments = [] } = useQuery({
     queryKey: ['departments'],
     queryFn: () => api.get<Department[]>('/departments'),
+  });
+
+  const { data: knowledgeItems = [] } = useQuery({
+    queryKey: ['knowledge'],
+    queryFn: () => api.get<KnowledgeItem[]>('/knowledge'),
   });
 
   const accounts = data?.accounts || [];
@@ -131,8 +143,19 @@ export function WhatsAppPage() {
   });
 
   const updateAccountMutation = useMutation({
-    mutationFn: ({ id, ...body }: { id: string; is_active?: boolean; is_default?: boolean; department_ids?: string[]; label?: string }) =>
-      api.patch(`/whatsapp/accounts/${id}`, body),
+    mutationFn: ({
+      id,
+      ...body
+    }: {
+      id: string;
+      is_active?: boolean;
+      is_default?: boolean;
+      department_ids?: string[];
+      knowledge_base_ids?: string[];
+      ai_enabled?: boolean | null;
+      custom_instructions?: string | null;
+      label?: string;
+    }) => api.patch(`/whatsapp/accounts/${id}`, body),
     onSuccess: invalidate,
   });
 
@@ -330,6 +353,8 @@ export function WhatsAppPage() {
                 key={account.id}
                 account={account}
                 departments={departments}
+                knowledgeItems={knowledgeItems}
+                companyAiEnabled={companyAiEnabled}
                 isExpanded={expandedAccount === account.id}
                 onToggle={() => setExpandedAccount(expandedAccount === account.id ? null : account.id)}
                 connectionMode={getConnectionMode(account)}
@@ -358,6 +383,18 @@ export function WhatsAppPage() {
                 onSaveLabel={(label) => updateAccountMutation.mutate({ id: account.id, label })}
                 onSetDefault={() => updateAccountMutation.mutate({ id: account.id, is_default: true })}
                 onDepartmentsChange={(ids) => updateAccountMutation.mutate({ id: account.id, department_ids: ids })}
+                onAiEnabledChange={(enabled) =>
+                  updateAccountMutation.mutate({ id: account.id, ai_enabled: enabled })
+                }
+                onSaveCustomInstructions={(text) =>
+                  updateAccountMutation.mutate({
+                    id: account.id,
+                    custom_instructions: text.trim() || null,
+                  })
+                }
+                onKnowledgeChange={(ids) =>
+                  updateAccountMutation.mutate({ id: account.id, knowledge_base_ids: ids })
+                }
                 onCloudConnect={(form) => cloudConnectMutation.mutate({ accountId: account.id, form })}
                 onCancelQr={cancelQr}
                 onRefreshQr={() => startQrMutation.mutate(account.id)}
@@ -365,6 +402,13 @@ export function WhatsAppPage() {
                 isCloudPending={cloudConnectMutation.isPending && cloudConnectMutation.variables?.accountId === account.id}
                 isDisconnecting={disconnectMutation.isPending && disconnectMutation.variables === account.id}
                 isSavingLabel={updateAccountMutation.isPending && updateAccountMutation.variables?.id === account.id && updateAccountMutation.variables?.label !== undefined}
+                isSavingAi={
+                  updateAccountMutation.isPending &&
+                  updateAccountMutation.variables?.id === account.id &&
+                  (updateAccountMutation.variables?.ai_enabled !== undefined ||
+                    updateAccountMutation.variables?.custom_instructions !== undefined ||
+                    updateAccountMutation.variables?.knowledge_base_ids !== undefined)
+                }
                 onSendTest={() => sendTest(account.id)}
               />
             ))}
@@ -470,6 +514,8 @@ export function WhatsAppPage() {
 interface AccountCardProps {
   account: WhatsAppAccount;
   departments: Department[];
+  knowledgeItems: KnowledgeItem[];
+  companyAiEnabled: boolean;
   isExpanded: boolean;
   onToggle: () => void;
   connectionMode: 'qr' | 'api';
@@ -489,6 +535,9 @@ interface AccountCardProps {
   onSaveLabel: (label: string) => void;
   onSetDefault: () => void;
   onDepartmentsChange: (ids: string[]) => void;
+  onAiEnabledChange: (enabled: boolean | null) => void;
+  onSaveCustomInstructions: (text: string) => void;
+  onKnowledgeChange: (ids: string[]) => void;
   onCloudConnect: (form: CloudApiFormState) => void;
   onCancelQr: () => void;
   onRefreshQr: () => void;
@@ -496,33 +545,48 @@ interface AccountCardProps {
   isCloudPending: boolean;
   isDisconnecting: boolean;
   isSavingLabel: boolean;
+  isSavingAi: boolean;
   onSendTest: () => void;
 }
 
 function AccountCard({
-  account, departments, isExpanded, onToggle,
+  account, departments, knowledgeItems, companyAiEnabled, isExpanded, onToggle,
   connectionMode, supportsQr, supportsCloudApi, onConnectionModeChange,
   activeQr, cloudForm, cloudFeedback, testState, onCloudFormChange, onTestChange,
   onStartQr, onDisconnect, onDelete, onToggleActive, onSetDefault,
-  onDepartmentsChange, onCloudConnect, onCancelQr, onRefreshQr,
-  isQrPending, isCloudPending, isDisconnecting, isSavingLabel, onSaveLabel, onSendTest,
+  onDepartmentsChange, onAiEnabledChange, onSaveCustomInstructions, onKnowledgeChange,
+  onCloudConnect, onCancelQr, onRefreshQr,
+  isQrPending, isCloudPending, isDisconnecting, isSavingLabel, isSavingAi, onSaveLabel, onSendTest,
 }: AccountCardProps) {
   const { t } = useTranslation();
   const [labelDraft, setLabelDraft] = useState(account.label || '');
+  const [instructionsDraft, setInstructionsDraft] = useState(account.custom_instructions || '');
   const isConnected = account.status === 'connected';
   const isReconnecting = account.status === 'reconnecting' || account.reconnecting;
   const isCloudConnected = isConnected && account.connection_type === 'api';
   const isQrConnected = isConnected && account.connection_type === 'qr';
   const selectedDeptIds = account.departments.map((d) => d.id);
+  const selectedKbIds = account.knowledge_base_ids || [];
   const showModeTabs = supportsQr && supportsCloudApi;
   const useQrPanel = connectionMode === 'qr' && supportsQr;
   const useCloudPanel = connectionMode === 'api' && supportsCloudApi;
   const lastSyncValue = account.last_synced_at || account.updated_at || null;
   const labelChanged = labelDraft.trim() !== (account.label || '').trim();
+  const instructionsChanged =
+    instructionsDraft.trim() !== (account.custom_instructions || '').trim();
+  const effectiveAiEnabled =
+    account.ai_enabled === null || account.ai_enabled === undefined
+      ? companyAiEnabled
+      : account.ai_enabled === true;
+  const inheritsCompanyAi = account.ai_enabled === null || account.ai_enabled === undefined;
 
   useEffect(() => {
     setLabelDraft(account.label || '');
   }, [account.id, account.label]);
+
+  useEffect(() => {
+    setInstructionsDraft(account.custom_instructions || '');
+  }, [account.id, account.custom_instructions]);
 
   const statusBadge = isConnected ? (
     <Badge variant="success"><Wifi className="mr-1 h-3 w-3" /> {t('whatsapp.connected')}</Badge>
@@ -690,6 +754,142 @@ function AccountCard({
               </div>
             </SectionPanel>
           )}
+
+          <SectionPanel title={t('whatsapp.sectionAi')} icon={Bot}>
+            <p className="mb-4 text-xs text-slate-500">{t('whatsapp.sectionAiHint')}</p>
+
+            <div className="mb-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-slate-900">{t('whatsapp.aiEnabled')}</p>
+                <p className="text-xs text-slate-500">
+                  {inheritsCompanyAi
+                    ? t('whatsapp.aiInheritCompany', {
+                        state: companyAiEnabled ? t('whatsapp.aiOn') : t('whatsapp.aiOff'),
+                      })
+                    : t('whatsapp.aiOverrideLine')}
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {!inheritsCompanyAi && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-9"
+                    disabled={isSavingAi}
+                    onClick={() => onAiEnabledChange(null)}
+                  >
+                    {t('whatsapp.aiUseCompanyDefault')}
+                  </Button>
+                )}
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={effectiveAiEnabled}
+                  disabled={isSavingAi || !companyAiEnabled}
+                  onClick={() => onAiEnabledChange(!effectiveAiEnabled)}
+                  className={cn(
+                    'relative h-8 w-14 shrink-0 rounded-full transition-colors',
+                    effectiveAiEnabled ? 'bg-primary' : 'bg-slate-300',
+                    (!companyAiEnabled || isSavingAi) && 'opacity-60'
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-transform',
+                      effectiveAiEnabled ? 'translate-x-[1.35rem]' : 'translate-x-1'
+                    )}
+                  />
+                </button>
+              </div>
+            </div>
+            {!companyAiEnabled && (
+              <p className="mb-4 text-xs text-amber-700">{t('whatsapp.aiCompanyDisabledHint')}</p>
+            )}
+
+            <div className="mb-4 space-y-2">
+              <Label htmlFor={`wa-ai-instructions-${account.id}`}>
+                {t('whatsapp.customInstructions')}
+              </Label>
+              <Textarea
+                id={`wa-ai-instructions-${account.id}`}
+                value={instructionsDraft}
+                onChange={(e) => setInstructionsDraft(e.target.value)}
+                placeholder={t('whatsapp.customInstructionsPlaceholder')}
+                rows={4}
+                className="min-h-[96px] resize-y"
+              />
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs text-slate-500">{t('whatsapp.customInstructionsHint')}</p>
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-10 w-full sm:w-auto"
+                  disabled={!instructionsChanged || isSavingAi}
+                  onClick={() => onSaveCustomInstructions(instructionsDraft)}
+                >
+                  {isSavingAi && instructionsChanged ? <Spinner /> : <Save className="h-4 w-4" />}
+                  {t('common.save')}
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>{t('whatsapp.linkKnowledge')}</Label>
+              <p className="text-xs text-slate-500">{t('whatsapp.linkKnowledgeHint')}</p>
+              {knowledgeItems.length === 0 ? (
+                <p className="text-sm text-slate-500">{t('whatsapp.noKnowledge')}</p>
+              ) : (
+                <div className="flex max-h-48 flex-col gap-1.5 overflow-y-auto rounded-xl border border-slate-200 bg-white p-2 sm:max-h-56">
+                  {knowledgeItems.map((item) => {
+                    const selected = selectedKbIds.includes(item.id);
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        disabled={isSavingAi}
+                        className={cn(
+                          'flex min-h-[44px] items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors',
+                          selected
+                            ? 'bg-primary/10 text-primary'
+                            : 'text-slate-700 hover:bg-slate-50'
+                        )}
+                        onClick={() => {
+                          const next = selected
+                            ? selectedKbIds.filter((id) => id !== item.id)
+                            : [...selectedKbIds, item.id];
+                          onKnowledgeChange(next);
+                        }}
+                      >
+                        <span
+                          className={cn(
+                            'flex h-5 w-5 shrink-0 items-center justify-center rounded border text-[10px] font-bold',
+                            selected
+                              ? 'border-primary bg-primary text-white'
+                              : 'border-slate-300 bg-white text-transparent'
+                          )}
+                          aria-hidden
+                        >
+                          ✓
+                        </span>
+                        <span className="min-w-0 flex-1 truncate font-medium">{item.title}</span>
+                        {!item.is_active && (
+                          <Badge variant="default" className="shrink-0 text-[10px]">
+                            {t('whatsapp.knowledgeInactive')}
+                          </Badge>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {selectedKbIds.length > 0 && (
+                <p className="text-xs text-slate-500">
+                  {t('whatsapp.knowledgeSelected', { count: selectedKbIds.length })}
+                </p>
+              )}
+            </div>
+          </SectionPanel>
 
           <SectionPanel title={t('whatsapp.sectionConnection')}>
             {showModeTabs && (

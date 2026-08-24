@@ -5,6 +5,9 @@
 import { adminClient } from '../database/supabase';
 import { SubscriptionPlanType, WhatsAppAccount, WhatsAppStatus, Department } from '../types';
 import { normalizePlanType } from './plan-capabilities.service';
+import { invalidateAccountAiSettingsCache } from './company-ai-settings.service';
+import { invalidateStaticSystemPromptCache } from '../ai/admin-prompt-builder';
+import { invalidateCompanyCache } from '../ai/openai.service';
 
 export const WHATSAPP_LINE_LIMITS: Record<string, number> = {
   starter: 1,
@@ -16,6 +19,7 @@ export const WHATSAPP_LINE_LIMITS: Record<string, number> = {
 
 export interface WhatsAppAccountView extends WhatsAppAccount {
   departments: Department[];
+  knowledge_base_ids: string[];
   connection_type: 'qr' | 'api' | null;
   reconnecting?: boolean;
   live_connected?: boolean;
@@ -75,6 +79,26 @@ async function fetchDepartmentLinks(accountIds: string[]): Promise<Map<string, D
   return map;
 }
 
+async function fetchKnowledgeLinks(accountIds: string[]): Promise<Map<string, string[]>> {
+  const map = new Map<string, string[]>();
+  if (!accountIds.length) return map;
+
+  const { data: links } = await adminClient
+    .from('whatsapp_account_knowledge')
+    .select('whatsapp_account_id, knowledge_base_id')
+    .in('whatsapp_account_id', accountIds);
+
+  for (const link of links || []) {
+    const accountId = link.whatsapp_account_id as string;
+    const kbId = link.knowledge_base_id as string;
+    if (!kbId) continue;
+    const list = map.get(accountId) || [];
+    list.push(kbId);
+    map.set(accountId, list);
+  }
+  return map;
+}
+
 function resolveConnectionType(account: WhatsAppAccount): 'qr' | 'api' | null {
   if (account.business_account_id?.startsWith('baileys:')) return 'qr';
   if (account.access_token && account.business_account_id) return 'api';
@@ -85,7 +109,7 @@ export async function listWhatsAppAccounts(companyId: string): Promise<WhatsAppA
   const { data, error } = await adminClient
     .from('whatsapp_configs')
     .select(
-      'id, company_id, label, phone_number, profile_name, business_account_id, status, is_active, is_default, last_synced_at, created_at, updated_at'
+      'id, company_id, label, phone_number, profile_name, business_account_id, status, is_active, is_default, ai_enabled, custom_instructions, last_synced_at, created_at, updated_at'
     )
     .eq('company_id', companyId)
     .order('is_default', { ascending: false })
@@ -94,11 +118,16 @@ export async function listWhatsAppAccounts(companyId: string): Promise<WhatsAppA
   if (error) throw new Error(error.message);
 
   const accounts = (data || []) as WhatsAppAccount[];
-  const deptMap = await fetchDepartmentLinks(accounts.map((a) => a.id));
+  const accountIds = accounts.map((a) => a.id);
+  const [deptMap, kbMap] = await Promise.all([
+    fetchDepartmentLinks(accountIds),
+    fetchKnowledgeLinks(accountIds),
+  ]);
 
   return accounts.map((account) => ({
     ...account,
     departments: deptMap.get(account.id) || [],
+    knowledge_base_ids: kbMap.get(account.id) || [],
     connection_type: resolveConnectionType(account),
   }));
 }
@@ -170,6 +199,9 @@ export async function updateWhatsAppAccount(
     is_active?: boolean;
     is_default?: boolean;
     department_ids?: string[];
+    knowledge_base_ids?: string[];
+    ai_enabled?: boolean | null;
+    custom_instructions?: string | null;
     phone_number?: string;
     business_account_id?: string;
     access_token?: string;
@@ -194,6 +226,14 @@ export async function updateWhatsAppAccount(
   if (updates.status !== undefined) patch.status = updates.status;
   if (updates.profile_name !== undefined) patch.profile_name = updates.profile_name;
   if (updates.last_synced_at !== undefined) patch.last_synced_at = updates.last_synced_at;
+  if (updates.ai_enabled !== undefined) patch.ai_enabled = updates.ai_enabled;
+  if (updates.custom_instructions !== undefined) {
+    const trimmed =
+      typeof updates.custom_instructions === 'string'
+        ? updates.custom_instructions.trim()
+        : updates.custom_instructions;
+    patch.custom_instructions = trimmed || null;
+  }
 
   if (updates.is_default === true) {
     await adminClient
@@ -215,6 +255,20 @@ export async function updateWhatsAppAccount(
 
   if (updates.department_ids !== undefined) {
     await setAccountDepartments(companyId, accountId, updates.department_ids);
+  }
+
+  if (updates.knowledge_base_ids !== undefined) {
+    await setAccountKnowledge(companyId, accountId, updates.knowledge_base_ids);
+  }
+
+  if (
+    updates.ai_enabled !== undefined ||
+    updates.custom_instructions !== undefined ||
+    updates.knowledge_base_ids !== undefined
+  ) {
+    invalidateAccountAiSettingsCache(companyId, accountId);
+    invalidateStaticSystemPromptCache(companyId);
+    invalidateCompanyCache(companyId);
   }
 
   const refreshed = await getWhatsAppAccount(companyId, accountId);
@@ -251,6 +305,43 @@ async function setAccountDepartments(
       uniqueIds.map((department_id) => ({
         whatsapp_account_id: accountId,
         department_id,
+      }))
+    );
+    if (error) throw new Error(error.message);
+  }
+}
+
+async function setAccountKnowledge(
+  companyId: string,
+  accountId: string,
+  knowledgeBaseIds: string[]
+): Promise<void> {
+  const uniqueIds = [...new Set(knowledgeBaseIds.filter(Boolean))];
+
+  if (uniqueIds.length > 0) {
+    const { data: valid } = await adminClient
+      .from('knowledge_base')
+      .select('id')
+      .eq('company_id', companyId)
+      .in('id', uniqueIds);
+    const validIds = (valid || []).map((d) => d.id);
+    if (validIds.length !== uniqueIds.length) {
+      throw new Error('Geçersiz bilgi bankası seçimi');
+    }
+  }
+
+  await adminClient
+    .from('whatsapp_account_knowledge')
+    .delete()
+    .eq('whatsapp_account_id', accountId)
+    .eq('company_id', companyId);
+
+  if (uniqueIds.length > 0) {
+    const { error } = await adminClient.from('whatsapp_account_knowledge').insert(
+      uniqueIds.map((knowledge_base_id) => ({
+        whatsapp_account_id: accountId,
+        knowledge_base_id,
+        company_id: companyId,
       }))
     );
     if (error) throw new Error(error.message);

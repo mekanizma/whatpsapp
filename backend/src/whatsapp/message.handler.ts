@@ -29,7 +29,7 @@ import {
 } from '../ai/department-routing.service';
 import { detectConversationLanguage, t, type ConversationLang } from '../ai/language.service';
 import { uploadMessageMedia } from '../services/message-media.service';
-import { isCompanyAiEnabled } from '../services/company-ai-settings.service';
+import { isAiEnabledForAccount } from '../services/company-ai-settings.service';
 import { detectAngerPrefilter } from '../ai/anger-prefilter.service';
 import {
   buildDedupKey,
@@ -546,7 +546,7 @@ export async function processInboundImage(
       await incrementConversationUsage(companyId);
     }
 
-    if (!(await isCompanyAiEnabled(companyId))) {
+    if (!(await isAiEnabledForAccount(companyId, whatsappAccountId))) {
       const lang = detectConversationLanguage(caption);
       return handleAiDisabledInbound(
         companyId,
@@ -693,7 +693,7 @@ export async function processInboundVoiceMessage(
       return '';
     }
 
-    if (!(await isCompanyAiEnabled(companyId))) {
+    if (!(await isAiEnabledForAccount(companyId))) {
       if (whatsappMessageId) markProcessedWaId(companyId, whatsappMessageId);
       return '';
     }
@@ -762,7 +762,7 @@ export async function processInboundMessage(
       await incrementConversationUsage(companyId);
     }
 
-    if (!(await isCompanyAiEnabled(companyId))) {
+    if (!(await isAiEnabledForAccount(companyId, whatsappAccountId))) {
       return handleAiDisabledInbound(companyId, phone, customerName, trimmed);
     }
 
@@ -873,7 +873,13 @@ export async function processInboundMessage(
 
     let aiResponse;
     try {
-      aiResponse = await generateAIResponse(companyId, trimmed, phone, customerName);
+      aiResponse = await generateAIResponse(
+        companyId,
+        trimmed,
+        phone,
+        customerName,
+        whatsappAccountId
+      );
     } catch (err) {
       const detail = err instanceof Error ? err.message : String(err);
       console.error('[WhatsApp] AI hatası:', detail);

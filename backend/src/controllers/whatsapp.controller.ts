@@ -142,7 +142,15 @@ export async function createAccount(req: AuthRequest, res: Response): Promise<vo
 
 export async function updateAccount(req: AuthRequest, res: Response): Promise<void> {
   const accountId = req.params.accountId as string;
-  const { label, is_active, is_default, department_ids } = req.body;
+  const {
+    label,
+    is_active,
+    is_default,
+    department_ids,
+    knowledge_base_ids,
+    ai_enabled,
+    custom_instructions,
+  } = req.body;
 
   try {
     const account = await updateWhatsAppAccount(req.companyId!, accountId, {
@@ -150,7 +158,15 @@ export async function updateAccount(req: AuthRequest, res: Response): Promise<vo
       is_active,
       is_default,
       department_ids,
+      knowledge_base_ids,
+      ai_enabled,
+      custom_instructions,
     });
+    const [enriched] = await Promise.all([
+      listWhatsAppAccounts(req.companyId!).then((list) =>
+        list.find((a) => a.id === accountId)
+      ),
+    ]);
     await logActivity({
       userId: req.userId,
       companyId: req.companyId,
@@ -158,7 +174,7 @@ export async function updateAccount(req: AuthRequest, res: Response): Promise<vo
       entityType: 'whatsapp_account',
       entityId: accountId,
     });
-    res.json({ success: true, data: account });
+    res.json({ success: true, data: enriched || account });
   } catch (err) {
     res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'Güncellenemedi' });
   }

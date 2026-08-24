@@ -63,6 +63,10 @@ export interface WhatsAppConfig {
   status: WhatsAppStatus;
   is_active?: boolean;
   is_default?: boolean;
+  /** NULL = şirket ai_enabled miras */
+  ai_enabled?: boolean | null;
+  /** NULL = şirket custom_instructions miras */
+  custom_instructions?: string | null;
   last_synced_at?: string | null;
   created_at: string;
   updated_at: string;

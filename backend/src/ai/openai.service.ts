@@ -40,6 +40,7 @@ import {
   setCachedResponse,
   shouldCacheResponse,
 } from './ai-cache.service';
+import { resolveAccountAiSettings } from '../services/company-ai-settings.service';
 import {
   getEcommerceContextForAI,
   getEcommerceSettings,
@@ -94,9 +95,15 @@ async function buildEcommerceLookupContext(
 async function fetchGenerateAIContext(
   companyId: string,
   customerPhone: string,
-  trimmed: string
+  trimmed: string,
+  whatsappAccountId?: string | null
 ): Promise<GenerateAIContext> {
-  const [historyResult, company, knowledgeResult, ecommerceBase] = await Promise.all([
+  const accountSettingsPromise = whatsappAccountId
+    ? resolveAccountAiSettings(companyId, whatsappAccountId)
+    : Promise.resolve(null);
+
+  const [historyResult, company, knowledgeResult, ecommerceBase, accountSettings] =
+    await Promise.all([
       adminClient
         .from('messages')
         .select('sender_type, message')
@@ -131,16 +138,31 @@ async function fetchGenerateAIContext(
           returnsEnabled: Boolean(settings?.returns_enabled),
         };
       })(),
+      accountSettingsPromise,
     ]);
 
   const history = (historyResult.data || [])
     .reverse()
     .filter((m) => m.message !== trimmed);
 
+  let allKnowledge = (knowledgeResult.data || []) as KnowledgeItem[];
+  if (accountSettings?.knowledgeBaseIds) {
+    const allowed = new Set(accountSettings.knowledgeBaseIds);
+    allKnowledge = allKnowledge.filter((item) => allowed.has(item.id));
+  }
+
+  const companyWithInstructions: Company = {
+    ...company,
+    custom_instructions:
+      accountSettings?.customInstructions !== undefined && accountSettings !== null
+        ? accountSettings.customInstructions
+        : company.custom_instructions,
+  };
+
   return {
     history,
-    company,
-    allKnowledge: (knowledgeResult.data || []) as KnowledgeItem[],
+    company: companyWithInstructions,
+    allKnowledge,
     ecommerceContext: ecommerceBase.context,
     ecommerceReturnsEnabled: ecommerceBase.returnsEnabled,
   };
@@ -196,12 +218,18 @@ export async function generateAIResponse(
   companyId: string,
   customerMessage: string,
   customerPhone: string,
-  _customerName: string | null = null
+  _customerName: string | null = null,
+  whatsappAccountId?: string | null
 ): Promise<AIResponse> {
   const trimmed = customerMessage.trim();
 
   const { history, company, allKnowledge, ecommerceContext, ecommerceReturnsEnabled } =
-    await generateAIResponseDeps.fetchGenerateAIContext(companyId, customerPhone, trimmed);
+    await generateAIResponseDeps.fetchGenerateAIContext(
+      companyId,
+      customerPhone,
+      trimmed,
+      whatsappAccountId
+    );
 
   const chatHistory = prepareConversationHistoryForChat(history, trimmed);
 
@@ -343,7 +371,7 @@ export async function generateAIResponse(
     };
   }
 
-  const cachedResponse = await getCachedResponse(companyId, trimmed);
+  const cachedResponse = await getCachedResponse(companyId, trimmed, whatsappAccountId);
     if (cachedResponse) {
       await logAIUsage({
         companyId,
@@ -398,7 +426,10 @@ export async function generateAIResponse(
   const languageBlock = await buildLanguageBlockForTurn(conversationLang);
 
   const [staticSystemPrompt, activePrompts] = await Promise.all([
-    buildStaticSystemPrompt(companyId, company),
+    buildStaticSystemPrompt(companyId, company, {
+      accountId: whatsappAccountId,
+      customInstructionsOverride: company.custom_instructions,
+    }),
     getAllActivePromptContentsForAI(),
   ]);
 
@@ -482,7 +513,7 @@ export async function generateAIResponse(
       hasStrongMatch: retrieval.usedRag && !retrieval.kbHasNoMatch,
     })
   ) {
-    void setCachedResponse(companyId, trimmed, message, shouldTransfer);
+    void setCachedResponse(companyId, trimmed, message, shouldTransfer, whatsappAccountId);
   }
 
   const knowledgeSources = buildKnowledgeSources(

@@ -78,6 +78,36 @@ export function KnowledgePage() {
     },
   });
 
+  const { data: waAccountsData } = useQuery({
+    queryKey: ['whatsapp-accounts'],
+    queryFn: () =>
+      api.get<{
+        accounts: {
+          id: string;
+          label: string | null;
+          phone_number: string | null;
+          knowledge_base_ids?: string[];
+        }[];
+      }>('/whatsapp/accounts'),
+    enabled: !!user?.id,
+  });
+
+  const knowledgeLineLabels = (() => {
+    const map = new Map<string, string[]>();
+    for (const account of waAccountsData?.accounts || []) {
+      const label =
+        account.label?.trim() ||
+        account.phone_number ||
+        account.id.slice(0, 8);
+      for (const kbId of account.knowledge_base_ids || []) {
+        const list = map.get(kbId) || [];
+        list.push(label);
+        map.set(kbId, list);
+      }
+    }
+    return map;
+  })();
+
   const { data: departments = [] } = useQuery({
     queryKey: authQueryKey(['departments'], user?.id, user?.role),
     queryFn: () => api.get<Department[]>('/departments'),
@@ -442,6 +472,21 @@ export function KnowledgePage() {
                     </Badge>
                   )}
                 </div>
+                {(() => {
+                  const lines = knowledgeLineLabels.get(item.id);
+                  if (!lines?.length) {
+                    return (
+                      <p className="mb-2 text-[11px] text-slate-400">
+                        {t('knowledge.linkedLinesAll')}
+                      </p>
+                    );
+                  }
+                  return (
+                    <p className="mb-2 text-[11px] leading-snug text-slate-500">
+                      {t('knowledge.linkedLines', { lines: lines.join(', ') })}
+                    </p>
+                  );
+                })()}
                 {item.index_error && (
                   <p className="mb-2 text-xs text-red-600 line-clamp-2">{item.index_error}</p>
                 )}

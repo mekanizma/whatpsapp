@@ -25,10 +25,11 @@ const memoryCache = new Map<string, CacheEntry>();
 const PHONE_IN_TEXT_RE =
   /(?:\+?90|0)?[\s-]?5\d{2}[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}|\b\d{10,15}\b/;
 
-export function getCacheKey(message: string): string {
+export function getCacheKey(message: string, accountId?: string | null): string {
   const normalized = normalizeForCache(message);
+  const scope = accountId || 'default';
   return createHash('sha256')
-    .update(`${config.ai.cacheVersion}:${normalized}`)
+    .update(`${config.ai.cacheVersion}:${scope}:${normalized}`)
     .digest('hex');
 }
 
@@ -190,11 +191,12 @@ async function writePersistedResponse(
 
 export async function getCachedResponse(
   companyId: string,
-  message: string
+  message: string,
+  accountId?: string | null
 ): Promise<{ message: string; shouldTransfer: boolean } | null> {
   if (!config.ai.cacheEnabled) return null;
 
-  const messageHash = getCacheKey(message);
+  const messageHash = getCacheKey(message, accountId);
   const key = memoryKey(companyId, messageHash);
 
   const mem = memoryCache.get(key);
@@ -215,12 +217,13 @@ export async function setCachedResponse(
   companyId: string,
   message: string,
   response: string,
-  shouldTransfer: boolean
+  shouldTransfer: boolean,
+  accountId?: string | null
 ): Promise<void> {
   if (!config.ai.cacheEnabled) return;
   if (normalizeForCache(message).length < 10) return;
 
-  const messageHash = getCacheKey(message);
+  const messageHash = getCacheKey(message, accountId);
   const key = memoryKey(companyId, messageHash);
   const createdAt = Date.now();
   const expiresAt = Math.min(
