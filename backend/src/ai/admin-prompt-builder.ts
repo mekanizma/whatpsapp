@@ -32,6 +32,8 @@ export interface DynamicPromptContext {
   lang?: ConversationLang;
   languageBlock?: string;
   appointmentCtx?: AppointmentCompanyContext;
+  resolvedTopic?: string | null;
+  resolvedQuestion?: string | null;
 }
 
 const TOPIC_RECALL_INSTRUCTION =
@@ -171,6 +173,17 @@ export function buildDynamicUserMessage(
       langName: getLanguageHintName(lang),
     });
   sections.push(`### Dil\n${langSection}`);
+
+  const topic = ctx.resolvedTopic?.trim() || '';
+  const resolvedQ = ctx.resolvedQuestion?.trim() || '';
+  if (topic || resolvedQ) {
+    const topicLines = [
+      topic ? `Konu: ${topic}` : null,
+      resolvedQ ? `Çözümlenmiş soru: ${resolvedQ}` : null,
+      'Aşağıdaki alıntılar bu konuyla ilgili değilse hiçbirini kullanma; bilgin yoksa canlı destek temsilcisi teklif et.',
+    ].filter(Boolean);
+    sections.push(`### Konuşmanın Konusu\n${topicLines.join('\n')}`);
+  }
 
   const knowledge = ctx.knowledge?.trim() || '';
   const titlesList = formatTopicTitlesList(ctx.knowledgeTitles || []);

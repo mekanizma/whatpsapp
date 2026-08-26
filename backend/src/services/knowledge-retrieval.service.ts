@@ -5,7 +5,11 @@
 import { config } from '../config';
 import { adminClient } from '../database/supabase';
 import { createEmbeddings as createEmbeddingsImpl } from './embedding.service';
-import { expandQueryForRetrieval as expandQueryForRetrievalImpl } from './query-expansion.service';
+import {
+  expandQueryForRetrieval as expandQueryForRetrievalImpl,
+  type RetrievalHistoryMsg,
+} from './query-expansion.service';
+import { rerankChunks as rerankChunksImpl } from './chunk-rerank.service';
 import {
   buildKnowledgeContextForAI,
   filterRelevantKnowledge,
@@ -18,6 +22,7 @@ export const knowledgeRetrievalDeps = {
   countReadyDocuments: countReadyDocumentsImpl,
   isCompanyVectorIndexReady: isCompanyVectorIndexReadyImpl,
   expandQueryForRetrieval: expandQueryForRetrievalImpl,
+  rerankChunks: rerankChunksImpl,
   matchKnowledgeChunksRpc: (
     companyId: string,
     queryText: string,
@@ -43,6 +48,10 @@ export interface KnowledgeRetrievalResult {
   fallbackItems: KnowledgeItem[];
   /** İndeks hazır ama sorguya uygun chunk bulunamadı */
   kbHasNoMatch: boolean;
+  topic?: string;
+  resolvedQuestion?: string;
+  topicChanged?: boolean;
+  dependsOnHistory?: boolean;
 }
 
 export function resolveRetrievalVariantCap(): number {
@@ -53,13 +62,17 @@ export function resolveRetrievalVariantCap(): number {
 export function buildRetrievalTexts(
   rawMessage: string,
   variants: string[],
-  intentVariant: string | null = null
+  intentVariant: string | null = null,
+  options?: {
+    resolvedQuestion?: string | null;
+    topic?: string | null;
+  }
 ): string[] {
   const cap = resolveRetrievalVariantCap();
   const raw = rawMessage.trim();
+  const resolved = options?.resolvedQuestion?.trim() || null;
+  const topic = options?.topic?.trim() || null;
   const intent = intentVariant?.trim() || null;
-  const intentKey = intent?.toLocaleLowerCase('tr') ?? null;
-  const rawKey = raw.toLocaleLowerCase('tr');
 
   const deduped: string[] = [];
   const seen = new Set<string>();
@@ -73,14 +86,14 @@ export function buildRetrievalTexts(
     deduped.push(trimmed);
   };
 
-  push(raw);
+  push(resolved || raw);
+  push(topic);
   push(intent);
   for (const variant of variants) {
-    const trimmed = variant.trim();
-    if (!trimmed) continue;
-    const key = trimmed.toLocaleLowerCase('tr');
-    if (key === rawKey || (intentKey && key === intentKey)) continue;
-    push(trimmed);
+    push(variant);
+  }
+  if (resolved && raw && resolved.toLocaleLowerCase('tr') !== raw.toLocaleLowerCase('tr')) {
+    push(raw);
   }
 
   return deduped.slice(0, cap);
@@ -235,18 +248,32 @@ export function finalizeRetrievalChunks(
 export function logRetrievalDiagnostics(
   query: string,
   texts: string[],
-  intentVariant: string | null,
-  chunks: RetrievedKnowledgeChunk[]
+  chunks: RetrievedKnowledgeChunk[],
+  meta?: {
+    topic?: string | null;
+    topicChanged?: boolean;
+    resolvedQuestion?: string | null;
+    rerankBefore?: number;
+    rerankAfter?: number;
+  }
 ): void {
   const q = query.slice(0, 40);
-  const textPreview = texts.map((t) => t.slice(0, 28)).join(' | ');
+  const topic = meta?.topic?.trim() ? meta.topic.trim().slice(0, 40) : '';
+  const resolved = meta?.resolvedQuestion?.trim()
+    ? meta.resolvedQuestion.trim().slice(0, 50)
+    : '';
+  const changed = meta?.topicChanged === true;
   const top = chunks
     .slice(0, 3)
-    .map((c) => `${c.heading ?? '—'}:${c.combined_score.toFixed(3)}`)
+    .map((c) => `${c.heading ?? '—'}:${c.combined_score.toFixed(2)}`)
     .join(', ');
   const strong = hasStrongRetrievalMatch(chunks);
+  const rerankPart =
+    meta?.rerankBefore !== undefined && meta?.rerankAfter !== undefined
+      ? ` rerank=${meta.rerankBefore}->${meta.rerankAfter}`
+      : '';
   console.log(
-    `[RAG] q="${q}" texts=${texts.length} intent=${intentVariant ? `"${intentVariant.slice(0, 24)}"` : 'none'} [${textPreview}] top=[${top}] strong=${strong}`
+    `[RAG] q="${q}" topic="${topic}" changed=${changed} resolved="${resolved}" texts=${texts.length} top=[${top}]${rerankPart} strong=${strong}`
   );
 }
 
@@ -363,7 +390,8 @@ async function queryAllVariantChunks(
 export async function retrieveKnowledgeContext(
   companyId: string,
   query: string,
-  fallbackItems: KnowledgeItem[] = []
+  fallbackItems: KnowledgeItem[] = [],
+  history: RetrievalHistoryMsg[] = []
 ): Promise<KnowledgeRetrievalResult> {
   const trimmed = query.trim();
   if (!trimmed) {
@@ -374,6 +402,10 @@ export async function retrieveKnowledgeContext(
       usedLexicalFallback: false,
       fallbackItems,
       kbHasNoMatch: false,
+      topic: '',
+      resolvedQuestion: '',
+      topicChanged: false,
+      dependsOnHistory: false,
     };
   }
 
@@ -386,27 +418,68 @@ export async function retrieveKnowledgeContext(
       usedLexicalFallback: false,
       fallbackItems,
       kbHasNoMatch: fallbackItems.length > 0,
+      topic: '',
+      resolvedQuestion: trimmed,
+      topicChanged: false,
+      dependsOnHistory: false,
     };
   }
 
   const vectorIndexReady = await knowledgeRetrievalDeps.isCompanyVectorIndexReady(companyId);
-  const rewrite = await knowledgeRetrievalDeps.expandQueryForRetrieval(companyId, trimmed);
+  const rewrite = await knowledgeRetrievalDeps.expandQueryForRetrieval(
+    companyId,
+    trimmed,
+    history
+  );
+
+  const topicMeta = {
+    topic: rewrite.topic || '',
+    resolvedQuestion: rewrite.resolvedQuestion || trimmed,
+    topicChanged: rewrite.topicChanged === true,
+    dependsOnHistory: rewrite.dependsOnHistory === true,
+  };
 
   if (!vectorIndexReady) {
     console.warn(
       `[RAG] Company ${companyId} has ready docs with stale/mixed embedding model — lexical fallback`
     );
-    return buildLexicalFallbackResult(fallbackItems, trimmed, rewrite.isBroad);
+    return {
+      ...buildLexicalFallbackResult(
+        fallbackItems,
+        topicMeta.resolvedQuestion || trimmed,
+        rewrite.isBroad
+      ),
+      ...topicMeta,
+    };
   }
 
-  const texts = buildRetrievalTexts(trimmed, rewrite.variants, rewrite.intentVariant);
+  const texts = buildRetrievalTexts(trimmed, rewrite.variants, rewrite.intentVariant, {
+    resolvedQuestion: rewrite.resolvedQuestion,
+    topic: rewrite.topic || null,
+  });
 
   try {
     const embeddings = await knowledgeRetrievalDeps.createEmbeddings(texts);
     const resultSets = await queryAllVariantChunks(companyId, texts, embeddings);
     const merged = mergeRetrievalChunksByMax(resultSets);
-    const chunks = finalizeRetrievalChunks(merged);
-    logRetrievalDiagnostics(trimmed, texts, rewrite.intentVariant, chunks);
+    const finalized = finalizeRetrievalChunks(merged);
+    const rerankBefore = finalized.length;
+
+    const reranked = await knowledgeRetrievalDeps.rerankChunks(
+      companyId,
+      topicMeta.resolvedQuestion,
+      rewrite.topic || null,
+      finalized
+    );
+    const chunks = reranked.kept;
+
+    logRetrievalDiagnostics(trimmed, texts, chunks, {
+      topic: topicMeta.topic,
+      topicChanged: topicMeta.topicChanged,
+      resolvedQuestion: topicMeta.resolvedQuestion,
+      rerankBefore,
+      rerankAfter: chunks.length,
+    });
 
     if (!chunks.length) {
       return {
@@ -416,6 +489,7 @@ export async function retrieveKnowledgeContext(
         usedLexicalFallback: false,
         fallbackItems,
         kbHasNoMatch: true,
+        ...topicMeta,
       };
     }
 
@@ -428,11 +502,19 @@ export async function retrieveKnowledgeContext(
       usedLexicalFallback: false,
       fallbackItems,
       kbHasNoMatch: !hasStrongMatch,
+      ...topicMeta,
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('[RAG] Embedding retrieval failed, lexical fallback:', message);
-    return buildLexicalFallbackResult(fallbackItems, trimmed, rewrite.isBroad);
+    return {
+      ...buildLexicalFallbackResult(
+        fallbackItems,
+        topicMeta.resolvedQuestion || trimmed,
+        rewrite.isBroad
+      ),
+      ...topicMeta,
+    };
   }
 }
 

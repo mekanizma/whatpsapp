@@ -28,7 +28,7 @@ describe('ai-cache.service', () => {
     const b = getCacheKey(message);
     const c = getCacheKey('Fiyatlarınız nedir?');
     const expected = createHash('sha256')
-      .update(`${config.ai.cacheVersion}:${normalizeForCache(message)}`)
+      .update(`${config.ai.cacheVersion}:default:${normalizeForCache(message)}`)
       .digest('hex');
 
     assert.equal(a, b);
@@ -53,6 +53,22 @@ describe('ai-cache.service', () => {
     const hash = getCacheKey('Merhaba çalışma saatleri');
     assert.equal(hash, getCacheKey('Merhaba çalışma saatleri'));
     assert.notEqual(`tenant-a:${hash}`, `tenant-b:${hash}`);
+  });
+
+  it('shouldCacheResponse rejects followUp messages', () => {
+    assert.equal(
+      shouldCacheResponse({
+        appointmentMode: false,
+        shouldTransfer: false,
+        response:
+          'Pasaport genellikle iki yıllık verilir ve öğrenci işlemleri için geçerli kabul edilir.',
+        history: [{ sender_type: 'customer', message: 'pasaport' }],
+        latestMessage: 'oluyor mu',
+        followUp: true,
+        ...STRONG_RAG,
+      }),
+      false
+    );
   });
 
   it('shouldCacheResponse rejects appointment and transfer flows', () => {
@@ -237,18 +253,17 @@ describe('ai-cache.service', () => {
     assert.ok(await getCachedResponse('tenant-b', message));
   });
 
-  it('rewrite cache key includes REWRITE_CACHE_VERSION (default 6)', () => {
-    assert.equal(config.ai.rewriteCacheVersion, '6');
+  it('rewrite cache key includes REWRITE_CACHE_VERSION (default 7)', () => {
+    assert.equal(config.ai.rewriteCacheVersion, '7');
     const companyId = 'tenant-a';
     const message = 'üniversite nerede';
     setCachedQueryRewrite(companyId, message, {
       variants: ['old variant'],
       isBroad: false,
     });
-    assert.deepEqual(getCachedQueryRewrite(companyId, message), {
-      variants: ['old variant'],
-      isBroad: false,
-    });
+    const cached = getCachedQueryRewrite(companyId, message);
+    assert.deepEqual(cached?.variants, ['old variant']);
+    assert.equal(cached?.isBroad, false);
     const hash = hashNormalizedMessage(message);
     const v1Key = `rewrite:1:${companyId}:${hash}`;
     const v2Key = `rewrite:2:${companyId}:${hash}`;

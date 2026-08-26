@@ -112,6 +112,13 @@ export const config = {
     maxContextChars: parseInt(process.env.RAG_MAX_CONTEXT_CHARS || '3500', 10),
     maxVariants: parseInt(process.env.RAG_MAX_VARIANTS || '5', 10),
     indexBatchSize: parseInt(process.env.RAG_INDEX_BATCH_SIZE || '50', 10),
+    rewriteModel: process.env.RAG_REWRITE_MODEL || 'gpt-4o-mini',
+    rewriteContextMessages: parseInt(process.env.RAG_REWRITE_CONTEXT_MESSAGES || '8', 10),
+    followUpMaxWords: parseInt(process.env.RAG_FOLLOWUP_MAX_WORDS || '7', 10),
+    rerankEnabled: process.env.RAG_RERANK_ENABLED !== 'false',
+    rerankModel: process.env.RAG_RERANK_MODEL || 'gpt-4o-mini',
+    rerankMinScore: parseFloat(process.env.RAG_RERANK_MIN_SCORE || '0.45'),
+    rerankKeep: parseInt(process.env.RAG_RERANK_KEEP || '3', 10),
   },
 
   ai: {
@@ -126,7 +133,7 @@ export const config = {
     /** Bumped on deploy to invalidate all cached AI responses (memory + DB) */
     cacheVersion: process.env.CACHE_VERSION || '2',
     /** Bumped when query-rewrite / intent-variant logic changes */
-    rewriteCacheVersion: process.env.REWRITE_CACHE_VERSION || '6',
+    rewriteCacheVersion: process.env.REWRITE_CACHE_VERSION || '7',
     /** Max age for persistent cache rows — enforced at read time */
     cacheMaxAgeMs:
       (parseInt(process.env.AI_CACHE_TTL_HOURS || '168', 10) || 168) * 60 * 60 * 1000,

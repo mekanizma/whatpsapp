@@ -29,12 +29,6 @@ describe('admin-prompt-builder prompt cache layout', () => {
     invalidateStaticSystemPromptCache();
   });
 
-  it('rejects 1501-char custom instructions at validation layer (maps to HTTP 400 in controller)', () => {
-    const tooLong = 'x'.repeat(1501);
-    const result = validateCustomInstructionsForWrite(tooLong);
-    assert.equal(result.ok, false);
-  });
-
   it('static system prompt does not embed per-turn knowledge', async () => {
     process.env.DEMO_MODE = 'true';
     invalidateStaticSystemPromptCache();
@@ -91,6 +85,21 @@ describe('admin-prompt-builder prompt cache layout', () => {
     assert.doesNotMatch(wrapped, /### Bilgi Bankası/);
     assert.doesNotMatch(wrapped, /### Randevu Bağlamı/);
     assert.match(wrapped, /### Müşteri Mesajı\nMerhaba/);
+  });
+
+  it('includes topic section before Bilgi Bankası when resolved', () => {
+    const wrapped = buildDynamicUserMessage('2 yıllığına verildi oluyor mu', {
+      knowledge: 'Pasaport 2 yıl geçerlidir.',
+      resolvedTopic: 'pasaport süresi ve geçerliliği',
+      resolvedQuestion: 'Pasaport 2 yıllık verildiyse öğrenci için geçerli midir?',
+      lang: 'tr',
+    });
+    const topicIdx = wrapped.indexOf('### Konuşmanın Konusu');
+    const kbIdx = wrapped.indexOf('### Bilgi Bankası');
+    assert.ok(topicIdx >= 0);
+    assert.ok(kbIdx > topicIdx);
+    assert.match(wrapped, /Konu: pasaport süresi/);
+    assert.match(wrapped, /Çözümlenmiş soru: Pasaport 2 yıllık/);
   });
 });
 

@@ -101,8 +101,10 @@ export function shouldCacheResponse(options: {
   kbHasNoMatch?: boolean;
   usedRag?: boolean;
   hasStrongMatch?: boolean;
+  followUp?: boolean;
 }): boolean {
   if (!config.ai.cacheEnabled) return false;
+  if (options.followUp) return false;
   if (options.appointmentMode) return false;
   if (options.shouldTransfer) return false;
   if (options.kbHasNoMatch) return false;
@@ -318,19 +320,34 @@ export function startResponseCacheCleanupSchedule(): void {
 export interface QueryRewriteCacheEntry {
   variants: string[];
   isBroad: boolean;
+  topic?: string;
+  previousTopic?: string;
+  topicChanged?: boolean;
+  dependsOnHistory?: boolean;
+  resolvedQuestion?: string;
 }
 
 const rewriteCache = new Map<string, QueryRewriteCacheEntry & { expiresAt: number }>();
 
-function rewriteCacheKey(companyId: string, message: string): string {
-  return `rewrite:${config.ai.rewriteCacheVersion}:${companyId}:${hashNormalizedMessage(message)}`;
+function rewriteMessageHash(message: string, contextKey?: string): string {
+  const normalized = normalizeForCache(message);
+  const payload =
+    contextKey !== undefined && contextKey !== ''
+      ? `${normalized}|${contextKey}`
+      : normalized;
+  return createHash('sha256').update(payload).digest('hex');
+}
+
+function rewriteCacheKey(companyId: string, message: string, contextKey?: string): string {
+  return `rewrite:${config.ai.rewriteCacheVersion}:${companyId}:${rewriteMessageHash(message, contextKey)}`;
 }
 
 export function getCachedQueryRewrite(
   companyId: string,
-  message: string
+  message: string,
+  contextKey?: string
 ): QueryRewriteCacheEntry | null {
-  const key = rewriteCacheKey(companyId, message);
+  const key = rewriteCacheKey(companyId, message, contextKey);
   const entry = rewriteCache.get(key);
   if (!entry || Date.now() > entry.expiresAt) {
     rewriteCache.delete(key);
@@ -339,17 +356,23 @@ export function getCachedQueryRewrite(
   return {
     variants: entry.variants,
     isBroad: entry.isBroad,
+    topic: entry.topic,
+    previousTopic: entry.previousTopic,
+    topicChanged: entry.topicChanged,
+    dependsOnHistory: entry.dependsOnHistory,
+    resolvedQuestion: entry.resolvedQuestion,
   };
 }
 
 export function setCachedQueryRewrite(
   companyId: string,
   message: string,
-  result: QueryRewriteCacheEntry
+  result: QueryRewriteCacheEntry,
+  contextKey?: string
 ): void {
   if (normalizeForCache(message).length < 3) return;
 
-  const key = rewriteCacheKey(companyId, message);
+  const key = rewriteCacheKey(companyId, message, contextKey);
   rewriteCache.set(key, {
     ...result,
     expiresAt: Date.now() + config.ai.cacheTtlMs,

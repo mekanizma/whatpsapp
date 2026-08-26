@@ -288,7 +288,8 @@ async function callAppointmentLlm(
   knowledge: string,
   allKnowledge: KnowledgeItem[],
   state: AppointmentLlmState,
-  appointmentCtx: AppointmentCompanyContext
+  appointmentCtx: AppointmentCompanyContext,
+  topicCtx?: { resolvedTopic?: string | null; resolvedQuestion?: string | null }
 ): Promise<{ raw: string; tokensUsed: number }> {
   const chatHistory = prepareConversationHistoryForChat(input.history, input.customerMessage);
   const languageBlock = await buildLanguageBlockForTurn(lang);
@@ -318,6 +319,8 @@ async function callAppointmentLlm(
     appointmentContext,
     lang,
     languageBlock,
+    resolvedTopic: topicCtx?.resolvedTopic,
+    resolvedQuestion: topicCtx?.resolvedQuestion,
   });
 
   const chatMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [];
@@ -356,7 +359,8 @@ async function runHandoffAiTurn(
   knowledge: string,
   allKnowledge: KnowledgeItem[],
   state: AppointmentLlmState,
-  appointmentCtx: AppointmentCompanyContext
+  appointmentCtx: AppointmentCompanyContext,
+  topicCtx?: { resolvedTopic?: string | null; resolvedQuestion?: string | null }
 ): Promise<{ message: string; shouldTransfer: boolean; tokensUsed: number }> {
   const handoffCall = await callAppointmentLlm(
     input,
@@ -365,7 +369,8 @@ async function runHandoffAiTurn(
     knowledge,
     allKnowledge,
     state,
-    appointmentCtx
+    appointmentCtx,
+    topicCtx
   );
   const handoffParsed = parseAppointmentResponse(handoffCall.raw);
   const reply = handoffParsed.payload?.reply || appointmentConfig.handoffFallbackMessage;
@@ -384,7 +389,8 @@ async function parseLlmTurnWithRetry(
   knowledge: string,
   allKnowledge: KnowledgeItem[],
   state: AppointmentLlmState,
-  appointmentCtx: AppointmentCompanyContext
+  appointmentCtx: AppointmentCompanyContext,
+  topicCtx?: { resolvedTopic?: string | null; resolvedQuestion?: string | null }
 ): Promise<{
   parsed: ParsedAppointmentResponse;
   tokensUsed: number;
@@ -398,7 +404,8 @@ async function parseLlmTurnWithRetry(
     knowledge,
     allKnowledge,
     state,
-    appointmentCtx
+    appointmentCtx,
+    topicCtx
   );
   totalTokens += call.tokensUsed;
   let parsed = parseAppointmentResponse(call.raw);
@@ -420,7 +427,8 @@ async function parseLlmTurnWithRetry(
     knowledge,
     allKnowledge,
     state,
-    appointmentCtx
+    appointmentCtx,
+    topicCtx
   );
   totalTokens += call.tokensUsed;
   parsed = parseAppointmentResponse(call.raw);
@@ -481,10 +489,15 @@ export async function runAppointmentLlmFlow(
   const retrieval = await appointmentLlmFlowDeps.retrieveKnowledgeContext(
     input.companyId,
     input.customerMessage,
-    input.allKnowledge
+    input.allKnowledge,
+    input.history
   );
   const knowledge = retrieval.context;
   const appointmentKnowledge = input.allKnowledge;
+  const topicCtx = {
+    resolvedTopic: retrieval.topic || null,
+    resolvedQuestion: retrieval.resolvedQuestion || null,
+  };
 
   const pendingNote =
     meta.pendingSystemNote ||
@@ -523,7 +536,8 @@ export async function runAppointmentLlmFlow(
     knowledge,
     appointmentKnowledge,
     state,
-    input.appointmentCtx
+    input.appointmentCtx,
+    topicCtx
   );
   let totalTokens = llmResult.tokensUsed;
 
@@ -556,7 +570,8 @@ export async function runAppointmentLlmFlow(
       knowledge,
       appointmentKnowledge,
       state,
-      input.appointmentCtx
+      input.appointmentCtx,
+      topicCtx
     );
     totalTokens += handoff.tokensUsed;
     message = handoff.message;
@@ -621,7 +636,8 @@ export async function runAppointmentLlmFlow(
         knowledge,
         appointmentKnowledge,
         state,
-        input.appointmentCtx
+        input.appointmentCtx,
+        topicCtx
       );
       totalTokens += retry.tokensUsed;
       if (!retry.handoffFallback && retry.parsed.payload) {
@@ -644,7 +660,8 @@ export async function runAppointmentLlmFlow(
         knowledge,
         appointmentKnowledge,
         state,
-        input.appointmentCtx
+        input.appointmentCtx,
+        topicCtx
       );
       totalTokens += retry.tokensUsed;
       if (!retry.handoffFallback && retry.parsed.payload) {
@@ -663,7 +680,8 @@ export async function runAppointmentLlmFlow(
         knowledge,
         appointmentKnowledge,
         state,
-        input.appointmentCtx
+        input.appointmentCtx,
+        topicCtx
       );
       totalTokens += handoff.tokensUsed;
       message = handoff.message;
@@ -687,7 +705,8 @@ export async function runAppointmentLlmFlow(
       knowledge,
       appointmentKnowledge,
       state,
-      input.appointmentCtx
+      input.appointmentCtx,
+      topicCtx
     );
     totalTokens += handoff.tokensUsed;
     message = handoff.message;

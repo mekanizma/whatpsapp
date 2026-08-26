@@ -12,7 +12,14 @@ import {
   type GenerateAIContext,
 } from './openai.service';
 import { knowledgeRetrievalDeps } from '../services/knowledge-retrieval.service';
+import { buildRetrievalTexts } from '../services/knowledge-retrieval.service';
+import {
+  expandQueryForRetrieval,
+  queryExpansionDeps,
+} from '../services/query-expansion.service';
 import { setCachedResponse, clearCompanyCache } from './ai-cache.service';
+import { buildDynamicUserMessage } from './admin-prompt-builder';
+import { buildKnowledgeNoMatchHint } from './kb-answer.service';
 import type { Company } from '../types';
 
 const COMPANY_ID = 'a0000000-0000-0000-0000-000000000099';
@@ -100,7 +107,7 @@ describe('generateAIResponse cost gates', () => {
   });
 
   it('response cache hit performs zero embedding, rewrite, and RPC calls', async () => {
-    const message = 'çalışma saatleriniz nedir?';
+    const message = 'hafta içi çalışma saatleriniz tam olarak nedir ve cumartesi açık mısınız?';
     const cached =
       'Pazartesi-Cuma 09:00-18:00 arası hizmet veriyoruz. Cumartesi 10:00-14:00. Pazar kapalıyız. Detaylı bilgi için web sitemizi ziyaret edebilirsiniz.';
 
@@ -122,5 +129,208 @@ describe('generateAIResponse cost gates', () => {
 describe('openai.service company fetch', () => {
   it('loads custom_instructions for prompt assembly', () => {
     assert.match(COMPANY_AI_SELECT, /custom_instructions/);
+  });
+});
+
+describe('context-aware topic resolution (real cases)', () => {
+  const origExpandChat = queryExpansionDeps.createChatCompletion;
+
+  afterEach(() => {
+    queryExpansionDeps.createChatCompletion = origExpandChat;
+  });
+
+  it('vaka A: follow-up about passport duration keeps pasaport in retrieval texts', async () => {
+    queryExpansionDeps.createChatCompletion = async () =>
+      ({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                topic: 'pasaport süresi ve geçerliliği',
+                previous_topic: 'pasaport başvurusu',
+                topic_changed: false,
+                depends_on_history: true,
+                resolved_question: 'Pasaport 2 yıllık verildiyse öğrenci için geçerli midir?',
+                variants: ['pasaport geçerlilik süresi', 'öğrenci pasaportu kaç yıllık olmalı'],
+                is_broad: false,
+              }),
+            },
+          },
+        ],
+        usage: { total_tokens: 20 },
+      }) as never;
+
+    const rewrite = await expandQueryForRetrieval(
+      COMPANY_ID,
+      '2 yıllığına verildi oluyor mu',
+      [
+        { sender_type: 'customer', message: 'Hocam pasaport başvurusunda bulundum' },
+        { sender_type: 'ai', message: 'Pasaport için gerekli belgeler...' },
+      ]
+    );
+    const texts = buildRetrievalTexts(rewrite.rawMessage, rewrite.variants, rewrite.intentVariant, {
+      resolvedQuestion: rewrite.resolvedQuestion,
+      topic: rewrite.topic,
+    });
+    assert.ok(texts.some((t) => /pasaport/i.test(t)));
+  });
+
+  it('vaka B: topic change drops pasaport and keeps yurt', async () => {
+    queryExpansionDeps.createChatCompletion = async () =>
+      ({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                topic: 'yurt ücretleri',
+                previous_topic: 'pasaport başvurusu',
+                topic_changed: true,
+                depends_on_history: false,
+                resolved_question: 'Yurt ücretleri ne kadar?',
+                variants: ['yurt ücreti', 'yurt fiyatları'],
+                is_broad: false,
+              }),
+            },
+          },
+        ],
+        usage: { total_tokens: 20 },
+      }) as never;
+
+    const rewrite = await expandQueryForRetrieval(
+      COMPANY_ID,
+      'peki yurt ücretleri ne kadar',
+      [
+        { sender_type: 'customer', message: 'Hocam pasaport başvurusunda bulundum' },
+        { sender_type: 'ai', message: 'Pasaport için...' },
+      ]
+    );
+    const texts = buildRetrievalTexts(rewrite.rawMessage, rewrite.variants, rewrite.intentVariant, {
+      resolvedQuestion: rewrite.resolvedQuestion,
+      topic: rewrite.topic,
+    });
+    const joined = texts.join(' ').toLocaleLowerCase('tr');
+    assert.doesNotMatch(joined, /pasaport/);
+    assert.match(joined, /yurt/);
+  });
+});
+
+describe('generateAIResponse follow-up cache and empty rerank', () => {
+  const origFetch = generateAIResponseDeps.fetchGenerateAIContext;
+  const origRetrieve = generateAIResponseDeps.retrieveKnowledgeContext;
+  const origChat = generateAIResponseDeps.createChatCompletion;
+
+  afterEach(() => {
+    generateAIResponseDeps.fetchGenerateAIContext = origFetch;
+    generateAIResponseDeps.retrieveKnowledgeContext = origRetrieve;
+    generateAIResponseDeps.createChatCompletion = origChat;
+    void clearCompanyCache(COMPANY_ID);
+  });
+
+  it('short follow-up skips response cache even when an entry exists', async () => {
+    const shortMsg = 'oluyor mu';
+    await setCachedResponse(
+      COMPANY_ID,
+      shortMsg,
+      'Bu önbellekten gelen yanlış yurt cevabıdır ve yeterince uzundur ki cache kabul edilsin.',
+      false
+    );
+
+    let retrieveCalled = false;
+    generateAIResponseDeps.fetchGenerateAIContext = async () => ({
+      ...MOCK_CONTEXT,
+      history: [
+        { sender_type: 'customer', message: 'Hocam pasaport başvurusunda bulundum' },
+        { sender_type: 'ai', message: 'Pasaport bilgisi...' },
+      ],
+      allKnowledge: [
+        {
+          id: 'kb1',
+          company_id: COMPANY_ID,
+          title: 'Pasaport',
+          content: 'Pasaport 2 yıl',
+          category: 'general',
+          is_active: true,
+        },
+      ],
+    });
+    generateAIResponseDeps.retrieveKnowledgeContext = async () => {
+      retrieveCalled = true;
+      return {
+        context: '### Pasaport\n2 yıllık verilir',
+        chunks: [],
+        usedRag: true,
+        usedLexicalFallback: false,
+        fallbackItems: [],
+        kbHasNoMatch: false,
+        topic: 'pasaport süresi',
+        resolvedQuestion: 'Pasaport 2 yıllık oluyor mu',
+        topicChanged: false,
+        dependsOnHistory: true,
+      };
+    };
+    generateAIResponseDeps.createChatCompletion = async () =>
+      ({
+        choices: [{ message: { content: 'Pasaport genellikle 2 yıllık verilir.' } }],
+        usage: { total_tokens: 30 },
+      }) as never;
+
+    const result = await generateAIResponse(COMPANY_ID, shortMsg, PHONE);
+    assert.equal(retrieveCalled, true);
+    assert.match(result.message, /Pasaport/);
+    assert.doesNotMatch(result.message, /önbellekten/);
+  });
+
+  it('when rerank drops all chunks, prompt has no KB citation and includes no-match hint', async () => {
+    const knowledge = [
+      {
+        id: 'kb1',
+        company_id: COMPANY_ID,
+        title: 'Muhaceret',
+        content: 'Muhaceret işlemleri...',
+        category: 'general',
+        is_active: true,
+      },
+    ];
+    const noMatchHint = buildKnowledgeNoMatchHint(knowledge, 'tr');
+
+    generateAIResponseDeps.fetchGenerateAIContext = async () => ({
+      ...MOCK_CONTEXT,
+      allKnowledge: knowledge,
+    });
+    generateAIResponseDeps.retrieveKnowledgeContext = async () => ({
+      context: '',
+      chunks: [],
+      usedRag: true,
+      usedLexicalFallback: false,
+      fallbackItems: [],
+      kbHasNoMatch: true,
+      topic: 'yönlendirme',
+      resolvedQuestion: 'yönlendirme',
+      topicChanged: false,
+      dependsOnHistory: false,
+    });
+
+    let userPrompt = '';
+    generateAIResponseDeps.createChatCompletion = async (messages) => {
+      const last = messages[messages.length - 1];
+      userPrompt = typeof last.content === 'string' ? last.content : '';
+      return {
+        choices: [{ message: { content: 'Bu konuda bilgim yok, temsilciye aktarabilirim.' } }],
+        usage: { total_tokens: 20 },
+      } as never;
+    };
+
+    await generateAIResponse(COMPANY_ID, 'yönlendirme nedir tam olarak burada', PHONE);
+
+    assert.match(userPrompt, /eşleşen içerik bulunamadı|eşleşme/i);
+    assert.doesNotMatch(userPrompt, /Muhaceret işlemleri/);
+    const expected = buildDynamicUserMessage('yönlendirme nedir tam olarak burada', {
+      knowledge: noMatchHint,
+      knowledgeTitles: ['Muhaceret'],
+      lang: 'tr',
+      resolvedTopic: 'yönlendirme',
+      resolvedQuestion: 'yönlendirme',
+    });
+    assert.match(expected, /eşleşen içerik bulunamadı/);
   });
 });

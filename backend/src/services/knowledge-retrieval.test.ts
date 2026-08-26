@@ -351,9 +351,15 @@ describe('knowledge-retrieval', () => {
     knowledgeRetrievalDeps.countReadyDocuments = async () => 2;
     knowledgeRetrievalDeps.isCompanyVectorIndexReady = async () => false;
     knowledgeRetrievalDeps.expandQueryForRetrieval = async () => ({
+      rawMessage: 'fiyat ne kadar',
       variants: ['ücret bilgisi'],
       intentVariant: 'ücret fiyat',
       isBroad: false,
+      topic: 'ücretler',
+      previousTopic: '',
+      topicChanged: false,
+      dependsOnHistory: false,
+      resolvedQuestion: 'fiyat ne kadar',
     });
     knowledgeRetrievalDeps.createEmbeddings = async () => {
       embeddingsCalled = true;
@@ -387,6 +393,84 @@ describe('knowledge-retrieval', () => {
       knowledgeRetrievalDeps.isCompanyVectorIndexReady = origReady;
       knowledgeRetrievalDeps.expandQueryForRetrieval = origExpand;
       knowledgeRetrievalDeps.createEmbeddings = origEmbeddings;
+    }
+  });
+
+  it('buildRetrievalTexts orders resolvedQuestion, topic, intent, variants, raw', () => {
+    const texts = buildRetrievalTexts(
+      'oluyor mu',
+      ['pasaport geçerlilik', 'öğrenci pasaport süresi'],
+      null,
+      {
+        resolvedQuestion: 'Pasaport 2 yıllık verildiyse geçerli midir?',
+        topic: 'pasaport süresi',
+      }
+    );
+    assert.equal(texts[0], 'Pasaport 2 yıllık verildiyse geçerli midir?');
+    assert.equal(texts[1], 'pasaport süresi');
+    assert.ok(texts.includes('pasaport geçerlilik'));
+    assert.ok(texts.includes('oluyor mu'));
+    assert.ok(texts.length <= 5);
+  });
+
+  it('retrieveKnowledgeContext sets kbHasNoMatch when rerank drops all chunks', async () => {
+    const origCount = knowledgeRetrievalDeps.countReadyDocuments;
+    const origReady = knowledgeRetrievalDeps.isCompanyVectorIndexReady;
+    const origExpand = knowledgeRetrievalDeps.expandQueryForRetrieval;
+    const origEmbeddings = knowledgeRetrievalDeps.createEmbeddings;
+    const origRpc = knowledgeRetrievalDeps.matchKnowledgeChunksRpc;
+    const origRerank = knowledgeRetrievalDeps.rerankChunks;
+
+    knowledgeRetrievalDeps.countReadyDocuments = async () => 1;
+    knowledgeRetrievalDeps.isCompanyVectorIndexReady = async () => true;
+    knowledgeRetrievalDeps.expandQueryForRetrieval = async () => ({
+      rawMessage: 'yönlendirme',
+      variants: ['yönlendirme'],
+      intentVariant: null,
+      isBroad: false,
+      topic: 'yönlendirme',
+      previousTopic: '',
+      topicChanged: false,
+      dependsOnHistory: false,
+      resolvedQuestion: 'yönlendirme',
+    });
+    knowledgeRetrievalDeps.createEmbeddings = async (texts) => texts.map(() => [0.1, 0.2]);
+    knowledgeRetrievalDeps.matchKnowledgeChunksRpc = (() =>
+      Promise.resolve({
+        data: [
+          {
+            id: 'c1',
+            document_id: 'd1',
+            knowledge_base_id: 'kb1',
+            chunk_index: 0,
+            heading: 'Muhaceret',
+            content: 'Muhaceret işlemleriyle ilgili...',
+            similarity: 0.4,
+            text_rank: 0.1,
+            combined_score: 0.31,
+          },
+        ],
+        error: null,
+      })) as typeof knowledgeRetrievalDeps.matchKnowledgeChunksRpc;
+    knowledgeRetrievalDeps.rerankChunks = async () => ({
+      kept: [],
+      dropped: 1,
+      tokensUsed: 5,
+    });
+
+    try {
+      const result = await retrieveKnowledgeContext('company-rerank-empty', 'yönlendirme', []);
+      assert.equal(result.kbHasNoMatch, true);
+      assert.equal(result.context, '');
+      assert.equal(result.chunks.length, 0);
+      assert.equal(result.usedRag, true);
+    } finally {
+      knowledgeRetrievalDeps.countReadyDocuments = origCount;
+      knowledgeRetrievalDeps.isCompanyVectorIndexReady = origReady;
+      knowledgeRetrievalDeps.expandQueryForRetrieval = origExpand;
+      knowledgeRetrievalDeps.createEmbeddings = origEmbeddings;
+      knowledgeRetrievalDeps.matchKnowledgeChunksRpc = origRpc;
+      knowledgeRetrievalDeps.rerankChunks = origRerank;
     }
   });
 });

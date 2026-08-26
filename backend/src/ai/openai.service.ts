@@ -40,6 +40,7 @@ import {
   setCachedResponse,
   shouldCacheResponse,
 } from './ai-cache.service';
+import { isShortFollowUpMessage } from '../services/query-expansion.service';
 import { resolveAccountAiSettings } from '../services/company-ai-settings.service';
 import {
   getEcommerceContextForAI,
@@ -371,7 +372,10 @@ export async function generateAIResponse(
     };
   }
 
-  const cachedResponse = await getCachedResponse(companyId, trimmed, whatsappAccountId);
+  const cachedResponse =
+    isShortFollowUpMessage(trimmed)
+      ? null
+      : await getCachedResponse(companyId, trimmed, whatsappAccountId);
     if (cachedResponse) {
       await logAIUsage({
         companyId,
@@ -408,7 +412,8 @@ export async function generateAIResponse(
   const retrieval = await generateAIResponseDeps.retrieveKnowledgeContext(
     companyId,
     trimmed,
-    allKnowledge
+    allKnowledge,
+    history
   );
   let knowledge = retrieval.context;
   if (retrieval.kbHasNoMatch && allKnowledge.length > 0) {
@@ -439,6 +444,8 @@ export async function generateAIResponse(
     ecommerceContext,
     lang: conversationLang,
     languageBlock,
+    resolvedTopic: retrieval.topic || null,
+    resolvedQuestion: retrieval.resolvedQuestion || null,
   });
 
   if (staticSystemPrompt) {
@@ -501,6 +508,9 @@ export async function generateAIResponse(
     console.log(`[KB Miss] Bilinmeyen soru kaydedilecek → ${trimmed.slice(0, 80)}`);
   }
 
+  const followUp =
+    isShortFollowUpMessage(trimmed) || retrieval.dependsOnHistory === true;
+
   if (
     shouldCacheResponse({
       appointmentMode: false,
@@ -511,6 +521,7 @@ export async function generateAIResponse(
       kbHasNoMatch: retrieval.kbHasNoMatch,
       usedRag: retrieval.usedRag,
       hasStrongMatch: retrieval.usedRag && !retrieval.kbHasNoMatch,
+      followUp,
     })
   ) {
     void setCachedResponse(companyId, trimmed, message, shouldTransfer, whatsappAccountId);
