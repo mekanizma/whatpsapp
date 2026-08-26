@@ -68,6 +68,7 @@ export interface AppointmentLlmFlowInput {
   company: Company;
   allKnowledge: KnowledgeItem[];
   appointmentCtx: AppointmentCompanyContext;
+  knowledgeBaseIds?: string[] | null;
 }
 
 export interface AppointmentLlmFlowResult {
@@ -490,7 +491,7 @@ export async function runAppointmentLlmFlow(
     input.companyId,
     input.customerMessage,
     input.allKnowledge,
-    input.history
+    { history: input.history, knowledgeBaseIds: input.knowledgeBaseIds ?? null }
   );
   const knowledge = retrieval.context;
   const appointmentKnowledge = input.allKnowledge;

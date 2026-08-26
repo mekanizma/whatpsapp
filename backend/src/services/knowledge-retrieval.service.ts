@@ -26,7 +26,8 @@ export const knowledgeRetrievalDeps = {
   matchKnowledgeChunksRpc: (
     companyId: string,
     queryText: string,
-    embedding: number[]
+    embedding: number[],
+    knowledgeBaseIds?: string[] | null
   ) =>
     adminClient.rpc('match_knowledge_chunks', {
       p_company_id: companyId,
@@ -36,8 +37,17 @@ export const knowledgeRetrievalDeps = {
       match_threshold: config.rag.matchThreshold,
       vector_weight: config.rag.vectorWeight,
       text_weight: config.rag.textWeight,
+      ...(knowledgeBaseIds?.length
+        ? { p_knowledge_base_ids: knowledgeBaseIds }
+        : {}),
     }),
 };
+
+export interface KnowledgeRetrievalOptions {
+  history?: RetrievalHistoryMsg[];
+  /** null/undefined = tüm şirket KB; dolu dizi = yalnızca atanan KB id'leri */
+  knowledgeBaseIds?: string[] | null;
+}
 
 export interface KnowledgeRetrievalResult {
   context: string;
@@ -97,6 +107,16 @@ export function buildRetrievalTexts(
   }
 
   return deduped.slice(0, cap);
+}
+
+/** Hat/hesap bazlı KB ataması — RPC sonrası güvenlik ağı */
+export function filterChunksByKnowledgeBaseIds(
+  chunks: RetrievedKnowledgeChunk[],
+  knowledgeBaseIds: string[] | null | undefined
+): RetrievedKnowledgeChunk[] {
+  if (!knowledgeBaseIds?.length) return chunks;
+  const allowed = new Set(knowledgeBaseIds);
+  return chunks.filter((c) => allowed.has(c.knowledge_base_id));
 }
 
 export function mergeRetrievalChunksByMax(
@@ -295,23 +315,40 @@ function buildLexicalFallbackResult(
   };
 }
 
-async function countReadyDocumentsImpl(companyId: string): Promise<number> {
-  const { count } = await adminClient
+async function countReadyDocumentsImpl(
+  companyId: string,
+  knowledgeBaseIds?: string[] | null
+): Promise<number> {
+  let query = adminClient
     .from('knowledge_documents')
     .select('id', { count: 'exact', head: true })
     .eq('company_id', companyId)
     .eq('index_status', 'ready');
 
+  if (knowledgeBaseIds?.length) {
+    query = query.in('knowledge_base_id', knowledgeBaseIds);
+  }
+
+  const { count } = await query;
   return count ?? 0;
 }
 
 /** True when every ready document was embedded with the current config model */
-async function isCompanyVectorIndexReadyImpl(companyId: string): Promise<boolean> {
-  const { data, error } = await adminClient
+async function isCompanyVectorIndexReadyImpl(
+  companyId: string,
+  knowledgeBaseIds?: string[] | null
+): Promise<boolean> {
+  let query = adminClient
     .from('knowledge_documents')
     .select('embedding_model')
     .eq('company_id', companyId)
     .eq('index_status', 'ready');
+
+  if (knowledgeBaseIds?.length) {
+    query = query.in('knowledge_base_id', knowledgeBaseIds);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     throw new Error(error.message);
@@ -326,12 +363,14 @@ async function isCompanyVectorIndexReadyImpl(companyId: string): Promise<boolean
 async function queryKnowledgeChunksRaw(
   companyId: string,
   queryText: string,
-  embedding: number[]
+  embedding: number[],
+  knowledgeBaseIds?: string[] | null
 ): Promise<RetrievedKnowledgeChunk[]> {
   const { data, error } = await knowledgeRetrievalDeps.matchKnowledgeChunksRpc(
     companyId,
     queryText,
-    embedding
+    embedding,
+    knowledgeBaseIds
   );
 
   if (error) {
@@ -372,11 +411,12 @@ export function allVariantRetrievalsFailed(
 async function queryAllVariantChunks(
   companyId: string,
   texts: string[],
-  embeddings: number[][]
+  embeddings: number[][],
+  knowledgeBaseIds?: string[] | null
 ): Promise<RetrievedKnowledgeChunk[][]> {
   const settled = await Promise.allSettled(
     texts.map((text, index) =>
-      queryKnowledgeChunksRaw(companyId, text, embeddings[index] || [])
+      queryKnowledgeChunksRaw(companyId, text, embeddings[index] || [], knowledgeBaseIds)
     )
   );
 
@@ -391,8 +431,17 @@ export async function retrieveKnowledgeContext(
   companyId: string,
   query: string,
   fallbackItems: KnowledgeItem[] = [],
-  history: RetrievalHistoryMsg[] = []
+  historyOrOptions: RetrievalHistoryMsg[] | KnowledgeRetrievalOptions = [],
+  maybeOptions?: KnowledgeRetrievalOptions
 ): Promise<KnowledgeRetrievalResult> {
+  const history = Array.isArray(historyOrOptions)
+    ? historyOrOptions
+    : historyOrOptions.history ?? [];
+  const options: KnowledgeRetrievalOptions = Array.isArray(historyOrOptions)
+    ? maybeOptions ?? {}
+    : historyOrOptions;
+  const knowledgeBaseIds = options.knowledgeBaseIds ?? null;
+
   const trimmed = query.trim();
   if (!trimmed) {
     return {
@@ -409,7 +458,10 @@ export async function retrieveKnowledgeContext(
     };
   }
 
-  const readyCount = await knowledgeRetrievalDeps.countReadyDocuments(companyId);
+  const readyCount = await knowledgeRetrievalDeps.countReadyDocuments(
+    companyId,
+    knowledgeBaseIds
+  );
   if (!readyCount) {
     return {
       context: '',
@@ -425,7 +477,10 @@ export async function retrieveKnowledgeContext(
     };
   }
 
-  const vectorIndexReady = await knowledgeRetrievalDeps.isCompanyVectorIndexReady(companyId);
+  const vectorIndexReady = await knowledgeRetrievalDeps.isCompanyVectorIndexReady(
+    companyId,
+    knowledgeBaseIds
+  );
   const rewrite = await knowledgeRetrievalDeps.expandQueryForRetrieval(
     companyId,
     trimmed,
@@ -460,8 +515,16 @@ export async function retrieveKnowledgeContext(
 
   try {
     const embeddings = await knowledgeRetrievalDeps.createEmbeddings(texts);
-    const resultSets = await queryAllVariantChunks(companyId, texts, embeddings);
-    const merged = mergeRetrievalChunksByMax(resultSets);
+    const resultSets = await queryAllVariantChunks(
+      companyId,
+      texts,
+      embeddings,
+      knowledgeBaseIds
+    );
+    const merged = filterChunksByKnowledgeBaseIds(
+      mergeRetrievalChunksByMax(resultSets),
+      knowledgeBaseIds
+    );
     const finalized = finalizeRetrievalChunks(merged);
     const rerankBefore = finalized.length;
 
@@ -471,7 +534,7 @@ export async function retrieveKnowledgeContext(
       rewrite.topic || null,
       finalized
     );
-    const chunks = reranked.kept;
+    const chunks = filterChunksByKnowledgeBaseIds(reranked.kept, knowledgeBaseIds);
 
     logRetrievalDiagnostics(trimmed, texts, chunks, {
       topic: topicMeta.topic,

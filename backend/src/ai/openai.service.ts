@@ -64,6 +64,8 @@ export interface GenerateAIContext {
   allKnowledge: KnowledgeItem[];
   ecommerceContext: string;
   ecommerceReturnsEnabled: boolean;
+  /** null = tüm şirket KB; string[] = hatta atanan KB id'leri */
+  knowledgeBaseIds: string[] | null;
 }
 
 const ORDER_NUMBER_RE = /(?:sipari[sş]\s*(?:no|numara(?:s[ıi])?|#)?|order\s*(?:no|#|number)?)\s*[:#]?\s*([A-Za-z0-9-]{4,})\b/i;
@@ -166,6 +168,7 @@ async function fetchGenerateAIContext(
     allKnowledge,
     ecommerceContext: ecommerceBase.context,
     ecommerceReturnsEnabled: ecommerceBase.returnsEnabled,
+    knowledgeBaseIds: accountSettings?.knowledgeBaseIds ?? null,
   };
 }
 
@@ -224,7 +227,7 @@ export async function generateAIResponse(
 ): Promise<AIResponse> {
   const trimmed = customerMessage.trim();
 
-  const { history, company, allKnowledge, ecommerceContext, ecommerceReturnsEnabled } =
+  const { history, company, allKnowledge, ecommerceContext, ecommerceReturnsEnabled, knowledgeBaseIds } =
     await generateAIResponseDeps.fetchGenerateAIContext(
       companyId,
       customerPhone,
@@ -341,6 +344,7 @@ export async function generateAIResponse(
       company,
       allKnowledge,
       appointmentCtx,
+      knowledgeBaseIds,
     });
 
     await logAIUsage({
@@ -413,7 +417,7 @@ export async function generateAIResponse(
     companyId,
     trimmed,
     allKnowledge,
-    history
+    { history, knowledgeBaseIds }
   );
   let knowledge = retrieval.context;
   if (retrieval.kbHasNoMatch && allKnowledge.length > 0) {

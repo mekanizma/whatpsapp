@@ -4,6 +4,7 @@ import {
   buildContextFromChunks,
   buildRetrievalTexts,
   finalizeRetrievalChunks,
+  filterChunksByKnowledgeBaseIds,
   hasStrongRetrievalMatch,
   collectFulfilledVariantResults,
   allVariantRetrievalsFailed,
@@ -411,6 +412,95 @@ describe('knowledge-retrieval', () => {
     assert.ok(texts.includes('pasaport geçerlilik'));
     assert.ok(texts.includes('oluyor mu'));
     assert.ok(texts.length <= 5);
+  });
+
+  it('filterChunksByKnowledgeBaseIds keeps only assigned KB chunks', () => {
+    const allowedKb = 'kb-ufu';
+    const filtered = filterChunksByKnowledgeBaseIds(
+      [
+        { ...UCRETLER_CHUNK, knowledge_base_id: allowedKb },
+        { ...OTHER_CHUNK, knowledge_base_id: 'kb-old' },
+      ],
+      [allowedKb]
+    );
+    assert.equal(filtered.length, 1);
+    assert.equal(filtered[0].knowledge_base_id, allowedKb);
+  });
+
+  it('retrieveKnowledgeContext passes knowledgeBaseIds to match_knowledge_chunks RPC', async () => {
+    const allowedKb = 'kb-ufu-only';
+    const origCount = knowledgeRetrievalDeps.countReadyDocuments;
+    const origReady = knowledgeRetrievalDeps.isCompanyVectorIndexReady;
+    const origExpand = knowledgeRetrievalDeps.expandQueryForRetrieval;
+    const origEmbeddings = knowledgeRetrievalDeps.createEmbeddings;
+    const origRpc = knowledgeRetrievalDeps.matchKnowledgeChunksRpc;
+    const origRerank = knowledgeRetrievalDeps.rerankChunks;
+    let rpcKbIds: string[] | null | undefined;
+
+    knowledgeRetrievalDeps.countReadyDocuments = async () => 1;
+    knowledgeRetrievalDeps.isCompanyVectorIndexReady = async () => true;
+    knowledgeRetrievalDeps.expandQueryForRetrieval = async () => ({
+      rawMessage: 'pasaport',
+      variants: ['pasaport'],
+      intentVariant: null,
+      isBroad: false,
+      topic: 'pasaport',
+      previousTopic: '',
+      topicChanged: false,
+      dependsOnHistory: false,
+      resolvedQuestion: 'pasaport',
+    });
+    knowledgeRetrievalDeps.createEmbeddings = async (texts) => texts.map(() => [0.1]);
+    knowledgeRetrievalDeps.matchKnowledgeChunksRpc = async (_co, _text, _emb, kbIds) => {
+      rpcKbIds = kbIds ?? null;
+      return {
+        data: [
+          {
+            id: 'c1',
+            document_id: 'd1',
+            knowledge_base_id: allowedKb,
+            chunk_index: 0,
+            heading: 'Pasaport',
+            content: 'UFÜ pasaport bilgisi',
+            similarity: 0.5,
+            text_rank: 0.2,
+            combined_score: 0.41,
+          },
+        ],
+        error: null,
+      } as never;
+    };
+    knowledgeRetrievalDeps.rerankChunks = async (_co, _q, _t, chunks) => ({
+      kept: chunks,
+      dropped: 0,
+      tokensUsed: 0,
+    });
+
+    try {
+      await retrieveKnowledgeContext(
+        'company-kb-filter',
+        'pasaport süresi',
+        [
+          {
+            id: allowedKb,
+            company_id: 'company-kb-filter',
+            title: 'UFÜ',
+            content: '...',
+            category: 'general',
+            is_active: true,
+          },
+        ],
+        { knowledgeBaseIds: [allowedKb] }
+      );
+      assert.deepEqual(rpcKbIds, [allowedKb]);
+    } finally {
+      knowledgeRetrievalDeps.countReadyDocuments = origCount;
+      knowledgeRetrievalDeps.isCompanyVectorIndexReady = origReady;
+      knowledgeRetrievalDeps.expandQueryForRetrieval = origExpand;
+      knowledgeRetrievalDeps.createEmbeddings = origEmbeddings;
+      knowledgeRetrievalDeps.matchKnowledgeChunksRpc = origRpc;
+      knowledgeRetrievalDeps.rerankChunks = origRerank;
+    }
   });
 
   it('retrieveKnowledgeContext sets kbHasNoMatch when rerank drops all chunks', async () => {

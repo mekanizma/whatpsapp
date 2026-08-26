@@ -42,6 +42,7 @@ const MOCK_CONTEXT: GenerateAIContext = {
   allKnowledge: [],
   ecommerceContext: '',
   ecommerceReturnsEnabled: false,
+  knowledgeBaseIds: null,
 };
 
 describe('generateAIResponse cost gates', () => {
