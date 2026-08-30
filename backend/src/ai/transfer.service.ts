@@ -2,6 +2,7 @@
  * Canlı temsilciye aktarım — [TRANSFER] marker işleme ve ticket konusu
  */
 
+import { formatOutboundMessage } from '../messaging/outbound-message-format';
 import { TRANSFER_MARKER } from './system-prompt';
 
 export interface ParsedTransferResponse {
@@ -13,14 +14,16 @@ export interface ParsedTransferResponse {
 export function stripTransferMarker(text: string): ParsedTransferResponse {
   const trimmed = text.trim();
   if (!trimmed.includes(TRANSFER_MARKER)) {
-    return { message: trimmed, shouldTransfer: false };
+    return { message: formatOutboundMessage(trimmed), shouldTransfer: false };
   }
 
   const escaped = TRANSFER_MARKER.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const message = trimmed
-    .replace(new RegExp(`\\s*${escaped}\\s*$`), '')
-    .replaceAll(TRANSFER_MARKER, '')
-    .trim();
+  const message = formatOutboundMessage(
+    trimmed
+      .replace(new RegExp(`\\s*${escaped}\\s*$`), '')
+      .replaceAll(TRANSFER_MARKER, '')
+      .trim()
+  );
 
   return { message, shouldTransfer: true };
 }

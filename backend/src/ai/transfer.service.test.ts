@@ -14,6 +14,14 @@ describe('stripTransferMarker', () => {
     assert.equal(r.shouldTransfer, false);
     assert.equal(r.message, 'Hello, how can I help?');
   });
+
+  it('converts markdown links to plain URLs', () => {
+    const r = stripTransferMarker(
+      '[https://online.final.edu.tr/hesaplar/](https://online.final.edu.tr/hesaplar/)'
+    );
+    assert.equal(r.shouldTransfer, false);
+    assert.equal(r.message, 'https://online.final.edu.tr/hesaplar/');
+  });
 });
 
 describe('buildTransferTicketSubject', () => {
