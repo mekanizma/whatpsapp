@@ -187,6 +187,9 @@ router.get('/messages', authenticate, requireCompany, messagesCtrl.getConversati
 router.get('/messages/media/:messageId', authenticate, requireCompany, messagesCtrl.getMessageMedia);
 router.get('/messages/:phone', authenticate, requireCompany, messagesCtrl.getConversationMessages);
 router.patch('/messages/:phone/customer-name', authenticate, requireRole('company_admin'), requireCompany, messagesCtrl.updateCustomerName);
+router.get('/messages/:phone/blacklist', authenticate, requireRole('company_admin'), requireCompany, messagesCtrl.getBlacklistStatus);
+router.post('/messages/:phone/blacklist', authenticate, requireRole('company_admin'), requireCompany, messagesCtrl.addToBlacklist);
+router.delete('/messages/:phone/blacklist', authenticate, requireRole('company_admin'), requireCompany, messagesCtrl.removeFromBlacklist);
 router.post('/messages/:phone/reply', authenticate, requireCompany, messagesCtrl.replyToConversation);
 router.post(
   '/messages/:phone/reply-image',

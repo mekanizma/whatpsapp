@@ -6,7 +6,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Send, Search, Phone, Bot, User, CheckCircle2, Headphones, MessageSquare, ChevronLeft, ImagePlus } from 'lucide-react';
+import { Send, Search, Phone, Bot, User, CheckCircle2, Headphones, MessageSquare, ChevronLeft, ImagePlus, Ban } from 'lucide-react';
 import { api } from '@/services/api';
 import { supabase, supabaseConfigured } from '@/services/supabase';
 import { useAuthStore } from '@/store/authStore';
@@ -83,6 +83,7 @@ export function MessagesPage() {
   const isStaff = userRole === 'staff';
   const canSeeKbSources =
     userRole === 'company_admin' || (userRole === 'super_admin' && isImpersonating);
+  const canManageBlacklist = canSeeKbSources;
 
   const [selectedPhone, setSelectedPhone] = useState<string | null>(phoneParam);
   const [replyText, setReplyText] = useState('');
@@ -183,6 +184,14 @@ export function MessagesPage() {
     refetchInterval: supabaseConfigured ? false : 5000,
   });
 
+  const { data: blacklistStatus } = useQuery({
+    queryKey: ['blacklist', selectedPhone],
+    queryFn: () =>
+      api.get<{ phone: string; blacklisted: boolean }>(`/messages/${encodedPhone}/blacklist`),
+    enabled: !!selectedPhone && canManageBlacklist,
+  });
+  const isBlacklisted = !!blacklistStatus?.blacklisted;
+
   // 24 saat penceresi dolunca UI'yi güncelle (müşteri yeni mesaj atınca sorgu zaten yenilenir)
   useEffect(() => {
     if (!selectedPhone || !activeTicket) return;
@@ -245,6 +254,19 @@ export function MessagesPage() {
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
       setSearchParams({});
       if (isStaff) setSelectedPhone(null);
+    },
+  });
+
+  const blacklistMutation = useMutation({
+    mutationFn: (blacklisted: boolean) =>
+      blacklisted
+        ? api.delete<{ phone: string; blacklisted: boolean }>(`/messages/${encodedPhone}/blacklist`)
+        : api.post<{ phone: string; blacklisted: boolean }>(`/messages/${encodedPhone}/blacklist`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['blacklist', selectedPhone] });
+    },
+    onError: (err: Error) => {
+      setReplyError(err.message || t('messages.blacklistFailed'));
     },
   });
 
@@ -388,19 +410,49 @@ export function MessagesPage() {
                     {formatCustomerLabel(selectedPhone, t)}
                   </p>
                 </div>
-                {hasActiveTicket && ticketId && (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="shrink-0 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-                    onClick={() => resolveMutation.mutate(ticketId)}
-                    disabled={resolveMutation.isPending}
-                  >
-                    <CheckCircle2 className="h-4 w-4" />
-                    <span className="hidden sm:inline">{t('messages.resolved')}</span>
-                  </Button>
-                )}
+                <div className="flex shrink-0 items-center gap-2">
+                  {canManageBlacklist && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className={cn(
+                        'shrink-0',
+                        isBlacklisted
+                          ? 'border-slate-200 text-slate-700 hover:bg-slate-50'
+                          : 'border-red-200 text-red-700 hover:bg-red-50'
+                      )}
+                      onClick={() => blacklistMutation.mutate(isBlacklisted)}
+                      disabled={blacklistMutation.isPending || blacklistStatus === undefined}
+                      title={isBlacklisted ? t('messages.unblacklist') : t('messages.blacklist')}
+                    >
+                      <Ban className="h-4 w-4" />
+                      <span className="hidden sm:inline">
+                        {isBlacklisted ? t('messages.unblacklist') : t('messages.blacklist')}
+                      </span>
+                    </Button>
+                  )}
+                  {hasActiveTicket && ticketId && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="shrink-0 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                      onClick={() => resolveMutation.mutate(ticketId)}
+                      disabled={resolveMutation.isPending}
+                    >
+                      <CheckCircle2 className="h-4 w-4" />
+                      <span className="hidden sm:inline">{t('messages.resolved')}</span>
+                    </Button>
+                  )}
+                </div>
               </div>
+              {canManageBlacklist && isBlacklisted && (
+                <div className="border-t border-red-100 bg-red-50/80 px-4 py-2.5">
+                  <div className="flex items-center gap-2 text-xs text-red-800">
+                    <Ban className="h-3.5 w-3.5 shrink-0" />
+                    <span>{t('messages.blacklistBanner')}</span>
+                  </div>
+                </div>
+              )}
               {hasActiveTicket && activeTicket && (
                 <div className="border-t border-amber-100 bg-amber-50/80 px-4 py-3 space-y-3">
                   <div className="flex flex-wrap items-center gap-2 text-xs text-amber-900">

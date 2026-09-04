@@ -729,7 +729,11 @@
     "imageSizeError": "Resim en fazla 5 MB olabilir",
     "replyWindowClosed": "24 saat cevap verilmediğinden talep kapatılmıştır. Lütfen telefon numarasından arayarak ulaşınız",
     "dateToday": "Bugün",
-    "dateYesterday": "Dün"
+    "dateYesterday": "Dün",
+    "blacklist": "Blacklist",
+    "unblacklist": "Blacklist'ten çıkar",
+    "blacklistBanner": "Bu numara blacklist'te — mesajları alınmaz ve yanıt gönderilmez",
+    "blacklistFailed": "Blacklist işlemi başarısız"
   },
   "tickets": {
     "title": "Destek Talepleri",

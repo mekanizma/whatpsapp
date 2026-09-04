@@ -30,6 +30,7 @@ import {
 import { detectConversationLanguage, t, type ConversationLang } from '../ai/language.service';
 import { uploadMessageMedia } from '../services/message-media.service';
 import { isAiEnabledForAccount } from '../services/company-ai-settings.service';
+import { isPhoneBlacklisted } from '../services/phone-blacklist.service';
 import { detectAngerPrefilter } from '../ai/anger-prefilter.service';
 import {
   buildDedupKey,
@@ -491,6 +492,12 @@ export async function processInboundImage(
     return t(lang, 'photo_received');
   }
 
+  if (await isPhoneBlacklisted(companyId, phone)) {
+    console.log(`[WhatsApp] Blacklist — resim yok sayıldı → ${phone}`);
+    if (whatsappMessageId) markProcessedWaId(companyId, whatsappMessageId);
+    return '';
+  }
+
   return withCustomerLock(`${companyId}:${phone}`, async () => {
     if (whatsappMessageId && (await isMessageAlreadyStored(companyId, whatsappMessageId))) {
       return '';
@@ -688,6 +695,12 @@ export async function processInboundVoiceMessage(
     return buildVoiceMessageReply(detectConversationLanguage('', history));
   }
 
+  if (await isPhoneBlacklisted(companyId, phone)) {
+    console.log(`[WhatsApp] Blacklist — sesli mesaj yok sayıldı → ${phone}`);
+    if (whatsappMessageId) markProcessedWaId(companyId, whatsappMessageId);
+    return '';
+  }
+
   return withCustomerLock(`${companyId}:${phone}`, async () => {
     if (whatsappMessageId && (await isMessageAlreadyStored(companyId, whatsappMessageId))) {
       return '';
@@ -720,6 +733,12 @@ export async function processInboundMessage(
   if (config.demoMode) {
     const lang = detectConversationLanguage(trimmed);
     return t(lang, 'live_demo_welcome');
+  }
+
+  if (await isPhoneBlacklisted(companyId, phone)) {
+    console.log(`[WhatsApp] Blacklist — mesaj yok sayıldı → ${phone}`);
+    if (whatsappMessageId) markProcessedWaId(companyId, whatsappMessageId);
+    return '';
   }
 
   return withCustomerLock(`${companyId}:${phone}`, async () => {

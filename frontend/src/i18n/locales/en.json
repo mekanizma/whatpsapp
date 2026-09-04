@@ -729,7 +729,11 @@
     "imageSizeError": "Image must be 5 MB or smaller",
     "replyWindowClosed": "The request has been closed because no reply was given within 24 hours. Please reach the customer by phone.",
     "dateToday": "Today",
-    "dateYesterday": "Yesterday"
+    "dateYesterday": "Yesterday",
+    "blacklist": "Blacklist",
+    "unblacklist": "Remove from blacklist",
+    "blacklistBanner": "This number is blacklisted — messages are ignored and no reply is sent",
+    "blacklistFailed": "Blacklist action failed"
   },
   "tickets": {
     "title": "Support Tickets",

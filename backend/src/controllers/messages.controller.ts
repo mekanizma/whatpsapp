@@ -23,6 +23,11 @@ import {
   staffCanAccessCustomerPhone,
 } from '../services/department-access.service';
 import { getSupportReplyWindowBlockReason } from '../services/support-reply-window.service';
+import {
+  addPhoneToBlacklist,
+  isPhoneBlacklisted,
+  removePhoneFromBlacklist,
+} from '../services/phone-blacklist.service';
 
 function resolvePhoneParam(phone: string): string {
   const decoded = decodeURIComponent(phone);
@@ -250,6 +255,108 @@ export async function updateCustomerName(req: AuthRequest, res: Response): Promi
     data: { customer_phone: phone, customer_name: name },
     message: 'Müşteri adı güncellendi',
   });
+}
+
+export async function getBlacklistStatus(req: AuthRequest, res: Response): Promise<void> {
+  const phone = resolvePhoneParam(req.params.phone as string);
+
+  if (!req.companyId) {
+    res.status(403).json({ success: false, error: 'Şirket bilgisi bulunamadı' });
+    return;
+  }
+
+  if (isDemoSession(req)) {
+    res.json({ success: true, data: { phone, blacklisted: false } });
+    return;
+  }
+
+  const blacklisted = await isPhoneBlacklisted(req.companyId, phone);
+  res.json({ success: true, data: { phone, blacklisted } });
+}
+
+export async function addToBlacklist(req: AuthRequest, res: Response): Promise<void> {
+  const phone = resolvePhoneParam(req.params.phone as string);
+
+  if (!req.companyId) {
+    res.status(403).json({ success: false, error: 'Şirket bilgisi bulunamadı' });
+    return;
+  }
+
+  if (!phone) {
+    res.status(400).json({ success: false, error: 'Geçersiz numara' });
+    return;
+  }
+
+  if (isDemoSession(req)) {
+    res.json({
+      success: true,
+      data: { phone, blacklisted: true },
+      message: 'Numara blacklist\'e eklendi',
+    });
+    return;
+  }
+
+  try {
+    const row = await addPhoneToBlacklist(req.companyId, phone, req.userId);
+    await logActivity({
+      userId: req.userId,
+      companyId: req.companyId,
+      action: 'phone_blacklisted',
+      entityType: 'customer',
+      metadata: { customer_phone: phone },
+    });
+
+    res.json({
+      success: true,
+      data: { phone: row.phone, blacklisted: true, created_at: row.created_at },
+      message: 'Numara blacklist\'e eklendi',
+    });
+  } catch (err) {
+    res.status(400).json({
+      success: false,
+      error: err instanceof Error ? err.message : 'Blacklist eklenemedi',
+    });
+  }
+}
+
+export async function removeFromBlacklist(req: AuthRequest, res: Response): Promise<void> {
+  const phone = resolvePhoneParam(req.params.phone as string);
+
+  if (!req.companyId) {
+    res.status(403).json({ success: false, error: 'Şirket bilgisi bulunamadı' });
+    return;
+  }
+
+  if (isDemoSession(req)) {
+    res.json({
+      success: true,
+      data: { phone, blacklisted: false },
+      message: 'Numara blacklist\'ten çıkarıldı',
+    });
+    return;
+  }
+
+  try {
+    await removePhoneFromBlacklist(req.companyId, phone);
+    await logActivity({
+      userId: req.userId,
+      companyId: req.companyId,
+      action: 'phone_unblacklisted',
+      entityType: 'customer',
+      metadata: { customer_phone: phone },
+    });
+
+    res.json({
+      success: true,
+      data: { phone, blacklisted: false },
+      message: 'Numara blacklist\'ten çıkarıldı',
+    });
+  } catch (err) {
+    res.status(400).json({
+      success: false,
+      error: err instanceof Error ? err.message : 'Blacklist kaldırılamadı',
+    });
+  }
 }
 
 export async function replyToConversation(req: AuthRequest, res: Response): Promise<void> {
