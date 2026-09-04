@@ -297,7 +297,7 @@ export async function addToBlacklist(req: AuthRequest, res: Response): Promise<v
   }
 
   try {
-    const row = await addPhoneToBlacklist(req.companyId, phone, req.userId);
+    const row = await addPhoneToBlacklist(req.companyId, phone, req.profile?.id ?? null);
     await logActivity({
       userId: req.userId,
       companyId: req.companyId,
