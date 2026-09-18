@@ -196,3 +196,52 @@ export function buildScheduleSummary(schedule: WorkingHoursSchedule, lang: Conve
 
   return parts.join('; ');
 }
+
+function weekdayNowInTimezone(at: Date, timeZone: string): number {
+  const weekday = new Intl.DateTimeFormat('en-US', { timeZone, weekday: 'short' }).format(at);
+  const map: Record<string, number> = {
+    Sun: 0,
+    Mon: 1,
+    Tue: 2,
+    Wed: 3,
+    Thu: 4,
+    Fri: 5,
+    Sat: 6,
+  };
+  return map[weekday] ?? 0;
+}
+
+function clockMinutesInTimezone(at: Date, timeZone: string): number {
+  const fmt = new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  const [hour, minute] = fmt.format(at).split(':').map(Number);
+  return hour * 60 + minute;
+}
+
+/** Şu an (veya verilen an) mesai içinde mi? */
+export function isWithinWorkingHours(
+  schedule: WorkingHoursSchedule,
+  timeZone: string,
+  at: Date = new Date()
+): boolean {
+  const dayKey = weekdayToDayKey(weekdayNowInTimezone(at, timeZone));
+  const day = schedule[dayKey];
+  if (!day) return false;
+
+  const nowMin = clockMinutesInTimezone(at, timeZone);
+  const openMin = parseHm(day.open);
+  const closeMin = parseHm(day.close);
+  if (nowMin < openMin || nowMin >= closeMin) return false;
+
+  for (const br of day.breaks || []) {
+    const breakStart = parseHm(br.start);
+    const breakEnd = parseHm(br.end);
+    if (nowMin >= breakStart && nowMin < breakEnd) return false;
+  }
+
+  return true;
+}

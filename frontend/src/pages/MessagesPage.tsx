@@ -83,7 +83,11 @@ export function MessagesPage() {
   const isStaff = userRole === 'staff';
   const canSeeKbSources =
     userRole === 'company_admin' || (userRole === 'super_admin' && isImpersonating);
-  const canManageBlacklist = canSeeKbSources;
+  // Tüm personel + şirket yöneticisi blacklist yapabilir
+  const canManageBlacklist =
+    userRole === 'company_admin' ||
+    userRole === 'staff' ||
+    (userRole === 'super_admin' && isImpersonating);
 
   const [selectedPhone, setSelectedPhone] = useState<string | null>(phoneParam);
   const [replyText, setReplyText] = useState('');

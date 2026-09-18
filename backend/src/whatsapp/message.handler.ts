@@ -31,6 +31,7 @@ import { detectConversationLanguage, t, type ConversationLang } from '../ai/lang
 import { uploadMessageMedia } from '../services/message-media.service';
 import { isAiEnabledForAccount } from '../services/company-ai-settings.service';
 import { isPhoneBlacklisted } from '../services/phone-blacklist.service';
+import { resolveSupportHandoffPolicy } from '../services/support-hours.service';
 import { detectAngerPrefilter } from '../ai/anger-prefilter.service';
 import {
   buildDedupKey,
@@ -212,7 +213,7 @@ async function deliverForcedHandoff(options: ForcedHandoffOptions): Promise<stri
   }
 
   let messageStatus: 'open' | 'transferred' = 'open';
-  if (transferResult.ticketCreated) {
+  if (transferResult.handoffCompleted) {
     messageStatus = 'transferred';
     markConversationTransferred(companyId, phone);
 
@@ -234,6 +235,7 @@ async function deliverForcedHandoff(options: ForcedHandoffOptions): Promise<stri
         skip_reason: skipReason,
         skipped_ai: skippedAI,
         forced_handoff: true,
+        ticket_created: transferResult.ticketCreated,
       },
     });
 
@@ -301,9 +303,31 @@ async function ensureOpenTransferTicket(
   customerPhone: string,
   customerName: string | null,
   subject: string,
-  departmentId?: string | null
-): Promise<void> {
+  departmentId?: string | null,
+  whatsappAccountId?: string | null
+): Promise<{ ticketCreated: boolean; outOfHoursReply: string | null; handoffCompleted: boolean }> {
   try {
+    const policy = await resolveSupportHandoffPolicy(companyId, whatsappAccountId);
+    if (policy.outsideHours) {
+      let ticketCreated = false;
+      if (policy.createTicket) {
+        const { created } = await createTicketAndNotify(companyId, {
+          customer_phone: customerPhone,
+          customer_name: customerName,
+          subject,
+          priority: 'medium',
+          status: 'open',
+          department_id: departmentId || null,
+        });
+        ticketCreated = created;
+      }
+      return {
+        ticketCreated,
+        outOfHoursReply: policy.replyMessage,
+        handoffCompleted: true,
+      };
+    }
+
     const { created } = await createTicketAndNotify(companyId, {
       customer_phone: customerPhone,
       customer_name: customerName,
@@ -313,9 +337,14 @@ async function ensureOpenTransferTicket(
       department_id: departmentId || null,
     });
 
-    if (!created) return;
+    return {
+      ticketCreated: created,
+      outOfHoursReply: null,
+      handoffCompleted: true,
+    };
   } catch (err) {
     console.error('Ticket oluşturma hatası:', err instanceof Error ? err.message : err);
+    return { ticketCreated: false, outOfHoursReply: null, handoffCompleted: false };
   }
 }
 
@@ -354,15 +383,43 @@ async function handleTransferWithDepartment(
   subject: string,
   whatsappAccountId?: string | null,
   options?: { forceCustomerPrompt?: boolean }
-): Promise<{ reply: string; ticketCreated: boolean }> {
+): Promise<{ reply: string; ticketCreated: boolean; handoffCompleted: boolean }> {
+  const policy = await resolveSupportHandoffPolicy(companyId, whatsappAccountId);
+  if (policy.outsideHours) {
+    const result = await ensureOpenTransferTicket(
+      companyId,
+      phone,
+      customerName,
+      subject,
+      null,
+      whatsappAccountId
+    );
+    return {
+      reply: result.outOfHoursReply || '',
+      ticketCreated: result.ticketCreated,
+      handoffCompleted: result.handoffCompleted,
+    };
+  }
+
   let departments = await getDepartmentsForWhatsAppAccount(companyId, whatsappAccountId);
   if (!departments.length) {
     departments = await listActiveDepartments(companyId);
   }
 
   if (!departments.length) {
-    await ensureOpenTransferTicket(companyId, phone, customerName, subject);
-    return { reply: '', ticketCreated: true };
+    const result = await ensureOpenTransferTicket(
+      companyId,
+      phone,
+      customerName,
+      subject,
+      null,
+      whatsappAccountId
+    );
+    return {
+      reply: result.outOfHoursReply || '',
+      ticketCreated: result.ticketCreated,
+      handoffCompleted: result.handoffCompleted,
+    };
   }
 
   const history = await fetchRecentHistory(companyId, phone);
@@ -381,11 +438,22 @@ async function handleTransferWithDepartment(
       subject,
       customerName,
     });
-    return { reply: routing.promptMessage, ticketCreated: false };
+    return { reply: routing.promptMessage, ticketCreated: false, handoffCompleted: false };
   }
 
-  await ensureOpenTransferTicket(companyId, phone, customerName, subject, routing.departmentId);
-  return { reply: '', ticketCreated: true };
+  const result = await ensureOpenTransferTicket(
+    companyId,
+    phone,
+    customerName,
+    subject,
+    routing.departmentId,
+    whatsappAccountId
+  );
+  return {
+    reply: result.outOfHoursReply || '',
+    ticketCreated: result.ticketCreated,
+    handoffCompleted: result.handoffCompleted,
+  };
 }
 
 function shouldSkipTransferReply(companyId: string, phone: string): boolean {
@@ -401,7 +469,8 @@ async function handleAiDisabledInbound(
   companyId: string,
   phone: string,
   customerName: string | null,
-  messageText: string
+  messageText: string,
+  whatsappAccountId?: string | null
 ): Promise<string> {
   // Sonraki mesajlar: ticket açıkken sessiz kal (bilgi mesajı yalnızca 1 kez)
   if (await hasActiveTransferTicket(companyId, phone)) {
@@ -410,7 +479,16 @@ async function handleAiDisabledInbound(
   }
 
   const subject = buildTransferTicketSubject(messageText, 'ai_disabled');
-  await ensureOpenTransferTicket(companyId, phone, customerName, subject);
+  const result = await ensureOpenTransferTicket(
+    companyId,
+    phone,
+    customerName,
+    subject,
+    null,
+    whatsappAccountId
+  );
+
+  if (!result.handoffCompleted) return '';
 
   await adminClient
     .from('messages')
@@ -423,7 +501,7 @@ async function handleAiDisabledInbound(
   markTransferReply(companyId, phone);
 
   const lang = detectConversationLanguage(messageText);
-  const replyMessage = t(lang, 'ai_disabled_handoff');
+  const replyMessage = result.outOfHoursReply || t(lang, 'ai_disabled_handoff');
 
   await adminClient.from('messages').insert({
     company_id: companyId,
@@ -444,6 +522,8 @@ async function handleAiDisabledInbound(
       skipped_ai: true,
       silent_handoff: false,
       one_time_notice: true,
+      ticket_created: result.ticketCreated,
+      out_of_hours: !!result.outOfHoursReply,
     },
   });
 
@@ -559,7 +639,8 @@ export async function processInboundImage(
         companyId,
         phone,
         customerName,
-        caption || buildImageTransferSubject(undefined, lang)
+        caption || buildImageTransferSubject(undefined, lang),
+        whatsappAccountId
       );
     }
 
@@ -573,12 +654,13 @@ export async function processInboundImage(
       const matched = matchDepartmentFromReply(caption, pendingDept.departments);
       if (matched) {
         clearPendingDepartmentSelection(companyId, phone);
-        await ensureOpenTransferTicket(
+        const handoff = await ensureOpenTransferTicket(
           companyId,
           phone,
           customerName,
           pendingDept.subject,
-          matched.id
+          matched.id,
+          whatsappAccountId
         );
 
         await adminClient
@@ -592,7 +674,9 @@ export async function processInboundImage(
         markConversationTransferred(companyId, phone);
 
         const lang = detectConversationLanguage(caption);
-        const confirmMsg = t(lang, 'dept_forwarded', { department: matched.name });
+        const confirmMsg =
+          handoff.outOfHoursReply ||
+          t(lang, 'dept_forwarded', { department: matched.name });
 
         await adminClient.from('messages').insert({
           company_id: companyId,
@@ -633,14 +717,14 @@ export async function processInboundImage(
     );
 
     let replyMessage = transferResult.reply;
-    if (!replyMessage && transferResult.ticketCreated) {
+    if (!replyMessage && transferResult.handoffCompleted) {
       const lang = detectConversationLanguage(caption);
       replyMessage = t(lang, 'photo_received');
     }
 
     if (!replyMessage) return '';
 
-    if (transferResult.ticketCreated) {
+    if (transferResult.handoffCompleted) {
       await adminClient
         .from('messages')
         .update({ status: 'transferred' })
@@ -659,6 +743,7 @@ export async function processInboundImage(
           customer_phone: phone,
           skip_reason: 'customer_image',
           media: true,
+          ticket_created: transferResult.ticketCreated,
         },
       });
 
@@ -671,7 +756,7 @@ export async function processInboundImage(
       customer_name: customerName,
       message: replyMessage,
       sender_type: 'ai',
-      status: transferResult.ticketCreated ? 'transferred' : 'open',
+      status: transferResult.handoffCompleted ? 'transferred' : 'open',
     });
 
     return replyMessage;
@@ -782,7 +867,7 @@ export async function processInboundMessage(
     }
 
     if (!(await isAiEnabledForAccount(companyId, whatsappAccountId))) {
-      return handleAiDisabledInbound(companyId, phone, customerName, trimmed);
+      return handleAiDisabledInbound(companyId, phone, customerName, trimmed, whatsappAccountId);
     }
 
     const transferredReply = await handleTransferredInbound(
@@ -805,12 +890,13 @@ export async function processInboundMessage(
       const matched = matchDepartmentFromReply(trimmed, pendingDept.departments);
       if (matched) {
         clearPendingDepartmentSelection(companyId, phone);
-        await ensureOpenTransferTicket(
+        const handoff = await ensureOpenTransferTicket(
           companyId,
           phone,
           customerName,
           pendingDept.subject,
-          matched.id
+          matched.id,
+          whatsappAccountId
         );
 
         await adminClient
@@ -824,7 +910,9 @@ export async function processInboundMessage(
         markConversationTransferred(companyId, phone);
 
         const lang = detectConversationLanguage(trimmed);
-        const confirmMsg = t(lang, 'dept_forwarded', { department: matched.name });
+        const confirmMsg =
+          handoff.outOfHoursReply ||
+          t(lang, 'dept_forwarded', { department: matched.name });
 
         await adminClient.from('messages').insert({
           company_id: companyId,
@@ -965,7 +1053,7 @@ export async function processInboundMessage(
         replyMessage = transferResult.reply;
       }
 
-      if (transferResult.ticketCreated) {
+      if (transferResult.handoffCompleted) {
         messageStatus = 'transferred';
         markConversationTransferred(companyId, phone);
 
@@ -986,6 +1074,7 @@ export async function processInboundMessage(
             customer_phone: phone,
             skip_reason: aiResponse.skipReason,
             skipped_ai: aiResponse.skippedAI,
+            ticket_created: transferResult.ticketCreated,
           },
         });
 

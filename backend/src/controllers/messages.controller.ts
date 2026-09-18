@@ -21,6 +21,7 @@ import {
   getAssignedCustomerPhones,
   getStaffRecord,
   staffCanAccessCustomerPhone,
+  staffHasCompanyWideSupportAccess,
 } from '../services/department-access.service';
 import { getSupportReplyWindowBlockReason } from '../services/support-reply-window.service';
 import {
@@ -76,10 +77,13 @@ export async function getConversations(req: AuthRequest, res: Response): Promise
       res.json({ success: true, data: [] });
       return;
     }
-    assignedPhones = await getAssignedCustomerPhones(req.companyId!, staff.id);
-    if (assignedPhones.length === 0) {
-      res.json({ success: true, data: [] });
-      return;
+    // Süper personel tüm destek konuşmalarını atama olmadan görür
+    if (!staffHasCompanyWideSupportAccess(staff)) {
+      assignedPhones = await getAssignedCustomerPhones(req.companyId!, staff.id);
+      if (assignedPhones.length === 0) {
+        res.json({ success: true, data: [] });
+        return;
+      }
     }
   }
 

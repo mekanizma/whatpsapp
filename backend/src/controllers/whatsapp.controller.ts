@@ -150,6 +150,11 @@ export async function updateAccount(req: AuthRequest, res: Response): Promise<vo
     knowledge_base_ids,
     ai_enabled,
     custom_instructions,
+    support_hours_enabled,
+    support_working_hours,
+    support_timezone,
+    out_of_hours_message,
+    out_of_hours_create_ticket,
   } = req.body;
 
   try {
@@ -161,6 +166,11 @@ export async function updateAccount(req: AuthRequest, res: Response): Promise<vo
       knowledge_base_ids,
       ai_enabled,
       custom_instructions,
+      support_hours_enabled,
+      support_working_hours,
+      support_timezone,
+      out_of_hours_message,
+      out_of_hours_create_ticket,
     });
     const [enriched] = await Promise.all([
       listWhatsAppAccounts(req.companyId!).then((list) =>

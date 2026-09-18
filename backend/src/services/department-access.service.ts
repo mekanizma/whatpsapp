@@ -3,7 +3,14 @@
  */
 
 import { adminClient } from '../database/supabase';
+import { isSuperStaffRole, type StaffSubRole } from './staff-permissions.service';
 import type { Department } from '../types';
+
+export type StaffAccessRecord = {
+  id: string;
+  department_id: string | null;
+  role: StaffSubRole;
+};
 
 export async function getStaffDepartmentId(
   companyId: string,
@@ -24,17 +31,22 @@ export async function getStaffDepartmentId(
 export async function getStaffRecord(
   companyId: string,
   profileId?: string
-): Promise<{ id: string; department_id: string | null } | null> {
+): Promise<StaffAccessRecord | null> {
   if (!profileId) return null;
 
   const { data } = await adminClient
     .from('staff')
-    .select('id, department_id')
+    .select('id, department_id, role')
     .eq('company_id', companyId)
     .eq('profile_id', profileId)
     .maybeSingle();
 
-  return data || null;
+  if (!data) return null;
+  return {
+    id: data.id as string,
+    department_id: (data.department_id as string | null) || null,
+    role: (data.role as StaffSubRole) || 'agent',
+  };
 }
 
 /** Aktif taleplerde personele atanan müşteri telefonları */
@@ -58,7 +70,12 @@ export async function getAssignedCustomerPhones(
   ];
 }
 
-/** Personel yalnızca kendisine atanmış müşteri konuşmasına erişebilir */
+/** Süper personel şirket genelinde destek konuşmalarını görebilir */
+export function staffHasCompanyWideSupportAccess(staff: StaffAccessRecord | null): boolean {
+  return !!staff && isSuperStaffRole(staff.role);
+}
+
+/** Personel yalnızca kendisine atanmış müşteri konuşmasına erişebilir (süper personel hariç) */
 export async function staffCanAccessCustomerPhone(
   companyId: string,
   profileId: string | undefined,
@@ -66,6 +83,8 @@ export async function staffCanAccessCustomerPhone(
 ): Promise<boolean> {
   const staff = await getStaffRecord(companyId, profileId);
   if (!staff) return false;
+
+  if (staffHasCompanyWideSupportAccess(staff)) return true;
 
   const { data } = await adminClient
     .from('tickets')

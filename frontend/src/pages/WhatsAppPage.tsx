@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Smartphone, Wifi, WifiOff, QrCode, Send, Unplug, Cloud, Copy, Check,
-  Plus, Trash2, RefreshCw, Building2, Star, Power, ChevronDown, Link2, Save, Bot,
+  Plus, Trash2, RefreshCw, Building2, Star, Power, ChevronDown, Link2, Save, Bot, Pencil, Clock,
 } from 'lucide-react';
 import { api } from '@/services/api';
 import {
@@ -26,6 +26,47 @@ interface Department {
   name: string;
   description: string | null;
   is_active: boolean;
+}
+
+type DayKey = 'sun' | 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat';
+
+interface DaySchedule {
+  open: string;
+  close: string;
+}
+
+type WorkingHoursSchedule = Record<DayKey, DaySchedule | null>;
+
+const DAY_KEYS: DayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+
+const DEFAULT_SUPPORT_HOURS: WorkingHoursSchedule = {
+  sun: null,
+  mon: { open: '09:00', close: '18:00' },
+  tue: { open: '09:00', close: '18:00' },
+  wed: { open: '09:00', close: '18:00' },
+  thu: { open: '09:00', close: '18:00' },
+  fri: { open: '09:00', close: '18:00' },
+  sat: { open: '09:00', close: '14:00' },
+};
+
+function parseSupportHours(raw: unknown): WorkingHoursSchedule {
+  const base: WorkingHoursSchedule = { ...DEFAULT_SUPPORT_HOURS };
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return base;
+  const obj = raw as Record<string, unknown>;
+  for (const key of DAY_KEYS) {
+    const val = obj[key];
+    if (val === null) {
+      base[key] = null;
+      continue;
+    }
+    if (val && typeof val === 'object' && !Array.isArray(val)) {
+      const day = val as Record<string, unknown>;
+      if (typeof day.open === 'string' && typeof day.close === 'string') {
+        base[key] = { open: day.open, close: day.close };
+      }
+    }
+  }
+  return base;
 }
 
 interface QrSession {
@@ -57,6 +98,11 @@ interface WhatsAppAccount {
   knowledge_base_ids?: string[];
   live_connected?: boolean;
   reconnecting?: boolean;
+  support_hours_enabled?: boolean;
+  support_working_hours?: WorkingHoursSchedule | Record<string, unknown> | null;
+  support_timezone?: string | null;
+  out_of_hours_message?: string | null;
+  out_of_hours_create_ticket?: boolean;
 }
 
 interface AccountsResponse {
@@ -84,6 +130,8 @@ export function WhatsAppPage() {
   const [activeQr, setActiveQr] = useState<{ accountId: string; session: QrSession } | null>(null);
   const [expandedAccount, setExpandedAccount] = useState<string | null>(null);
   const [newDeptName, setNewDeptName] = useState('');
+  const [editingDeptId, setEditingDeptId] = useState<string | null>(null);
+  const [editingDeptName, setEditingDeptName] = useState('');
   const [testState, setTestState] = useState<Record<string, { phone: string; message: string; feedback?: { type: 'success' | 'error'; text: string } }>>({});
   const [cloudForms, setCloudForms] = useState<Record<string, CloudApiFormState>>({});
   const [connectionModes, setConnectionModes] = useState<Record<string, 'qr' | 'api'>>({});
@@ -155,6 +203,11 @@ export function WhatsAppPage() {
       ai_enabled?: boolean | null;
       custom_instructions?: string | null;
       label?: string;
+      support_hours_enabled?: boolean;
+      support_working_hours?: WorkingHoursSchedule;
+      support_timezone?: string | null;
+      out_of_hours_message?: string | null;
+      out_of_hours_create_ticket?: boolean;
     }) => api.patch(`/whatsapp/accounts/${id}`, body),
     onSuccess: invalidate,
   });
@@ -202,6 +255,17 @@ export function WhatsAppPage() {
     mutationFn: (name: string) => api.post<Department>('/departments', { name }),
     onSuccess: () => {
       setNewDeptName('');
+      queryClient.invalidateQueries({ queryKey: ['departments'] });
+      invalidate();
+    },
+  });
+
+  const updateDeptMutation = useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) =>
+      api.patch<Department>(`/departments/${id}`, { name }),
+    onSuccess: () => {
+      setEditingDeptId(null);
+      setEditingDeptName('');
       queryClient.invalidateQueries({ queryKey: ['departments'] });
       invalidate();
     },
@@ -395,6 +459,9 @@ export function WhatsAppPage() {
                 onKnowledgeChange={(ids) =>
                   updateAccountMutation.mutate({ id: account.id, knowledge_base_ids: ids })
                 }
+                onSaveSupportHours={(settings) =>
+                  updateAccountMutation.mutate({ id: account.id, ...settings })
+                }
                 onCloudConnect={(form) => cloudConnectMutation.mutate({ accountId: account.id, form })}
                 onCancelQr={cancelQr}
                 onRefreshQr={() => startQrMutation.mutate(account.id)}
@@ -408,6 +475,11 @@ export function WhatsAppPage() {
                   (updateAccountMutation.variables?.ai_enabled !== undefined ||
                     updateAccountMutation.variables?.custom_instructions !== undefined ||
                     updateAccountMutation.variables?.knowledge_base_ids !== undefined)
+                }
+                isSavingSupportHours={
+                  updateAccountMutation.isPending &&
+                  updateAccountMutation.variables?.id === account.id &&
+                  updateAccountMutation.variables?.support_hours_enabled !== undefined
                 }
                 onSendTest={() => sendTest(account.id)}
               />
@@ -442,21 +514,76 @@ export function WhatsAppPage() {
               </Button>
             </div>
             {departments.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-col gap-2">
                 {departments.map((dept) => (
-                  <Badge key={dept.id} variant="default" className="gap-1.5 px-3 py-1.5 text-sm">
-                    {dept.name}
-                    <button
-                      type="button"
-                      className="rounded-full p-0.5 text-slate-400 transition hover:bg-red-50 hover:text-red-500"
-                      onClick={() => {
-                        if (window.confirm(t('whatsapp.deleteDeptConfirm'))) deleteDeptMutation.mutate(dept.id);
-                      }}
-                      aria-label={t('common.delete')}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
-                  </Badge>
+                  <div
+                    key={dept.id}
+                    className="flex min-h-[44px] flex-col gap-2 rounded-xl bg-slate-50 px-3 py-2 ring-1 ring-slate-200/60 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    {editingDeptId === dept.id ? (
+                      <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center">
+                        <Input
+                          value={editingDeptName}
+                          onChange={(e) => setEditingDeptName(e.target.value)}
+                          className="h-11 flex-1"
+                          autoFocus
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            className="h-11 flex-1 sm:flex-none"
+                            disabled={!editingDeptName.trim() || updateDeptMutation.isPending}
+                            onClick={() =>
+                              updateDeptMutation.mutate({ id: dept.id, name: editingDeptName.trim() })
+                            }
+                          >
+                            {updateDeptMutation.isPending ? <Spinner /> : <Save className="h-4 w-4" />}
+                            {t('common.save')}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="h-11 flex-1 sm:flex-none"
+                            onClick={() => {
+                              setEditingDeptId(null);
+                              setEditingDeptName('');
+                            }}
+                          >
+                            {t('common.cancel')}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        <span className="text-sm font-medium text-slate-900">{dept.name}</span>
+                        <div className="flex gap-1">
+                          <button
+                            type="button"
+                            className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-slate-500 transition hover:bg-white hover:text-primary"
+                            onClick={() => {
+                              setEditingDeptId(dept.id);
+                              setEditingDeptName(dept.name);
+                            }}
+                            aria-label={t('whatsapp.renameDepartment')}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-slate-400 transition hover:bg-red-50 hover:text-red-500"
+                            onClick={() => {
+                              if (window.confirm(t('whatsapp.deleteDeptConfirm'))) {
+                                deleteDeptMutation.mutate(dept.id);
+                              }
+                            }}
+                            aria-label={t('common.delete')}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
                 ))}
               </div>
             ) : (
@@ -538,6 +665,12 @@ interface AccountCardProps {
   onAiEnabledChange: (enabled: boolean | null) => void;
   onSaveCustomInstructions: (text: string) => void;
   onKnowledgeChange: (ids: string[]) => void;
+  onSaveSupportHours: (settings: {
+    support_hours_enabled: boolean;
+    support_working_hours: WorkingHoursSchedule;
+    out_of_hours_message: string | null;
+    out_of_hours_create_ticket: boolean;
+  }) => void;
   onCloudConnect: (form: CloudApiFormState) => void;
   onCancelQr: () => void;
   onRefreshQr: () => void;
@@ -546,6 +679,7 @@ interface AccountCardProps {
   isDisconnecting: boolean;
   isSavingLabel: boolean;
   isSavingAi: boolean;
+  isSavingSupportHours: boolean;
   onSendTest: () => void;
 }
 
@@ -555,12 +689,21 @@ function AccountCard({
   activeQr, cloudForm, cloudFeedback, testState, onCloudFormChange, onTestChange,
   onStartQr, onDisconnect, onDelete, onToggleActive, onSetDefault,
   onDepartmentsChange, onAiEnabledChange, onSaveCustomInstructions, onKnowledgeChange,
-  onCloudConnect, onCancelQr, onRefreshQr,
-  isQrPending, isCloudPending, isDisconnecting, isSavingLabel, isSavingAi, onSaveLabel, onSendTest,
+  onSaveSupportHours, onCloudConnect, onCancelQr, onRefreshQr,
+  isQrPending, isCloudPending, isDisconnecting, isSavingLabel, isSavingAi,
+  isSavingSupportHours, onSaveLabel, onSendTest,
 }: AccountCardProps) {
   const { t } = useTranslation();
   const [labelDraft, setLabelDraft] = useState(account.label || '');
   const [instructionsDraft, setInstructionsDraft] = useState(account.custom_instructions || '');
+  const [hoursEnabled, setHoursEnabled] = useState(!!account.support_hours_enabled);
+  const [hoursSchedule, setHoursSchedule] = useState<WorkingHoursSchedule>(() =>
+    parseSupportHours(account.support_working_hours)
+  );
+  const [oohMessage, setOohMessage] = useState(account.out_of_hours_message || '');
+  const [oohCreateTicket, setOohCreateTicket] = useState(
+    account.out_of_hours_create_ticket !== false
+  );
   const isConnected = account.status === 'connected';
   const isReconnecting = account.status === 'reconnecting' || account.reconnecting;
   const isCloudConnected = isConnected && account.connection_type === 'api';
@@ -588,6 +731,18 @@ function AccountCard({
     setInstructionsDraft(account.custom_instructions || '');
   }, [account.id, account.custom_instructions]);
 
+  useEffect(() => {
+    setHoursEnabled(!!account.support_hours_enabled);
+    setHoursSchedule(parseSupportHours(account.support_working_hours));
+    setOohMessage(account.out_of_hours_message || '');
+    setOohCreateTicket(account.out_of_hours_create_ticket !== false);
+  }, [
+    account.id,
+    account.support_hours_enabled,
+    account.support_working_hours,
+    account.out_of_hours_message,
+    account.out_of_hours_create_ticket,
+  ]);
   const statusBadge = isConnected ? (
     <Badge variant="success"><Wifi className="mr-1 h-3 w-3" /> {t('whatsapp.connected')}</Badge>
   ) : isReconnecting ? (
@@ -888,6 +1043,150 @@ function AccountCard({
                   {t('whatsapp.knowledgeSelected', { count: selectedKbIds.length })}
                 </p>
               )}
+            </div>
+          </SectionPanel>
+
+          <SectionPanel title={t('whatsapp.sectionSupportHours')} icon={Clock}>
+            <p className="mb-4 text-xs text-slate-500">{t('whatsapp.sectionSupportHoursHint')}</p>
+
+            <div className="mb-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-slate-900">{t('whatsapp.supportHoursEnabled')}</p>
+                <p className="text-xs text-slate-500">{t('whatsapp.supportHoursEnabledHint')}</p>
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={hoursEnabled}
+                onClick={() => setHoursEnabled((v) => !v)}
+                className={cn(
+                  'relative h-8 w-14 shrink-0 rounded-full transition-colors',
+                  hoursEnabled ? 'bg-primary' : 'bg-slate-300'
+                )}
+              >
+                <span
+                  className={cn(
+                    'absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-transform',
+                    hoursEnabled ? 'translate-x-[1.35rem]' : 'translate-x-1'
+                  )}
+                />
+              </button>
+            </div>
+
+            {hoursEnabled && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  {DAY_KEYS.map((day) => {
+                    const daySched = hoursSchedule[day];
+                    const open = !!daySched;
+                    return (
+                      <div
+                        key={day}
+                        className="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 sm:flex-row sm:items-center"
+                      >
+                        <label className="flex min-h-[44px] items-center gap-2 sm:w-28">
+                          <input
+                            type="checkbox"
+                            checked={open}
+                            onChange={(e) => {
+                              setHoursSchedule((prev) => ({
+                                ...prev,
+                                [day]: e.target.checked
+                                  ? { open: '09:00', close: '18:00' }
+                                  : null,
+                              }));
+                            }}
+                            className="h-4 w-4 rounded border-slate-300"
+                          />
+                          <span className="text-sm font-medium text-slate-800">
+                            {t(`whatsapp.days.${day}`)}
+                          </span>
+                        </label>
+                        {open && daySched ? (
+                          <div className="flex flex-1 flex-wrap items-center gap-2">
+                            <Input
+                              type="time"
+                              value={daySched.open}
+                              onChange={(e) =>
+                                setHoursSchedule((prev) => ({
+                                  ...prev,
+                                  [day]: { ...daySched, open: e.target.value },
+                                }))
+                              }
+                              className="h-11 w-full sm:w-32"
+                            />
+                            <span className="text-slate-400">–</span>
+                            <Input
+                              type="time"
+                              value={daySched.close}
+                              onChange={(e) =>
+                                setHoursSchedule((prev) => ({
+                                  ...prev,
+                                  [day]: { ...daySched, close: e.target.value },
+                                }))
+                              }
+                              className="h-11 w-full sm:w-32"
+                            />
+                          </div>
+                        ) : (
+                          <span className="text-sm text-slate-400">{t('whatsapp.dayClosed')}</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor={`wa-ooh-msg-${account.id}`}>
+                    {t('whatsapp.outOfHoursMessage')}
+                  </Label>
+                  <Textarea
+                    id={`wa-ooh-msg-${account.id}`}
+                    value={oohMessage}
+                    onChange={(e) => setOohMessage(e.target.value)}
+                    placeholder={t('whatsapp.outOfHoursMessagePlaceholder')}
+                    rows={3}
+                    className="min-h-[80px] resize-y"
+                  />
+                  <p className="text-xs text-slate-500">{t('whatsapp.outOfHoursMessageHint')}</p>
+                </div>
+
+                <label className="flex min-h-[44px] items-start gap-3 rounded-xl border border-slate-200 bg-white p-3">
+                  <input
+                    type="checkbox"
+                    checked={oohCreateTicket}
+                    onChange={(e) => setOohCreateTicket(e.target.checked)}
+                    className="mt-1 h-4 w-4 rounded border-slate-300"
+                  />
+                  <span>
+                    <span className="block text-sm font-medium text-slate-900">
+                      {t('whatsapp.outOfHoursCreateTicket')}
+                    </span>
+                    <span className="block text-xs text-slate-500">
+                      {t('whatsapp.outOfHoursCreateTicketHint')}
+                    </span>
+                  </span>
+                </label>
+              </div>
+            )}
+
+            <div className="mt-4 flex justify-end">
+              <Button
+                type="button"
+                className="h-11 w-full sm:w-auto"
+                disabled={isSavingSupportHours}
+                onClick={() =>
+                  onSaveSupportHours({
+                    support_hours_enabled: hoursEnabled,
+                    support_working_hours: hoursSchedule,
+                    out_of_hours_message: oohMessage.trim() || null,
+                    out_of_hours_create_ticket: oohCreateTicket,
+                  })
+                }
+              >
+                {isSavingSupportHours ? <Spinner /> : <Save className="h-4 w-4" />}
+                {t('common.save')}
+              </Button>
             </div>
           </SectionPanel>
 

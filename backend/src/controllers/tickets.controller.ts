@@ -10,9 +10,9 @@ import { clearTransferState, normalizePhoneNumber } from '../whatsapp/message.ha
 import { createTicketAndNotify, notifyTicketRecipients } from '../services/ticket-notification.service';
 import { getSupportReplyWindowStatus } from '../services/support-reply-window.service';
 import {
-  getStaffDepartmentId,
   getStaffRecord,
   resolveStaffIdForProfile,
+  staffHasCompanyWideSupportAccess,
   validateDepartmentBelongsToCompany,
 } from '../services/department-access.service';
 import { mapTicketRow } from '../utils/supabase-join';
@@ -45,6 +45,8 @@ async function canUserTransferTicket(
 
   const staff = await getStaffRecord(req.companyId!, req.profile?.id);
   if (!staff) return false;
+
+  if (staffHasCompanyWideSupportAccess(staff)) return true;
 
   if (ticket.status === 'in_progress' && ticket.assigned_staff === staff.id) return true;
 
@@ -80,45 +82,51 @@ export async function getTickets(req: AuthRequest, res: Response): Promise<void>
   }
 
   if (req.role === 'staff') {
-    const staffDeptId = await getStaffDepartmentId(req.companyId!, req.profile?.id);
-    const staffId = await getStaffIdForProfile(req.companyId!, req.profile?.id);
+    const staff = await getStaffRecord(req.companyId!, req.profile?.id);
+    const staffId = staff?.id || null;
+    const isSuperStaff = staffHasCompanyWideSupportAccess(staff);
 
-    const wantsResolved =
-      view === 'resolved' || status === 'resolved' || status === 'closed';
+    // Süper personel tüm talepleri şirket yöneticisi gibi görür
+    if (!isSuperStaff) {
+      const staffDeptId = staff?.department_id || null;
 
-    if (wantsResolved) {
-      // Personel yalnızca kendi çözdüğü / atandığı geçmiş talepleri görür
-      if (!staffId) {
-        res.json({ success: true, data: [] });
-        return;
-      }
-      query = query.or(`assigned_staff.eq.${staffId},last_assigned_staff.eq.${staffId}`);
-    } else if (view === 'open' || !status) {
-      // Açık + işlemdeki talepler (departman / atama kuralları)
-      if (staffDeptId) {
-        query = query.eq('department_id', staffDeptId);
-        if (staffId) {
+      const wantsResolved =
+        view === 'resolved' || status === 'resolved' || status === 'closed';
+
+      if (wantsResolved) {
+        // Personel yalnızca kendi çözdüğü / atandığı geçmiş talepleri görür
+        if (!staffId) {
+          res.json({ success: true, data: [] });
+          return;
+        }
+        query = query.or(`assigned_staff.eq.${staffId},last_assigned_staff.eq.${staffId}`);
+      } else if (view === 'open' || !status) {
+        // Açık + işlemdeki talepler (departman / atama kuralları)
+        if (staffDeptId) {
+          query = query.eq('department_id', staffDeptId);
+          if (staffId) {
+            query = query.or(
+              `status.eq.open,and(assigned_staff.eq.${staffId},status.eq.in_progress)`
+            );
+          } else {
+            query = query.eq('status', 'open');
+          }
+        } else if (staffId) {
           query = query.or(
             `status.eq.open,and(assigned_staff.eq.${staffId},status.eq.in_progress)`
           );
         } else {
           query = query.eq('status', 'open');
         }
-      } else if (staffId) {
-        query = query.or(
-          `status.eq.open,and(assigned_staff.eq.${staffId},status.eq.in_progress)`
-        );
-      } else {
-        query = query.eq('status', 'open');
+      } else if (status === 'open') {
+        if (staffDeptId) query = query.eq('department_id', staffDeptId);
+      } else if (status === 'in_progress') {
+        if (!staffId) {
+          res.json({ success: true, data: [] });
+          return;
+        }
+        query = query.eq('assigned_staff', staffId);
       }
-    } else if (status === 'open') {
-      if (staffDeptId) query = query.eq('department_id', staffDeptId);
-    } else if (status === 'in_progress') {
-      if (!staffId) {
-        res.json({ success: true, data: [] });
-        return;
-      }
-      query = query.eq('assigned_staff', staffId);
     }
   }
 
@@ -146,12 +154,15 @@ export async function getActiveTicketByPhone(req: AuthRequest, res: Response): P
     .limit(1);
 
   if (req.role === 'staff') {
-    const staffId = await getStaffIdForProfile(req.companyId!, req.profile?.id);
-    if (!staffId) {
+    const staff = await getStaffRecord(req.companyId!, req.profile?.id);
+    if (!staff) {
       res.json({ success: true, data: null });
       return;
     }
-    query = query.eq('assigned_staff', staffId);
+    // Süper personel atama olmadan aktif talebi görebilir
+    if (!staffHasCompanyWideSupportAccess(staff)) {
+      query = query.eq('assigned_staff', staff.id);
+    }
   }
 
   const { data, error } = await query.maybeSingle();
@@ -264,7 +275,9 @@ export async function claimTicket(req: AuthRequest, res: Response): Promise<void
     return;
   }
 
-  const staffDeptId = await getStaffDepartmentId(req.companyId!, req.profile?.id);
+  const staff = await getStaffRecord(req.companyId!, req.profile?.id);
+  const staffDeptId = staff?.department_id || null;
+  const isSuperStaff = staffHasCompanyWideSupportAccess(staff);
 
   let claimQuery = adminClient
     .from('tickets')
@@ -278,7 +291,8 @@ export async function claimTicket(req: AuthRequest, res: Response): Promise<void
     .eq('company_id', req.companyId)
     .in('status', ['open', 'in_progress']);
 
-  if (req.role === 'staff' && staffDeptId) {
+  // Süper personel tüm departmanlardan talep alabilir
+  if (req.role === 'staff' && staffDeptId && !isSuperStaff) {
     claimQuery = claimQuery.eq('department_id', staffDeptId);
   }
 

@@ -67,6 +67,11 @@ export interface WhatsAppConfig {
   ai_enabled?: boolean | null;
   /** NULL = şirket custom_instructions miras */
   custom_instructions?: string | null;
+  support_hours_enabled?: boolean;
+  support_working_hours?: Record<string, unknown> | null;
+  support_timezone?: string | null;
+  out_of_hours_message?: string | null;
+  out_of_hours_create_ticket?: boolean;
   last_synced_at?: string | null;
   created_at: string;
   updated_at: string;

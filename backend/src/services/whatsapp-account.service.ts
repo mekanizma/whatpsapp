@@ -8,6 +8,7 @@ import { normalizePlanType } from './plan-capabilities.service';
 import { invalidateAccountAiSettingsCache } from './company-ai-settings.service';
 import { invalidateStaticSystemPromptCache } from '../ai/admin-prompt-builder';
 import { invalidateCompanyCache } from '../ai/openai.service';
+import { validateWorkingHoursForWrite } from './working-hours.service';
 
 export const WHATSAPP_LINE_LIMITS: Record<string, number> = {
   starter: 1,
@@ -109,7 +110,7 @@ export async function listWhatsAppAccounts(companyId: string): Promise<WhatsAppA
   const { data, error } = await adminClient
     .from('whatsapp_configs')
     .select(
-      'id, company_id, label, phone_number, profile_name, business_account_id, status, is_active, is_default, ai_enabled, custom_instructions, last_synced_at, created_at, updated_at'
+      'id, company_id, label, phone_number, profile_name, business_account_id, status, is_active, is_default, ai_enabled, custom_instructions, support_hours_enabled, support_working_hours, support_timezone, out_of_hours_message, out_of_hours_create_ticket, last_synced_at, created_at, updated_at'
     )
     .eq('company_id', companyId)
     .order('is_default', { ascending: false })
@@ -210,6 +211,11 @@ export async function updateWhatsAppAccount(
     status?: WhatsAppStatus;
     profile_name?: string | null;
     last_synced_at?: string | null;
+    support_hours_enabled?: boolean;
+    support_working_hours?: Record<string, unknown> | null;
+    support_timezone?: string | null;
+    out_of_hours_message?: string | null;
+    out_of_hours_create_ticket?: boolean;
   }
 ): Promise<WhatsAppAccount> {
   const account = await getWhatsAppAccount(companyId, accountId);
@@ -233,6 +239,32 @@ export async function updateWhatsAppAccount(
         ? updates.custom_instructions.trim()
         : updates.custom_instructions;
     patch.custom_instructions = trimmed || null;
+  }
+  if (updates.support_hours_enabled !== undefined) {
+    patch.support_hours_enabled = !!updates.support_hours_enabled;
+  }
+  if (updates.support_working_hours !== undefined) {
+    if (updates.support_working_hours === null) {
+      patch.support_working_hours = {};
+    } else {
+      const validated = validateWorkingHoursForWrite(updates.support_working_hours);
+      if (!validated.ok) throw new Error(validated.error);
+      patch.support_working_hours = validated.data;
+    }
+  }
+  if (updates.support_timezone !== undefined) {
+    const tz = typeof updates.support_timezone === 'string' ? updates.support_timezone.trim() : '';
+    patch.support_timezone = tz || null;
+  }
+  if (updates.out_of_hours_message !== undefined) {
+    const msg =
+      typeof updates.out_of_hours_message === 'string'
+        ? updates.out_of_hours_message.trim()
+        : '';
+    patch.out_of_hours_message = msg || null;
+  }
+  if (updates.out_of_hours_create_ticket !== undefined) {
+    patch.out_of_hours_create_ticket = !!updates.out_of_hours_create_ticket;
   }
 
   if (updates.is_default === true) {
