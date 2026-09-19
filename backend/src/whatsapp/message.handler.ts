@@ -240,6 +240,11 @@ async function deliverForcedHandoff(options: ForcedHandoffOptions): Promise<stri
     });
 
     console.log(`[WhatsApp] Temsilciye aktarıldı → ${phone} (sebep=${skipReason})`);
+  } else if (transferResult.outsideHours && transferResult.reply) {
+    markTransferReply(companyId, phone);
+    console.log(
+      `[WhatsApp] Mesai dışı bilgilendirme (forced) — AI devam edecek → ${phone}`
+    );
   }
 
   await adminClient.from('messages').insert({
@@ -304,27 +309,39 @@ async function ensureOpenTransferTicket(
   customerName: string | null,
   subject: string,
   departmentId?: string | null,
-  whatsappAccountId?: string | null
-): Promise<{ ticketCreated: boolean; outOfHoursReply: string | null; handoffCompleted: boolean }> {
+  whatsappAccountId?: string | null,
+  options?: { completeHandoffOutsideHours?: boolean }
+): Promise<{
+  ticketCreated: boolean;
+  outOfHoursReply: string | null;
+  handoffCompleted: boolean;
+  outsideHours: boolean;
+}> {
   try {
     const policy = await resolveSupportHandoffPolicy(companyId, whatsappAccountId);
     if (policy.outsideHours) {
       let ticketCreated = false;
       if (policy.createTicket) {
-        const { created } = await createTicketAndNotify(companyId, {
-          customer_phone: customerPhone,
-          customer_name: customerName,
-          subject,
-          priority: 'medium',
-          status: 'open',
-          department_id: departmentId || null,
-        });
-        ticketCreated = created;
+        const alreadyOpen = await hasActiveTransferTicket(companyId, customerPhone);
+        if (!alreadyOpen) {
+          const { created } = await createTicketAndNotify(companyId, {
+            customer_phone: customerPhone,
+            customer_name: customerName,
+            subject,
+            priority: 'medium',
+            status: 'open',
+            department_id: departmentId || null,
+          });
+          ticketCreated = created;
+        }
       }
+      // Mesai dışı: varsayılan soft handoff — AI cevap vermeye devam eder.
+      // (AI kapalı vb. senaryolarda completeHandoffOutsideHours ile tam aktarım)
       return {
         ticketCreated,
         outOfHoursReply: policy.replyMessage,
-        handoffCompleted: true,
+        handoffCompleted: !!options?.completeHandoffOutsideHours,
+        outsideHours: true,
       };
     }
 
@@ -341,11 +358,36 @@ async function ensureOpenTransferTicket(
       ticketCreated: created,
       outOfHoursReply: null,
       handoffCompleted: true,
+      outsideHours: false,
     };
   } catch (err) {
     console.error('Ticket oluşturma hatası:', err instanceof Error ? err.message : err);
-    return { ticketCreated: false, outOfHoursReply: null, handoffCompleted: false };
+    return {
+      ticketCreated: false,
+      outOfHoursReply: null,
+      handoffCompleted: false,
+      outsideHours: false,
+    };
   }
+}
+
+/** Aktif ticket varken AI'yi atla — mesai dışında soft handoff ticket'ları AI'yi durdurmaz */
+async function shouldSkipAiForActiveTicket(
+  companyId: string,
+  phone: string,
+  whatsappAccountId?: string | null
+): Promise<boolean> {
+  if (!(await hasActiveTransferTicket(companyId, phone, { excludeAiDisabled: true }))) {
+    return false;
+  }
+  const policy = await resolveSupportHandoffPolicy(companyId, whatsappAccountId);
+  if (policy.outsideHours) {
+    console.log(
+      `[WhatsApp] Aktif ticket var ama mesai dışı — AI devam ediyor → ${phone}`
+    );
+    return false;
+  }
+  return true;
 }
 
 async function fetchRecentHistory(
@@ -383,7 +425,12 @@ async function handleTransferWithDepartment(
   subject: string,
   whatsappAccountId?: string | null,
   options?: { forceCustomerPrompt?: boolean }
-): Promise<{ reply: string; ticketCreated: boolean; handoffCompleted: boolean }> {
+): Promise<{
+  reply: string;
+  ticketCreated: boolean;
+  handoffCompleted: boolean;
+  outsideHours: boolean;
+}> {
   const policy = await resolveSupportHandoffPolicy(companyId, whatsappAccountId);
   if (policy.outsideHours) {
     const result = await ensureOpenTransferTicket(
@@ -398,6 +445,7 @@ async function handleTransferWithDepartment(
       reply: result.outOfHoursReply || '',
       ticketCreated: result.ticketCreated,
       handoffCompleted: result.handoffCompleted,
+      outsideHours: true,
     };
   }
 
@@ -419,6 +467,7 @@ async function handleTransferWithDepartment(
       reply: result.outOfHoursReply || '',
       ticketCreated: result.ticketCreated,
       handoffCompleted: result.handoffCompleted,
+      outsideHours: result.outsideHours,
     };
   }
 
@@ -438,7 +487,12 @@ async function handleTransferWithDepartment(
       subject,
       customerName,
     });
-    return { reply: routing.promptMessage, ticketCreated: false, handoffCompleted: false };
+    return {
+      reply: routing.promptMessage,
+      ticketCreated: false,
+      handoffCompleted: false,
+      outsideHours: false,
+    };
   }
 
   const result = await ensureOpenTransferTicket(
@@ -453,6 +507,7 @@ async function handleTransferWithDepartment(
     reply: result.outOfHoursReply || '',
     ticketCreated: result.ticketCreated,
     handoffCompleted: result.handoffCompleted,
+    outsideHours: result.outsideHours,
   };
 }
 
@@ -485,7 +540,8 @@ async function handleAiDisabledInbound(
     customerName,
     subject,
     null,
-    whatsappAccountId
+    whatsappAccountId,
+    { completeHandoffOutsideHours: true }
   );
 
   if (!result.handoffCompleted) return '';
@@ -644,7 +700,7 @@ export async function processInboundImage(
       );
     }
 
-    if (await hasActiveTransferTicket(companyId, phone, { excludeAiDisabled: true })) {
+    if (await shouldSkipAiForActiveTicket(companyId, phone, whatsappAccountId)) {
       console.log(`[WhatsApp] Aktif ticket — resim kaydedildi, yanıt yok → ${phone}`);
       return '';
     }
@@ -663,29 +719,42 @@ export async function processInboundImage(
           whatsappAccountId
         );
 
-        await adminClient
-          .from('messages')
-          .update({ status: 'transferred' })
-          .eq('company_id', companyId)
-          .eq('customer_phone', phone)
-          .eq('status', 'open');
-
-        markTransferReply(companyId, phone);
-        markConversationTransferred(companyId, phone);
-
         const lang = detectConversationLanguage(caption);
         const confirmMsg =
           handoff.outOfHoursReply ||
           t(lang, 'dept_forwarded', { department: matched.name });
 
-        await adminClient.from('messages').insert({
-          company_id: companyId,
-          customer_phone: phone,
-          customer_name: customerName,
-          message: confirmMsg,
-          sender_type: 'ai',
-          status: 'transferred',
-        });
+        if (handoff.handoffCompleted) {
+          await adminClient
+            .from('messages')
+            .update({ status: 'transferred' })
+            .eq('company_id', companyId)
+            .eq('customer_phone', phone)
+            .eq('status', 'open');
+
+          markTransferReply(companyId, phone);
+          markConversationTransferred(companyId, phone);
+
+          await adminClient.from('messages').insert({
+            company_id: companyId,
+            customer_phone: phone,
+            customer_name: customerName,
+            message: confirmMsg,
+            sender_type: 'ai',
+            status: 'transferred',
+          });
+        } else {
+          // Mesai dışı soft handoff: temsilci onay mesajı yok, sadece mesai bilgilendirmesi
+          markTransferReply(companyId, phone);
+          await adminClient.from('messages').insert({
+            company_id: companyId,
+            customer_phone: phone,
+            customer_name: customerName,
+            message: confirmMsg,
+            sender_type: 'ai',
+            status: 'open',
+          });
+        }
 
         return confirmMsg;
       }
@@ -748,6 +817,11 @@ export async function processInboundImage(
       });
 
       console.log(`[WhatsApp] Resim ile temsilciye aktarıldı → ${phone}`);
+    } else if (transferResult.outsideHours) {
+      markTransferReply(companyId, phone);
+      console.log(
+        `[WhatsApp] Mesai dışı resim bilgilendirmesi — AI devam edecek → ${phone}`
+      );
     }
 
     await adminClient.from('messages').insert({
@@ -880,7 +954,7 @@ export async function processInboundMessage(
       return transferredReply;
     }
 
-    if (await hasActiveTransferTicket(companyId, phone, { excludeAiDisabled: true })) {
+    if (await shouldSkipAiForActiveTicket(companyId, phone, whatsappAccountId)) {
       console.log(`[WhatsApp] Aktif ticket — AI yanıt atlandı → ${phone}`);
       return '';
     }
@@ -899,29 +973,41 @@ export async function processInboundMessage(
           whatsappAccountId
         );
 
-        await adminClient
-          .from('messages')
-          .update({ status: 'transferred' })
-          .eq('company_id', companyId)
-          .eq('customer_phone', phone)
-          .eq('status', 'open');
-
-        markTransferReply(companyId, phone);
-        markConversationTransferred(companyId, phone);
-
         const lang = detectConversationLanguage(trimmed);
         const confirmMsg =
           handoff.outOfHoursReply ||
           t(lang, 'dept_forwarded', { department: matched.name });
 
-        await adminClient.from('messages').insert({
-          company_id: companyId,
-          customer_phone: phone,
-          customer_name: customerName,
-          message: confirmMsg,
-          sender_type: 'ai',
-          status: 'transferred',
-        });
+        if (handoff.handoffCompleted) {
+          await adminClient
+            .from('messages')
+            .update({ status: 'transferred' })
+            .eq('company_id', companyId)
+            .eq('customer_phone', phone)
+            .eq('status', 'open');
+
+          markTransferReply(companyId, phone);
+          markConversationTransferred(companyId, phone);
+
+          await adminClient.from('messages').insert({
+            company_id: companyId,
+            customer_phone: phone,
+            customer_name: customerName,
+            message: confirmMsg,
+            sender_type: 'ai',
+            status: 'transferred',
+          });
+        } else {
+          markTransferReply(companyId, phone);
+          await adminClient.from('messages').insert({
+            company_id: companyId,
+            customer_phone: phone,
+            customer_name: customerName,
+            message: confirmMsg,
+            sender_type: 'ai',
+            status: 'open',
+          });
+        }
 
         return confirmMsg;
       }
@@ -1036,49 +1122,62 @@ export async function processInboundMessage(
 
     if (aiResponse.shouldTransfer) {
       const hasTicket = await hasActiveTransferTicket(companyId, phone);
-      if (hasTicket && shouldSkipTransferReply(companyId, phone)) {
+      const transferCooldown = shouldSkipTransferReply(companyId, phone);
+      const supportPolicy = await resolveSupportHandoffPolicy(companyId, whatsappAccountId);
+
+      // Mesai dışı soft handoff sonrası: temsilci mesajı / sessizlik yok — AI cevabı kalsın
+      if (hasTicket && transferCooldown && !supportPolicy.outsideHours) {
         return '';
       }
 
-      const transferResult = await handleTransferWithDepartment(
-        companyId,
-        phone,
-        customerName,
-        trimmed,
-        buildTransferTicketSubject(trimmed, aiResponse.skipReason),
-        whatsappAccountId
-      );
-
-      if (transferResult.reply) {
-        replyMessage = transferResult.reply;
-      }
-
-      if (transferResult.handoffCompleted) {
-        messageStatus = 'transferred';
-        markConversationTransferred(companyId, phone);
-
-        await adminClient
-          .from('messages')
-          .update({ status: 'transferred' })
-          .eq('company_id', companyId)
-          .eq('customer_phone', phone)
-          .eq('status', 'open');
-
-        markTransferReply(companyId, phone);
-
-        await logActivity({
+      if (!(hasTicket && transferCooldown && supportPolicy.outsideHours)) {
+        const transferResult = await handleTransferWithDepartment(
           companyId,
-          action: 'conversation_transferred',
-          entityType: 'ticket',
-          metadata: {
-            customer_phone: phone,
-            skip_reason: aiResponse.skipReason,
-            skipped_ai: aiResponse.skippedAI,
-            ticket_created: transferResult.ticketCreated,
-          },
-        });
+          phone,
+          customerName,
+          trimmed,
+          buildTransferTicketSubject(trimmed, aiResponse.skipReason),
+          whatsappAccountId
+        );
 
-        console.log(`[WhatsApp] Temsilciye aktarıldı → ${phone}`);
+        if (transferResult.reply) {
+          replyMessage = transferResult.reply;
+        }
+
+        if (transferResult.outsideHours && transferResult.reply) {
+          markTransferReply(companyId, phone);
+          console.log(
+            `[WhatsApp] Mesai dışı bilgilendirme — AI aktarım yapılmadı, devam edecek → ${phone}`
+          );
+        }
+
+        if (transferResult.handoffCompleted) {
+          messageStatus = 'transferred';
+          markConversationTransferred(companyId, phone);
+
+          await adminClient
+            .from('messages')
+            .update({ status: 'transferred' })
+            .eq('company_id', companyId)
+            .eq('customer_phone', phone)
+            .eq('status', 'open');
+
+          markTransferReply(companyId, phone);
+
+          await logActivity({
+            companyId,
+            action: 'conversation_transferred',
+            entityType: 'ticket',
+            metadata: {
+              customer_phone: phone,
+              skip_reason: aiResponse.skipReason,
+              skipped_ai: aiResponse.skippedAI,
+              ticket_created: transferResult.ticketCreated,
+            },
+          });
+
+          console.log(`[WhatsApp] Temsilciye aktarıldı → ${phone}`);
+        }
       }
     }
 
