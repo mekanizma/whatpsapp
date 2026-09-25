@@ -167,7 +167,20 @@ export async function sendWhatsAppTemplate(
     );
     if (response.ok) return { success: true };
     const errBody = await response.text().catch(() => '');
-    return { success: false, error: errBody || 'Şablon gönderilemedi' };
+    let message = 'Şablon gönderilemedi';
+    try {
+      const parsed = JSON.parse(errBody) as {
+        error?: { message?: string; error_user_msg?: string; code?: number };
+      };
+      message =
+        parsed?.error?.error_user_msg ||
+        parsed?.error?.message ||
+        errBody.slice(0, 400) ||
+        message;
+    } catch {
+      if (errBody.trim()) message = errBody.slice(0, 400);
+    }
+    return { success: false, error: message };
   } catch (err) {
     return {
       success: false,
@@ -518,26 +531,44 @@ export async function sendCustomerOutreachTemplate(
   toPhone: string,
   templateName: string,
   languageCode: string,
-  plainTextBody: string
-): Promise<{ success: boolean; error?: string }> {
-  const account = await resolveOutboundAccount(companyId, toPhone);
+  plainTextBody: string,
+  accountId?: string | null
+): Promise<{ success: boolean; error?: string; accountId?: string }> {
+  const account = accountId
+    ? await getWhatsAppAccount(companyId, accountId)
+    : await resolveOutboundAccount(companyId, toPhone);
+
   if (!account) {
-    return { success: false, error: 'Aktif WhatsApp hattı bulunamadı' };
+    return {
+      success: false,
+      error: accountId
+        ? 'Seçilen WhatsApp hattı bulunamadı'
+        : 'Aktif WhatsApp hattı bulunamadı',
+    };
   }
   if (!account.is_active) {
     return { success: false, error: 'Bu WhatsApp hattı pasif durumda' };
+  }
+  if (account.status !== 'connected') {
+    return { success: false, error: 'Seçilen WhatsApp hattı bağlı değil' };
   }
 
   if (account.business_account_id?.startsWith('baileys:')) {
     const baileysStatus = await getBaileysConnectionStatus(account.id);
     if (baileysStatus.connected) {
-      return sendBaileysMessage(account.id, account.company_id, toPhone, plainTextBody);
+      const sent = await sendBaileysMessage(
+        account.id,
+        account.company_id,
+        toPhone,
+        plainTextBody
+      );
+      return { ...sent, accountId: account.id };
     }
     return { success: false, error: 'WhatsApp bağlantısı aktif değil. QR ile yeniden bağlanın.' };
   }
 
   if (account.access_token && account.business_account_id) {
-    return sendWhatsAppTemplate(
+    const sent = await sendWhatsAppTemplate(
       account.business_account_id,
       account.access_token,
       toPhone,
@@ -545,9 +576,13 @@ export async function sendCustomerOutreachTemplate(
       languageCode,
       []
     );
+    return { ...sent, accountId: account.id };
   }
 
-  return { success: false, error: 'WhatsApp Cloud API bağlantısı gerekli (şablon yalnızca Cloud API ile gönderilir)' };
+  return {
+    success: false,
+    error: 'WhatsApp Cloud API bağlantısı gerekli (şablon yalnızca Cloud API ile gönderilir)',
+  };
 }
 
 export async function sendImageToCustomer(

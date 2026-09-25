@@ -772,12 +772,18 @@ export async function sendOutreachTemplate(req: AuthRequest, res: Response): Pro
     return;
   }
 
+  const requestedAccountId =
+    typeof req.body?.whatsapp_account_id === 'string'
+      ? req.body.whatsapp_account_id.trim()
+      : '';
+
   const sendResult = await sendCustomerOutreachTemplate(
     req.companyId,
     waPhone,
     tpl.name,
     tpl.language,
-    tpl.body
+    tpl.body,
+    requestedAccountId || null
   );
 
   if (!sendResult.success) {
@@ -808,6 +814,7 @@ export async function sendOutreachTemplate(req: AuthRequest, res: Response): Pro
       staff_id: staffRecord?.id || null,
       sender_name: senderName,
       channel: 'whatsapp',
+      whatsapp_account_id: sendResult.accountId || null,
     })
     .select('*, staff:staff_id(name)')
     .single();

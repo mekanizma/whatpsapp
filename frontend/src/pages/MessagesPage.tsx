@@ -106,6 +106,7 @@ export function MessagesPage() {
   const [search, setSearch] = useState('');
   const [showNewMessage, setShowNewMessage] = useState(false);
   const [newPhone, setNewPhone] = useState('');
+  const [selectedAccountId, setSelectedAccountId] = useState('');
   const queryClient = useQueryClient();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -223,6 +224,53 @@ export function MessagesPage() {
   const templateEnabled = !!outreachTemplate?.enabled;
   const canStartNewWithTemplate = !!outreachTemplate?.can_start_new;
 
+  type OutreachLine = {
+    id: string;
+    label: string | null;
+    phone_number: string | null;
+    profile_name: string | null;
+    status: string;
+    is_active: boolean;
+    is_default: boolean;
+    connection_type: 'qr' | 'api' | null;
+  };
+
+  const { data: waAccountsData } = useQuery({
+    queryKey: ['whatsapp-accounts'],
+    queryFn: () =>
+      api.get<{ accounts: OutreachLine[] }>('/whatsapp/accounts'),
+    enabled: templateEnabled,
+  });
+
+  const outreachLines = (waAccountsData?.accounts || []).filter(
+    (a) => a.is_active && a.status === 'connected'
+  );
+
+  useEffect(() => {
+    const lines = (waAccountsData?.accounts || []).filter(
+      (a) => a.is_active && a.status === 'connected'
+    );
+    if (!lines.length) {
+      setSelectedAccountId('');
+      return;
+    }
+    setSelectedAccountId((prev) => {
+      if (prev && lines.some((a) => a.id === prev)) return prev;
+      const preferred =
+        lines.find((a) => a.is_default) ||
+        lines.find((a) => a.connection_type === 'api') ||
+        lines[0];
+      return preferred.id;
+    });
+  }, [waAccountsData]);
+
+  const lineLabel = (line: OutreachLine) => {
+    const name = line.label?.trim() || line.profile_name?.trim() || '';
+    const phone = line.phone_number?.trim() || '';
+    if (name && phone && name !== phone) return `${name} · ${phone}`;
+    return phone || name || line.id.slice(0, 8);
+  };
+
   // 24 saat penceresi dolunca UI'yi güncelle (müşteri yeni mesaj atınca sorgu zaten yenilenir)
   useEffect(() => {
     if (!selectedPhone || !activeTicket) return;
@@ -302,10 +350,15 @@ export function MessagesPage() {
   });
 
   const templateMutation = useMutation({
-    mutationFn: (phone: string) =>
-      api.post<Message>('/messages/outreach-template', { phone }),
-    onSuccess: (_data, phone) => {
-      const normalized = phone.replace(/\D/g, '') || phone;
+    mutationFn: (payload: { phone: string; whatsapp_account_id?: string }) =>
+      api.post<Message>('/messages/outreach-template', {
+        phone: payload.phone,
+        ...(payload.whatsapp_account_id
+          ? { whatsapp_account_id: payload.whatsapp_account_id }
+          : {}),
+      }),
+    onSuccess: (_data, payload) => {
+      const normalized = payload.phone.replace(/\D/g, '') || payload.phone;
       setReplyError(null);
       setShowNewMessage(false);
       setNewPhone('');
@@ -722,6 +775,25 @@ export function MessagesPage() {
                           {outreachTemplate.body}
                         </p>
                       )}
+                      {outreachLines.length > 0 ? (
+                        <label className="block text-xs font-medium text-slate-600">
+                          {t('messages.newMessageFromLine')}
+                          <select
+                            value={selectedAccountId}
+                            onChange={(e) => setSelectedAccountId(e.target.value)}
+                            disabled={templateMutation.isPending}
+                            className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary/25 disabled:opacity-50"
+                          >
+                            {outreachLines.map((line) => (
+                              <option key={line.id} value={line.id}>
+                                {lineLabel(line)}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : (
+                        <p className="text-xs text-amber-800">{t('messages.newMessageNoLines')}</p>
+                      )}
                       {replyError && (
                         <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 ring-1 ring-red-100">
                           {replyError}
@@ -730,10 +802,19 @@ export function MessagesPage() {
                       <Button
                         type="button"
                         className="w-full min-h-[44px]"
-                        disabled={templateMutation.isPending || !selectedPhone}
+                        disabled={
+                          templateMutation.isPending ||
+                          !selectedPhone ||
+                          !selectedAccountId
+                        }
                         onClick={() => {
                           setReplyError(null);
-                          if (selectedPhone) templateMutation.mutate(selectedPhone);
+                          if (selectedPhone) {
+                            templateMutation.mutate({
+                              phone: selectedPhone,
+                              whatsapp_account_id: selectedAccountId,
+                            });
+                          }
                         }}
                       >
                         {templateMutation.isPending ? <Spinner /> : <Send className="h-4 w-4" />}
@@ -836,6 +917,26 @@ export function MessagesPage() {
               </p>
             )}
             <label className="mt-4 block text-xs font-medium text-slate-600">
+              {t('messages.newMessageFromLine')}
+              {outreachLines.length > 0 ? (
+                <select
+                  value={selectedAccountId}
+                  onChange={(e) => setSelectedAccountId(e.target.value)}
+                  disabled={templateMutation.isPending}
+                  className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary/25 disabled:opacity-50"
+                >
+                  <option value="">{t('messages.newMessageFromLineSelect')}</option>
+                  {outreachLines.map((line) => (
+                    <option key={line.id} value={line.id}>
+                      {lineLabel(line)}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <p className="mt-1.5 text-xs text-amber-800">{t('messages.newMessageNoLines')}</p>
+              )}
+            </label>
+            <label className="mt-4 block text-xs font-medium text-slate-600">
               {t('messages.newMessagePhone')}
               <Input
                 className="mt-1.5"
@@ -868,10 +969,17 @@ export function MessagesPage() {
               <Button
                 type="button"
                 className="min-h-[44px] w-full sm:w-auto"
-                disabled={templateMutation.isPending || newPhone.replace(/\D/g, '').length < 8}
+                disabled={
+                  templateMutation.isPending ||
+                  newPhone.replace(/\D/g, '').length < 8 ||
+                  !selectedAccountId
+                }
                 onClick={() => {
                   setReplyError(null);
-                  templateMutation.mutate(newPhone);
+                  templateMutation.mutate({
+                    phone: newPhone,
+                    whatsapp_account_id: selectedAccountId,
+                  });
                 }}
               >
                 {templateMutation.isPending ? <Spinner /> : <Send className="h-4 w-4" />}
