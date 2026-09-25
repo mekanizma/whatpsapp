@@ -156,7 +156,7 @@ export const config = {
     staffTicketTemplateName: process.env.WHATSAPP_STAFF_TICKET_TEMPLATE || 'staff_new_ticket',
     staffTicketTemplateLang: process.env.WHATSAPP_STAFF_TICKET_TEMPLATE_LANG || 'tr',
     /** Meta onaylı müşteri outreach — 24s dışı / yeni mesaj (şirket kolonları yoksa) */
-    customerOutreachTemplateName: process.env.WHATSAPP_CUSTOMER_OUTREACH_TEMPLATE || '',
+    customerOutreachTemplateName: process.env.WHATSAPP_CUSTOMER_OUTREACH_TEMPLATE || 'applicationautomated',
     customerOutreachTemplateLang: process.env.WHATSAPP_CUSTOMER_OUTREACH_TEMPLATE_LANG || 'en',
     customerOutreachTemplateBody:
       process.env.WHATSAPP_CUSTOMER_OUTREACH_TEMPLATE_BODY ||
