@@ -733,7 +733,8 @@
     "blacklist": "Blacklist",
     "unblacklist": "Remove from blacklist",
     "blacklistBanner": "This number is blacklisted — messages are ignored and no reply is sent",
-    "blacklistFailed": "Blacklist action failed"
+    "blacklistFailed": "Blacklist action failed",
+    "receivedOn": "Line: {{line}}"
   },
   "tickets": {
     "title": "Support Tickets",

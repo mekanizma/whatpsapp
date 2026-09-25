@@ -17,7 +17,7 @@ import { getTicketAssigneeLabel } from '@/lib/ticket-assignee';
 import { getTicketSubjectLabel } from '@/lib/ticket-labels';
 import { MessageImage } from '@/components/MessageImage';
 import { cn } from '@/lib/utils';
-import type { Conversation, Message, Ticket } from '@/types';
+import type { Conversation, Message, ReceivedLine, Ticket } from '@/types';
 
 const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif';
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
@@ -27,6 +27,14 @@ function channelBadgeLabel(channel: string, t: (key: string) => string): string 
   if (channel === 'facebook_messenger') return t('meta.channelMessenger');
   if (channel === 'instagram_dm') return t('meta.channelInstagram');
   return t('meta.channelWhatsapp');
+}
+
+function formatReceivedLine(line: ReceivedLine | null | undefined): string | null {
+  if (!line) return null;
+  const phone = line.phone?.trim() || '';
+  const label = line.label?.trim() || '';
+  if (label && phone && label !== phone) return `${label} · ${phone}`;
+  return phone || label || null;
 }
 
 function formatCustomerLabel(phone: string, t: (key: string) => string): string {
@@ -292,12 +300,38 @@ export function MessagesPage() {
     imageMutation.mutate(file);
   };
 
-  const filtered = conversations?.filter((c) =>
-    c.customer_name?.toLowerCase().includes(search.toLowerCase()) ||
-    c.customer_phone.includes(search)
-  );
+  const filtered = conversations?.filter((c) => {
+    const q = search.toLowerCase();
+    const lines = (c.received_lines || []).map((line) => formatReceivedLine(line) || '').join(' ');
+    return (
+      c.customer_name?.toLowerCase().includes(q) ||
+      c.customer_phone.includes(search) ||
+      lines.toLowerCase().includes(q)
+    );
+  });
 
   const selectedConv = conversations?.find((c) => c.customer_phone === selectedPhone);
+  const threadLineLabels = (() => {
+    const seen = new Set<string>();
+    const labels: string[] = [];
+    for (const msg of messages || []) {
+      const text = formatReceivedLine(msg.received_line);
+      if (text && !seen.has(text)) {
+        seen.add(text);
+        labels.push(text);
+      }
+    }
+    if (labels.length === 0) {
+      for (const line of selectedConv?.received_lines || []) {
+        const text = formatReceivedLine(line);
+        if (text && !seen.has(text)) {
+          seen.add(text);
+          labels.push(text);
+        }
+      }
+    }
+    return labels;
+  })();
   const ticketId = activeTicket?.id || ticketParam;
   const hasActiveTicket = !!activeTicket;
   const isSending = replyMutation.isPending || imageMutation.isPending;
@@ -380,6 +414,14 @@ export function MessagesPage() {
                           {channelBadgeLabel(conv.channel, t)}
                         </span>
                       )}
+                      {!!conv.received_lines?.length && (
+                        <p className="mt-0.5 truncate text-[10px] font-medium text-primary">
+                          {(conv.received_lines || [])
+                            .map((line) => formatReceivedLine(line))
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </p>
+                      )}
                     </div>
                     {conv.unread_count > 0 && <Badge variant="success">{conv.unread_count}</Badge>}
                   </div>
@@ -407,12 +449,17 @@ export function MessagesPage() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold text-slate-900">{selectedConv?.customer_name || formatCustomerLabel(selectedPhone, t)}</p>
-                  <p className="text-xs text-slate-500">
+                  <p className="truncate text-xs text-slate-500">
                     {selectedConv?.channel && selectedConv.channel !== 'whatsapp'
                       ? `${channelBadgeLabel(selectedConv.channel, t)} · `
                       : ''}
                     {formatCustomerLabel(selectedPhone, t)}
                   </p>
+                  {threadLineLabels.length > 0 && (
+                    <p className="truncate text-[11px] font-medium text-primary">
+                      {t('messages.receivedOn', { line: threadLineLabels.join(' · ') })}
+                    </p>
+                  )}
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   {canManageBlacklist && (
@@ -529,6 +576,19 @@ export function MessagesPage() {
                             {senderLabel(msg)}
                           </span>
                         </div>
+                        {formatReceivedLine(msg.received_line) && (
+                          <p
+                            className={cn(
+                              'mb-1 flex min-w-0 items-center gap-1 text-[10px] font-medium',
+                              msg.sender_type === 'staff' ? 'text-white/75' : 'text-primary'
+                            )}
+                          >
+                            <Phone className="h-2.5 w-2.5 shrink-0" />
+                            <span className="truncate">
+                              {t('messages.receivedOn', { line: formatReceivedLine(msg.received_line) })}
+                            </span>
+                          </p>
+                        )}
 
                         {hasImage(msg) && msg.media_url ? (
                           <MessageImage

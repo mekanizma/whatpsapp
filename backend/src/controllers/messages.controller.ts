@@ -43,6 +43,82 @@ function formatLastMessagePreview(message: string, mediaType?: string | null): s
   return message;
 }
 
+/** Şirket hattı: mesajın geldiği / gönderildiği WhatsApp numarası veya Meta sayfası */
+export type ReceivedLine = {
+  phone: string | null;
+  label: string | null;
+};
+
+type LineRef = {
+  whatsapp_account_id?: string | null;
+  channel_connection_id?: string | null;
+};
+
+async function loadReceivedLineMaps(companyId: string, rows: LineRef[]) {
+  const waIds = [...new Set(rows.map((r) => r.whatsapp_account_id).filter((id): id is string => !!id))];
+  const chIds = [...new Set(rows.map((r) => r.channel_connection_id).filter((id): id is string => !!id))];
+
+  const waMap = new Map<string, ReceivedLine>();
+  const chMap = new Map<string, ReceivedLine>();
+
+  if (waIds.length > 0) {
+    const { data } = await adminClient
+      .from('whatsapp_configs')
+      .select('id, phone_number, label, profile_name')
+      .eq('company_id', companyId)
+      .in('id', waIds);
+
+    for (const row of data || []) {
+      const phone = typeof row.phone_number === 'string' ? row.phone_number.trim() : '';
+      const named =
+        (typeof row.label === 'string' && row.label.trim()) ||
+        (typeof row.profile_name === 'string' && row.profile_name.trim()) ||
+        '';
+      if (phone || named) {
+        waMap.set(row.id, { phone: phone || null, label: named || null });
+      }
+    }
+  }
+
+  if (chIds.length > 0) {
+    const { data } = await adminClient
+      .from('channel_connections')
+      .select('id, label, page_name, account_name')
+      .eq('company_id', companyId)
+      .in('id', chIds);
+
+    for (const row of data || []) {
+      const named =
+        (typeof row.page_name === 'string' && row.page_name.trim()) ||
+        (typeof row.account_name === 'string' && row.account_name.trim()) ||
+        (typeof row.label === 'string' && row.label.trim()) ||
+        '';
+      if (named) chMap.set(row.id, { phone: null, label: named });
+    }
+  }
+
+  return { waMap, chMap };
+}
+
+function receivedLineFor(
+  row: LineRef,
+  maps: { waMap: Map<string, ReceivedLine>; chMap: Map<string, ReceivedLine> }
+): ReceivedLine | null {
+  if (row.whatsapp_account_id) {
+    const line = maps.waMap.get(row.whatsapp_account_id);
+    if (line) return line;
+  }
+  if (row.channel_connection_id) {
+    const line = maps.chMap.get(row.channel_connection_id);
+    if (line) return line;
+  }
+  return null;
+}
+
+function sameLine(a: ReceivedLine, b: ReceivedLine): boolean {
+  return a.phone === b.phone && a.label === b.label;
+}
+
 /** Personel için konuşma erişim kontrolü; admin her zaman geçer */
 async function assertStaffConversationAccess(
   req: AuthRequest,
@@ -113,10 +189,15 @@ export async function getConversations(req: AuthRequest, res: Response): Promise
     unread_count: number;
     status: string;
     channel: string;
+    line_refs: LineRef[];
   }>();
 
   for (const msg of messages || []) {
     const existing = conversationMap.get(msg.customer_phone);
+    const lineRef: LineRef = {
+      whatsapp_account_id: msg.whatsapp_account_id || null,
+      channel_connection_id: msg.channel_connection_id || null,
+    };
     if (!existing) {
       conversationMap.set(msg.customer_phone, {
         customer_phone: msg.customer_phone,
@@ -126,6 +207,7 @@ export async function getConversations(req: AuthRequest, res: Response): Promise
         unread_count: msg.sender_type === 'customer' && msg.status === 'open' ? 1 : 0,
         status: msg.status,
         channel: msg.channel || 'whatsapp',
+        line_refs: lineRef.whatsapp_account_id || lineRef.channel_connection_id ? [lineRef] : [],
       });
       continue;
     }
@@ -133,9 +215,39 @@ export async function getConversations(req: AuthRequest, res: Response): Promise
     if (!existing.customer_name && msg.customer_name) {
       existing.customer_name = msg.customer_name;
     }
+    if (
+      (lineRef.whatsapp_account_id || lineRef.channel_connection_id) &&
+      !existing.line_refs.some(
+        (ref) =>
+          ref.whatsapp_account_id === lineRef.whatsapp_account_id &&
+          ref.channel_connection_id === lineRef.channel_connection_id
+      )
+    ) {
+      existing.line_refs.push(lineRef);
+    }
   }
 
-  res.json({ success: true, data: Array.from(conversationMap.values()) });
+  const conversations = Array.from(conversationMap.values());
+  const lineMaps = req.companyId
+    ? await loadReceivedLineMaps(
+        req.companyId,
+        conversations.flatMap((conv) => conv.line_refs)
+      )
+    : { waMap: new Map<string, ReceivedLine>(), chMap: new Map<string, ReceivedLine>() };
+
+  res.json({
+    success: true,
+    data: conversations.map(({ line_refs, ...conv }) => {
+      const received_lines: ReceivedLine[] = [];
+      for (const ref of line_refs) {
+        const line = receivedLineFor(ref, lineMaps);
+        if (line && !received_lines.some((existing) => sameLine(existing, line))) {
+          received_lines.push(line);
+        }
+      }
+      return { ...conv, received_lines };
+    }),
+  });
 }
 
 export async function getConversationMessages(req: AuthRequest, res: Response): Promise<void> {
@@ -160,7 +272,14 @@ export async function getConversationMessages(req: AuthRequest, res: Response): 
   }
 
   const mapped = (data || []).map(mapMessageRow);
-  const withMedia = await attachSignedMediaUrls(mapped);
+  const lineMaps = req.companyId
+    ? await loadReceivedLineMaps(req.companyId, mapped)
+    : { waMap: new Map<string, ReceivedLine>(), chMap: new Map<string, ReceivedLine>() };
+  const withLines = mapped.map((msg) => ({
+    ...msg,
+    received_line: receivedLineFor(msg, lineMaps),
+  }));
+  const withMedia = await attachSignedMediaUrls(withLines);
 
   // Bilgi bankası kaynakları yalnızca şirket yöneticisine (ve impersonation) görünür
   const canSeeRagSources =

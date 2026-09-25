@@ -293,6 +293,12 @@ export interface DashboardStats {
   ai_tokens_used: number;
 }
 
+/** Şirket hattı — mesajın geldiği WhatsApp numarası veya sayfa */
+export interface ReceivedLine {
+  phone: string | null;
+  label: string | null;
+}
+
 export interface Conversation {
   customer_phone: string;
   customer_name: string | null;
@@ -301,6 +307,8 @@ export interface Conversation {
   unread_count: number;
   status: string;
   channel?: 'whatsapp' | 'facebook_messenger' | 'instagram_dm' | string;
+  /** Bu konuşmada kullanılan şirket hatları (en son mesajdaki hat önce) */
+  received_lines?: ReceivedLine[];
 }
 
 export interface Message {
@@ -320,6 +328,8 @@ export interface Message {
   media_filename?: string | null;
   /** Yalnızca şirket yöneticisine dönen AI bilgi bankası kaynakları */
   rag_sources?: KnowledgeSourceRef[];
+  /** Mesajın geldiği / gönderildiği şirket hattı */
+  received_line?: ReceivedLine | null;
 }
 
 export interface KnowledgeSourceRef {

@@ -733,7 +733,8 @@
     "blacklist": "Blacklist",
     "unblacklist": "Blacklist'ten çıkar",
     "blacklistBanner": "Bu numara blacklist'te — mesajları alınmaz ve yanıt gönderilmez",
-    "blacklistFailed": "Blacklist işlemi başarısız"
+    "blacklistFailed": "Blacklist işlemi başarısız",
+    "receivedOn": "Hat: {{line}}"
   },
   "tickets": {
     "title": "Destek Talepleri",
