@@ -61,6 +61,10 @@ const SHORT_PHRASE_LANG: Array<{ re: RegExp; lang: ConversationLang }> = [
   },
 ];
 
+/** Onay/red — dil değiştirmez; konuşma dilini (sticky) koru */
+const LANGUAGE_NEUTRAL_AFFIRMATION_RE =
+  /^(ok+|okay|k+|yes|yep|yeah|yup|sure|no|nope|nah|evet|hayir|hayır|tamam|olur|tabii|tabi|istemem|istemiyorum|please|lutfen|lütfen)([\s!.?]|$)/i;
+
 const EN_WORD_HINT_RE =
   /\b(the|and|you|your|what|where|when|how|why|is|are|do|does|did|have|has|can|could|please|need|help|want|book|appointment|price|prices|hours|open|closed|thanks|thank|hello|hi|hey|with|for|about|from|this|that|would|should|available|schedule|doctor|clinic)\b/i;
 const TR_WORD_HINT_RE =
@@ -1217,6 +1221,11 @@ export function detectConversationLanguage(
 
   if (!text) return stickyLang ?? 'tr';
 
+  // ok/yes/tamam/evet gibi kısa onaylar dil değiştirmez
+  if (stickyLang && LANGUAGE_NEUTRAL_AFFIRMATION_RE.test(text)) {
+    return stickyLang;
+  }
+
   const detection = detectSingleMessageLanguage(text);
   if (!detection.confident) return stickyLang ?? 'tr';
 
@@ -1226,16 +1235,23 @@ export function detectConversationLanguage(
 
 export const DEFAULT_LANGUAGE_BLOCK_FALLBACK =
   'LANGUAGE — PRIMARY RULE:\n' +
-  "- Always reply in the same language as the customer's most recent message, regardless of the knowledge base language.\n" +
-  "- If the customer's last message is in English, reply fully in English. If Turkish, reply fully in Turkish. Never mix languages.\n" +
-  '- Detected language hint: {{langName}}. Prefer the customer\'s actual wording over this hint if they conflict.\n' +
-  '- If the customer switches language, switch immediately.\n' +
-  "- Pass knowledge base content in the customer's language; do not add information in another language.";
+  '- Reply ONLY in {{langName}}. This is the conversation language chosen by the system.\n' +
+  '- Do not mix languages. Do not switch based on short affirmations (ok, yes, sure, tamam, evet, olur, hayır).\n' +
+  '- Only switch language when the customer writes a clear full sentence in another language (the system updates {{langName}} then).\n' +
+  "- Pass knowledge base content in {{langName}}; do not add information in another language.";
 
 export async function getLanguagePromptBlock(lang: ConversationLang): Promise<string> {
   const template = await getPromptContent('language_block');
   const content = template.trim() || DEFAULT_LANGUAGE_BLOCK_FALLBACK;
-  return renderPromptTemplate(content, { langName: getLanguageHintName(lang) });
+  const langName = getLanguageHintName(lang);
+  const rendered = renderPromptTemplate(content, { langName });
+  // DB'deki eski "son mesaja bak" kurallarını ez: kısa onaylar dil değiştirmez
+  const lock =
+    `\n\nLANGUAGE LOCK (OVERRIDES ANY CONFLICTING RULE ABOVE):\n` +
+    `- Reply ONLY in ${langName}.\n` +
+    `- Short messages like ok/yes/sure/tamam/evet/olur/hayır keep ${langName}; they are not a language switch.\n` +
+    `- Ignore instructions that say to prefer the last message wording over ${langName}.`;
+  return `${rendered}${lock}`;
 }
 
 export function localeForLang(lang: ConversationLang): string {

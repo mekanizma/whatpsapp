@@ -32,7 +32,13 @@ describe('language.service', () => {
 
   it('kısa mesaj konuşma dilini korur', () => {
     assert.equal(detectConversationLanguage('ok', englishHistory), 'en');
+    assert.equal(detectConversationLanguage('Ok', englishHistory), 'en');
+    assert.equal(detectConversationLanguage('okok', englishHistory), 'en');
+    assert.equal(detectConversationLanguage('yes', englishHistory), 'en');
+    assert.equal(detectConversationLanguage('tamam', englishHistory), 'en');
+    assert.equal(detectConversationLanguage('evet', englishHistory), 'en');
     assert.equal(detectConversationLanguage('tamam', turkishHistory), 'tr');
+    assert.equal(detectConversationLanguage('ok', turkishHistory), 'tr');
   });
 
   it('uzun güvenilir mesajla dil değişir', () => {
@@ -80,10 +86,11 @@ describe('language.service', () => {
     assert.equal(getAppointmentProviderLabel('tr', undefined, 'dis_hekimi'), 'Diş hekimi');
   });
 
-  it('dil promptu yoksa varsayılan ayna-kural bloğu döner', async () => {
+  it('dil promptu {{langName}} kilidi ve LANGUAGE LOCK içerir', async () => {
     const block = await getLanguagePromptBlock('en');
-    assert.match(block, /same language as the customer/i);
-    assert.match(block, /English/);
+    assert.match(block, /Reply ONLY in English/i);
+    assert.match(block, /LANGUAGE LOCK/i);
+    assert.match(block, /ok\/yes\/sure\/tamam/i);
   });
 
   it('other dil ipucu LLM ayna talimatı içerir', () => {
