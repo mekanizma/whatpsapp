@@ -9,6 +9,7 @@ import { AuthRequest, isDemoSession } from '../middleware/auth.middleware';
 import { sendChannelText, sendChannelImage } from '../channels/outbound.service';
 import { logActivity } from '../services/log.service';
 import { normalizePhoneNumber } from '../whatsapp/message.handler';
+import { sendCustomerOutreachTemplate } from '../whatsapp/whatsapp.service';
 import { isChannelCustomerId, parseCustomerExternalId } from '../channels/customer-id';
 import { mapMessageRow } from '../utils/supabase-join';
 import {
@@ -29,6 +30,11 @@ import {
   isPhoneBlacklisted,
   removePhoneFromBlacklist,
 } from '../services/phone-blacklist.service';
+import {
+  canUserSendWaOutreach,
+  canUserStartWaOutreach,
+  getWaOutreachTemplateConfig,
+} from '../services/wa-outreach-template.service';
 
 function resolvePhoneParam(phone: string): string {
   const decoded = decodeURIComponent(phone);
@@ -672,4 +678,158 @@ export async function replyWithImage(req: AuthRequest, res: Response): Promise<v
 
   const [withMedia] = await attachSignedMediaUrls([mapMessageRow(msg)]);
   res.status(201).json({ success: true, data: withMedia });
+}
+
+/** Panel: outreach şablon bilgisi (yetkili kullanıcılar) */
+export async function getOutreachTemplate(req: AuthRequest, res: Response): Promise<void> {
+  if (!req.companyId) {
+    res.status(403).json({ success: false, error: 'Şirket bilgisi bulunamadı' });
+    return;
+  }
+
+  const canStart = await canUserStartWaOutreach(req);
+  const tpl = await getWaOutreachTemplateConfig(req.companyId);
+
+  res.json({
+    success: true,
+    data: {
+      ...tpl,
+      can_start_new: canStart && tpl.enabled,
+    },
+  });
+}
+
+/**
+ * Meta onaylı outreach şablonu gönder.
+ * 24 saat penceresini aşar; yeni numaraya da gönderilebilir (yönetici / süper personel).
+ */
+export async function sendOutreachTemplate(req: AuthRequest, res: Response): Promise<void> {
+  if (!req.companyId) {
+    res.status(403).json({ success: false, error: 'Şirket bilgisi bulunamadı' });
+    return;
+  }
+
+  const rawPhone =
+    (typeof req.body?.phone === 'string' && req.body.phone) ||
+    (typeof req.params.phone === 'string' && req.params.phone) ||
+    '';
+  const phone = resolvePhoneParam(rawPhone);
+
+  if (!phone || phone.length < 8) {
+    res.status(400).json({ success: false, error: 'Geçerli bir telefon numarası gerekli' });
+    return;
+  }
+
+  if (isChannelCustomerId(phone) && !phone.startsWith('wa:')) {
+    res.status(400).json({
+      success: false,
+      error: 'Şablon gönderimi yalnızca WhatsApp numaraları için desteklenir',
+    });
+    return;
+  }
+
+  const waPhone = phone.startsWith('wa:') ? phone.slice(3) : phone;
+
+  const { count: historyCount } = await adminClient
+    .from('messages')
+    .select('id', { count: 'exact', head: true })
+    .eq('company_id', req.companyId)
+    .eq('customer_phone', waPhone);
+
+  const isNewConversation = !historyCount;
+
+  if (isNewConversation) {
+    const allowed = await canUserStartWaOutreach(req);
+    if (!allowed) {
+      res.status(403).json({
+        success: false,
+        error: 'Yeni numaraya şablon gönderme yetkiniz yok',
+      });
+      return;
+    }
+  } else {
+    const allowed = await canUserSendWaOutreach(req, waPhone);
+    if (!allowed) {
+      res.status(403).json({
+        success: false,
+        error: 'Bu görüşmeye şablon gönderme yetkiniz yok',
+      });
+      return;
+    }
+  }
+
+  if (await isPhoneBlacklisted(req.companyId, waPhone)) {
+    res.status(403).json({ success: false, error: 'Bu numara blacklistte' });
+    return;
+  }
+
+  const tpl = await getWaOutreachTemplateConfig(req.companyId);
+  if (!tpl.enabled || !tpl.name) {
+    res.status(400).json({
+      success: false,
+      error: 'Outreach şablonu yapılandırılmamış. Meta şablon adını şirket ayarına veya ortam değişkenine ekleyin.',
+    });
+    return;
+  }
+
+  const sendResult = await sendCustomerOutreachTemplate(
+    req.companyId,
+    waPhone,
+    tpl.name,
+    tpl.language,
+    tpl.body
+  );
+
+  if (!sendResult.success) {
+    res.status(502).json({
+      success: false,
+      error: sendResult.error || 'Şablon müşteriye iletilemedi',
+    });
+    return;
+  }
+
+  const { data: staffRecord } = await adminClient
+    .from('staff')
+    .select('id, name')
+    .eq('profile_id', req.profile?.id)
+    .eq('company_id', req.companyId)
+    .maybeSingle();
+
+  const senderName = staffRecord?.name?.trim() || req.profile?.full_name?.trim() || null;
+
+  const { data: msg, error } = await adminClient
+    .from('messages')
+    .insert({
+      company_id: req.companyId,
+      customer_phone: waPhone,
+      message: tpl.body,
+      sender_type: 'staff',
+      status: 'open',
+      staff_id: staffRecord?.id || null,
+      sender_name: senderName,
+      channel: 'whatsapp',
+    })
+    .select('*, staff:staff_id(name)')
+    .single();
+
+  if (error) {
+    res.status(400).json({ success: false, error: error.message });
+    return;
+  }
+
+  await logActivity({
+    userId: req.userId,
+    companyId: req.companyId,
+    action: 'staff_outreach_template_sent',
+    entityType: 'message',
+    entityId: msg.id,
+    metadata: {
+      customer_phone: waPhone,
+      template_name: tpl.name,
+      template_lang: tpl.language,
+      is_new: isNewConversation,
+    },
+  });
+
+  res.status(201).json({ success: true, data: mapMessageRow(msg) });
 }

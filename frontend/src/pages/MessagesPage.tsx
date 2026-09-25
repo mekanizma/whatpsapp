@@ -6,10 +6,11 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Send, Search, Phone, Bot, User, CheckCircle2, Headphones, MessageSquare, ChevronLeft, ImagePlus, Ban } from 'lucide-react';
+import { Send, Search, Phone, Bot, User, CheckCircle2, Headphones, MessageSquare, ChevronLeft, ImagePlus, Ban, Plus } from 'lucide-react';
 import { api } from '@/services/api';
 import { supabase, supabaseConfigured } from '@/services/supabase';
 import { useAuthStore } from '@/store/authStore';
+import { canStartWaOutreach } from '@/lib/staff-permissions';
 import { Button, Input, Spinner, Badge } from '@/components/ui';
 import { EmptyState } from '@/components/EmptyState';
 import { TransferTicketControl } from '@/components/TransferTicketControl';
@@ -86,6 +87,7 @@ export function MessagesPage() {
   const phoneParam = searchParams.get('phone');
   const ticketParam = searchParams.get('ticket');
   const companyId = useAuthStore((s) => s.company?.id);
+  const user = useAuthStore((s) => s.user);
   const userRole = useAuthStore((s) => s.user?.role);
   const isImpersonating = useAuthStore((s) => s.isImpersonating);
   const isStaff = userRole === 'staff';
@@ -96,11 +98,14 @@ export function MessagesPage() {
     userRole === 'company_admin' ||
     userRole === 'staff' ||
     (userRole === 'super_admin' && isImpersonating);
+  const canStartOutreach = canStartWaOutreach(user);
 
   const [selectedPhone, setSelectedPhone] = useState<string | null>(phoneParam);
   const [replyText, setReplyText] = useState('');
   const [replyError, setReplyError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [showNewMessage, setShowNewMessage] = useState(false);
+  const [newPhone, setNewPhone] = useState('');
   const queryClient = useQueryClient();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -204,6 +209,20 @@ export function MessagesPage() {
   });
   const isBlacklisted = !!blacklistStatus?.blacklisted;
 
+  const { data: outreachTemplate } = useQuery({
+    queryKey: ['outreach-template'],
+    queryFn: () =>
+      api.get<{
+        enabled: boolean;
+        name: string;
+        language: string;
+        body: string;
+        can_start_new: boolean;
+      }>('/messages/outreach-template'),
+  });
+  const templateEnabled = !!outreachTemplate?.enabled;
+  const canStartNewWithTemplate = !!outreachTemplate?.can_start_new;
+
   // 24 saat penceresi dolunca UI'yi güncelle (müşteri yeni mesaj atınca sorgu zaten yenilenir)
   useEffect(() => {
     if (!selectedPhone || !activeTicket) return;
@@ -282,6 +301,23 @@ export function MessagesPage() {
     },
   });
 
+  const templateMutation = useMutation({
+    mutationFn: (phone: string) =>
+      api.post<Message>('/messages/outreach-template', { phone }),
+    onSuccess: (_data, phone) => {
+      const normalized = phone.replace(/\D/g, '') || phone;
+      setReplyError(null);
+      setShowNewMessage(false);
+      setNewPhone('');
+      invalidateMessageQueries(normalized);
+      setSelectedPhone(normalized);
+      setSearchParams({ phone: normalized });
+    },
+    onError: (err: Error) => {
+      setReplyError(err.message || t('messages.sendTemplateFailed'));
+    },
+  });
+
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -334,7 +370,10 @@ export function MessagesPage() {
   })();
   const ticketId = activeTicket?.id || ticketParam;
   const hasActiveTicket = !!activeTicket;
-  const isSending = replyMutation.isPending || imageMutation.isPending;
+  const isSending =
+    replyMutation.isPending || imageMutation.isPending || templateMutation.isPending;
+  const canSendTemplateHere =
+    templateEnabled && (canStartOutreach || hasActiveTicket || !isStaff);
 
   const lastCustomerMessageAt =
     activeTicket?.last_customer_message_at ||
@@ -374,7 +413,24 @@ export function MessagesPage() {
     <div className="flex h-[calc(100dvh-11rem)] min-h-[420px] w-full max-w-full min-w-0 overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-[var(--shadow-card)]">
       <div className={cn('flex w-full min-w-0 flex-col border-r border-slate-100 bg-slate-50/50 md:w-80 lg:w-[22rem]', selectedPhone && 'hidden md:flex')}>
         <div className="border-b border-slate-100 bg-white p-4">
-          <h2 className="mb-3 text-sm font-semibold text-slate-900">{t('messages.title')}</h2>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-slate-900">{t('messages.title')}</h2>
+            {canStartNewWithTemplate && (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="shrink-0"
+                onClick={() => {
+                  setReplyError(null);
+                  setShowNewMessage(true);
+                }}
+              >
+                <Plus className="h-4 w-4" />
+                <span className="hidden sm:inline">{t('messages.newMessage')}</span>
+              </Button>
+            )}
+          </div>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <Input className="border-slate-200 bg-slate-50 pl-9" placeholder={t('messages.search')} value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -532,14 +588,9 @@ export function MessagesPage() {
                     ticket={activeTicket}
                     compact
                     onSuccess={() => {
-                      queryClient.invalidateQueries({ queryKey: ['active-ticket', selectedPhone] });
-                      queryClient.invalidateQueries({ queryKey: ['conversations'] });
-                      if (isStaff) {
-                        setSelectedPhone(null);
-                        setSearchParams({});
-                      } else {
-                        setSearchParams({ phone: selectedPhone! });
-                      }
+                      // Transfer sonrası talep açıkta; görüşme aktaran kişide kalmasın
+                      setSelectedPhone(null);
+                      setSearchParams({});
                     }}
                   />
                 </div>
@@ -654,11 +705,45 @@ export function MessagesPage() {
 
             <div className="border-t border-slate-100 bg-white p-3 sm:p-4">
               {isReplyWindowClosed ? (
-                <div
-                  role="status"
-                  className="rounded-xl bg-amber-50 px-3 py-3 text-sm leading-relaxed text-amber-950 ring-1 ring-amber-200/80 sm:px-4"
-                >
-                  {t('messages.replyWindowClosed')}
+                <div className="space-y-3">
+                  <div
+                    role="status"
+                    className="rounded-xl bg-amber-50 px-3 py-3 text-sm leading-relaxed text-amber-950 ring-1 ring-amber-200/80 sm:px-4"
+                  >
+                    {t('messages.replyWindowClosed')}
+                  </div>
+                  {canSendTemplateHere ? (
+                    <div className="space-y-2">
+                      {outreachTemplate?.body && (
+                        <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-600 ring-1 ring-slate-100 whitespace-pre-wrap">
+                          <span className="mb-1 block font-semibold text-slate-700">
+                            {t('messages.templatePreview')}
+                          </span>
+                          {outreachTemplate.body}
+                        </p>
+                      )}
+                      {replyError && (
+                        <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 ring-1 ring-red-100">
+                          {replyError}
+                        </p>
+                      )}
+                      <Button
+                        type="button"
+                        className="w-full min-h-[44px]"
+                        disabled={templateMutation.isPending || !selectedPhone}
+                        onClick={() => {
+                          setReplyError(null);
+                          if (selectedPhone) templateMutation.mutate(selectedPhone);
+                        }}
+                      >
+                        {templateMutation.isPending ? <Spinner /> : <Send className="h-4 w-4" />}
+                        {t('messages.sendTemplate')}
+                      </Button>
+                      <p className="text-[11px] text-slate-500">{t('messages.sendTemplateHint')}</p>
+                    </div>
+                  ) : !templateEnabled ? (
+                    <p className="text-xs text-slate-500">{t('messages.templateNotConfigured')}</p>
+                  ) : null}
                 </div>
               ) : (
                 <>
@@ -727,6 +812,75 @@ export function MessagesPage() {
           </div>
         )}
       </div>
+
+      {showNewMessage && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-0 sm:items-center sm:p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={t('messages.newMessageTitle')}
+          onClick={() => !templateMutation.isPending && setShowNewMessage(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-t-2xl bg-white p-4 shadow-xl sm:rounded-2xl sm:p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-base font-semibold text-slate-900">{t('messages.newMessageTitle')}</h3>
+            <p className="mt-1 text-sm text-slate-500">{t('messages.newMessageDesc')}</p>
+            {outreachTemplate?.body && (
+              <p className="mt-3 max-h-32 overflow-y-auto rounded-lg bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-600 ring-1 ring-slate-100 whitespace-pre-wrap">
+                <span className="mb-1 block font-semibold text-slate-700">
+                  {t('messages.templatePreview')}
+                </span>
+                {outreachTemplate.body}
+              </p>
+            )}
+            <label className="mt-4 block text-xs font-medium text-slate-600">
+              {t('messages.newMessagePhone')}
+              <Input
+                className="mt-1.5"
+                inputMode="tel"
+                autoComplete="tel"
+                placeholder={t('messages.newMessagePhonePlaceholder')}
+                value={newPhone}
+                onChange={(e) => {
+                  setNewPhone(e.target.value);
+                  if (replyError) setReplyError(null);
+                }}
+                disabled={templateMutation.isPending}
+              />
+            </label>
+            {replyError && (
+              <p className="mt-2 rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 ring-1 ring-red-100">
+                {replyError}
+              </p>
+            )}
+            <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-[44px] w-full sm:w-auto"
+                disabled={templateMutation.isPending}
+                onClick={() => setShowNewMessage(false)}
+              >
+                {t('messages.newMessageCancel')}
+              </Button>
+              <Button
+                type="button"
+                className="min-h-[44px] w-full sm:w-auto"
+                disabled={templateMutation.isPending || newPhone.replace(/\D/g, '').length < 8}
+                onClick={() => {
+                  setReplyError(null);
+                  templateMutation.mutate(newPhone);
+                }}
+              >
+                {templateMutation.isPending ? <Spinner /> : <Send className="h-4 w-4" />}
+                {t('messages.newMessageSend')}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -155,6 +155,12 @@ export const config = {
     /** Meta onaylı utility şablon — personel talep bildirimi */
     staffTicketTemplateName: process.env.WHATSAPP_STAFF_TICKET_TEMPLATE || 'staff_new_ticket',
     staffTicketTemplateLang: process.env.WHATSAPP_STAFF_TICKET_TEMPLATE_LANG || 'tr',
+    /** Meta onaylı müşteri outreach — 24s dışı / yeni mesaj (şirket kolonları yoksa) */
+    customerOutreachTemplateName: process.env.WHATSAPP_CUSTOMER_OUTREACH_TEMPLATE || '',
+    customerOutreachTemplateLang: process.env.WHATSAPP_CUSTOMER_OUTREACH_TEMPLATE_LANG || 'en',
+    customerOutreachTemplateBody:
+      process.env.WHATSAPP_CUSTOMER_OUTREACH_TEMPLATE_BODY ||
+      'Hi! 👋 We are very happy that you are interested in Final International University (FIU)!\nSimply reply to this message. We are here to answer all your questions!',
   },
 
   /** Messenger + Instagram DM (aynı Meta App; WhatsApp Cloud API'den ayrı webhook) */

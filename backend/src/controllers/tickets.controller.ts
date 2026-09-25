@@ -317,19 +317,75 @@ export async function claimTicket(req: AuthRequest, res: Response): Promise<void
   res.json({ success: true, data: mapTicketRow(data) });
 }
 
+/** Aktif talebi belirli bir personele ata — görüşme o kişiye geçer */
 export async function assignTicket(req: AuthRequest, res: Response): Promise<void> {
-  const { staff_id } = req.body;
+  const ticketId = req.params.id as string;
+  const companyId = req.companyId!;
+  const { staff_id: targetStaffId } = req.body;
+
+  if (!targetStaffId || typeof targetStaffId !== 'string') {
+    res.status(400).json({ success: false, error: 'Hedef personel gerekli' });
+    return;
+  }
+
+  const { data: targetStaff, error: staffError } = await adminClient
+    .from('staff')
+    .select('id, name, department_id, is_active')
+    .eq('id', targetStaffId)
+    .eq('company_id', companyId)
+    .maybeSingle();
+
+  if (staffError || !targetStaff || !targetStaff.is_active) {
+    res.status(400).json({ success: false, error: 'Geçersiz veya pasif personel' });
+    return;
+  }
+
+  const { data: ticket, error: fetchError } = await adminClient
+    .from('tickets')
+    .select('id, status, assigned_staff, last_assigned_staff, department_id, customer_phone, customer_name, subject, priority')
+    .eq('id', ticketId)
+    .eq('company_id', companyId)
+    .single();
+
+  if (fetchError || !ticket) {
+    res.status(404).json({ success: false, error: 'Talep bulunamadı' });
+    return;
+  }
+
+  if (!['open', 'in_progress'].includes(ticket.status)) {
+    res.status(400).json({
+      success: false,
+      error: 'Yalnızca açık veya işlemdeki talepler atanabilir',
+    });
+    return;
+  }
+
+  if (ticket.assigned_staff === targetStaffId) {
+    res.status(400).json({ success: false, error: 'Talep zaten bu personele atanmış' });
+    return;
+  }
+
+  const allowed = await canUserTransferTicket(req, ticket);
+  if (!allowed) {
+    res.status(403).json({ success: false, error: 'Bu talebi atama yetkiniz yok' });
+    return;
+  }
+
+  const updates: Record<string, unknown> = withLastAssignedStaff({
+    assigned_staff: targetStaffId,
+    status: 'in_progress',
+  });
+
+  // Personelin departmanı varsa talebi de o departmana taşı
+  if (targetStaff.department_id) {
+    updates.department_id = targetStaff.department_id;
+  }
 
   const { data, error } = await adminClient
     .from('tickets')
-    .update(
-      withLastAssignedStaff({
-        assigned_staff: staff_id,
-        status: 'in_progress',
-      })
-    )
-    .eq('id', req.params.id)
-    .eq('company_id', req.companyId)
+    .update(updates)
+    .eq('id', ticketId)
+    .eq('company_id', companyId)
     .select(TICKET_SELECT)
     .single();
 
@@ -337,6 +393,29 @@ export async function assignTicket(req: AuthRequest, res: Response): Promise<voi
     res.status(400).json({ success: false, error: error.message });
     return;
   }
+
+  void notifyTicketRecipients(companyId, {
+    id: data.id,
+    customer_phone: data.customer_phone,
+    customer_name: data.customer_name,
+    subject: data.subject,
+    priority: data.priority,
+    department_id: data.department_id,
+  });
+
+  await logActivity({
+    userId: req.userId,
+    companyId,
+    action: 'ticket_assigned',
+    entityType: 'ticket',
+    entityId: ticketId,
+    metadata: {
+      from_staff_id: ticket.assigned_staff,
+      to_staff_id: targetStaffId,
+      to_staff_name: targetStaff.name,
+      customer_phone: ticket.customer_phone,
+    },
+  });
 
   res.json({ success: true, data: mapTicketRow(data) });
 }
@@ -389,19 +468,17 @@ export async function transferTicket(req: AuthRequest, res: Response): Promise<v
     return;
   }
 
-  const actorStaffId = await resolveStaffIdForProfile(
-    companyId,
-    req.profile?.id,
-    req.userId
-  );
+  // Atama tamamen bırakılır: görüşme aktaran personele bağlı kalmaz;
+  // hedef departmanda açık talep olarak "üzerine al" ile alınır.
+  const previousAssignee =
+    ticket.assigned_staff || ticket.last_assigned_staff || null;
 
   const { data, error } = await adminClient
     .from('tickets')
     .update({
       department_id: targetDepartmentId,
       assigned_staff: null,
-      last_assigned_staff:
-        ticket.assigned_staff || ticket.last_assigned_staff || actorStaffId,
+      last_assigned_staff: previousAssignee,
       status: 'open',
     })
     .eq('id', ticketId)
@@ -411,6 +488,14 @@ export async function transferTicket(req: AuthRequest, res: Response): Promise<v
 
   if (error) {
     res.status(400).json({ success: false, error: error.message });
+    return;
+  }
+
+  if (data.assigned_staff) {
+    res.status(500).json({
+      success: false,
+      error: 'Transfer sonrası atama sıfırlanamadı',
+    });
     return;
   }
 

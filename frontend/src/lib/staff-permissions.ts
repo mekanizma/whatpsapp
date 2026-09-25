@@ -20,6 +20,14 @@ export function staffCanAccessKnowledge(user?: Profile | null): boolean {
   return isSuperStaff(user.staff_role);
 }
 
+/** Meta outreach şablonu ile yeni konuşma başlatma (yönetici / süper personel) */
+export function canStartWaOutreach(user?: Profile | null): boolean {
+  if (!user) return false;
+  if (user.role === 'company_admin' || user.role === 'super_admin') return true;
+  if (user.role !== 'staff') return false;
+  return isSuperStaff(user.staff_role);
+}
+
 export function canSeeNavItem(
   userRole: UserRole,
   staffRole: StaffSubRole | null | undefined,

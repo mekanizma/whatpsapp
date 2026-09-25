@@ -185,6 +185,8 @@ router.post('/knowledge/:id/index-now', authenticate, requireRole('company_admin
 // Messages
 router.get('/messages', authenticate, requireCompany, messagesCtrl.getConversations);
 router.get('/messages/media/:messageId', authenticate, requireCompany, messagesCtrl.getMessageMedia);
+router.get('/messages/outreach-template', authenticate, requireCompany, messagesCtrl.getOutreachTemplate);
+router.post('/messages/outreach-template', authenticate, requireCompany, messagesCtrl.sendOutreachTemplate);
 router.get('/messages/:phone', authenticate, requireCompany, messagesCtrl.getConversationMessages);
 router.patch('/messages/:phone/customer-name', authenticate, requireRole('company_admin'), requireCompany, messagesCtrl.updateCustomerName);
 router.get('/messages/:phone/blacklist', authenticate, requireRole('company_admin', 'staff'), requireCompany, messagesCtrl.getBlacklistStatus);
@@ -197,6 +199,12 @@ router.post(
   requireCompany,
   messageImageUpload.single('file'),
   asyncHandler(messagesCtrl.replyWithImage)
+);
+router.post(
+  '/messages/:phone/send-template',
+  authenticate,
+  requireCompany,
+  messagesCtrl.sendOutreachTemplate
 );
 
 // Unknown questions (Business / Enterprise)
@@ -293,7 +301,7 @@ router.post('/tickets', authenticate, requireCompany, ticketsCtrl.createTicket);
 router.put('/tickets/:id', authenticate, requireCompany, ticketsCtrl.updateTicket);
 router.patch('/tickets/:id/claim', authenticate, requireCompany, ticketsCtrl.claimTicket);
 router.patch('/tickets/:id/transfer', authenticate, requireCompany, ticketsCtrl.transferTicket);
-router.patch('/tickets/:id/assign', authenticate, requireRole('company_admin'), requireCompany, ticketsCtrl.assignTicket);
+router.patch('/tickets/:id/assign', authenticate, requireCompany, ticketsCtrl.assignTicket);
 
 // Notifications
 router.get('/notifications/recipients', authenticate, requireRole('company_admin'), requireCompany, asyncHandler(notificationsCtrl.getNotificationRecipients));

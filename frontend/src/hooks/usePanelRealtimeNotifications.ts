@@ -54,15 +54,6 @@ function normalizePhone(phone: string): string {
   return phone.replace(/\D/g, '');
 }
 
-function hasAssignee(
-  ticket: {
-    assigned_staff?: string | null;
-    last_assigned_staff?: string | null;
-  }
-): boolean {
-  return !!(ticket.assigned_staff || ticket.last_assigned_staff);
-}
-
 function isActiveTicketStatus(status: string): boolean {
   return ACTIVE_TICKET_STATUSES.has(status);
 }
@@ -137,7 +128,8 @@ export function usePanelRealtimeNotifications({
 
       for (const ticket of tickets) {
         if (!isActiveTicketStatus(ticket.status)) continue;
-        if (!hasAssignee(ticket)) continue;
+        // Yalnızca gerçekten atanmış talepler mesaj bildirimi alır (last_assigned sayılmaz)
+        if (!ticket.assigned_staff) continue;
 
         next.set(normalizePhone(ticket.customer_phone), toAssignedTicketInfo(ticket));
       }
@@ -153,7 +145,8 @@ export function usePanelRealtimeNotifications({
 
       if (role === 'staff') {
         const myStaffId = staffIdRef.current;
-        if (!hasAssignee(ticket)) return true;
+        // Atanmamış (açık) talepler: departman personeli üzerine alabilsin diye bildir
+        if (!ticket.assigned_staff) return true;
         return !!myStaffId && ticket.assigned_staff === myStaffId;
       }
 
@@ -171,11 +164,16 @@ export function usePanelRealtimeNotifications({
       const subject = getTicketSubjectLabel(t, row.subject);
       const body = t('browserNotifications.newTicketBody', { customer, subject });
 
+      // Atanmamış talepler Destek sayfasından üzerine alınır; atanmışlar doğrudan sohbete
+      const url = ticket.assigned_staff
+        ? `/panel/messages?phone=${encodeURIComponent(row.customer_phone)}&ticket=${row.id}`
+        : `/panel/tickets`;
+
       showBrowserNotification({
         title,
         body: body.slice(0, 160),
         tag: `ticket-${row.id}`,
-        url: `/panel/messages?phone=${encodeURIComponent(row.customer_phone)}&ticket=${row.id}`,
+        url,
       });
 
       queryClient.invalidateQueries({ queryKey: ['tickets'] });
@@ -187,7 +185,7 @@ export function usePanelRealtimeNotifications({
       if (seenIdsRef.current.has(row.id)) return;
 
       const ticket = assignedTicketsRef.current.get(normalizePhone(row.customer_phone));
-      if (!ticket || !hasAssignee(ticket)) return;
+      if (!ticket?.assigned_staff) return;
       if (!shouldNotifyForTicket(ticket)) return;
 
       markSeen(row.id);
@@ -217,7 +215,7 @@ export function usePanelRealtimeNotifications({
       const info = toAssignedTicketInfo(row);
       const key = normalizePhone(row.customer_phone);
 
-      if (isActiveTicketStatus(row.status) && hasAssignee(row)) {
+      if (isActiveTicketStatus(row.status) && row.assigned_staff) {
         assignedTicketsRef.current.set(key, info);
         return;
       }
@@ -289,7 +287,16 @@ export function usePanelRealtimeNotifications({
             table: 'tickets',
             filter: `company_id=eq.${companyId}`,
           },
-          (payload) => syncTicketRow(payload.new as TicketRow)
+          (payload) => {
+            const row = payload.new as TicketRow;
+            syncTicketRow(row);
+            // Transfer / atama değişince konuşma listesini yenile
+            queryClient.invalidateQueries({ queryKey: ['conversations'] });
+            queryClient.invalidateQueries({ queryKey: ['tickets'] });
+            queryClient.invalidateQueries({
+              queryKey: ['active-ticket', row.customer_phone],
+            });
+          }
         )
         .subscribe((status) => {
           if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
