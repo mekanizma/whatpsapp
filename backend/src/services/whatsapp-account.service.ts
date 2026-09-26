@@ -451,10 +451,17 @@ export async function listDepartments(companyId: string): Promise<Department[]> 
 export async function createDepartment(
   companyId: string,
   name: string,
-  description?: string
+  description?: string,
+  options?: { email?: string | null; notify_email_enabled?: boolean }
 ): Promise<Department> {
   const trimmed = name.trim();
   if (!trimmed) throw new Error('Departman adı gerekli');
+
+  const email = normalizeDepartmentEmail(options?.email);
+  const notifyEnabled = !!options?.notify_email_enabled;
+  if (notifyEnabled && !email) {
+    throw new Error('Bildirim açmak için e-posta gerekli');
+  }
 
   const { data, error } = await adminClient
     .from('departments')
@@ -462,6 +469,8 @@ export async function createDepartment(
       company_id: companyId,
       name: trimmed,
       description: description?.trim() || null,
+      email,
+      notify_email_enabled: notifyEnabled,
     })
     .select('*')
     .single();
@@ -476,7 +485,13 @@ export async function createDepartment(
 export async function updateDepartment(
   companyId: string,
   departmentId: string,
-  updates: { name?: string; description?: string; is_active?: boolean }
+  updates: {
+    name?: string;
+    description?: string;
+    is_active?: boolean;
+    email?: string | null;
+    notify_email_enabled?: boolean;
+  }
 ): Promise<Department> {
   const patch: Record<string, unknown> = {};
   if (updates.name !== undefined) {
@@ -486,6 +501,24 @@ export async function updateDepartment(
   }
   if (updates.description !== undefined) patch.description = updates.description?.trim() || null;
   if (updates.is_active !== undefined) patch.is_active = updates.is_active;
+  if (updates.email !== undefined) patch.email = normalizeDepartmentEmail(updates.email);
+  if (updates.notify_email_enabled !== undefined) {
+    patch.notify_email_enabled = !!updates.notify_email_enabled;
+  }
+
+  if (patch.notify_email_enabled === true) {
+    let email = patch.email as string | null | undefined;
+    if (email === undefined) {
+      const { data: current } = await adminClient
+        .from('departments')
+        .select('email')
+        .eq('id', departmentId)
+        .eq('company_id', companyId)
+        .maybeSingle();
+      email = (current?.email as string | null) || null;
+    }
+    if (!email) throw new Error('Bildirim açmak için e-posta gerekli');
+  }
 
   const { data, error } = await adminClient
     .from('departments')
@@ -500,6 +533,16 @@ export async function updateDepartment(
     throw new Error(error.message);
   }
   return data as Department;
+}
+
+function normalizeDepartmentEmail(value?: string | null): string | null {
+  if (value === undefined || value === null) return null;
+  const trimmed = value.trim().toLowerCase();
+  if (!trimmed) return null;
+  if (!trimmed.includes('@') || trimmed.length < 5) {
+    throw new Error('Geçerli bir e-posta adresi girin');
+  }
+  return trimmed;
 }
 
 export async function deleteDepartment(companyId: string, departmentId: string): Promise<void> {

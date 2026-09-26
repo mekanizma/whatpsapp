@@ -25,6 +25,8 @@ interface Department {
   id: string;
   name: string;
   description: string | null;
+  email: string | null;
+  notify_email_enabled: boolean;
   is_active: boolean;
 }
 
@@ -132,6 +134,8 @@ export function WhatsAppPage() {
   const [newDeptName, setNewDeptName] = useState('');
   const [editingDeptId, setEditingDeptId] = useState<string | null>(null);
   const [editingDeptName, setEditingDeptName] = useState('');
+  const [editingDeptEmail, setEditingDeptEmail] = useState('');
+  const [editingDeptNotify, setEditingDeptNotify] = useState(false);
   const [testState, setTestState] = useState<Record<string, { phone: string; message: string; feedback?: { type: 'success' | 'error'; text: string } }>>({});
   const [cloudForms, setCloudForms] = useState<Record<string, CloudApiFormState>>({});
   const [connectionModes, setConnectionModes] = useState<Record<string, 'qr' | 'api'>>({});
@@ -261,11 +265,22 @@ export function WhatsAppPage() {
   });
 
   const updateDeptMutation = useMutation({
-    mutationFn: ({ id, name }: { id: string; name: string }) =>
-      api.patch<Department>(`/departments/${id}`, { name }),
+    mutationFn: ({
+      id,
+      name,
+      email,
+      notify_email_enabled,
+    }: {
+      id: string;
+      name?: string;
+      email?: string | null;
+      notify_email_enabled?: boolean;
+    }) => api.patch<Department>(`/departments/${id}`, { name, email, notify_email_enabled }),
     onSuccess: () => {
       setEditingDeptId(null);
       setEditingDeptName('');
+      setEditingDeptEmail('');
+      setEditingDeptNotify(false);
       queryClient.invalidateQueries({ queryKey: ['departments'] });
       invalidate();
     },
@@ -518,23 +533,77 @@ export function WhatsAppPage() {
                 {departments.map((dept) => (
                   <div
                     key={dept.id}
-                    className="flex min-h-[44px] flex-col gap-2 rounded-xl bg-slate-50 px-3 py-2 ring-1 ring-slate-200/60 sm:flex-row sm:items-center sm:justify-between"
+                    className="flex min-h-[44px] flex-col gap-2 rounded-xl bg-slate-50 px-3 py-3 ring-1 ring-slate-200/60"
                   >
                     {editingDeptId === dept.id ? (
-                      <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center">
-                        <Input
-                          value={editingDeptName}
-                          onChange={(e) => setEditingDeptName(e.target.value)}
-                          className="h-11 flex-1"
-                          autoFocus
-                        />
-                        <div className="flex gap-2">
+                      <div className="flex w-full flex-col gap-3">
+                        <div className="space-y-1.5">
+                          <Label htmlFor={`dept-name-${dept.id}`}>{t('whatsapp.deptNameLabel')}</Label>
+                          <Input
+                            id={`dept-name-${dept.id}`}
+                            value={editingDeptName}
+                            onChange={(e) => setEditingDeptName(e.target.value)}
+                            className="h-11"
+                            autoFocus
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor={`dept-email-${dept.id}`}>{t('whatsapp.deptEmail')}</Label>
+                          <Input
+                            id={`dept-email-${dept.id}`}
+                            type="email"
+                            inputMode="email"
+                            autoComplete="email"
+                            value={editingDeptEmail}
+                            onChange={(e) => setEditingDeptEmail(e.target.value)}
+                            placeholder={t('whatsapp.deptEmailPlaceholder')}
+                            className="h-11"
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          role="switch"
+                          aria-checked={editingDeptNotify}
+                          disabled={!editingDeptEmail.trim()}
+                          onClick={() => setEditingDeptNotify((v) => !v)}
+                          className={`flex min-h-[44px] w-full items-center justify-between gap-3 rounded-xl px-3.5 py-2.5 ring-1 transition-colors ${
+                            editingDeptNotify
+                              ? 'bg-primary/10 text-primary ring-primary/20'
+                              : 'bg-white text-slate-600 ring-slate-200'
+                          } ${!editingDeptEmail.trim() ? 'opacity-50' : ''}`}
+                        >
+                          <span className="text-left text-sm font-medium">
+                            {t('whatsapp.deptNotifyEmail')}
+                          </span>
+                          <span
+                            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+                              editingDeptNotify ? 'bg-primary' : 'bg-slate-300'
+                            }`}
+                          >
+                            <span
+                              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform ${
+                                editingDeptNotify ? 'translate-x-[1.35rem]' : 'translate-x-0.5'
+                              }`}
+                            />
+                          </span>
+                        </button>
+                        <p className="text-xs text-slate-500">{t('whatsapp.deptNotifyEmailHint')}</p>
+                        <div className="flex flex-col gap-2 sm:flex-row">
                           <Button
                             type="button"
                             className="h-11 flex-1 sm:flex-none"
-                            disabled={!editingDeptName.trim() || updateDeptMutation.isPending}
+                            disabled={
+                              !editingDeptName.trim() ||
+                              (editingDeptNotify && !editingDeptEmail.trim()) ||
+                              updateDeptMutation.isPending
+                            }
                             onClick={() =>
-                              updateDeptMutation.mutate({ id: dept.id, name: editingDeptName.trim() })
+                              updateDeptMutation.mutate({
+                                id: dept.id,
+                                name: editingDeptName.trim(),
+                                email: editingDeptEmail.trim() || null,
+                                notify_email_enabled: editingDeptNotify && !!editingDeptEmail.trim(),
+                              })
                             }
                           >
                             {updateDeptMutation.isPending ? <Spinner /> : <Save className="h-4 w-4" />}
@@ -547,6 +616,8 @@ export function WhatsAppPage() {
                             onClick={() => {
                               setEditingDeptId(null);
                               setEditingDeptName('');
+                              setEditingDeptEmail('');
+                              setEditingDeptNotify(false);
                             }}
                           >
                             {t('common.cancel')}
@@ -554,17 +625,35 @@ export function WhatsAppPage() {
                         </div>
                       </div>
                     ) : (
-                      <>
-                        <span className="text-sm font-medium text-slate-900">{dept.name}</span>
-                        <div className="flex gap-1">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0 space-y-1">
+                          <span className="text-sm font-medium text-slate-900">{dept.name}</span>
+                          <p className="truncate text-xs text-slate-500">
+                            {dept.email || t('whatsapp.deptEmailEmpty')}
+                          </p>
+                          <span
+                            className={`inline-flex min-h-[24px] items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                              dept.notify_email_enabled && dept.email
+                                ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100'
+                                : 'bg-slate-100 text-slate-500 ring-1 ring-slate-200/80'
+                            }`}
+                          >
+                            {dept.notify_email_enabled && dept.email
+                              ? t('whatsapp.deptNotifyOn')
+                              : t('whatsapp.deptNotifyOff')}
+                          </span>
+                        </div>
+                        <div className="flex gap-1 self-end sm:self-start">
                           <button
                             type="button"
                             className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-slate-500 transition hover:bg-white hover:text-primary"
                             onClick={() => {
                               setEditingDeptId(dept.id);
                               setEditingDeptName(dept.name);
+                              setEditingDeptEmail(dept.email || '');
+                              setEditingDeptNotify(!!dept.notify_email_enabled);
                             }}
-                            aria-label={t('whatsapp.renameDepartment')}
+                            aria-label={t('whatsapp.editDepartment')}
                           >
                             <Pencil className="h-4 w-4" />
                           </button>
@@ -581,7 +670,7 @@ export function WhatsAppPage() {
                             <Trash2 className="h-4 w-4" />
                           </button>
                         </div>
-                      </>
+                      </div>
                     )}
                   </div>
                 ))}

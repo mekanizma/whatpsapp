@@ -496,6 +496,7 @@ export interface EcommerceReturnRequest {
 
 export interface Ticket {
   id: string;
+  ticket_number?: number | null;
   customer_phone: string;
   customer_name: string | null;
   subject: string;
@@ -572,6 +573,8 @@ export interface Department {
   id: string;
   name: string;
   description?: string | null;
+  email?: string | null;
+  notify_email_enabled?: boolean;
   is_active?: boolean;
 }
 

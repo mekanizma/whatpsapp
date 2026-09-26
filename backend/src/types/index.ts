@@ -85,6 +85,8 @@ export interface Department {
   company_id: string;
   name: string;
   description: string | null;
+  email: string | null;
+  notify_email_enabled: boolean;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -154,6 +156,7 @@ export interface Message {
 export interface Ticket {
   id: string;
   company_id: string;
+  ticket_number?: number | null;
   customer_phone: string;
   customer_name: string | null;
   subject: string;

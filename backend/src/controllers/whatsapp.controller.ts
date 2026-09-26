@@ -427,7 +427,10 @@ export async function getDepartments(req: AuthRequest, res: Response): Promise<v
 
 export async function postDepartment(req: AuthRequest, res: Response): Promise<void> {
   try {
-    const dept = await createDepartment(req.companyId!, req.body.name, req.body.description);
+    const dept = await createDepartment(req.companyId!, req.body.name, req.body.description, {
+      email: req.body.email,
+      notify_email_enabled: req.body.notify_email_enabled,
+    });
     res.status(201).json({ success: true, data: dept });
   } catch (err) {
     res.status(400).json({ success: false, error: err instanceof Error ? err.message : 'Oluşturulamadı' });

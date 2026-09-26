@@ -31,11 +31,17 @@ export interface NotificationUserInput {
 
 export interface TicketNotificationPayload {
   id: string;
+  ticket_number?: number | null;
   customer_phone: string;
   customer_name: string | null;
   subject: string;
   priority?: string;
   department_id?: string | null;
+}
+
+function formatTicketLabel(ticket: TicketNotificationPayload): string {
+  if (ticket.ticket_number != null) return `#${ticket.ticket_number}`;
+  return `#${ticket.id.slice(0, 8).toUpperCase()}`;
 }
 
 async function getProfileEmail(userId: string): Promise<string | null> {
@@ -186,10 +192,12 @@ function buildTicketNotificationMessage(ticket: TicketNotificationPayload, depar
   const customerLabel = ticket.customer_name
     ? `${ticket.customer_name} (${ticket.customer_phone})`
     : ticket.customer_phone;
+  const ticketLabel = formatTicketLabel(ticket);
 
   const lines = [
     '🔔 Yeni destek talebi',
     '',
+    `Talep No: ${ticketLabel}`,
     `Müşteri: ${customerLabel}`,
     `Konu: ${ticket.subject}`,
   ];
@@ -218,18 +226,23 @@ async function sendTicketEmail(options: {
   const customerLabel = options.ticket.customer_name
     ? `${options.ticket.customer_name} (${options.ticket.customer_phone})`
     : options.ticket.customer_phone;
+  const ticketLabel = formatTicketLabel(options.ticket);
   const panelUrl = panelTicketsUrl();
   const rows = [
+    { label: 'Talep No', value: ticketLabel },
     { label: 'Müşteri', value: customerLabel },
     { label: 'Konu', value: options.ticket.subject },
   ];
+  if (options.ticket.priority) {
+    rows.push({ label: 'Öncelik', value: options.ticket.priority });
+  }
   if (options.departmentName) {
     rows.push({ label: 'Departman', value: options.departmentName });
   }
 
   return sendEmail({
     to: options.to,
-    subject: `Yeni destek talebi: ${options.ticket.subject}`,
+    subject: `Yeni destek talebi ${ticketLabel}: ${options.ticket.subject}`,
     html: buildMobileEmailHtml({
       title: 'Yeni Destek Talebi',
       intro: 'Şirket paneline yeni bir destek talebi geldi.',
@@ -286,13 +299,17 @@ export async function notifyTicketRecipients(
   }
 
   let departmentName: string | undefined;
+  let departmentEmail: string | null = null;
+  let departmentNotifyEnabled = false;
   if (ticket.department_id) {
     const { data: dept } = await adminClient
       .from('departments')
-      .select('name')
+      .select('name, email, notify_email_enabled')
       .eq('id', ticket.department_id)
       .maybeSingle();
     departmentName = dept?.name;
+    departmentEmail = (dept?.email as string | null)?.trim().toLowerCase() || null;
+    departmentNotifyEnabled = !!dept?.notify_email_enabled;
   }
 
   const recipientMap = new Map(
@@ -384,8 +401,28 @@ export async function notifyTicketRecipients(
     }
   }
 
+  if (
+    departmentNotifyEnabled &&
+    departmentEmail &&
+    departmentEmail.includes('@') &&
+    !sentEmails.has(departmentEmail)
+  ) {
+    sentEmails.add(departmentEmail);
+    const sent = await sendTicketEmail({
+      to: departmentEmail,
+      ticket,
+      departmentName,
+    });
+    if (sent) {
+      notified += 1;
+      console.log(`[TicketNotify] Departman e-postası gönderildi → ${departmentEmail}`);
+    } else {
+      console.error(`[TicketNotify] Departman e-postası gönderilemedi → ${departmentEmail}`);
+    }
+  }
+
   if (!notified) {
-    if (!ticket.department_id && !configured) {
+    if (!ticket.department_id && !configured && !departmentNotifyEnabled) {
       console.log('[TicketNotify] Departman atanmamış talep — bildirim gönderilmedi');
     } else {
       console.log(
@@ -429,7 +466,7 @@ export async function createTicketAndNotify(
       status: input.status || 'open',
       department_id: departmentId,
     })
-    .select('id, customer_phone, customer_name, subject, priority, department_id')
+    .select('id, ticket_number, customer_phone, customer_name, subject, priority, department_id')
     .single();
 
   if (error) {

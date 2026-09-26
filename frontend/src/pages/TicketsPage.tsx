@@ -201,6 +201,11 @@ export function TicketsPage() {
                       </div>
                       <div className="min-w-0 space-y-1.5">
                         <div className="flex flex-wrap items-center gap-2">
+                          {ticket.ticket_number != null && (
+                            <Badge variant="info">
+                              {t('tickets.ticketNumber', { number: ticket.ticket_number })}
+                            </Badge>
+                          )}
                           <h3 className="font-semibold text-slate-900">
                             {getTicketSubjectLabel(t, ticket.subject)}
                           </h3>

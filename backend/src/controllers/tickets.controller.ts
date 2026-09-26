@@ -396,6 +396,7 @@ export async function assignTicket(req: AuthRequest, res: Response): Promise<voi
 
   void notifyTicketRecipients(companyId, {
     id: data.id,
+    ticket_number: data.ticket_number,
     customer_phone: data.customer_phone,
     customer_name: data.customer_name,
     subject: data.subject,
@@ -501,6 +502,7 @@ export async function transferTicket(req: AuthRequest, res: Response): Promise<v
 
   void notifyTicketRecipients(companyId, {
     id: data.id,
+    ticket_number: data.ticket_number,
     customer_phone: data.customer_phone,
     customer_name: data.customer_name,
     subject: data.subject,
