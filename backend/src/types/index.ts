@@ -72,6 +72,10 @@ export interface WhatsAppConfig {
   support_timezone?: string | null;
   out_of_hours_message?: string | null;
   out_of_hours_create_ticket?: boolean;
+  /** Belirsiz konuşma dilinde şablonların düşeceği hat dili */
+  primary_language?: string | null;
+  /** Doluysa aktarım bekleme mesajı bu metindir; boşsa dile göre şablon */
+  handoff_waiting_message?: string | null;
   last_synced_at?: string | null;
   created_at: string;
   updated_at: string;

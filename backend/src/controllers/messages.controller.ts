@@ -20,9 +20,11 @@ import {
 import { buildContentDisposition } from '../utils/content-disposition';
 import {
   getAssignedCustomerPhones,
+  getDepartmentCustomerPhones,
   getStaffRecord,
   staffCanAccessCustomerPhone,
   staffHasCompanyWideSupportAccess,
+  staffHasDepartmentWideSupportAccess,
 } from '../services/department-access.service';
 import { getSupportReplyWindowBlockReason } from '../services/support-reply-window.service';
 import {
@@ -161,7 +163,14 @@ export async function getConversations(req: AuthRequest, res: Response): Promise
     }
     // Süper personel tüm destek konuşmalarını atama olmadan görür
     if (!staffHasCompanyWideSupportAccess(staff)) {
-      assignedPhones = await getAssignedCustomerPhones(req.companyId!, staff.id);
+      if (staffHasDepartmentWideSupportAccess(staff) && staff.department_id) {
+        assignedPhones = await getDepartmentCustomerPhones(
+          req.companyId!,
+          staff.department_id
+        );
+      } else {
+        assignedPhones = await getAssignedCustomerPhones(req.companyId!, staff.id);
+      }
       if (assignedPhones.length === 0) {
         res.json({ success: true, data: [] });
         return;

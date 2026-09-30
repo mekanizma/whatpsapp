@@ -1039,12 +1039,13 @@
     "savePassword": "Şifreyi Kaydet",
     "passwordSaved": "Personel şifresi güncellendi.",
     "permissionLevel": "Yetki Seviyesi",
-    "roleHintNormal": "Mesajlar, destek talepleri, takvim ve hesap ayarlarına erişebilir.",
-    "roleHintSuper": "Mesajlar, destek talepleri, takvim, hesap ayarları ve bilgi bankasına erişebilir.",
+    "roleHintNormal": "Mesajlar, destek talepleri, takvim ve hesap ayarlarına erişebilir. Başkasına talep atayamaz.",
+    "roleHintAdmin": "Departman sorumlusu: kendi departmanındaki tüm mesajlaşmaları görür; talepleri kendisi hariç istediği personele atayabilir.",
+    "roleHintSuper": "Mesajlar, destek talepleri, takvim, hesap ayarları ve bilgi bankasına erişebilir. Tüm şirkette talep atayabilir.",
     "roles": {
       "agent": "Personel",
-      "supervisor": "Süper Personel",
-      "admin": "Süper Personel"
+      "admin": "Admin Personel",
+      "supervisor": "Süper Personel"
     }
   },
   "knowledge": {
@@ -1240,6 +1241,22 @@
     "outOfHoursMessageHint": "Canlı desteğe aktarım mesai dışında olduğunda müşteriye gönderilir",
     "outOfHoursCreateTicket": "Mesai dışında destek talebi oluştur",
     "outOfHoursCreateTicketHint": "Kapalıysa yalnızca mesaj gönderilir, panelde talep açılmaz",
+    "sectionHandoffMessage": "Destek talebi mesajı",
+    "sectionHandoffMessageHint": "Destek talebi açıldıktan sonra müşteriye bir kez giden bekleme mesajı. Bu numaraya özeldir.",
+    "primaryLanguage": "Bu hattın ana dili",
+    "primaryLanguageHint": "Konuşmanın dili net değilse bekleme mesajı bu dilde gider. Net bir dil varsa müşterinin dili kullanılır.",
+    "languages": {
+      "tr": "Türkçe",
+      "en": "English",
+      "de": "Deutsch",
+      "ar": "العربية",
+      "ru": "Русский",
+      "fr": "Français",
+      "es": "Español"
+    },
+    "handoffWaitingMessage": "Bekleme mesajı",
+    "handoffWaitingMessagePlaceholder": "Temsilcimiz en kısa sürede sizinle iletişime geçecek.",
+    "handoffWaitingMessageHint": "Boş bırakılırsa konuşma diline göre hazır metin gider. Doldurursanız bu numarada her zaman bu metin gider.",
     "connected": "Bağlı",
     "disconnected": "Bağlı Değil",
     "reconnecting": "Yeniden bağlanıyor",

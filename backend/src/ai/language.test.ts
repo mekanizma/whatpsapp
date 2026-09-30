@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   detectConversationLanguage,
+  resolveTransferredWaitingMessage,
   t,
   getLanguagePromptBlock,
   getAppointmentProviderLabel,
@@ -109,6 +110,25 @@ describe('language.service', () => {
   it('belirsiz kısa ilk mesaj iş varsayılanı tr', () => {
     assert.equal(detectConversationLanguage('ok', []), 'tr');
     assert.equal(detectConversationLanguage('?', []), 'tr');
+  });
+
+  it('belirsiz mesajda hat ana diline düşer', () => {
+    assert.equal(detectConversationLanguage('ok', [], 'en'), 'en');
+    assert.equal(detectConversationLanguage('?', [], 'de'), 'de');
+    assert.equal(detectConversationLanguage('ok', englishHistory, 'tr'), 'en');
+  });
+
+  it('bekleme mesajı özel metni şablonun önüne alır', () => {
+    assert.equal(
+      resolveTransferredWaitingMessage('tr', 'Our representative will contact you shortly.'),
+      'Our representative will contact you shortly.'
+    );
+    assert.equal(
+      resolveTransferredWaitingMessage('en', '   '),
+      t('en', 'transferred_waiting')
+    );
+    assert.match(t('en', 'transferred_waiting'), /representative/i);
+    assert.match(t('tr', 'transferred_waiting'), /Temsilcimiz/);
   });
 
   it('preAIGate İngilizce selamı ilk mesajda İngilizce şablonla verir', () => {

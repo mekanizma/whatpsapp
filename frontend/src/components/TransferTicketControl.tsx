@@ -10,6 +10,8 @@ import { ArrowRightLeft, UserPlus } from 'lucide-react';
 import { api } from '@/services/api';
 import { Button, Label, Spinner } from '@/components/ui';
 import { cn } from '@/lib/utils';
+import { canAssignTickets, isAdminStaff } from '@/lib/staff-permissions';
+import { useAuthStore } from '@/store/authStore';
 import type { Conversation, StaffMember, Ticket } from '@/types';
 
 interface Department {
@@ -35,12 +37,15 @@ export function TransferTicketControl({
 }: TransferTicketControlProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const user = useAuthStore((s) => s.user);
+  const allowReassign = canAssignTickets(user);
   const [mode, setMode] = useState<AssignMode>('department');
   const [selectedDept, setSelectedDept] = useState('');
   const [selectedStaff, setSelectedStaff] = useState('');
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const canReassign = ticket.status === 'open' || ticket.status === 'in_progress';
+  const canReassign =
+    allowReassign && (ticket.status === 'open' || ticket.status === 'in_progress');
 
   const { data: departments = [], isLoading: deptLoading } = useQuery({
     queryKey: ['departments'],
@@ -54,14 +59,25 @@ export function TransferTicketControl({
     enabled: canReassign,
   });
 
+  const myStaffId =
+    staffList.find((s) => s.profile_id && user?.id && s.profile_id === user.id)?.id || null;
+
   const targetDepartments = departments.filter((d) => d.id !== ticket.department_id);
-  const targetStaff = staffList.filter(
-    (s) => s.is_active && s.id !== ticket.assigned_staff
-  );
+  const targetStaff = staffList.filter((s) => {
+    if (!s.is_active) return false;
+    if (s.id === ticket.assigned_staff) return false;
+    // Admin personel kendisine atayamaz
+    if (isAdminStaff(user?.staff_role) && myStaffId && s.id === myStaffId) return false;
+    return true;
+  });
 
   const isLoading = deptLoading || staffLoading;
   const hasDeptTargets = targetDepartments.length > 0;
   const hasStaffTargets = targetStaff.length > 0;
+
+  if (!allowReassign) {
+    return null;
+  }
 
   const clearConversationCache = (phone: string) => {
     queryClient.setQueriesData<Conversation[]>({ queryKey: ['conversations'] }, (old) =>

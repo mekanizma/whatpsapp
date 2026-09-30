@@ -10,6 +10,18 @@ import { invalidateStaticSystemPromptCache } from '../ai/admin-prompt-builder';
 import { invalidateCompanyCache } from '../ai/openai.service';
 import { validateWorkingHoursForWrite } from './working-hours.service';
 
+export const ACCOUNT_PRIMARY_LANGUAGES = ['tr', 'en', 'de', 'ar', 'ru', 'fr', 'es'] as const;
+export type AccountPrimaryLanguage = (typeof ACCOUNT_PRIMARY_LANGUAGES)[number];
+
+export const HANDOFF_WAITING_MESSAGE_MAX = 800;
+
+export function parseAccountPrimaryLanguage(value: unknown): AccountPrimaryLanguage {
+  const code = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  return (ACCOUNT_PRIMARY_LANGUAGES as readonly string[]).includes(code)
+    ? (code as AccountPrimaryLanguage)
+    : 'tr';
+}
+
 export const WHATSAPP_LINE_LIMITS: Record<string, number> = {
   starter: 1,
   business: 3,
@@ -110,7 +122,7 @@ export async function listWhatsAppAccounts(companyId: string): Promise<WhatsAppA
   const { data, error } = await adminClient
     .from('whatsapp_configs')
     .select(
-      'id, company_id, label, phone_number, profile_name, business_account_id, status, is_active, is_default, ai_enabled, custom_instructions, support_hours_enabled, support_working_hours, support_timezone, out_of_hours_message, out_of_hours_create_ticket, last_synced_at, created_at, updated_at'
+      'id, company_id, label, phone_number, profile_name, business_account_id, status, is_active, is_default, ai_enabled, custom_instructions, support_hours_enabled, support_working_hours, support_timezone, out_of_hours_message, out_of_hours_create_ticket, primary_language, handoff_waiting_message, last_synced_at, created_at, updated_at'
     )
     .eq('company_id', companyId)
     .order('is_default', { ascending: false })
@@ -167,6 +179,35 @@ export async function getDefaultWhatsAppAccount(companyId: string): Promise<What
   return (first as WhatsAppAccount) || null;
 }
 
+export async function getWhatsAppAccountLanguageSettings(
+  companyId: string,
+  accountId?: string | null
+): Promise<{ primaryLanguage: AccountPrimaryLanguage; handoffWaitingMessage: string | null }> {
+  let id = accountId || null;
+  if (!id) {
+    const fallback = await getDefaultWhatsAppAccount(companyId);
+    id = fallback?.id || null;
+  }
+  if (!id) {
+    return { primaryLanguage: 'tr', handoffWaitingMessage: null };
+  }
+
+  const { data } = await adminClient
+    .from('whatsapp_configs')
+    .select('primary_language, handoff_waiting_message')
+    .eq('id', id)
+    .eq('company_id', companyId)
+    .maybeSingle();
+
+  const custom =
+    typeof data?.handoff_waiting_message === 'string' ? data.handoff_waiting_message.trim() : '';
+
+  return {
+    primaryLanguage: parseAccountPrimaryLanguage(data?.primary_language),
+    handoffWaitingMessage: custom || null,
+  };
+}
+
 export async function createWhatsAppAccount(
   companyId: string,
   label?: string
@@ -216,6 +257,8 @@ export async function updateWhatsAppAccount(
     support_timezone?: string | null;
     out_of_hours_message?: string | null;
     out_of_hours_create_ticket?: boolean;
+    primary_language?: string | null;
+    handoff_waiting_message?: string | null;
   }
 ): Promise<WhatsAppAccount> {
   const account = await getWhatsAppAccount(companyId, accountId);
@@ -265,6 +308,24 @@ export async function updateWhatsAppAccount(
   }
   if (updates.out_of_hours_create_ticket !== undefined) {
     patch.out_of_hours_create_ticket = !!updates.out_of_hours_create_ticket;
+  }
+  if (updates.primary_language !== undefined) {
+    const lang = parseAccountPrimaryLanguage(updates.primary_language);
+    const raw = typeof updates.primary_language === 'string' ? updates.primary_language.trim().toLowerCase() : '';
+    if (raw && lang !== raw) {
+      throw new Error('Geçersiz hat dili');
+    }
+    patch.primary_language = lang;
+  }
+  if (updates.handoff_waiting_message !== undefined) {
+    const msg =
+      typeof updates.handoff_waiting_message === 'string'
+        ? updates.handoff_waiting_message.trim()
+        : '';
+    if (msg.length > HANDOFF_WAITING_MESSAGE_MAX) {
+      throw new Error(`Bekleme mesajı en fazla ${HANDOFF_WAITING_MESSAGE_MAX} karakter olabilir`);
+    }
+    patch.handoff_waiting_message = msg || null;
   }
 
   if (updates.is_default === true) {

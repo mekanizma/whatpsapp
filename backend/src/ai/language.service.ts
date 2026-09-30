@@ -1214,12 +1214,14 @@ export function getAppointmentProviderLabel(
  */
 export function detectConversationLanguage(
   message: string,
-  history: { sender_type: string; message: string }[] = []
+  history: { sender_type: string; message: string }[] = [],
+  fallback: ConversationLang = 'tr'
 ): ConversationLang {
   const text = message.trim();
   const stickyLang = getStickyLanguageFromHistory(history);
+  const fallbackLang = fallback === 'other' ? 'en' : fallback;
 
-  if (!text) return stickyLang ?? 'tr';
+  if (!text) return stickyLang ?? fallbackLang;
 
   // ok/yes/tamam/evet gibi kısa onaylar dil değiştirmez
   if (stickyLang && LANGUAGE_NEUTRAL_AFFIRMATION_RE.test(text)) {
@@ -1227,9 +1229,19 @@ export function detectConversationLanguage(
   }
 
   const detection = detectSingleMessageLanguage(text);
-  if (!detection.confident) return stickyLang ?? 'tr';
+  if (!detection.confident) return stickyLang ?? fallbackLang;
 
   return detection.lang;
+}
+
+/** Destek talebi açıldıktan sonra giden bekleme metni. Özel metin varsa o, yoksa dil şablonu. */
+export function resolveTransferredWaitingMessage(
+  lang: ConversationLang,
+  customMessage?: string | null
+): string {
+  const custom = customMessage?.trim();
+  if (custom) return custom;
+  return t(lang, 'transferred_waiting');
 }
 
 

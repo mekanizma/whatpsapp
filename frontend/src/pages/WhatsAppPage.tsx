@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Smartphone, Wifi, WifiOff, QrCode, Send, Unplug, Cloud, Copy, Check,
-  Plus, Trash2, RefreshCw, Building2, Star, Power, ChevronDown, Link2, Save, Bot, Pencil, Clock,
+  Plus, Trash2, RefreshCw, Building2, Star, Power, ChevronDown, Link2, Save, Bot, Pencil, Clock, MessageSquare,
 } from 'lucide-react';
 import { api } from '@/services/api';
 import {
@@ -38,6 +38,8 @@ interface DaySchedule {
 }
 
 type WorkingHoursSchedule = Record<DayKey, DaySchedule | null>;
+
+const LINE_LANGUAGES = ['tr', 'en', 'de', 'ar', 'ru', 'fr', 'es'] as const;
 
 const DAY_KEYS: DayKey[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
 
@@ -105,6 +107,8 @@ interface WhatsAppAccount {
   support_timezone?: string | null;
   out_of_hours_message?: string | null;
   out_of_hours_create_ticket?: boolean;
+  primary_language?: string | null;
+  handoff_waiting_message?: string | null;
 }
 
 interface AccountsResponse {
@@ -212,6 +216,8 @@ export function WhatsAppPage() {
       support_timezone?: string | null;
       out_of_hours_message?: string | null;
       out_of_hours_create_ticket?: boolean;
+      primary_language?: string;
+      handoff_waiting_message?: string | null;
     }) => api.patch(`/whatsapp/accounts/${id}`, body),
     onSuccess: invalidate,
   });
@@ -477,6 +483,9 @@ export function WhatsAppPage() {
                 onSaveSupportHours={(settings) =>
                   updateAccountMutation.mutate({ id: account.id, ...settings })
                 }
+                onSaveHandoffMessage={(settings) =>
+                  updateAccountMutation.mutate({ id: account.id, ...settings })
+                }
                 onCloudConnect={(form) => cloudConnectMutation.mutate({ accountId: account.id, form })}
                 onCancelQr={cancelQr}
                 onRefreshQr={() => startQrMutation.mutate(account.id)}
@@ -495,6 +504,11 @@ export function WhatsAppPage() {
                   updateAccountMutation.isPending &&
                   updateAccountMutation.variables?.id === account.id &&
                   updateAccountMutation.variables?.support_hours_enabled !== undefined
+                }
+                isSavingHandoff={
+                  updateAccountMutation.isPending &&
+                  updateAccountMutation.variables?.id === account.id &&
+                  updateAccountMutation.variables?.primary_language !== undefined
                 }
                 onSendTest={() => sendTest(account.id)}
               />
@@ -760,6 +774,10 @@ interface AccountCardProps {
     out_of_hours_message: string | null;
     out_of_hours_create_ticket: boolean;
   }) => void;
+  onSaveHandoffMessage: (settings: {
+    primary_language: string;
+    handoff_waiting_message: string | null;
+  }) => void;
   onCloudConnect: (form: CloudApiFormState) => void;
   onCancelQr: () => void;
   onRefreshQr: () => void;
@@ -769,6 +787,7 @@ interface AccountCardProps {
   isSavingLabel: boolean;
   isSavingAi: boolean;
   isSavingSupportHours: boolean;
+  isSavingHandoff: boolean;
   onSendTest: () => void;
 }
 
@@ -778,9 +797,9 @@ function AccountCard({
   activeQr, cloudForm, cloudFeedback, testState, onCloudFormChange, onTestChange,
   onStartQr, onDisconnect, onDelete, onToggleActive, onSetDefault,
   onDepartmentsChange, onAiEnabledChange, onSaveCustomInstructions, onKnowledgeChange,
-  onSaveSupportHours, onCloudConnect, onCancelQr, onRefreshQr,
+  onSaveSupportHours, onSaveHandoffMessage, onCloudConnect, onCancelQr, onRefreshQr,
   isQrPending, isCloudPending, isDisconnecting, isSavingLabel, isSavingAi,
-  isSavingSupportHours, onSaveLabel, onSendTest,
+  isSavingSupportHours, isSavingHandoff, onSaveLabel, onSendTest,
 }: AccountCardProps) {
   const { t } = useTranslation();
   const [labelDraft, setLabelDraft] = useState(account.label || '');
@@ -793,6 +812,12 @@ function AccountCard({
   const [oohCreateTicket, setOohCreateTicket] = useState(
     account.out_of_hours_create_ticket !== false
   );
+  const [primaryLanguage, setPrimaryLanguage] = useState(
+    LINE_LANGUAGES.includes(account.primary_language as (typeof LINE_LANGUAGES)[number])
+      ? (account.primary_language as (typeof LINE_LANGUAGES)[number])
+      : 'tr'
+  );
+  const [handoffMessage, setHandoffMessage] = useState(account.handoff_waiting_message || '');
   const isConnected = account.status === 'connected';
   const isReconnecting = account.status === 'reconnecting' || account.reconnecting;
   const isCloudConnected = isConnected && account.connection_type === 'api';
@@ -832,6 +857,16 @@ function AccountCard({
     account.out_of_hours_message,
     account.out_of_hours_create_ticket,
   ]);
+
+  useEffect(() => {
+    const lang = account.primary_language;
+    setPrimaryLanguage(
+      LINE_LANGUAGES.includes(lang as (typeof LINE_LANGUAGES)[number])
+        ? (lang as (typeof LINE_LANGUAGES)[number])
+        : 'tr'
+    );
+    setHandoffMessage(account.handoff_waiting_message || '');
+  }, [account.id, account.primary_language, account.handoff_waiting_message]);
   const statusBadge = isConnected ? (
     <Badge variant="success"><Wifi className="mr-1 h-3 w-3" /> {t('whatsapp.connected')}</Badge>
   ) : isReconnecting ? (
@@ -1274,6 +1309,61 @@ function AccountCard({
                 }
               >
                 {isSavingSupportHours ? <Spinner /> : <Save className="h-4 w-4" />}
+                {t('common.save')}
+              </Button>
+            </div>
+          </SectionPanel>
+
+          <SectionPanel title={t('whatsapp.sectionHandoffMessage')} icon={MessageSquare}>
+            <p className="mb-4 text-xs text-slate-500">{t('whatsapp.sectionHandoffMessageHint')}</p>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor={`wa-lang-${account.id}`}>{t('whatsapp.primaryLanguage')}</Label>
+                <select
+                  id={`wa-lang-${account.id}`}
+                  value={primaryLanguage}
+                  onChange={(e) =>
+                    setPrimaryLanguage(e.target.value as (typeof LINE_LANGUAGES)[number])
+                  }
+                  className="flex h-11 min-h-[44px] w-full rounded-xl border border-slate-200 bg-white px-3.5 text-base text-slate-900 shadow-sm focus:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/25 sm:text-sm"
+                >
+                  {LINE_LANGUAGES.map((code) => (
+                    <option key={code} value={code}>
+                      {t(`whatsapp.languages.${code}`)}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-slate-500">{t('whatsapp.primaryLanguageHint')}</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor={`wa-handoff-msg-${account.id}`}>
+                  {t('whatsapp.handoffWaitingMessage')}
+                </Label>
+                <Textarea
+                  id={`wa-handoff-msg-${account.id}`}
+                  value={handoffMessage}
+                  onChange={(e) => setHandoffMessage(e.target.value)}
+                  placeholder={t('whatsapp.handoffWaitingMessagePlaceholder')}
+                  rows={3}
+                  maxLength={800}
+                  className="min-h-[88px] resize-y text-base sm:text-sm"
+                />
+                <p className="text-xs text-slate-500">{t('whatsapp.handoffWaitingMessageHint')}</p>
+              </div>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <Button
+                type="button"
+                className="h-11 w-full sm:w-auto"
+                disabled={isSavingHandoff}
+                onClick={() =>
+                  onSaveHandoffMessage({
+                    primary_language: primaryLanguage,
+                    handoff_waiting_message: handoffMessage.trim() || null,
+                  })
+                }
+              >
+                {isSavingHandoff ? <Spinner /> : <Save className="h-4 w-4" />}
                 {t('common.save')}
               </Button>
             </div>

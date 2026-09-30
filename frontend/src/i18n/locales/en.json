@@ -1039,12 +1039,13 @@
     "savePassword": "Save Password",
     "passwordSaved": "Staff password updated.",
     "permissionLevel": "Permission Level",
-    "roleHintNormal": "Can access messages, support tickets, calendar, and account settings.",
-    "roleHintSuper": "Can access messages, support tickets, calendar, account settings, and knowledge base.",
+    "roleHintNormal": "Can access messages, support tickets, calendar, and account settings. Cannot assign tickets to others.",
+    "roleHintAdmin": "Department lead: sees all conversations in their department; can assign tickets to any staff except themselves.",
+    "roleHintSuper": "Can access messages, support tickets, calendar, account settings, and knowledge base. Can assign tickets company-wide.",
     "roles": {
-      "agent": "Agent",
-      "supervisor": "Supervisor",
-      "admin": "Supervisor"
+      "agent": "Staff",
+      "admin": "Admin Staff",
+      "supervisor": "Super Staff"
     }
   },
   "knowledge": {
@@ -1240,6 +1241,22 @@
     "outOfHoursMessageHint": "Sent to the customer when live support is requested outside hours",
     "outOfHoursCreateTicket": "Create support ticket outside hours",
     "outOfHoursCreateTicketHint": "When off, only the message is sent — no ticket is opened in the panel",
+    "sectionHandoffMessage": "Support ticket message",
+    "sectionHandoffMessageHint": "The one-time waiting message sent after a support ticket is opened. It is specific to this number.",
+    "primaryLanguage": "Primary language of this line",
+    "primaryLanguageHint": "If the conversation language is unclear, the waiting message uses this language. A clear customer language is still followed.",
+    "languages": {
+      "tr": "Türkçe",
+      "en": "English",
+      "de": "Deutsch",
+      "ar": "العربية",
+      "ru": "Русский",
+      "fr": "Français",
+      "es": "Español"
+    },
+    "handoffWaitingMessage": "Waiting message",
+    "handoffWaitingMessagePlaceholder": "Our representative will contact you as soon as possible.",
+    "handoffWaitingMessageHint": "Leave empty to use the built-in text in the conversation language. If filled, this exact text is always sent on this number.",
     "connected": "Connected",
     "disconnected": "Not Connected",
     "reconnecting": "Reconnecting",

@@ -13,8 +13,10 @@ import {
   getStaffRecord,
   resolveStaffIdForProfile,
   staffHasCompanyWideSupportAccess,
+  staffHasDepartmentWideSupportAccess,
   validateDepartmentBelongsToCompany,
 } from '../services/department-access.service';
+import { staffCanAssignTickets } from '../services/staff-permissions.service';
 import { mapTicketRow } from '../utils/supabase-join';
 
 const TICKET_SELECT =
@@ -36,23 +38,23 @@ async function getStaffIdForProfile(
   return staff?.id || null;
 }
 
-async function canUserTransferTicket(
+async function canUserReassignTicket(
   req: AuthRequest,
   ticket: { status: string; assigned_staff: string | null; department_id: string | null }
 ): Promise<boolean> {
   if (req.role === 'company_admin' || req.role === 'super_admin') return true;
   if (req.role !== 'staff') return false;
+  if (!staffCanAssignTickets(req.role, req.staffRole)) return false;
 
   const staff = await getStaffRecord(req.companyId!, req.profile?.id);
   if (!staff) return false;
 
   if (staffHasCompanyWideSupportAccess(staff)) return true;
 
-  if (ticket.status === 'in_progress' && ticket.assigned_staff === staff.id) return true;
-
-  if (ticket.status === 'open') {
-    if (!staff.department_id) return true;
-    if (!ticket.department_id || ticket.department_id === staff.department_id) return true;
+  // Admin personel: yalnızca kendi departmanındaki talepler
+  if (staffHasDepartmentWideSupportAccess(staff)) {
+    if (!ticket.department_id) return true;
+    return ticket.department_id === staff.department_id;
   }
 
   return false;
@@ -85,6 +87,7 @@ export async function getTickets(req: AuthRequest, res: Response): Promise<void>
     const staff = await getStaffRecord(req.companyId!, req.profile?.id);
     const staffId = staff?.id || null;
     const isSuperStaff = staffHasCompanyWideSupportAccess(staff);
+    const isDeptLead = staffHasDepartmentWideSupportAccess(staff);
 
     // Süper personel tüm talepleri şirket yöneticisi gibi görür
     if (!isSuperStaff) {
@@ -93,7 +96,17 @@ export async function getTickets(req: AuthRequest, res: Response): Promise<void>
       const wantsResolved =
         view === 'resolved' || status === 'resolved' || status === 'closed';
 
-      if (wantsResolved) {
+      if (isDeptLead && staffDeptId) {
+        // Admin personel: departmanındaki tüm talepler
+        query = query.eq('department_id', staffDeptId);
+        if (wantsResolved) {
+          query = query.in('status', ['resolved', 'closed']);
+        } else if (view === 'open' || !status) {
+          query = query.in('status', ['open', 'in_progress']);
+        } else if (status) {
+          query = query.eq('status', status);
+        }
+      } else if (wantsResolved) {
         // Personel yalnızca kendi çözdüğü / atandığı geçmiş talepleri görür
         if (!staffId) {
           res.json({ success: true, data: [] });
@@ -161,7 +174,11 @@ export async function getActiveTicketByPhone(req: AuthRequest, res: Response): P
     }
     // Süper personel atama olmadan aktif talebi görebilir
     if (!staffHasCompanyWideSupportAccess(staff)) {
-      query = query.eq('assigned_staff', staff.id);
+      if (staffHasDepartmentWideSupportAccess(staff) && staff.department_id) {
+        query = query.eq('department_id', staff.department_id);
+      } else {
+        query = query.eq('assigned_staff', staff.id);
+      }
     }
   }
 
@@ -365,7 +382,23 @@ export async function assignTicket(req: AuthRequest, res: Response): Promise<voi
     return;
   }
 
-  const allowed = await canUserTransferTicket(req, ticket);
+  const actorStaff = await getStaffRecord(companyId, req.profile?.id);
+  // Admin personel kendisine atayamaz — dağıtım yetkisi
+  if (
+    req.role === 'staff' &&
+    staffHasDepartmentWideSupportAccess(actorStaff) &&
+    !staffHasCompanyWideSupportAccess(actorStaff) &&
+    actorStaff &&
+    targetStaffId === actorStaff.id
+  ) {
+    res.status(403).json({
+      success: false,
+      error: 'Admin personel talebi kendisine atayamaz. Üzerine almak için "Üzerine Al" kullanın.',
+    });
+    return;
+  }
+
+  const allowed = await canUserReassignTicket(req, ticket);
   if (!allowed) {
     res.status(403).json({ success: false, error: 'Bu talebi atama yetkiniz yok' });
     return;
@@ -463,7 +496,7 @@ export async function transferTicket(req: AuthRequest, res: Response): Promise<v
     return;
   }
 
-  const allowed = await canUserTransferTicket(req, ticket);
+  const allowed = await canUserReassignTicket(req, ticket);
   if (!allowed) {
     res.status(403).json({ success: false, error: 'Bu talebi transfer etme yetkiniz yok' });
     return;

@@ -3,7 +3,11 @@
  */
 
 import { adminClient } from '../database/supabase';
-import { isSuperStaffRole, type StaffSubRole } from './staff-permissions.service';
+import {
+  isAdminStaffRole,
+  isSuperStaffRole,
+  type StaffSubRole,
+} from './staff-permissions.service';
 import type { Department } from '../types';
 
 export type StaffAccessRecord = {
@@ -75,7 +79,38 @@ export function staffHasCompanyWideSupportAccess(staff: StaffAccessRecord | null
   return !!staff && isSuperStaffRole(staff.role);
 }
 
-/** Personel yalnızca kendisine atanmış müşteri konuşmasına erişebilir (süper personel hariç) */
+/** Admin personel — kendi departmanındaki tüm destek konuşmalarını görebilir */
+export function staffHasDepartmentWideSupportAccess(staff: StaffAccessRecord | null): boolean {
+  return !!staff && isAdminStaffRole(staff.role) && !!staff.department_id;
+}
+
+/** Departmandaki aktif taleplerin müşteri telefonları */
+export async function getDepartmentCustomerPhones(
+  companyId: string,
+  departmentId: string
+): Promise<string[]> {
+  const { data } = await adminClient
+    .from('tickets')
+    .select('customer_phone')
+    .eq('company_id', companyId)
+    .eq('department_id', departmentId)
+    .in('status', ['open', 'in_progress']);
+
+  return [
+    ...new Set(
+      (data || [])
+        .map((row) => row.customer_phone as string | null)
+        .filter((phone): phone is string => !!phone)
+    ),
+  ];
+}
+
+/**
+ * Konuşma erişimi:
+ * - süper personel: tüm şirket
+ * - admin personel: kendi departmanı
+ * - personel: yalnızca kendisine atanmış
+ */
 export async function staffCanAccessCustomerPhone(
   companyId: string,
   profileId: string | undefined,
@@ -85,6 +120,19 @@ export async function staffCanAccessCustomerPhone(
   if (!staff) return false;
 
   if (staffHasCompanyWideSupportAccess(staff)) return true;
+
+  if (staffHasDepartmentWideSupportAccess(staff) && staff.department_id) {
+    const { data: deptTicket } = await adminClient
+      .from('tickets')
+      .select('id')
+      .eq('company_id', companyId)
+      .eq('department_id', staff.department_id)
+      .eq('customer_phone', customerPhone)
+      .in('status', ['open', 'in_progress'])
+      .limit(1)
+      .maybeSingle();
+    if (deptTicket) return true;
+  }
 
   const { data } = await adminClient
     .from('tickets')
@@ -139,7 +187,7 @@ export async function resolveStaffIdForProfile(
     return byEmail.id;
   }
 
-  const staffRole = profile.role === 'company_admin' ? 'admin' : 'agent';
+  const staffRole = profile.role === 'company_admin' ? 'supervisor' : 'agent';
   const { data: created, error: insertError } = await adminClient
     .from('staff')
     .insert({

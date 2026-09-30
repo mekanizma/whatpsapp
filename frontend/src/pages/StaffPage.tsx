@@ -130,7 +130,9 @@ export function StaffPage() {
       email: member.email,
       phone: member.phone || '',
       department_id: member.department_id || member.department?.id || '',
-      role: member.role === 'supervisor' || member.role === 'admin' ? 'supervisor' : 'agent',
+      role: member.role === 'supervisor' || member.role === 'admin' || member.role === 'agent'
+        ? member.role
+        : 'agent',
     });
   };
 
@@ -245,7 +247,11 @@ export function StaffPage() {
                   ))}
                 </select>
                 <p className="text-xs text-slate-500">
-                  {form.role === 'supervisor' ? t('staff.roleHintSuper') : t('staff.roleHintNormal')}
+                  {form.role === 'supervisor'
+                    ? t('staff.roleHintSuper')
+                    : form.role === 'admin'
+                      ? t('staff.roleHintAdmin')
+                      : t('staff.roleHintNormal')}
                 </p>
               </div>
             </div>
@@ -323,7 +329,11 @@ export function StaffPage() {
                         ))}
                       </select>
                       <p className="text-xs text-slate-500">
-                        {editForm.role === 'supervisor' ? t('staff.roleHintSuper') : t('staff.roleHintNormal')}
+                        {editForm.role === 'supervisor'
+                          ? t('staff.roleHintSuper')
+                          : editForm.role === 'admin'
+                            ? t('staff.roleHintAdmin')
+                            : t('staff.roleHintNormal')}
                       </p>
                     </div>
                     {updateMutation.isError && (
@@ -380,7 +390,7 @@ export function StaffPage() {
                         <p className="text-sm text-slate-600">{member.phone}</p>
                       )}
                       <Badge variant="info" className="mt-1">
-                        {t(`staff.roles.${member.role === 'admin' ? 'supervisor' : member.role}`, { defaultValue: member.role })}
+                        {t(`staff.roles.${member.role}`, { defaultValue: member.role })}
                       </Badge>
                       {member.department?.name && (
                         <Badge variant="default" className="mt-1 ml-1">

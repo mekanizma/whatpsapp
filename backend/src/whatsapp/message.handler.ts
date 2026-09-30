@@ -27,7 +27,13 @@ import {
   matchDepartmentFromReply,
   buildDepartmentSelectionPrompt,
 } from '../ai/department-routing.service';
-import { detectConversationLanguage, t, type ConversationLang } from '../ai/language.service';
+import {
+  detectConversationLanguage,
+  resolveTransferredWaitingMessage,
+  t,
+  type ConversationLang,
+} from '../ai/language.service';
+import { getWhatsAppAccountLanguageSettings } from '../services/whatsapp-account.service';
 import { uploadMessageMedia } from '../services/message-media.service';
 import { isAiEnabledForAccount } from '../services/company-ai-settings.service';
 import { isPhoneBlacklisted } from '../services/phone-blacklist.service';
@@ -180,8 +186,12 @@ async function deliverForcedHandoff(options: ForcedHandoffOptions): Promise<stri
   const convState = getConversationState(companyId, phone);
   if (convState.status === 'transferred') {
     if (!convState.waitingMessageSent) {
-      const lang = detectConversationLanguage(customerMessage);
-      const waitMsg = t(lang, 'transferred_waiting');
+      const waitMsg = await buildTransferredWaitingMessage(
+        companyId,
+        phone,
+        customerMessage,
+        whatsappAccountId
+      );
       markTransferredWaitingMessageSent(companyId, phone);
 
       await adminClient.from('messages').insert({
@@ -263,14 +273,19 @@ async function handleTransferredInbound(
   companyId: string,
   phone: string,
   customerName: string | null,
-  messageText: string
+  messageText: string,
+  whatsappAccountId?: string | null
 ): Promise<string | null> {
   const convState = getConversationState(companyId, phone);
   if (convState.status !== 'transferred') return null;
 
   if (!convState.waitingMessageSent) {
-    const lang = detectConversationLanguage(messageText);
-    const waitMsg = t(lang, 'transferred_waiting');
+    const waitMsg = await buildTransferredWaitingMessage(
+      companyId,
+      phone,
+      messageText,
+      whatsappAccountId
+    );
     markTransferredWaitingMessageSent(companyId, phone);
 
     await adminClient.from('messages').insert({
@@ -407,6 +422,25 @@ async function fetchRecentHistory(
     sender_type: row.sender_type,
     message: formatHistoryLine(row.message, row.media_type),
   }));
+}
+
+/** Aktarılan görüşmede bir kez giden bekleme metni — hat ayarı, yoksa konuşma dili. */
+async function buildTransferredWaitingMessage(
+  companyId: string,
+  phone: string,
+  customerMessage: string,
+  whatsappAccountId?: string | null
+): Promise<string> {
+  const [settings, history] = await Promise.all([
+    getWhatsAppAccountLanguageSettings(companyId, whatsappAccountId),
+    fetchRecentHistory(companyId, phone),
+  ]);
+  const lang = detectConversationLanguage(
+    customerMessage,
+    history,
+    settings.primaryLanguage
+  );
+  return resolveTransferredWaitingMessage(lang, settings.handoffWaitingMessage);
 }
 
 function formatHistoryLine(message: string | null, mediaType?: string | null): string {
@@ -948,7 +982,8 @@ export async function processInboundMessage(
       companyId,
       phone,
       customerName,
-      trimmed
+      trimmed,
+      whatsappAccountId
     );
     if (transferredReply !== null) {
       return transferredReply;
