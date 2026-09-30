@@ -1,6 +1,9 @@
 /**
  * Reassign an active support ticket to another department (open pool)
  * or directly to a specific staff member.
+ *
+ * Standart personel: yalnızca departman aktarımı
+ * Admin / süper personel / yönetici: departman + personel atama
  */
 
 import { useState } from 'react';
@@ -10,7 +13,7 @@ import { ArrowRightLeft, UserPlus } from 'lucide-react';
 import { api } from '@/services/api';
 import { Button, Label, Spinner } from '@/components/ui';
 import { cn } from '@/lib/utils';
-import { canAssignTickets, isAdminStaff } from '@/lib/staff-permissions';
+import { canAssignTickets, canTransferTickets, isAdminStaff } from '@/lib/staff-permissions';
 import { useAuthStore } from '@/store/authStore';
 import type { Conversation, StaffMember, Ticket } from '@/types';
 
@@ -38,44 +41,49 @@ export function TransferTicketControl({
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const user = useAuthStore((s) => s.user);
-  const allowReassign = canAssignTickets(user);
+  const allowTransfer = canTransferTickets(user);
+  const allowAssign = canAssignTickets(user);
   const [mode, setMode] = useState<AssignMode>('department');
   const [selectedDept, setSelectedDept] = useState('');
   const [selectedStaff, setSelectedStaff] = useState('');
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const canReassign =
-    allowReassign && (ticket.status === 'open' || ticket.status === 'in_progress');
+  const ticketActive = ticket.status === 'open' || ticket.status === 'in_progress';
+  const canShowControl = (allowTransfer || allowAssign) && ticketActive;
 
   const { data: departments = [], isLoading: deptLoading } = useQuery({
     queryKey: ['departments'],
     queryFn: () => api.get<Department[]>('/departments'),
-    enabled: canReassign,
+    enabled: canShowControl && allowTransfer,
   });
 
   const { data: staffList = [], isLoading: staffLoading } = useQuery({
     queryKey: ['staff'],
     queryFn: () => api.get<StaffMember[]>('/staff'),
-    enabled: canReassign,
+    enabled: canShowControl && allowAssign,
   });
 
   const myStaffId =
     staffList.find((s) => s.profile_id && user?.id && s.profile_id === user.id)?.id || null;
 
-  const targetDepartments = departments.filter((d) => d.id !== ticket.department_id);
-  const targetStaff = staffList.filter((s) => {
-    if (!s.is_active) return false;
-    if (s.id === ticket.assigned_staff) return false;
-    // Admin personel kendisine atayamaz
-    if (isAdminStaff(user?.staff_role) && myStaffId && s.id === myStaffId) return false;
-    return true;
-  });
+  const targetDepartments = allowTransfer
+    ? departments.filter((d) => d.id !== ticket.department_id)
+    : [];
+  const targetStaff = allowAssign
+    ? staffList.filter((s) => {
+        if (!s.is_active) return false;
+        if (s.id === ticket.assigned_staff) return false;
+        // Admin personel kendisine atayamaz
+        if (isAdminStaff(user?.staff_role) && myStaffId && s.id === myStaffId) return false;
+        return true;
+      })
+    : [];
 
-  const isLoading = deptLoading || staffLoading;
+  const isLoading = (allowTransfer && deptLoading) || (allowAssign && staffLoading);
   const hasDeptTargets = targetDepartments.length > 0;
   const hasStaffTargets = targetStaff.length > 0;
 
-  if (!allowReassign) {
+  if (!allowTransfer && !allowAssign) {
     return null;
   }
 
@@ -128,7 +136,7 @@ export function TransferTicketControl({
   const pending = transferMutation.isPending || assignMutation.isPending;
 
   // Hiç hedef yoksa gizle
-  if (!canReassign || (!isLoading && !hasDeptTargets && !hasStaffTargets)) {
+  if (!canShowControl || (!isLoading && !hasDeptTargets && !hasStaffTargets)) {
     return null;
   }
 
@@ -137,21 +145,25 @@ export function TransferTicketControl({
       ? 'staff'
       : mode === 'staff' && !hasStaffTargets && hasDeptTargets
         ? 'department'
-        : mode;
+        : mode === 'staff' && !allowAssign
+          ? 'department'
+          : mode;
 
   const handleSubmit = () => {
     setFeedback(null);
     if (effectiveMode === 'department') {
-      if (!selectedDept) return;
+      if (!allowTransfer || !selectedDept) return;
       transferMutation.mutate(selectedDept);
       return;
     }
-    if (!selectedStaff) return;
+    if (!allowAssign || !selectedStaff) return;
     assignMutation.mutate(selectedStaff);
   };
 
   const canSubmit =
-    effectiveMode === 'department' ? !!selectedDept : !!selectedStaff;
+    effectiveMode === 'department' ? !!selectedDept && allowTransfer : !!selectedStaff && allowAssign;
+
+  const showModeTabs = hasDeptTargets && hasStaffTargets && allowTransfer && allowAssign;
 
   return (
     <div className={cn('space-y-2', className)}>
@@ -159,7 +171,7 @@ export function TransferTicketControl({
         <Label className="text-xs text-slate-600">{t('tickets.reassignLabel')}</Label>
       )}
 
-      {hasDeptTargets && hasStaffTargets && (
+      {showModeTabs && (
         <div
           className="grid grid-cols-2 gap-1 rounded-xl bg-slate-100/90 p-1"
           role="tablist"

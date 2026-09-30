@@ -31,6 +31,15 @@ export function staffCanAccessKnowledge(userRole: UserRole, staffRole?: StaffSub
   return isSuperStaffRole(staffRole);
 }
 
+/** Başka departmana aktarma: tüm personel (standart dahil) */
+export function staffCanTransferTickets(
+  userRole: UserRole,
+  _staffRole?: StaffSubRole | null
+): boolean {
+  if (userRole === 'company_admin' || userRole === 'super_admin') return true;
+  return userRole === 'staff';
+}
+
 /** Başkasına talep atama: yönetici, süper personel, admin personel — normal personel yok */
 export function staffCanAssignTickets(
   userRole: UserRole,

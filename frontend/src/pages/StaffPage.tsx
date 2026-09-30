@@ -5,7 +5,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, UserX, Eye, EyeOff, Pencil, Save, Lock } from 'lucide-react';
+import { Plus, UserX, Eye, EyeOff, Pencil, Save, Lock, X } from 'lucide-react';
 import { api } from '@/services/api';
 import { getErrorMessage } from '@/lib/errors';
 import { ResetPasswordForm } from '@/components/ResetPasswordForm';
@@ -32,6 +32,7 @@ export function StaffPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [showPasswordReset, setShowPasswordReset] = useState(false);
   const [passwordMsg, setPasswordMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<StaffMember | null>(null);
   const [editForm, setEditForm] = useState<Pick<StaffForm, 'name' | 'email' | 'phone' | 'department_id' | 'role'>>({
     name: '',
     email: '',
@@ -94,6 +95,7 @@ export function StaffPage() {
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/staff/${id}`),
     onSuccess: () => {
+      setDeleteTarget(null);
       queryClient.invalidateQueries({ queryKey: ['staff'] });
       queryClient.invalidateQueries({ queryKey: ['notification-recipients'] });
     },
@@ -407,8 +409,9 @@ export function StaffPage() {
                         <Pencil className="h-4 w-4 text-slate-500" />
                       </button>
                       <button
-                        onClick={() => deleteMutation.mutate(member.id)}
-                        className="rounded-lg p-2 hover:bg-red-50"
+                        type="button"
+                        onClick={() => setDeleteTarget(member)}
+                        className="min-h-[40px] min-w-[40px] rounded-lg p-2 hover:bg-red-50"
                         aria-label={t('common.delete')}
                       >
                         <UserX className="h-4 w-4 text-red-500" />
@@ -419,6 +422,71 @@ export function StaffPage() {
               </CardContent>
             </Card>
           ))}
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 p-0 sm:items-center sm:p-4"
+          role="presentation"
+          onClick={() => !deleteMutation.isPending && setDeleteTarget(null)}
+        >
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="staff-delete-title"
+            aria-describedby="staff-delete-desc"
+            className="w-full max-w-md rounded-t-2xl border border-slate-200/80 bg-white p-5 shadow-xl sm:rounded-2xl sm:p-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-red-50 ring-1 ring-red-100">
+                <UserX className="h-5 w-5 text-red-600" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h3 id="staff-delete-title" className="text-base font-semibold text-slate-900 sm:text-lg">
+                  {t('staff.deleteTitle')}
+                </h3>
+                <p id="staff-delete-desc" className="mt-2 text-sm leading-relaxed text-slate-600">
+                  {t('staff.deleteConfirm', { name: deleteTarget.name })}
+                </p>
+                <p className="mt-2 text-xs leading-relaxed text-slate-500">
+                  {t('staff.deleteHint')}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeleteTarget(null)}
+                className="min-h-[40px] min-w-[40px] shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                aria-label={t('common.cancel')}
+                disabled={deleteMutation.isPending}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full min-h-[44px] sm:w-auto"
+                onClick={() => setDeleteTarget(null)}
+                disabled={deleteMutation.isPending}
+              >
+                {t('common.cancel')}
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                className="w-full min-h-[44px] sm:w-auto"
+                onClick={() => deleteMutation.mutate(deleteTarget.id)}
+                disabled={deleteMutation.isPending}
+              >
+                {deleteMutation.isPending ? <Spinner className="h-4 w-4" /> : <UserX className="h-4 w-4" />}
+                {t('staff.deleteAction')}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>

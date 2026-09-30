@@ -36,7 +36,14 @@ export function canStartWaOutreach(user?: Profile | null): boolean {
   return isSuperStaff(user.staff_role);
 }
 
-/** Başkasına talep atama / transfer — normal personelde yok */
+/** Başka departmana aktarma — tüm personel (standart dahil) */
+export function canTransferTickets(user?: Profile | null): boolean {
+  if (!user) return false;
+  if (user.role === 'company_admin' || user.role === 'super_admin') return true;
+  return user.role === 'staff';
+}
+
+/** Başkasına talep atama — normal personelde yok (admin / süper personel) */
 export function canAssignTickets(user?: Profile | null): boolean {
   if (!user) return false;
   if (user.role === 'company_admin' || user.role === 'super_admin') return true;

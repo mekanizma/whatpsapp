@@ -1046,7 +1046,11 @@
       "agent": "Personel",
       "admin": "Admin Personel",
       "supervisor": "Süper Personel"
-    }
+    },
+    "deleteTitle": "Personeli sil",
+    "deleteConfirm": "“{{name}}” adlı personeli silmek istediğinize emin misiniz?",
+    "deleteHint": "Bu kişinin panel erişimi kapanır. İşlem geri alınamaz.",
+    "deleteAction": "Evet, sil"
   },
   "knowledge": {
     "title": "Bilgi Bankası",

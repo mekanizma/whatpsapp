@@ -16,7 +16,10 @@ import {
   staffHasDepartmentWideSupportAccess,
   validateDepartmentBelongsToCompany,
 } from '../services/department-access.service';
-import { staffCanAssignTickets } from '../services/staff-permissions.service';
+import {
+  staffCanAssignTickets,
+  staffCanTransferTickets,
+} from '../services/staff-permissions.service';
 import { mapTicketRow } from '../utils/supabase-join';
 
 const TICKET_SELECT =
@@ -38,26 +41,54 @@ async function getStaffIdForProfile(
   return staff?.id || null;
 }
 
-async function canUserReassignTicket(
-  req: AuthRequest,
-  ticket: { status: string; assigned_staff: string | null; department_id: string | null }
-): Promise<boolean> {
-  if (req.role === 'company_admin' || req.role === 'super_admin') return true;
-  if (req.role !== 'staff') return false;
-  if (!staffCanAssignTickets(req.role, req.staffRole)) return false;
+type TicketAccessFields = {
+  status: string;
+  assigned_staff: string | null;
+  department_id: string | null;
+};
 
+/** Talebin bu personelin kapsamına girip girmediği (rol yetkisi ayrı kontrol edilir) */
+async function staffCanAccessTicketForReassign(
+  req: AuthRequest,
+  ticket: TicketAccessFields
+): Promise<boolean> {
   const staff = await getStaffRecord(req.companyId!, req.profile?.id);
   if (!staff) return false;
 
   if (staffHasCompanyWideSupportAccess(staff)) return true;
 
-  // Admin personel: yalnızca kendi departmanındaki talepler
+  // Admin personel: kendi departmanı
   if (staffHasDepartmentWideSupportAccess(staff)) {
     if (!ticket.department_id) return true;
     return ticket.department_id === staff.department_id;
   }
 
+  // Standart personel: kendisine atanmış veya kendi departmanındaki talep
+  if (ticket.assigned_staff === staff.id) return true;
+  if (staff.department_id && ticket.department_id === staff.department_id) return true;
   return false;
+}
+
+/** Personel atama — yalnızca yönetici / süper / admin personel */
+async function canUserAssignTicket(
+  req: AuthRequest,
+  ticket: TicketAccessFields
+): Promise<boolean> {
+  if (req.role === 'company_admin' || req.role === 'super_admin') return true;
+  if (req.role !== 'staff') return false;
+  if (!staffCanAssignTickets(req.role, req.staffRole)) return false;
+  return staffCanAccessTicketForReassign(req, ticket);
+}
+
+/** Departman aktarımı — standart personel dahil tüm personel */
+async function canUserTransferTicket(
+  req: AuthRequest,
+  ticket: TicketAccessFields
+): Promise<boolean> {
+  if (req.role === 'company_admin' || req.role === 'super_admin') return true;
+  if (req.role !== 'staff') return false;
+  if (!staffCanTransferTickets(req.role, req.staffRole)) return false;
+  return staffCanAccessTicketForReassign(req, ticket);
 }
 
 export async function getTickets(req: AuthRequest, res: Response): Promise<void> {
@@ -398,7 +429,7 @@ export async function assignTicket(req: AuthRequest, res: Response): Promise<voi
     return;
   }
 
-  const allowed = await canUserReassignTicket(req, ticket);
+  const allowed = await canUserAssignTicket(req, ticket);
   if (!allowed) {
     res.status(403).json({ success: false, error: 'Bu talebi atama yetkiniz yok' });
     return;
@@ -496,7 +527,7 @@ export async function transferTicket(req: AuthRequest, res: Response): Promise<v
     return;
   }
 
-  const allowed = await canUserReassignTicket(req, ticket);
+  const allowed = await canUserTransferTicket(req, ticket);
   if (!allowed) {
     res.status(403).json({ success: false, error: 'Bu talebi transfer etme yetkiniz yok' });
     return;

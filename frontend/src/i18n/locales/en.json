@@ -1046,7 +1046,11 @@
       "agent": "Staff",
       "admin": "Admin Staff",
       "supervisor": "Super Staff"
-    }
+    },
+    "deleteTitle": "Delete staff member",
+    "deleteConfirm": "Are you sure you want to delete “{{name}}”?",
+    "deleteHint": "This person will lose panel access. This cannot be undone.",
+    "deleteAction": "Yes, delete"
   },
   "knowledge": {
     "title": "Knowledge Base",
