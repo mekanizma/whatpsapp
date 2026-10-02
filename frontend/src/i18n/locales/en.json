@@ -759,7 +759,12 @@
     "delete": "Delete message",
     "deleteConfirmTitle": "Delete message",
     "deleteConfirm": "Are you sure you want to permanently delete this message? This cannot be undone.",
-    "deleteFailed": "Failed to delete message"
+    "deleteFailed": "Failed to delete message",
+    "deleteConversation": "Delete all",
+    "deleteConversationTitle": "Delete conversation",
+    "deleteConversationConfirm": "All messages from this customer will be permanently deleted. This cannot be undone.",
+    "deleteConversationCount": "{{count}} messages",
+    "deleteConversationFailed": "Failed to delete conversation"
   },
   "quickReplies": {
     "title": "Quick Replies",

@@ -202,6 +202,13 @@ router.delete(
 router.get('/messages/outreach-template', authenticate, requireCompany, messagesCtrl.getOutreachTemplate);
 router.post('/messages/outreach-template', authenticate, requireCompany, messagesCtrl.sendOutreachTemplate);
 router.get('/messages/:phone', authenticate, requireCompany, messagesCtrl.getConversationMessages);
+router.delete(
+  '/messages/:phone',
+  authenticate,
+  requireRole('company_admin'),
+  requireCompany,
+  asyncHandler(messagesCtrl.deleteConversationMessages)
+);
 router.patch('/messages/:phone/customer-name', authenticate, requireRole('company_admin'), requireCompany, messagesCtrl.updateCustomerName);
 router.get('/messages/:phone/blacklist', authenticate, requireRole('company_admin', 'staff'), requireCompany, messagesCtrl.getBlacklistStatus);
 router.post('/messages/:phone/blacklist', authenticate, requireRole('company_admin', 'staff'), requireCompany, messagesCtrl.addToBlacklist);

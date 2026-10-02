@@ -759,7 +759,12 @@
     "delete": "Mesajı sil",
     "deleteConfirmTitle": "Mesajı sil",
     "deleteConfirm": "Bu mesajı kalıcı olarak silmek istediğinize emin misiniz? Bu işlem geri alınamaz.",
-    "deleteFailed": "Mesaj silinemedi"
+    "deleteFailed": "Mesaj silinemedi",
+    "deleteConversation": "Tümünü sil",
+    "deleteConversationTitle": "Konuşmayı sil",
+    "deleteConversationConfirm": "Bu müşterinin tüm mesajları kalıcı olarak silinecek. Bu işlem geri alınamaz.",
+    "deleteConversationCount": "{{count}} mesaj",
+    "deleteConversationFailed": "Konuşma silinemedi"
   },
   "quickReplies": {
     "title": "Hazır Cevaplar",

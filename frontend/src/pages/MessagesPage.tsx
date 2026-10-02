@@ -111,6 +111,7 @@ export function MessagesPage() {
   const [showNewMessage, setShowNewMessage] = useState(false);
   const [showQuickReplies, setShowQuickReplies] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Message | null>(null);
+  const [showDeleteConversation, setShowDeleteConversation] = useState(false);
   const [newPhone, setNewPhone] = useState('');
   const [selectedAccountId, setSelectedAccountId] = useState('');
   const queryClient = useQueryClient();
@@ -386,6 +387,21 @@ export function MessagesPage() {
     },
   });
 
+  const deleteConversationMutation = useMutation({
+    mutationFn: () =>
+      api.delete<{ customer_phone: string; deleted_count: number }>(`/messages/${encodedPhone}`),
+    onSuccess: () => {
+      setShowDeleteConversation(false);
+      setSelectedPhone(null);
+      setSearchParams({});
+      invalidateMessageQueries(selectedPhone);
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    },
+    onError: (err: Error) => {
+      setReplyError(err.message || t('messages.deleteConversationFailed'));
+    },
+  });
+
   const templateMutation = useMutation({
     mutationFn: (payload: { phone: string; whatsapp_account_id?: string }) =>
       api.post<Message>('/messages/outreach-template', {
@@ -608,6 +624,20 @@ export function MessagesPage() {
                   )}
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
+                  {canDeleteMessages && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="shrink-0 border-red-200 text-red-700 hover:bg-red-50"
+                      onClick={() => setShowDeleteConversation(true)}
+                      disabled={deleteConversationMutation.isPending || !messages?.length}
+                      title={t('messages.deleteConversation')}
+                      aria-label={t('messages.deleteConversation')}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      <span className="hidden sm:inline">{t('messages.deleteConversation')}</span>
+                    </Button>
+                  )}
                   {canManageBlacklist && (
                     <Button
                       size="sm"
@@ -1165,6 +1195,57 @@ export function MessagesPage() {
               >
                 {deleteMessageMutation.isPending ? <Spinner className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
                 {t('messages.delete')}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showDeleteConversation && selectedPhone && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-0 sm:items-center sm:p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={t('messages.deleteConversationTitle')}
+          onClick={() => !deleteConversationMutation.isPending && setShowDeleteConversation(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-t-2xl bg-white p-4 shadow-xl sm:rounded-2xl sm:p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-base font-semibold text-slate-900">
+              {t('messages.deleteConversationTitle')}
+            </h3>
+            <p className="mt-2 text-sm text-slate-500">{t('messages.deleteConversationConfirm')}</p>
+            <p className="mt-3 rounded-lg bg-red-50 px-3 py-2 text-xs font-medium text-red-800 ring-1 ring-red-100">
+              {selectedConv?.customer_name
+                ? `${selectedConv.customer_name} · ${formatCustomerLabel(selectedPhone, t)}`
+                : formatCustomerLabel(selectedPhone, t)}
+              {messages?.length ? ` · ${t('messages.deleteConversationCount', { count: messages.length })}` : ''}
+            </p>
+            <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-[44px]"
+                disabled={deleteConversationMutation.isPending}
+                onClick={() => setShowDeleteConversation(false)}
+              >
+                {t('common.cancel')}
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                className="min-h-[44px]"
+                disabled={deleteConversationMutation.isPending}
+                onClick={() => deleteConversationMutation.mutate()}
+              >
+                {deleteConversationMutation.isPending ? (
+                  <Spinner className="h-4 w-4" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+                {t('messages.deleteConversation')}
               </Button>
             </div>
           </div>

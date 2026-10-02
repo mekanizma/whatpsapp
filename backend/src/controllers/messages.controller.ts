@@ -15,6 +15,7 @@ import { mapMessageRow } from '../utils/supabase-join';
 import {
   attachSignedMediaUrls,
   deleteMessageMedia,
+  deleteMessageMediaBatch,
   downloadMessageMedia,
   uploadMessageMedia,
 } from '../services/message-media.service';
@@ -418,6 +419,85 @@ export async function deleteMessage(req: AuthRequest, res: Response): Promise<vo
     success: true,
     data: { id: msg.id, customer_phone: msg.customer_phone },
     message: 'Mesaj silindi',
+  });
+}
+
+/** Yalnızca şirket yöneticisi (ve impersonation) müşterinin tüm mesajlarını silebilir */
+export async function deleteConversationMessages(req: AuthRequest, res: Response): Promise<void> {
+  const phone = resolvePhoneParam(req.params.phone as string);
+
+  if (!req.companyId) {
+    res.status(403).json({ success: false, error: 'Şirket bilgisi bulunamadı' });
+    return;
+  }
+
+  if (!phone) {
+    res.status(400).json({ success: false, error: 'Geçersiz numara' });
+    return;
+  }
+
+  if (isDemoSession(req)) {
+    res.json({
+      success: true,
+      data: { customer_phone: phone, deleted_count: 0 },
+      message: 'Konuşma mesajları silindi',
+    });
+    return;
+  }
+
+  const { data: rows, error: fetchError } = await adminClient
+    .from('messages')
+    .select('id, media_path')
+    .eq('company_id', req.companyId)
+    .eq('customer_phone', phone);
+
+  if (fetchError) {
+    res.status(400).json({ success: false, error: fetchError.message });
+    return;
+  }
+
+  const messages = rows || [];
+  if (messages.length === 0) {
+    res.status(404).json({ success: false, error: 'Silinecek mesaj bulunamadı' });
+    return;
+  }
+
+  const mediaPaths = messages
+    .map((row) => (typeof row.media_path === 'string' ? row.media_path : null))
+    .filter((path): path is string => !!path);
+
+  const { error: deleteError, count } = await adminClient
+    .from('messages')
+    .delete({ count: 'exact' })
+    .eq('company_id', req.companyId)
+    .eq('customer_phone', phone);
+
+  if (deleteError) {
+    res.status(400).json({ success: false, error: deleteError.message });
+    return;
+  }
+
+  if (mediaPaths.length > 0) {
+    await deleteMessageMediaBatch(mediaPaths);
+  }
+
+  const deletedCount = count ?? messages.length;
+
+  await logActivity({
+    userId: req.userId,
+    companyId: req.companyId,
+    action: 'conversation_messages_deleted',
+    entityType: 'conversation',
+    metadata: {
+      customer_phone: phone,
+      deleted_count: deletedCount,
+    },
+  });
+
+  res.json({
+    success: true,
+    data: { customer_phone: phone, deleted_count: deletedCount },
+    message: 'Konuşma mesajları silindi',
   });
 }
 

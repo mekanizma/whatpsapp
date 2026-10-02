@@ -101,11 +101,19 @@ export async function attachSignedMediaUrls<T extends { media_path?: string | nu
 }
 
 export async function deleteMessageMedia(path: string): Promise<void> {
-  const trimmed = path.trim();
-  if (!trimmed) return;
+  await deleteMessageMediaBatch([path]);
+}
 
-  const { error } = await adminClient.storage.from(BUCKET).remove([trimmed]);
-  if (error) {
-    console.error('[MessageMedia] Silme hatası:', error.message);
+export async function deleteMessageMediaBatch(paths: string[]): Promise<void> {
+  const unique = [...new Set(paths.map((p) => p.trim()).filter(Boolean))];
+  if (unique.length === 0) return;
+
+  const chunkSize = 100;
+  for (let i = 0; i < unique.length; i += chunkSize) {
+    const chunk = unique.slice(i, i + chunkSize);
+    const { error } = await adminClient.storage.from(BUCKET).remove(chunk);
+    if (error) {
+      console.error('[MessageMedia] Toplu silme hatası:', error.message);
+    }
   }
 }
