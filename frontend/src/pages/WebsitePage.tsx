@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Globe, Plug, CheckCircle2, XCircle, Save } from 'lucide-react';
+import { Globe, Plug, CheckCircle2, XCircle, Save, Smartphone } from 'lucide-react';
 import { api } from '@/services/api';
 import { PageHeader } from '@/components/PageHeader';
 import {
@@ -20,6 +20,7 @@ import {
   Label,
   Spinner,
 } from '@/components/ui';
+import { cn } from '@/lib/utils';
 import type { EcommerceSettings } from '@/types';
 
 type FormState = {
@@ -36,6 +37,14 @@ type FormState = {
   stock_path: string;
   order_status_path: string;
   shipping_path: string;
+};
+
+type WhatsAppLineRow = {
+  id: string;
+  label: string | null;
+  phone_number: string | null;
+  website_api_enabled?: boolean;
+  is_active?: boolean;
 };
 
 const emptyForm: FormState = {
@@ -64,6 +73,14 @@ export function WebsitePage() {
     queryKey: ['ecommerce-settings'],
     queryFn: () => api.get<EcommerceSettings>('/ecommerce/settings'),
   });
+
+  const { data: accountsData, isPending: accountsPending } = useQuery({
+    queryKey: ['whatsapp-accounts'],
+    queryFn: () =>
+      api.get<{ accounts: WhatsAppLineRow[] }>('/whatsapp/accounts'),
+  });
+
+  const lines = accountsData?.accounts || [];
 
   useEffect(() => {
     if (!settings) return;
@@ -145,11 +162,21 @@ export function WebsitePage() {
     onError: (err: Error) => setMsg({ type: 'err', text: err.message }),
   });
 
+  const lineApiMutation = useMutation({
+    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) =>
+      api.patch(`/whatsapp/accounts/${id}`, { website_api_enabled: enabled }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-accounts'] });
+    },
+    onError: (err: Error) => setMsg({ type: 'err', text: err.message }),
+  });
+
   const setField = <K extends keyof FormState>(key: K, value: FormState[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
   const connected = Boolean(settings?.api_enabled && settings?.last_test_status === 'ok');
+  const companyApiOn = form.api_enabled;
 
   return (
     <div className="space-y-6 sm:space-y-8">
@@ -373,6 +400,80 @@ export function WebsitePage() {
                   {t('ecommerce.website.testConnection')}
                 </Button>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="space-y-1 p-4 sm:p-6">
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                <Smartphone className="h-5 w-5 text-primary" />
+                {t('ecommerce.website.lineApiSection')}
+              </CardTitle>
+              <CardDescription>{t('ecommerce.website.lineApiSectionDesc')}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 p-4 pt-0 sm:p-6 sm:pt-0">
+              {!companyApiOn && (
+                <p className="text-xs text-amber-700">{t('ecommerce.website.lineApiDisabledHint')}</p>
+              )}
+              {accountsPending ? (
+                <div className="flex justify-center py-6">
+                  <Spinner className="h-6 w-6" />
+                </div>
+              ) : lines.length === 0 ? (
+                <p className="text-sm text-slate-500">{t('ecommerce.website.noLines')}</p>
+              ) : (
+                <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
+                  {lines.map((line) => {
+                    const enabled = line.website_api_enabled !== false;
+                    const saving =
+                      lineApiMutation.isPending && lineApiMutation.variables?.id === line.id;
+                    return (
+                      <li
+                        key={line.id}
+                        className="flex min-h-[56px] flex-col gap-2 px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-slate-900">
+                            {line.label || t('whatsapp.unnamed')}
+                          </p>
+                          <p className="truncate text-xs text-slate-500">
+                            {line.phone_number || '—'}
+                          </p>
+                        </div>
+                        <div className="flex items-center justify-between gap-3 sm:justify-end">
+                          <span className="text-xs text-slate-600 sm:sr-only">
+                            {t('ecommerce.website.lineApiEnabled')}
+                          </span>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={enabled}
+                            aria-label={t('ecommerce.website.lineApiEnabled')}
+                            disabled={!companyApiOn || saving}
+                            onClick={() =>
+                              lineApiMutation.mutate({ id: line.id, enabled: !enabled })
+                            }
+                            className={cn(
+                              'relative h-8 w-14 shrink-0 rounded-full transition-colors',
+                              enabled && companyApiOn ? 'bg-primary' : 'bg-slate-300',
+                              (!companyApiOn || saving) && 'opacity-60'
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                'absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-transform',
+                                enabled && companyApiOn
+                                  ? 'translate-x-[1.35rem]'
+                                  : 'translate-x-1'
+                              )}
+                            />
+                          </button>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </CardContent>
           </Card>
 

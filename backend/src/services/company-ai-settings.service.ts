@@ -22,6 +22,11 @@ export type ResolvedAccountAiSettings = {
    * (hiç junction satırı yoksa null)
    */
   knowledgeBaseIds: string[] | null;
+  /**
+   * Bu hat canlı website API sorgusu kullansın mı?
+   * Şirket API yapılandırması yoksa AI tarafında yine false sayılır.
+   */
+  websiteApiEnabled: boolean;
 };
 
 function accountCacheKey(companyId: string, accountId: string): string {
@@ -111,7 +116,7 @@ export async function resolveAccountAiSettings(
   const [{ data: account }, { data: company }, { data: kbLinks }] = await Promise.all([
     adminClient
       .from('whatsapp_configs')
-      .select('ai_enabled, custom_instructions')
+      .select('ai_enabled, custom_instructions, website_api_enabled')
       .eq('id', accountId)
       .eq('company_id', companyId)
       .maybeSingle(),
@@ -146,10 +151,14 @@ export async function resolveAccountAiSettings(
     .filter(Boolean);
   const knowledgeBaseIds = linkIds.length > 0 ? linkIds : null;
 
+  // DEFAULT TRUE — kapalı yalnızca açıkça false iken
+  const websiteApiEnabled = account?.website_api_enabled !== false;
+
   const value: ResolvedAccountAiSettings = {
     aiEnabled,
     customInstructions,
     knowledgeBaseIds,
+    websiteApiEnabled,
   };
 
   accountSettingsCache.set(key, { value, expires: Date.now() + CACHE_TTL_MS });

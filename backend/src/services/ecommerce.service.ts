@@ -664,12 +664,16 @@ export async function updateReturnRequest(
 }
 
 /** WhatsApp AI için şirket e-ticaret bağlamı */
-export async function getEcommerceContextForAI(companyId: string): Promise<string> {
+export async function getEcommerceContextForAI(
+  companyId: string,
+  options?: { includeWebsiteApi?: boolean }
+): Promise<string> {
   const allowed = await companyCanUseEcommerce(companyId);
   if (!allowed) return '';
 
   const settings = await getEcommerceSettings(companyId);
   const parts: string[] = [];
+  const includeWebsiteApi = options?.includeWebsiteApi !== false;
 
   if (settings.store_name) parts.push(`Mağaza: ${settings.store_name}`);
   if (settings.store_url) parts.push(`Mağaza URL: ${settings.store_url}`);
@@ -685,10 +689,11 @@ export async function getEcommerceContextForAI(companyId: string): Promise<strin
     parts.push(`İade / değişim politikası:\n${settings.return_policy_text.trim().slice(0, 800)}`);
   }
 
-  if (settings.api_enabled && settings.api_base_url) {
+  if (includeWebsiteApi && settings.api_enabled && settings.api_base_url) {
     parts.push(
       'Web sitesi API bağlı: ürün adı, fiyat, stok ve (yapılandırıldıysa) sipariş/kargo için canlı API sonuçlarını kullan.',
-      'API sonucu yoksa uydurma; ürün adını netleştir veya temsilciye aktar.'
+      'API sonucu yoksa uydurma; ürün adını netleştir veya temsilciye aktar.',
+      'Bilgi bankası ile API sonuçları birlikte kullanılabilir; çelişide güncel API verisini tercih et.'
     );
   }
 
@@ -725,14 +730,16 @@ export async function testAndSaveWebsiteApi(companyId: string): Promise<{
 export async function lookupOrderStatusForAI(
   companyId: string,
   orderNumber: string,
-  customerPhone?: string | null
+  customerPhone?: string | null,
+  options?: { useWebsiteApi?: boolean }
 ): Promise<string | null> {
   if (!(await companyHasEcommerceModule(companyId, 'order_status'))) return null;
   const settings = await getEcommerceSettings(companyId);
   if (!settings.order_status_enabled) return null;
 
+  const useWebsiteApi = options?.useWebsiteApi !== false;
   const { lookupWebsiteOrder, isWebsiteApiConfigured } = await import('./website-api.client');
-  if (isWebsiteApiConfigured(settings)) {
+  if (useWebsiteApi && isWebsiteApiConfigured(settings)) {
     const remote = await lookupWebsiteOrder(settings, orderNumber).catch(() => null);
     if (remote) return remote;
   }
@@ -754,14 +761,16 @@ export async function lookupOrderStatusForAI(
 
 export async function lookupShipmentForAI(
   companyId: string,
-  trackingNumber: string
+  trackingNumber: string,
+  options?: { useWebsiteApi?: boolean }
 ): Promise<string | null> {
   if (!(await companyHasEcommerceModule(companyId, 'shipping_tracking'))) return null;
   const settings = await getEcommerceSettings(companyId);
   if (!settings.shipping_tracking_enabled) return null;
 
+  const useWebsiteApi = options?.useWebsiteApi !== false;
   const { lookupWebsiteShipping, isWebsiteApiConfigured } = await import('./website-api.client');
-  if (isWebsiteApiConfigured(settings)) {
+  if (useWebsiteApi && isWebsiteApiConfigured(settings)) {
     const remote = await lookupWebsiteShipping(settings, trackingNumber).catch(() => null);
     if (remote) return remote;
   }

@@ -895,7 +895,12 @@
         "header": "Custom header"
       },
       "authHeader": "Header name",
-      "enableApi": "Use live API for AI replies",
+      "enableApi": "Use live API for AI replies (company)",
+      "lineApiSection": "Per-line API",
+      "lineApiSectionDesc": "Which WhatsApp lines should query the live API? On enabled lines, AI uses API product/price/stock/order data in addition to the knowledge base.",
+      "lineApiEnabled": "API enabled on this line",
+      "lineApiDisabledHint": "Enable and save the company API first.",
+      "noLines": "No WhatsApp lines yet. Add a line on the WhatsApp page first.",
       "productsPath": "Products path",
       "searchPath": "Product search path",
       "stockPath": "Stock path ({sku})",
@@ -907,7 +912,7 @@
       "testFail": "Connection failed",
       "lastTest": "Last test",
       "howTitle": "How AI uses this",
-      "howDesc": "When a customer asks about price, stock, products, orders or shipping on WhatsApp, the system queries your API and feeds the result to the AI."
+      "howDesc": "On the e-commerce plan, when a customer asks about price, stock, products, orders or shipping on a line with API enabled, the system queries your API and feeds results to the AI together with the knowledge base."
     },
     "orderStatus": {
       "title": "Order Status Lookup",
@@ -1224,6 +1229,9 @@
     "aiOverrideLine": "Custom setting for this line",
     "aiUseCompanyDefault": "Use company default",
     "aiCompanyDisabledHint": "AI is disabled company-wide. Enable it in Settings first.",
+    "websiteApiEnabled": "Website API (this line)",
+    "websiteApiHint": "When on, AI also queries your store API for product/price/stock/order data in addition to the knowledge base. Requires the e-commerce plan and Website API connection.",
+    "websiteApiCompanyOff": "Company Website API is off. Enable it on the Website page first.",
     "customInstructions": "Custom instructions (prompt)",
     "customInstructionsPlaceholder": "Write tone, style, or content preferences for this line…",
     "customInstructionsHint": "If empty, the company custom instructions are used.",

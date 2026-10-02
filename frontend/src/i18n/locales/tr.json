@@ -895,7 +895,12 @@
         "header": "Özel header"
       },
       "authHeader": "Header adı",
-      "enableApi": "AI canlı API kullanılsın",
+      "enableApi": "AI canlı API kullanılsın (şirket)",
+      "lineApiSection": "Hat bazlı API",
+      "lineApiSectionDesc": "Hangi WhatsApp hatlarında canlı API sorgusu açılsın? Açık hatlarda AI, bilgi bankasına ek olarak API’den ürün/fiyat/stok/sipariş bilgisi kullanır.",
+      "lineApiEnabled": "Bu hatta API aktif",
+      "lineApiDisabledHint": "Önce şirket API anahtarını açın ve kaydedin.",
+      "noLines": "Henüz WhatsApp hattı yok. Önce WhatsApp sayfasından hat ekleyin.",
       "productsPath": "Ürün listesi yolu",
       "searchPath": "Ürün arama yolu",
       "stockPath": "Stok yolu ({sku})",
@@ -907,7 +912,7 @@
       "testFail": "Bağlantı başarısız",
       "lastTest": "Son test",
       "howTitle": "AI nasıl kullanır?",
-      "howDesc": "Müşteri WhatsApp’ta fiyat, stok, ürün adı, sipariş veya kargo sorduğunda sistem bağlı API’ye sorgu atar ve yanıtı AI’ya bağlam olarak verir."
+      "howDesc": "E-ticaret paketinde, API’si açık olan WhatsApp hatlarında müşteri fiyat, stok, ürün, sipariş veya kargo sorduğunda sistem bağlı API’ye sorgu atar; sonucu bilgi bankası ile birlikte AI’ya bağlam olarak verir."
     },
     "orderStatus": {
       "title": "Sipariş Durumu Sorgulama",
@@ -1224,6 +1229,9 @@
     "aiOverrideLine": "Bu hat için özel ayar",
     "aiUseCompanyDefault": "Şirket varsayılanına dön",
     "aiCompanyDisabledHint": "Şirket genelinde AI kapalı. Önce Ayarlar’dan şirketin AI’sını açın.",
+    "websiteApiEnabled": "Web sitesi API (bu hat)",
+    "websiteApiHint": "Açıkken AI, bilgi bankasına ek olarak mağaza API’sinden ürün/fiyat/stok/sipariş bilgisi çeker. E-ticaret paketi ve Web Sitesi API bağlantısı gerekir.",
+    "websiteApiCompanyOff": "Şirket Web Sitesi API’si kapalı. Önce Web Sitesi sayfasından API’yi açın.",
     "customInstructions": "Özel talimat (prompt)",
     "customInstructionsPlaceholder": "Bu hat için ton, üslup veya içerik tercihlerini yazın…",
     "customInstructionsHint": "Boş bırakılırsa şirket özel talimatı kullanılır.",

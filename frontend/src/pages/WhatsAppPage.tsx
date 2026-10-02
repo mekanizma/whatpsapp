@@ -17,9 +17,9 @@ import {
 import { PageHeader } from '@/components/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
 import { cn } from '@/lib/utils';
-import { getWhatsAppLineLimit } from '@/lib/plan-capabilities';
+import { getWhatsAppLineLimit, planHasModule } from '@/lib/plan-capabilities';
 import { useAuthStore } from '@/store/authStore';
-import type { KnowledgeItem } from '@/types';
+import type { KnowledgeItem, EcommerceSettings } from '@/types';
 
 interface Department {
   id: string;
@@ -99,6 +99,8 @@ interface WhatsAppAccount {
   /** null = şirket ayarını miras al */
   ai_enabled?: boolean | null;
   custom_instructions?: string | null;
+  /** Bu hat canlı website API kullansın mı */
+  website_api_enabled?: boolean;
   knowledge_base_ids?: string[];
   live_connected?: boolean;
   reconnecting?: boolean;
@@ -133,6 +135,9 @@ export function WhatsAppPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const companyAiEnabled = useAuthStore((s) => s.company?.ai_enabled !== false);
+  const companyPlanType = useAuthStore(
+    (s) => s.companyPlan?.plan_type || s.company?.subscription_plan || null
+  );
   const [activeQr, setActiveQr] = useState<{ accountId: string; session: QrSession } | null>(null);
   const [expandedAccount, setExpandedAccount] = useState<string | null>(null);
   const [newDeptName, setNewDeptName] = useState('');
@@ -167,6 +172,19 @@ export function WhatsAppPage() {
     queryKey: ['knowledge'],
     queryFn: () => api.get<KnowledgeItem[]>('/knowledge'),
   });
+
+  const showWebsiteApi = planHasModule(
+    data?.plan_type || companyPlanType,
+    'website'
+  );
+
+  const { data: ecommerceSettings } = useQuery({
+    queryKey: ['ecommerce-settings'],
+    queryFn: () => api.get<EcommerceSettings>('/ecommerce/settings'),
+    enabled: showWebsiteApi,
+  });
+
+  const companyWebsiteApiEnabled = Boolean(ecommerceSettings?.api_enabled);
 
   const accounts = data?.accounts || [];
   const limit = data?.limit ?? getWhatsAppLineLimit(data?.plan_type);
@@ -209,6 +227,7 @@ export function WhatsAppPage() {
       department_ids?: string[];
       knowledge_base_ids?: string[];
       ai_enabled?: boolean | null;
+      website_api_enabled?: boolean;
       custom_instructions?: string | null;
       label?: string;
       support_hours_enabled?: boolean;
@@ -440,6 +459,8 @@ export function WhatsAppPage() {
                 departments={departments}
                 knowledgeItems={knowledgeItems}
                 companyAiEnabled={companyAiEnabled}
+                showWebsiteApi={showWebsiteApi}
+                companyWebsiteApiEnabled={companyWebsiteApiEnabled}
                 isExpanded={expandedAccount === account.id}
                 onToggle={() => setExpandedAccount(expandedAccount === account.id ? null : account.id)}
                 connectionMode={getConnectionMode(account)}
@@ -471,6 +492,9 @@ export function WhatsAppPage() {
                 onAiEnabledChange={(enabled) =>
                   updateAccountMutation.mutate({ id: account.id, ai_enabled: enabled })
                 }
+                onWebsiteApiEnabledChange={(enabled) =>
+                  updateAccountMutation.mutate({ id: account.id, website_api_enabled: enabled })
+                }
                 onSaveCustomInstructions={(text) =>
                   updateAccountMutation.mutate({
                     id: account.id,
@@ -497,6 +521,7 @@ export function WhatsAppPage() {
                   updateAccountMutation.isPending &&
                   updateAccountMutation.variables?.id === account.id &&
                   (updateAccountMutation.variables?.ai_enabled !== undefined ||
+                    updateAccountMutation.variables?.website_api_enabled !== undefined ||
                     updateAccountMutation.variables?.custom_instructions !== undefined ||
                     updateAccountMutation.variables?.knowledge_base_ids !== undefined)
                 }
@@ -746,6 +771,8 @@ interface AccountCardProps {
   departments: Department[];
   knowledgeItems: KnowledgeItem[];
   companyAiEnabled: boolean;
+  showWebsiteApi: boolean;
+  companyWebsiteApiEnabled: boolean;
   isExpanded: boolean;
   onToggle: () => void;
   connectionMode: 'qr' | 'api';
@@ -766,6 +793,7 @@ interface AccountCardProps {
   onSetDefault: () => void;
   onDepartmentsChange: (ids: string[]) => void;
   onAiEnabledChange: (enabled: boolean | null) => void;
+  onWebsiteApiEnabledChange: (enabled: boolean) => void;
   onSaveCustomInstructions: (text: string) => void;
   onKnowledgeChange: (ids: string[]) => void;
   onSaveSupportHours: (settings: {
@@ -792,11 +820,12 @@ interface AccountCardProps {
 }
 
 function AccountCard({
-  account, departments, knowledgeItems, companyAiEnabled, isExpanded, onToggle,
+  account, departments, knowledgeItems, companyAiEnabled, showWebsiteApi, companyWebsiteApiEnabled,
+  isExpanded, onToggle,
   connectionMode, supportsQr, supportsCloudApi, onConnectionModeChange,
   activeQr, cloudForm, cloudFeedback, testState, onCloudFormChange, onTestChange,
   onStartQr, onDisconnect, onDelete, onToggleActive, onSetDefault,
-  onDepartmentsChange, onAiEnabledChange, onSaveCustomInstructions, onKnowledgeChange,
+  onDepartmentsChange, onAiEnabledChange, onWebsiteApiEnabledChange, onSaveCustomInstructions, onKnowledgeChange,
   onSaveSupportHours, onSaveHandoffMessage, onCloudConnect, onCancelQr, onRefreshQr,
   isQrPending, isCloudPending, isDisconnecting, isSavingLabel, isSavingAi,
   isSavingSupportHours, isSavingHandoff, onSaveLabel, onSendTest,
@@ -836,6 +865,7 @@ function AccountCard({
       ? companyAiEnabled
       : account.ai_enabled === true;
   const inheritsCompanyAi = account.ai_enabled === null || account.ai_enabled === undefined;
+  const websiteApiEnabled = account.website_api_enabled !== false;
 
   useEffect(() => {
     setLabelDraft(account.label || '');
@@ -1084,6 +1114,39 @@ function AccountCard({
             </div>
             {!companyAiEnabled && (
               <p className="mb-4 text-xs text-amber-700">{t('whatsapp.aiCompanyDisabledHint')}</p>
+            )}
+
+            {showWebsiteApi && (
+              <div className="mb-4 flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-slate-900">{t('whatsapp.websiteApiEnabled')}</p>
+                  <p className="text-xs text-slate-500">{t('whatsapp.websiteApiHint')}</p>
+                  {!companyWebsiteApiEnabled && (
+                    <p className="mt-1 text-xs text-amber-700">{t('whatsapp.websiteApiCompanyOff')}</p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={websiteApiEnabled && companyWebsiteApiEnabled}
+                  disabled={isSavingAi || !companyWebsiteApiEnabled}
+                  onClick={() => onWebsiteApiEnabledChange(!websiteApiEnabled)}
+                  className={cn(
+                    'relative h-8 w-14 shrink-0 self-end rounded-full transition-colors sm:self-auto',
+                    websiteApiEnabled && companyWebsiteApiEnabled ? 'bg-primary' : 'bg-slate-300',
+                    (!companyWebsiteApiEnabled || isSavingAi) && 'opacity-60'
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-transform',
+                      websiteApiEnabled && companyWebsiteApiEnabled
+                        ? 'translate-x-[1.35rem]'
+                        : 'translate-x-1'
+                    )}
+                  />
+                </button>
+              </div>
             )}
 
             <div className="mb-4 space-y-2">

@@ -122,7 +122,7 @@ export async function listWhatsAppAccounts(companyId: string): Promise<WhatsAppA
   const { data, error } = await adminClient
     .from('whatsapp_configs')
     .select(
-      'id, company_id, label, phone_number, profile_name, business_account_id, status, is_active, is_default, ai_enabled, custom_instructions, support_hours_enabled, support_working_hours, support_timezone, out_of_hours_message, out_of_hours_create_ticket, primary_language, handoff_waiting_message, last_synced_at, created_at, updated_at'
+      'id, company_id, label, phone_number, profile_name, business_account_id, status, is_active, is_default, ai_enabled, custom_instructions, website_api_enabled, support_hours_enabled, support_working_hours, support_timezone, out_of_hours_message, out_of_hours_create_ticket, primary_language, handoff_waiting_message, last_synced_at, created_at, updated_at'
     )
     .eq('company_id', companyId)
     .order('is_default', { ascending: false })
@@ -243,6 +243,7 @@ export async function updateWhatsAppAccount(
     department_ids?: string[];
     knowledge_base_ids?: string[];
     ai_enabled?: boolean | null;
+    website_api_enabled?: boolean;
     custom_instructions?: string | null;
     phone_number?: string;
     business_account_id?: string;
@@ -276,6 +277,9 @@ export async function updateWhatsAppAccount(
   if (updates.profile_name !== undefined) patch.profile_name = updates.profile_name;
   if (updates.last_synced_at !== undefined) patch.last_synced_at = updates.last_synced_at;
   if (updates.ai_enabled !== undefined) patch.ai_enabled = updates.ai_enabled;
+  if (updates.website_api_enabled !== undefined) {
+    patch.website_api_enabled = !!updates.website_api_enabled;
+  }
   if (updates.custom_instructions !== undefined) {
     const trimmed =
       typeof updates.custom_instructions === 'string'
@@ -356,6 +360,7 @@ export async function updateWhatsAppAccount(
 
   if (
     updates.ai_enabled !== undefined ||
+    updates.website_api_enabled !== undefined ||
     updates.custom_instructions !== undefined ||
     updates.knowledge_base_ids !== undefined
   ) {

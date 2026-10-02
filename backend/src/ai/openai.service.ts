@@ -75,20 +75,23 @@ const TRACKING_NUMBER_RE =
 async function buildEcommerceLookupContext(
   companyId: string,
   message: string,
-  customerPhone: string
+  customerPhone: string,
+  useWebsiteApi = true
 ): Promise<string> {
   const parts: string[] = [];
   const orderMatch = message.match(ORDER_NUMBER_RE);
   if (orderMatch?.[1]) {
-    const orderInfo = await lookupOrderStatusForAI(companyId, orderMatch[1], customerPhone).catch(
-      () => null
-    );
+    const orderInfo = await lookupOrderStatusForAI(companyId, orderMatch[1], customerPhone, {
+      useWebsiteApi,
+    }).catch(() => null);
     if (orderInfo) parts.push(`Bulunan sipariş:\n${orderInfo}`);
   }
 
   const trackingMatch = message.match(TRACKING_NUMBER_RE);
   if (trackingMatch?.[1]) {
-    const shipInfo = await lookupShipmentForAI(companyId, trackingMatch[1]).catch(() => null);
+    const shipInfo = await lookupShipmentForAI(companyId, trackingMatch[1], {
+      useWebsiteApi,
+    }).catch(() => null);
     if (shipInfo) parts.push(`Bulunan kargo:\n${shipInfo}`);
   }
 
@@ -124,14 +127,30 @@ async function fetchGenerateAIContext(
       (async () => {
         const allowed = await companyCanUseEcommerce(companyId).catch(() => false);
         if (!allowed) return { context: '', returnsEnabled: false };
+
+        const lineSettings = whatsappAccountId
+          ? await resolveAccountAiSettings(companyId, whatsappAccountId).catch(() => null)
+          : null;
+        // Hesap yoksa şirket API ayarına göre (açık varsay); hat varsa hat bayrağı
+        const useWebsiteApi = lineSettings ? lineSettings.websiteApiEnabled : true;
+
         const [base, settings, lookup] = await Promise.all([
-          getEcommerceContextForAI(companyId).catch(() => ''),
+          getEcommerceContextForAI(companyId, { includeWebsiteApi: useWebsiteApi }).catch(
+            () => ''
+          ),
           getEcommerceSettings(companyId).catch(() => null),
-          buildEcommerceLookupContext(companyId, trimmed, customerPhone).catch(() => ''),
+          buildEcommerceLookupContext(companyId, trimmed, customerPhone, useWebsiteApi).catch(
+            () => ''
+          ),
         ]);
 
         let catalog = '';
-        if (settings && isWebsiteApiConfigured(settings) && isProductCatalogIntent(trimmed)) {
+        if (
+          useWebsiteApi &&
+          settings &&
+          isWebsiteApiConfigured(settings) &&
+          isProductCatalogIntent(trimmed)
+        ) {
           catalog = await buildWebsiteCatalogContext(settings, trimmed).catch(() => '');
         }
 

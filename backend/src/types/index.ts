@@ -67,6 +67,8 @@ export interface WhatsAppConfig {
   ai_enabled?: boolean | null;
   /** NULL = şirket custom_instructions miras */
   custom_instructions?: string | null;
+  /** Bu hat canlı website API kullansın mı (e-ticaret); varsayılan true */
+  website_api_enabled?: boolean;
   support_hours_enabled?: boolean;
   support_working_hours?: Record<string, unknown> | null;
   support_timezone?: string | null;
