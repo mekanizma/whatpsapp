@@ -570,6 +570,7 @@
     "nav": {
       "dashboard": "Dashboard",
       "messages": "Messages",
+      "quickReplies": "Quick Replies",
       "customers": "Active Customers",
       "knowledge": "Knowledge Base",
       "unknownQuestions": "Unknown Questions",
@@ -603,6 +604,7 @@
     "titles": {
       "dashboard": "Dashboard",
       "messages": "Messages",
+      "quickReplies": "Quick Replies",
       "todayActivity": "Today's Activity",
       "aiInsights": "AI Assistant Summary",
       "customers": "Customers",
@@ -750,7 +752,31 @@
     "unblacklist": "Remove from blacklist",
     "blacklistBanner": "This number is blacklisted — messages are ignored and no reply is sent",
     "blacklistFailed": "Blacklist action failed",
-    "receivedOn": "Line: {{line}}"
+    "receivedOn": "Line: {{line}}",
+    "quickReplies": "Quick replies",
+    "quickRepliesHint": "Selected text is inserted into the composer — press send to deliver.",
+    "quickRepliesEmpty": "No quick replies yet — add them from the panel"
+  },
+  "quickReplies": {
+    "title": "Quick Replies",
+    "description": "Create department-specific canned replies and use them with one tap in chat",
+    "add": "New quick reply",
+    "new": "New quick reply",
+    "edit": "Edit quick reply",
+    "titleLabel": "Title",
+    "titlePlaceholder": "e.g. Working hours",
+    "bodyLabel": "Message text",
+    "bodyPlaceholder": "Ready-to-send text for the customer...",
+    "department": "Department",
+    "selectDepartment": "Select department",
+    "required": "Title and body are required",
+    "empty": "No quick replies",
+    "emptyDesc": "Add replies you use often",
+    "inactive": "Inactive",
+    "setActive": "Activate",
+    "setInactive": "Deactivate",
+    "delete": "Delete",
+    "deleteConfirm": "Delete this quick reply?"
   },
   "tickets": {
     "title": "Support Tickets",

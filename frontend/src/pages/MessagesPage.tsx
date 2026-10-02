@@ -6,7 +6,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Send, Search, Phone, Bot, User, CheckCircle2, Headphones, MessageSquare, ChevronLeft, ImagePlus, Ban, Plus } from 'lucide-react';
+import { Send, Search, Phone, Bot, User, CheckCircle2, Headphones, MessageSquare, ChevronLeft, ImagePlus, Ban, Plus, MessageSquareText } from 'lucide-react';
 import { api } from '@/services/api';
 import { supabase, supabaseConfigured } from '@/services/supabase';
 import { useAuthStore } from '@/store/authStore';
@@ -18,7 +18,8 @@ import { getTicketAssigneeLabel } from '@/lib/ticket-assignee';
 import { getTicketSubjectLabel } from '@/lib/ticket-labels';
 import { MessageImage } from '@/components/MessageImage';
 import { cn } from '@/lib/utils';
-import type { Conversation, Message, ReceivedLine, Ticket } from '@/types';
+import { authQueryKey } from '@/lib/query-keys';
+import type { Conversation, Message, QuickReply, ReceivedLine, Ticket } from '@/types';
 
 const IMAGE_ACCEPT = 'image/jpeg,image/png,image/webp,image/gif';
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
@@ -105,6 +106,7 @@ export function MessagesPage() {
   const [replyError, setReplyError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [showNewMessage, setShowNewMessage] = useState(false);
+  const [showQuickReplies, setShowQuickReplies] = useState(false);
   const [newPhone, setNewPhone] = useState('');
   const [selectedAccountId, setSelectedAccountId] = useState('');
   const queryClient = useQueryClient();
@@ -223,6 +225,12 @@ export function MessagesPage() {
   });
   const templateEnabled = !!outreachTemplate?.enabled;
   const canStartNewWithTemplate = !!outreachTemplate?.can_start_new;
+
+  const { data: quickReplies = [] } = useQuery({
+    queryKey: authQueryKey(['quick-replies', 'active'], user?.id, user?.role),
+    queryFn: () => api.get<QuickReply[]>('/quick-replies?active=1'),
+    enabled: !!user?.id,
+  });
 
   type OutreachLine = {
     id: string;
@@ -852,6 +860,22 @@ export function MessagesPage() {
                     >
                       <ImagePlus className="h-4 w-4" />
                     </Button>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      className="shrink-0 rounded-xl"
+                      disabled={isSending || quickReplies.length === 0}
+                      onClick={() => setShowQuickReplies(true)}
+                      aria-label={t('messages.quickReplies')}
+                      title={
+                        quickReplies.length === 0
+                          ? t('messages.quickRepliesEmpty')
+                          : t('messages.quickReplies')
+                      }
+                    >
+                      <MessageSquareText className="h-4 w-4" />
+                    </Button>
                     <Input
                       className="min-w-0 flex-1"
                       placeholder={hasActiveTicket ? t('messages.replyPlaceholder') : t('messages.messagePlaceholder')}
@@ -984,6 +1008,69 @@ export function MessagesPage() {
               >
                 {templateMutation.isPending ? <Spinner /> : <Send className="h-4 w-4" />}
                 {t('messages.newMessageSend')}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showQuickReplies && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-0 sm:items-center sm:p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={t('messages.quickReplies')}
+          onClick={() => setShowQuickReplies(false)}
+        >
+          <div
+            className="flex max-h-[85vh] w-full max-w-md flex-col rounded-t-2xl bg-white shadow-xl sm:rounded-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="border-b border-slate-100 px-4 py-3 sm:px-5">
+              <h3 className="text-base font-semibold text-slate-900">{t('messages.quickReplies')}</h3>
+              <p className="mt-0.5 text-sm text-slate-500">{t('messages.quickRepliesHint')}</p>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-2 sm:p-3">
+              {quickReplies.length === 0 ? (
+                <p className="px-3 py-8 text-center text-sm text-slate-500">
+                  {t('messages.quickRepliesEmpty')}
+                </p>
+              ) : (
+                <ul className="space-y-1">
+                  {quickReplies.map((reply) => (
+                    <li key={reply.id}>
+                      <button
+                        type="button"
+                        className="w-full rounded-xl px-3 py-3 text-left transition-colors hover:bg-slate-50 active:bg-slate-100"
+                        onClick={() => {
+                          setReplyText(reply.body);
+                          setReplyError(null);
+                          setShowQuickReplies(false);
+                        }}
+                      >
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-semibold text-slate-900">{reply.title}</span>
+                          {reply.department?.name && (
+                            <Badge variant="default">{reply.department.name}</Badge>
+                          )}
+                        </div>
+                        <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-slate-500 whitespace-pre-wrap">
+                          {reply.body}
+                        </p>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div className="border-t border-slate-100 p-3 sm:p-4">
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-[44px] w-full"
+                onClick={() => setShowQuickReplies(false)}
+              >
+                {t('common.cancel')}
               </Button>
             </div>
           </div>

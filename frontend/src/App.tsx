@@ -23,6 +23,7 @@ import { AdminLoginPage } from '@/pages/AdminLoginPage';
 import { RegisterPage } from '@/pages/RegisterPage';
 import { DashboardPage } from '@/pages/DashboardPage';
 import { MessagesPage } from '@/pages/MessagesPage';
+import { QuickRepliesPage } from '@/pages/QuickRepliesPage';
 import { KnowledgePage } from '@/pages/KnowledgePage';
 import { TicketsPage } from '@/pages/TicketsPage';
 import { StaffPage } from '@/pages/StaffPage';
@@ -116,6 +117,7 @@ function AppRoutes() {
         <Route index element={<PanelIndexRedirect />} />
         <Route path="dashboard" element={<PlanModuleRoute module="dashboard"><AdminOnlyRoute><DashboardPage /></AdminOnlyRoute></PlanModuleRoute>} />
         <Route path="messages" element={<PlanModuleRoute module="messages"><MessagesPage /></PlanModuleRoute>} />
+        <Route path="quick-replies" element={<PlanModuleRoute module="messages"><QuickRepliesPage /></PlanModuleRoute>} />
         <Route path="activity/today" element={<PlanModuleRoute module="dashboard"><AdminOnlyRoute><TodayActivityPage /></AdminOnlyRoute></PlanModuleRoute>} />
         <Route path="ai-insights" element={<PlanModuleRoute module="dashboard"><AdminOnlyRoute><AiInsightsPage /></AdminOnlyRoute></PlanModuleRoute>} />
         <Route path="customers" element={<PlanModuleRoute module="customers"><AdminOnlyRoute><CustomersPage /></AdminOnlyRoute></PlanModuleRoute>} />

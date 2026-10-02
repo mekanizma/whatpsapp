@@ -9,6 +9,7 @@ import {
   LayoutDashboard, MessageSquare, BookOpen, Users, Ticket,
   CreditCard, Smartphone, Settings, CalendarDays, UserRound, HelpCircle, Headphones,
   Sparkles, UserCog, PackageSearch, Truck, ShoppingCart, RefreshCcw, Globe, ChevronRight, Share2,
+  MessageSquareText,
 } from 'lucide-react';
 import { PanelNotificationBell } from '@/components/PanelNotificationBell';
 import { useAuthStore } from '@/store/authStore';
@@ -28,7 +29,7 @@ type NavItem = {
   labelKey: string;
   roles: UserRole[];
   module: PlanModuleKey;
-  staffNav?: 'messages' | 'knowledge' | 'tickets' | 'settings' | 'calendar';
+  staffNav?: 'messages' | 'knowledge' | 'tickets' | 'settings' | 'calendar' | 'quick_replies';
 };
 
 const navGroups: { sectionKey: string; items: NavItem[] }[] = [
@@ -42,6 +43,7 @@ const navGroups: { sectionKey: string; items: NavItem[] }[] = [
     sectionKey: 'layout.navSections.communication',
     items: [
       { to: '/panel/messages', icon: MessageSquare, labelKey: 'layout.nav.messages', roles: ['company_admin', 'staff'], module: 'messages', staffNav: 'messages' },
+      { to: '/panel/quick-replies', icon: MessageSquareText, labelKey: 'layout.nav.quickReplies', roles: ['company_admin', 'staff'], module: 'messages', staffNav: 'quick_replies' },
       { to: '/panel/tickets', icon: Ticket, labelKey: 'layout.nav.tickets', roles: ['company_admin', 'staff'], module: 'tickets', staffNav: 'tickets' },
       { to: '/panel/customers', icon: UserRound, labelKey: 'layout.nav.customers', roles: ['company_admin'], module: 'customers' },
       { to: '/panel/website', icon: Globe, labelKey: 'layout.nav.website', roles: ['company_admin'], module: 'website' },
@@ -83,6 +85,7 @@ const navGroups: { sectionKey: string; items: NavItem[] }[] = [
 const pageTitleKeys: Record<string, string> = {
   '/panel/dashboard': 'layout.titles.dashboard',
   '/panel/messages': 'layout.titles.messages',
+  '/panel/quick-replies': 'layout.titles.quickReplies',
   '/panel/activity/today': 'layout.titles.todayActivity',
   '/panel/ai-insights': 'layout.titles.aiInsights',
   '/panel/customers': 'layout.titles.customers',

@@ -54,12 +54,20 @@ export function canAssignTickets(user?: Profile | null): boolean {
 export function canSeeNavItem(
   userRole: UserRole,
   staffRole: StaffSubRole | null | undefined,
-  navKey: 'messages' | 'knowledge' | 'tickets' | 'settings' | 'calendar'
+  navKey: 'messages' | 'knowledge' | 'tickets' | 'settings' | 'calendar' | 'quick_replies'
 ): boolean {
   if (userRole === 'company_admin') return true;
   if (userRole !== 'staff') return false;
 
-  if (navKey === 'messages' || navKey === 'settings' || navKey === 'tickets' || navKey === 'calendar') return true;
+  if (
+    navKey === 'messages' ||
+    navKey === 'settings' ||
+    navKey === 'tickets' ||
+    navKey === 'calendar' ||
+    navKey === 'quick_replies'
+  ) {
+    return true;
+  }
   if (navKey === 'knowledge') return isSuperStaff(staffRole);
   return false;
 }

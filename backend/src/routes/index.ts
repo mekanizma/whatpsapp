@@ -12,6 +12,7 @@ import * as adminCtrl from '../controllers/admin.controller';
 import * as companyCtrl from '../controllers/company.controller';
 import * as whatsappCtrl from '../controllers/whatsapp.controller';
 import * as knowledgeCtrl from '../controllers/knowledge.controller';
+import * as quickRepliesCtrl from '../controllers/quick-replies.controller';
 import * as messagesCtrl from '../controllers/messages.controller';
 import * as ticketsCtrl from '../controllers/tickets.controller';
 import * as staffCtrl from '../controllers/staff.controller';
@@ -146,6 +147,12 @@ router.get('/departments', authenticate, requireCompany, whatsappCtrl.getDepartm
 router.post('/departments', authenticate, requireRole('company_admin'), requireCompany, whatsappCtrl.postDepartment);
 router.patch('/departments/:id', authenticate, requireRole('company_admin'), requireCompany, whatsappCtrl.patchDepartment);
 router.delete('/departments/:id', authenticate, requireRole('company_admin'), requireCompany, whatsappCtrl.removeDepartment);
+
+// Hazır cevaplar (departman bazlı)
+router.get('/quick-replies', authenticate, requireRole('company_admin', 'staff'), requireCompany, quickRepliesCtrl.getQuickReplies);
+router.post('/quick-replies', authenticate, requireRole('company_admin', 'staff'), requireCompany, quickRepliesCtrl.createQuickReply);
+router.put('/quick-replies/:id', authenticate, requireRole('company_admin', 'staff'), requireCompany, quickRepliesCtrl.updateQuickReply);
+router.delete('/quick-replies/:id', authenticate, requireRole('company_admin', 'staff'), requireCompany, quickRepliesCtrl.deleteQuickReply);
 
 // WhatsApp — legacy single-account (backward compatible)
 router.get('/whatsapp/config', authenticate, requireRole('super_admin', 'company_admin'), requireCompany, whatsappCtrl.getWhatsAppConfig);

@@ -570,6 +570,7 @@
     "nav": {
       "dashboard": "Anasayfa",
       "messages": "Mesajlar",
+      "quickReplies": "Hazır Cevaplar",
       "customers": "Aktif Müşteriler",
       "knowledge": "Bilgi Bankası",
       "unknownQuestions": "Bilinmeyen Sorular",
@@ -603,6 +604,7 @@
     "titles": {
       "dashboard": "Anasayfa",
       "messages": "Mesajlar",
+      "quickReplies": "Hazır Cevaplar",
       "todayActivity": "Bugünkü Aktivite",
       "aiInsights": "AI Asistan Özeti",
       "customers": "Müşteriler",
@@ -750,7 +752,31 @@
     "unblacklist": "Blacklist'ten çıkar",
     "blacklistBanner": "Bu numara blacklist'te — mesajları alınmaz ve yanıt gönderilmez",
     "blacklistFailed": "Blacklist işlemi başarısız",
-    "receivedOn": "Hat: {{line}}"
+    "receivedOn": "Hat: {{line}}",
+    "quickReplies": "Hazır cevaplar",
+    "quickRepliesHint": "Seçtiğiniz metin yazma alanına eklenir; göndermek için gönder’e basın.",
+    "quickRepliesEmpty": "Henüz hazır cevap yok — panelden ekleyebilirsiniz"
+  },
+  "quickReplies": {
+    "title": "Hazır Cevaplar",
+    "description": "Departmanınıza özel hazır cevaplar oluşturun; mesaj ekranından tek dokunuşla kullanın",
+    "add": "Yeni hazır cevap",
+    "new": "Yeni hazır cevap",
+    "edit": "Hazır cevabı düzenle",
+    "titleLabel": "Başlık",
+    "titlePlaceholder": "Örn: Çalışma saatleri",
+    "bodyLabel": "Mesaj metni",
+    "bodyPlaceholder": "Müşteriye gönderilecek hazır metin...",
+    "department": "Departman",
+    "selectDepartment": "Departman seçin",
+    "required": "Başlık ve içerik zorunludur",
+    "empty": "Hazır cevap yok",
+    "emptyDesc": "Sık kullandığınız yanıtları buraya ekleyin",
+    "inactive": "Pasif",
+    "setActive": "Aktifleştir",
+    "setInactive": "Pasifleştir",
+    "delete": "Sil",
+    "deleteConfirm": "Bu hazır cevabı silmek istiyor musunuz?"
   },
   "tickets": {
     "title": "Destek Talepleri",

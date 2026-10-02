@@ -578,6 +578,20 @@ export interface Department {
   is_active?: boolean;
 }
 
+export interface QuickReply {
+  id: string;
+  company_id: string;
+  department_id: string | null;
+  title: string;
+  body: string;
+  sort_order: number;
+  is_active: boolean;
+  created_by?: string | null;
+  created_at: string;
+  updated_at: string;
+  department?: { id: string; name: string } | null;
+}
+
 export type AppointmentStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
 export type AppointmentSource = 'ai' | 'manual' | 'panel';
 
