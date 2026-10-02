@@ -10,7 +10,61 @@
 import type { EcommerceSettings } from './ecommerce.service';
 
 const FETCH_TIMEOUT_MS = 8_000;
-const MAX_PRODUCTS = 5;
+const MAX_PRODUCTS = 8;
+
+/** Doğal dil sorularından çıkarılacak genel kelimeler (arama sorgusu değil) */
+const SEARCH_STOPWORDS = new Set([
+  'hangi',
+  'neler',
+  'ne',
+  'var',
+  'mi',
+  'mı',
+  'mu',
+  'mü',
+  'misiniz',
+  'musunuz',
+  'elinizde',
+  'sizde',
+  'mevcut',
+  'bir',
+  'bu',
+  'su',
+  'şu',
+  'urun',
+  'urunler',
+  'urunleri',
+  'product',
+  'products',
+  'fiyat',
+  'fiyati',
+  'fiyatı',
+  'stok',
+  'stokta',
+  'kadar',
+  'lütfen',
+  'lutfen',
+  'istiyorum',
+  'isterim',
+  'bakabilir',
+  'bakabilirim',
+  'gorebilir',
+  'görebilir',
+  'liste',
+  'listesi',
+  'hakkinda',
+  'hakkında',
+  'icin',
+  'için',
+  'bana',
+  'acaba',
+  'varsa',
+  'olan',
+  'modeller',
+  'modelleri',
+  'cesitleri',
+  'çeşitleri',
+]);
 
 export interface WebsiteProduct {
   name: string;
@@ -45,6 +99,54 @@ function fillPath(path: string, vars: Record<string, string>): string {
     result = result.replace(new RegExp(`\\{${key}\\}`, 'g'), encodeURIComponent(value));
   }
   return result;
+}
+
+function normalizeText(message: string): string {
+  return message
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+/** Path içinde {query} varsa doldur; yoksa q= parametresi ekle (çift q üretme). */
+function buildProductSearchUrl(baseUrl: string, searchPath: string, query: string): string {
+  const q = query.trim();
+  const hasPlaceholder = /\{query\}/i.test(searchPath);
+  const filled = hasPlaceholder ? fillPath(searchPath, { query: q }) : searchPath;
+  const url = joinUrl(baseUrl, filled);
+  if (hasPlaceholder) return url;
+  return url.includes('?') ? `${url}&q=${encodeURIComponent(q)}` : `${url}?q=${encodeURIComponent(q)}`;
+}
+
+/** Genel katalog / liste sorusu mu? (arama yerine ürün listesi çek) */
+export function isProductBrowseIntent(message: string): boolean {
+  const n = normalizeText(message);
+  return /(hangi\s+urun|neler\s+var|ne\s+var|urun(ler|leri)?\s+var|katalog|liste|urunleriniz|ne\s+sat|elinizde\s+ne|sizde\s+ne)/i.test(
+    n
+  );
+}
+
+/**
+ * Doğal dil mesajından API arama terimi çıkar.
+ * Örn: "Hangi monitörler var" → "monitörler"
+ * Genel sorularda boş döner (liste endpoint'i kullanılmalı).
+ */
+export function extractProductSearchQuery(message: string): string {
+  const raw = message.trim();
+  if (!raw) return '';
+
+  const tokens = raw
+    .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter((t) => {
+      if (t.length < 2) return false;
+      const key = normalizeText(t);
+      return !SEARCH_STOPWORDS.has(key);
+    });
+
+  if (!tokens.length) return '';
+  return tokens.slice(0, 4).join(' ');
 }
 
 function buildAuthHeaders(settings: EcommerceSettings): Record<string, string> {
@@ -218,8 +320,12 @@ export async function testWebsiteApiConnection(
   }
 
   const searchPath = settings.product_search_path || settings.products_path || '/products';
-  const url = joinUrl(settings.api_base_url, searchPath);
-  const testUrl = url.includes('?') ? `${url}&q=test` : `${url}?q=test`;
+  const testUrl = /\{query\}/i.test(searchPath)
+    ? joinUrl(settings.api_base_url, fillPath(searchPath, { query: 'test' }))
+    : (() => {
+        const url = joinUrl(settings.api_base_url, searchPath);
+        return url.includes('?') ? `${url}&q=test` : `${url}?q=test`;
+      })();
   const result = await fetchJson(testUrl, settings);
 
   if (!result.ok) {
@@ -248,6 +354,17 @@ export async function testWebsiteApiConnection(
   };
 }
 
+/** Ürün listesi (arama sorgusu olmadan) — "hangi ürünler var?" için */
+export async function listWebsiteProducts(
+  settings: EcommerceSettings
+): Promise<WebsiteProduct[]> {
+  if (!isWebsiteApiConfigured(settings)) return [];
+  const productsPath = settings.products_path || '/products';
+  const result = await fetchJson(joinUrl(settings.api_base_url!, productsPath), settings);
+  if (!result.ok) return [];
+  return extractProductList(result.data).slice(0, MAX_PRODUCTS);
+}
+
 export async function searchWebsiteProducts(
   settings: EcommerceSettings,
   query: string
@@ -257,22 +374,23 @@ export async function searchWebsiteProducts(
   if (q.length < 2) return [];
 
   const searchPath = settings.product_search_path || '/products/search';
-  const baseSearch = joinUrl(settings.api_base_url!, fillPath(searchPath, {}));
-  const url = baseSearch.includes('?')
-    ? `${baseSearch}&q=${encodeURIComponent(q)}`
-    : `${baseSearch}?q=${encodeURIComponent(q)}`;
+  const url = buildProductSearchUrl(settings.api_base_url!, searchPath, q);
 
   let result = await fetchJson(url, settings);
   if (!result.ok) {
     const productsPath = settings.products_path || '/products';
-    const fallback = joinUrl(settings.api_base_url!, productsPath);
-    const fallbackUrl = fallback.includes('?')
-      ? `${fallback}&q=${encodeURIComponent(q)}`
-      : `${fallback}?q=${encodeURIComponent(q)}`;
-    result = await fetchJson(fallbackUrl, settings);
+    // Fallback: listeyi çekip istemci tarafında süz (API q desteklemiyorsa)
+    const fallback = await fetchJson(joinUrl(settings.api_base_url!, productsPath), settings);
+    if (!fallback.ok) return [];
+    const all = extractProductList(fallback.data);
+    const needle = normalizeText(q);
+    const filtered = all.filter((p) => {
+      const hay = normalizeText([p.name, p.sku, p.description].filter(Boolean).join(' '));
+      return hay.includes(needle) || needle.split(/\s+/).some((t) => t.length >= 3 && hay.includes(t));
+    });
+    return (filtered.length ? filtered : all).slice(0, MAX_PRODUCTS);
   }
 
-  if (!result.ok) return [];
   return extractProductList(result.data).slice(0, MAX_PRODUCTS);
 }
 
@@ -341,23 +459,52 @@ export async function buildWebsiteCatalogContext(
 ): Promise<string> {
   if (!isWebsiteApiConfigured(settings)) return '';
 
-  const products = await searchWebsiteProducts(settings, customerMessage);
+  const searchQuery = extractProductSearchQuery(customerMessage);
+  const browse = isProductBrowseIntent(customerMessage) || !searchQuery;
+
+  let products: WebsiteProduct[] = [];
+  if (browse && !searchQuery) {
+    // "Hangi ürünler var?" → doğrudan liste
+    products = await listWebsiteProducts(settings);
+  } else if (searchQuery) {
+    // "Hangi monitörler var?" → "monitorler" ile ara
+    products = await searchWebsiteProducts(settings, searchQuery);
+    if (!products.length) {
+      // Arama boşsa listeyi çekip anahtar kelimeyle süz
+      const all = await listWebsiteProducts(settings);
+      const needle = normalizeText(searchQuery);
+      products = all
+        .filter((p) => {
+          const hay = normalizeText([p.name, p.sku, p.description].filter(Boolean).join(' '));
+          return (
+            hay.includes(needle) || needle.split(/\s+/).some((t) => t.length >= 3 && hay.includes(t))
+          );
+        })
+        .slice(0, MAX_PRODUCTS);
+      if (!products.length && browse) products = all.slice(0, MAX_PRODUCTS);
+    }
+  } else {
+    products = await listWebsiteProducts(settings);
+  }
+
   if (!products.length) return '';
 
   return [
     'Web sitesi API ürün sonuçları (güncel fiyat/stok):',
     ...products.map((p, i) => `(${i + 1})\n${formatProduct(p)}`),
     'Yalnızca bu sonuçlardaki fiyat ve stok bilgilerini kullan; uydurma.',
-  ].join('\n\n');
+    products.length >= MAX_PRODUCTS
+      ? 'Daha fazla ürün olabilir; müşteri kategori veya ürün adı netleştirirse yeniden ara.'
+      : '',
+  ]
+    .filter(Boolean)
+    .join('\n\n');
 }
 
 /** Fiyat / stok / ürün sorusu mu? */
 export function isProductCatalogIntent(message: string): boolean {
-  const n = message
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '');
-  return /(fiyat|ucret|ne kadar|stok|var mi|mevcut|urun|product|price|stock|kac tl|kaç tl)/i.test(
+  const n = normalizeText(message);
+  return /(fiyat|ucret|ne kadar|stok|var\s*mi|mevcut|urun|product|price|stock|kac\s*tl|katalog|liste|hangi\s+\w+|neler\s+var|ne\s+var|monitor|laptop|yazici|telefon|bilgisayar|notebook)/i.test(
     n
   );
 }
