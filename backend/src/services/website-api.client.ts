@@ -173,16 +173,19 @@ function buildAuthHeaders(settings: EcommerceSettings): Record<string, string> {
 
 async function fetchJson(
   url: string,
-  settings: EcommerceSettings
+  settings: EcommerceSettings,
+  options?: { method?: 'GET' | 'POST'; body?: unknown }
 ): Promise<{ ok: boolean; status: number; data: unknown; error?: string }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  const method = options?.method || 'GET';
 
   try {
     const res = await fetch(url, {
-      method: 'GET',
+      method,
       headers: buildAuthHeaders(settings),
       signal: controller.signal,
+      body: method !== 'GET' && options?.body !== undefined ? JSON.stringify(options.body) : undefined,
     });
 
     const text = await res.text();
@@ -196,11 +199,15 @@ async function fetchJson(
     }
 
     if (!res.ok) {
+      const errObj = asRecord(data);
+      const apiMsg =
+        pickString(errObj || {}, ['message', 'error', 'detail', 'msg']) ||
+        (typeof data === 'string' ? data : null);
       return {
         ok: false,
         status: res.status,
         data,
-        error: `HTTP ${res.status}`,
+        error: apiMsg || `HTTP ${res.status}`,
       };
     }
 
@@ -392,6 +399,95 @@ export async function searchWebsiteProducts(
   }
 
   return extractProductList(result.data).slice(0, MAX_PRODUCTS);
+}
+
+export interface CreateWebsiteOrderItem {
+  sku: string;
+  quantity: number;
+  options?: Record<string, string>;
+}
+
+export interface CreateWebsiteOrderInput {
+  fulfillment: 'pickup' | 'delivery';
+  customer: {
+    fullName: string;
+    phone: string;
+    email?: string;
+    line1: string;
+    city: string;
+  };
+  items: CreateWebsiteOrderItem[];
+  paymentMethod?: string;
+}
+
+export interface CreateWebsiteOrderResult {
+  ok: boolean;
+  orderNumber?: string;
+  message: string;
+  status?: number;
+}
+
+function resolveOrderCreatePath(settings: EcommerceSettings): string {
+  const configured = settings.order_create_path?.trim();
+  if (configured) return configured;
+  // /api/v1/orders/{orderNumber} → /api/v1/orders
+  const statusPath = settings.order_status_path || '/api/v1/orders/{orderNumber}';
+  const derived = statusPath.replace(/\/\{orderNumber\}\s*$/i, '').replace(/\/:\w+\s*$/i, '');
+  return derived || '/api/v1/orders';
+}
+
+/** WhatsApp / Waai sipariş oluşturma — POST /api/v1/orders */
+export async function createWebsiteOrder(
+  settings: EcommerceSettings,
+  input: CreateWebsiteOrderInput
+): Promise<CreateWebsiteOrderResult> {
+  if (!isWebsiteApiConfigured(settings)) {
+    return { ok: false, message: 'Website API yapılandırılmamış' };
+  }
+  if (!input.items.length || !input.customer.fullName.trim()) {
+    return { ok: false, message: 'Sipariş için ürün ve müşteri adı gerekli' };
+  }
+
+  const path = resolveOrderCreatePath(settings);
+  const url = joinUrl(settings.api_base_url!, path);
+  const body = {
+    fulfillment: input.fulfillment,
+    customer: {
+      fullName: input.customer.fullName.trim(),
+      phone: input.customer.phone.trim(),
+      email: input.customer.email?.trim() || undefined,
+      line1: input.customer.line1.trim(),
+      city: input.customer.city.trim(),
+    },
+    items: input.items.map((item) => ({
+      sku: item.sku.trim(),
+      quantity: Math.max(1, Math.floor(item.quantity) || 1),
+      ...(item.options && Object.keys(item.options).length ? { options: item.options } : {}),
+    })),
+    paymentMethod: input.paymentMethod || 'whatsapp',
+  };
+
+  const result = await fetchJson(url, settings, { method: 'POST', body });
+  if (!result.ok) {
+    return {
+      ok: false,
+      status: result.status,
+      message: result.error || 'Sipariş oluşturulamadı',
+    };
+  }
+
+  const root = asRecord(result.data);
+  const orderObj = asRecord(root?.order) || asRecord(root?.data) || root;
+  const orderNumber =
+    pickString(orderObj || {}, ['orderNumber', 'order_number', 'number', 'id']) ||
+    pickString(root || {}, ['orderNumber', 'order_number']);
+
+  return {
+    ok: true,
+    status: result.status,
+    orderNumber: orderNumber || undefined,
+    message: orderNumber ? `Sipariş oluşturuldu: ${orderNumber}` : 'Sipariş oluşturuldu',
+  };
 }
 
 export async function lookupWebsiteOrder(

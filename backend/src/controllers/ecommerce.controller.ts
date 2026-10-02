@@ -82,6 +82,7 @@ export async function getSettings(req: AuthRequest, res: Response): Promise<void
         product_search_path: '/products/search',
         stock_path: '/products/{sku}/stock',
         order_status_path: '/orders/{orderNumber}',
+        order_create_path: '/api/v1/orders',
         shipping_path: '/shipping/{trackingNumber}',
         api_connected_at: null,
         last_test_status: 'untested',

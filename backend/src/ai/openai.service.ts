@@ -54,6 +54,11 @@ import {
   isProductCatalogIntent,
   isWebsiteApiConfigured,
 } from '../services/website-api.client';
+import {
+  getOrderSession,
+  isOrderCreateIntent,
+  runOrderCreateFlow,
+} from './order-flow.service';
 
 const HISTORY_FETCH_EXTRA = 50;
 
@@ -315,6 +320,40 @@ export async function generateAIResponse(
 
   const appointmentMode =
     appointmentConfig.enabled && isAppointmentIntent(trimmed, history);
+
+  const activeOrderSession = getOrderSession(companyId, customerPhone);
+  if (activeOrderSession || (isOrderCreateIntent(trimmed) && !appointmentMode)) {
+    const orderFlow = await runOrderCreateFlow({
+      companyId,
+      customerPhone,
+      message: trimmed,
+      history,
+      whatsappAccountId,
+    }).catch(() => ({ handled: false as const }));
+
+    if (orderFlow.handled && orderFlow.message) {
+      await logAIUsage({
+        companyId,
+        customerPhone,
+        promptTokens: 0,
+        completionTokens: 0,
+        totalTokens: 0,
+        cached: false,
+        skipped: true,
+        skipReason: orderFlow.orderCreated ? 'order_created' : 'order_flow',
+        model: config.openai.model,
+      });
+
+      return {
+        message: orderFlow.message,
+        shouldTransfer: orderFlow.shouldTransfer ?? false,
+        skippedAI: true,
+        skipReason: orderFlow.orderCreated ? 'order_created' : 'order_flow',
+        tokensUsed: 0,
+        knowledgeMiss: false,
+      };
+    }
+  }
 
   if (appointmentMode) {
     if (appointmentConfig.mode === 'rules') {

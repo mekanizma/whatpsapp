@@ -36,6 +36,7 @@ type FormState = {
   product_search_path: string;
   stock_path: string;
   order_status_path: string;
+  order_create_path: string;
   shipping_path: string;
 };
 
@@ -60,6 +61,7 @@ const emptyForm: FormState = {
   product_search_path: '/products/search',
   stock_path: '/products/{sku}/stock',
   order_status_path: '/orders/{orderNumber}',
+  order_create_path: '/api/v1/orders',
   shipping_path: '/shipping/{trackingNumber}',
 };
 
@@ -97,6 +99,7 @@ export function WebsitePage() {
       product_search_path: settings.product_search_path || '/products/search',
       stock_path: settings.stock_path || '/products/{sku}/stock',
       order_status_path: settings.order_status_path || '/orders/{orderNumber}',
+      order_create_path: settings.order_create_path || '/api/v1/orders',
       shipping_path: settings.shipping_path || '/shipping/{trackingNumber}',
     });
   }, [settings]);
@@ -116,6 +119,7 @@ export function WebsitePage() {
         product_search_path: form.product_search_path || '/products/search',
         stock_path: form.stock_path || '/products/{sku}/stock',
         order_status_path: form.order_status_path || '/orders/{orderNumber}',
+        order_create_path: form.order_create_path || '/api/v1/orders',
         shipping_path: form.shipping_path || '/shipping/{trackingNumber}',
       }),
     onSuccess: () => {
@@ -140,6 +144,7 @@ export function WebsitePage() {
         product_search_path: form.product_search_path || '/products/search',
         stock_path: form.stock_path || '/products/{sku}/stock',
         order_status_path: form.order_status_path || '/orders/{orderNumber}',
+        order_create_path: form.order_create_path || '/api/v1/orders',
         shipping_path: form.shipping_path || '/shipping/{trackingNumber}',
       });
       return api.post<{
@@ -343,6 +348,14 @@ export function WebsitePage() {
                   id="order-path"
                   value={form.order_status_path}
                   onChange={(e) => setField('order_status_path', e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="order-create-path">{t('ecommerce.website.orderCreatePath')}</Label>
+                <Input
+                  id="order-create-path"
+                  value={form.order_create_path}
+                  onChange={(e) => setField('order_create_path', e.target.value)}
                 />
               </div>
               <div className="space-y-1.5 sm:col-span-2">

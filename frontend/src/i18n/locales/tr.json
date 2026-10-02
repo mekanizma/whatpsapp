@@ -755,7 +755,11 @@
     "receivedOn": "Hat: {{line}}",
     "quickReplies": "Hazır cevaplar",
     "quickRepliesHint": "Seçtiğiniz metin yazma alanına eklenir; göndermek için gönder’e basın.",
-    "quickRepliesEmpty": "Henüz hazır cevap yok — panelden ekleyebilirsiniz"
+    "quickRepliesEmpty": "Henüz hazır cevap yok — panelden ekleyebilirsiniz",
+    "delete": "Mesajı sil",
+    "deleteConfirmTitle": "Mesajı sil",
+    "deleteConfirm": "Bu mesajı kalıcı olarak silmek istediğinize emin misiniz? Bu işlem geri alınamaz.",
+    "deleteFailed": "Mesaj silinemedi"
   },
   "quickReplies": {
     "title": "Hazır Cevaplar",
@@ -904,7 +908,8 @@
       "productsPath": "Ürün listesi yolu",
       "searchPath": "Ürün arama yolu",
       "stockPath": "Stok yolu ({sku})",
-      "orderPath": "Sipariş yolu ({orderNumber})",
+      "orderPath": "Sipariş sorgu yolu ({orderNumber})",
+      "orderCreatePath": "Sipariş oluşturma yolu (POST)",
       "shippingPath": "Kargo yolu ({trackingNumber})",
       "testConnection": "Bağlantıyı Test Et",
       "saved": "Ayarlar kaydedildi",
@@ -912,7 +917,7 @@
       "testFail": "Bağlantı başarısız",
       "lastTest": "Son test",
       "howTitle": "AI nasıl kullanır?",
-      "howDesc": "E-ticaret paketinde, API’si açık olan WhatsApp hatlarında müşteri fiyat, stok, ürün, sipariş veya kargo sorduğunda sistem bağlı API’ye sorgu atar; sonucu bilgi bankası ile birlikte AI’ya bağlam olarak verir."
+      "howDesc": "E-ticaret paketinde, API’si açık olan WhatsApp hatlarında müşteri fiyat, stok, ürün sorduğunda sistem API’ye sorgu atar; sipariş vermek isterse ad/teslimat bilgisi toplayıp POST ile sipariş oluşturur."
     },
     "orderStatus": {
       "title": "Sipariş Durumu Sorgulama",

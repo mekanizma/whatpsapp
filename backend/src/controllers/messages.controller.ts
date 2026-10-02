@@ -14,6 +14,7 @@ import { isChannelCustomerId, parseCustomerExternalId } from '../channels/custom
 import { mapMessageRow } from '../utils/supabase-join';
 import {
   attachSignedMediaUrls,
+  deleteMessageMedia,
   downloadMessageMedia,
   uploadMessageMedia,
 } from '../services/message-media.service';
@@ -344,6 +345,80 @@ export async function getMessageMedia(req: AuthRequest, res: Response): Promise<
       error: err instanceof Error ? err.message : 'Medya indirilemedi',
     });
   }
+}
+
+/** Yalnızca şirket yöneticisi (ve impersonation) mesaj silebilir */
+export async function deleteMessage(req: AuthRequest, res: Response): Promise<void> {
+  const messageId = typeof req.params.messageId === 'string' ? req.params.messageId.trim() : '';
+
+  if (!req.companyId) {
+    res.status(403).json({ success: false, error: 'Şirket bilgisi bulunamadı' });
+    return;
+  }
+
+  if (!messageId) {
+    res.status(400).json({ success: false, error: 'Geçersiz mesaj' });
+    return;
+  }
+
+  if (isDemoSession(req)) {
+    res.json({
+      success: true,
+      data: { id: messageId },
+      message: 'Mesaj silindi',
+    });
+    return;
+  }
+
+  const { data: msg, error: fetchError } = await adminClient
+    .from('messages')
+    .select('id, company_id, customer_phone, media_path, sender_type')
+    .eq('id', messageId)
+    .eq('company_id', req.companyId)
+    .maybeSingle();
+
+  if (fetchError) {
+    res.status(400).json({ success: false, error: fetchError.message });
+    return;
+  }
+
+  if (!msg) {
+    res.status(404).json({ success: false, error: 'Mesaj bulunamadı' });
+    return;
+  }
+
+  const { error: deleteError } = await adminClient
+    .from('messages')
+    .delete()
+    .eq('id', msg.id)
+    .eq('company_id', req.companyId);
+
+  if (deleteError) {
+    res.status(400).json({ success: false, error: deleteError.message });
+    return;
+  }
+
+  if (msg.media_path) {
+    await deleteMessageMedia(msg.media_path);
+  }
+
+  await logActivity({
+    userId: req.userId,
+    companyId: req.companyId,
+    action: 'message_deleted',
+    entityType: 'message',
+    entityId: msg.id,
+    metadata: {
+      customer_phone: msg.customer_phone,
+      sender_type: msg.sender_type,
+    },
+  });
+
+  res.json({
+    success: true,
+    data: { id: msg.id, customer_phone: msg.customer_phone },
+    message: 'Mesaj silindi',
+  });
 }
 
 export async function updateCustomerName(req: AuthRequest, res: Response): Promise<void> {

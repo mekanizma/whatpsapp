@@ -399,6 +399,7 @@ export interface EcommerceSettings {
   product_search_path?: string | null;
   stock_path?: string | null;
   order_status_path?: string | null;
+  order_create_path?: string | null;
   shipping_path?: string | null;
   api_connected_at?: string | null;
   last_test_status?: 'ok' | 'failed' | 'untested' | null;

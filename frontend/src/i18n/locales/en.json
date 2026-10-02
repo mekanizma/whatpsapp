@@ -755,7 +755,11 @@
     "receivedOn": "Line: {{line}}",
     "quickReplies": "Quick replies",
     "quickRepliesHint": "Selected text is inserted into the composer — press send to deliver.",
-    "quickRepliesEmpty": "No quick replies yet — add them from the panel"
+    "quickRepliesEmpty": "No quick replies yet — add them from the panel",
+    "delete": "Delete message",
+    "deleteConfirmTitle": "Delete message",
+    "deleteConfirm": "Are you sure you want to permanently delete this message? This cannot be undone.",
+    "deleteFailed": "Failed to delete message"
   },
   "quickReplies": {
     "title": "Quick Replies",
@@ -904,7 +908,8 @@
       "productsPath": "Products path",
       "searchPath": "Product search path",
       "stockPath": "Stock path ({sku})",
-      "orderPath": "Order path ({orderNumber})",
+      "orderPath": "Order lookup path ({orderNumber})",
+      "orderCreatePath": "Order create path (POST)",
       "shippingPath": "Shipping path ({trackingNumber})",
       "testConnection": "Test Connection",
       "saved": "Settings saved",
@@ -912,7 +917,7 @@
       "testFail": "Connection failed",
       "lastTest": "Last test",
       "howTitle": "How AI uses this",
-      "howDesc": "On the e-commerce plan, when a customer asks about price, stock, products, orders or shipping on a line with API enabled, the system queries your API and feeds results to the AI together with the knowledge base."
+      "howDesc": "On the e-commerce plan, lines with API enabled query live product/price/stock data; when a customer wants to order, the bot collects details and creates the order via POST."
     },
     "orderStatus": {
       "title": "Order Status Lookup",

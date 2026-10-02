@@ -99,3 +99,13 @@ export async function attachSignedMediaUrls<T extends { media_path?: string | nu
     })
   );
 }
+
+export async function deleteMessageMedia(path: string): Promise<void> {
+  const trimmed = path.trim();
+  if (!trimmed) return;
+
+  const { error } = await adminClient.storage.from(BUCKET).remove([trimmed]);
+  if (error) {
+    console.error('[MessageMedia] Silme hatası:', error.message);
+  }
+}

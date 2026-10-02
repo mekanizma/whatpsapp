@@ -192,6 +192,13 @@ router.post('/knowledge/:id/index-now', authenticate, requireRole('company_admin
 // Messages
 router.get('/messages', authenticate, requireCompany, messagesCtrl.getConversations);
 router.get('/messages/media/:messageId', authenticate, requireCompany, messagesCtrl.getMessageMedia);
+router.delete(
+  '/messages/item/:messageId',
+  authenticate,
+  requireRole('company_admin'),
+  requireCompany,
+  asyncHandler(messagesCtrl.deleteMessage)
+);
 router.get('/messages/outreach-template', authenticate, requireCompany, messagesCtrl.getOutreachTemplate);
 router.post('/messages/outreach-template', authenticate, requireCompany, messagesCtrl.sendOutreachTemplate);
 router.get('/messages/:phone', authenticate, requireCompany, messagesCtrl.getConversationMessages);

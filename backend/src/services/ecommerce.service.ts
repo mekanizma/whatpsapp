@@ -56,6 +56,8 @@ export interface EcommerceSettings {
   product_search_path: string | null;
   stock_path: string | null;
   order_status_path: string | null;
+  /** POST sipariş oluşturma yolu — örn. /api/v1/orders */
+  order_create_path?: string | null;
   shipping_path: string | null;
   api_connected_at: string | null;
   last_test_status: EcommerceApiTestStatus | null;
@@ -202,6 +204,7 @@ function defaultSettings(companyId: string): EcommerceSettings {
     product_search_path: '/products/search',
     stock_path: '/products/{sku}/stock',
     order_status_path: '/orders/{orderNumber}',
+    order_create_path: '/api/v1/orders',
     shipping_path: '/shipping/{trackingNumber}',
     api_connected_at: null,
     last_test_status: 'untested',
@@ -258,6 +261,10 @@ export async function upsertEcommerceSettings(
       patch.order_status_path !== undefined
         ? patch.order_status_path
         : existing.order_status_path,
+    order_create_path:
+      patch.order_create_path !== undefined
+        ? patch.order_create_path
+        : existing.order_create_path ?? '/api/v1/orders',
     shipping_path:
       patch.shipping_path !== undefined ? patch.shipping_path : existing.shipping_path,
     api_connected_at:
@@ -692,6 +699,7 @@ export async function getEcommerceContextForAI(
   if (includeWebsiteApi && settings.api_enabled && settings.api_base_url) {
     parts.push(
       'Web sitesi API bağlı: ürün adı, fiyat, stok ve (yapılandırıldıysa) sipariş/kargo için canlı API sonuçlarını kullan.',
+      'Müşteri sipariş vermek isterse sistem ayrı bir sipariş akışı ile ad, teslimat ve onay toplayıp API üzerinden sipariş oluşturur.',
       'API sonucu yoksa uydurma; ürün adını netleştir veya temsilciye aktar.',
       'Bilgi bankası ile API sonuçları birlikte kullanılabilir; çelişide güncel API verisini tercih et.'
     );

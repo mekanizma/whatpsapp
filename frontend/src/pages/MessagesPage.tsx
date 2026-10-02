@@ -6,7 +6,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Send, Search, Phone, Bot, User, CheckCircle2, Headphones, MessageSquare, ChevronLeft, ImagePlus, Ban, Plus, MessageSquareText } from 'lucide-react';
+import { Send, Search, Phone, Bot, User, CheckCircle2, Headphones, MessageSquare, ChevronLeft, ImagePlus, Ban, Plus, MessageSquareText, Trash2 } from 'lucide-react';
 import { api } from '@/services/api';
 import { supabase, supabaseConfigured } from '@/services/supabase';
 import { useAuthStore } from '@/store/authStore';
@@ -99,6 +99,9 @@ export function MessagesPage() {
     userRole === 'company_admin' ||
     userRole === 'staff' ||
     (userRole === 'super_admin' && isImpersonating);
+  // Yalnızca şirket yöneticisi mesaj silebilir
+  const canDeleteMessages =
+    userRole === 'company_admin' || (userRole === 'super_admin' && isImpersonating);
   const canStartOutreach = canStartWaOutreach(user);
 
   const [selectedPhone, setSelectedPhone] = useState<string | null>(phoneParam);
@@ -107,6 +110,7 @@ export function MessagesPage() {
   const [search, setSearch] = useState('');
   const [showNewMessage, setShowNewMessage] = useState(false);
   const [showQuickReplies, setShowQuickReplies] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Message | null>(null);
   const [newPhone, setNewPhone] = useState('');
   const [selectedAccountId, setSelectedAccountId] = useState('');
   const queryClient = useQueryClient();
@@ -156,6 +160,19 @@ export function MessagesPage() {
         },
         (payload) => {
           const row = payload.new as { customer_phone?: string };
+          invalidateMessageQueries(row.customer_phone || selectedPhone);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'messages',
+          filter: `company_id=eq.${companyId}`,
+        },
+        (payload) => {
+          const row = payload.old as { customer_phone?: string };
           invalidateMessageQueries(row.customer_phone || selectedPhone);
         }
       )
@@ -354,6 +371,18 @@ export function MessagesPage() {
     },
     onError: (err: Error) => {
       setReplyError(err.message || t('messages.blacklistFailed'));
+    },
+  });
+
+  const deleteMessageMutation = useMutation({
+    mutationFn: (messageId: string) =>
+      api.delete<{ id: string; customer_phone?: string }>(`/messages/item/${messageId}`),
+    onSuccess: () => {
+      setDeleteTarget(null);
+      invalidateMessageQueries(selectedPhone);
+    },
+    onError: (err: Error) => {
+      setReplyError(err.message || t('messages.deleteFailed'));
     },
   });
 
@@ -672,8 +701,8 @@ export function MessagesPage() {
                         </span>
                       </div>
                     )}
-                    <div className={cn('flex', msg.sender_type === 'customer' ? 'justify-start' : 'justify-end')}>
-                      <div className={cn('max-w-[85%] rounded-2xl px-3 py-2.5 sm:max-w-[82%] sm:px-4', bubbleStyles[msg.sender_type] || bubbleStyles.ai)}>
+                    <div className={cn('group flex', msg.sender_type === 'customer' ? 'justify-start' : 'justify-end')}>
+                      <div className={cn('relative max-w-[85%] rounded-2xl px-3 py-2.5 sm:max-w-[82%] sm:px-4', bubbleStyles[msg.sender_type] || bubbleStyles.ai)}>
                         <div className="mb-1 flex items-center gap-1.5">
                           {msg.sender_type === 'ai' && <Bot className="h-3 w-3 text-violet-500" />}
                           {msg.sender_type === 'staff' && <User className="h-3 w-3 text-white/80" />}
@@ -687,6 +716,23 @@ export function MessagesPage() {
                           >
                             {senderLabel(msg)}
                           </span>
+                          {canDeleteMessages && (
+                            <button
+                              type="button"
+                              className={cn(
+                                'ml-auto inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition-opacity sm:h-7 sm:w-7',
+                                'opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100',
+                                msg.sender_type === 'staff'
+                                  ? 'text-white/70 hover:bg-white/15 hover:text-white'
+                                  : 'text-slate-400 hover:bg-slate-200/70 hover:text-red-600'
+                              )}
+                              title={t('messages.delete')}
+                              aria-label={t('messages.delete')}
+                              onClick={() => setDeleteTarget(msg)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                         </div>
                         {formatReceivedLine(msg.received_line) && (
                           <p
@@ -1071,6 +1117,54 @@ export function MessagesPage() {
                 onClick={() => setShowQuickReplies(false)}
               >
                 {t('common.cancel')}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-0 sm:items-center sm:p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={t('messages.deleteConfirmTitle')}
+          onClick={() => !deleteMessageMutation.isPending && setDeleteTarget(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-t-2xl bg-white p-4 shadow-xl sm:rounded-2xl sm:p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-base font-semibold text-slate-900">
+              {t('messages.deleteConfirmTitle')}
+            </h3>
+            <p className="mt-2 text-sm text-slate-500">{t('messages.deleteConfirm')}</p>
+            {deleteTarget.message?.trim() ? (
+              <p className="mt-3 line-clamp-3 rounded-lg bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-600 ring-1 ring-slate-100 whitespace-pre-wrap">
+                {deleteTarget.message}
+              </p>
+            ) : hasImage(deleteTarget) ? (
+              <p className="mt-3 text-xs text-slate-500">{t('messages.image')}</p>
+            ) : null}
+            <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-[44px]"
+                disabled={deleteMessageMutation.isPending}
+                onClick={() => setDeleteTarget(null)}
+              >
+                {t('common.cancel')}
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                className="min-h-[44px]"
+                disabled={deleteMessageMutation.isPending}
+                onClick={() => deleteMessageMutation.mutate(deleteTarget.id)}
+              >
+                {deleteMessageMutation.isPending ? <Spinner className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />}
+                {t('messages.delete')}
               </Button>
             </div>
           </div>
