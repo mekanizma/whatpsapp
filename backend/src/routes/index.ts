@@ -116,6 +116,13 @@ router.get('/companies/:id/dashboard', authenticate, requireCompany, companyCtrl
 router.get('/dashboard', authenticate, requireCompany, companyCtrl.getDashboard);
 router.get('/companies/:id/ai-cost-report', authenticate, requireCompany, companyCtrl.getAICostReportHandler);
 router.get('/ai-cost-report', authenticate, requireCompany, companyCtrl.getAICostReportHandler);
+router.delete(
+  '/ai/response-cache',
+  authenticate,
+  requireRole('company_admin'),
+  requireCompany,
+  asyncHandler(companyCtrl.clearAiResponseCacheHandler)
+);
 
 // WhatsApp — multi-account
 router.get('/whatsapp/accounts', authenticate, requireCompany, whatsappCtrl.listAccounts);

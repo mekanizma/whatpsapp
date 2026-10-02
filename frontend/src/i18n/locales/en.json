@@ -764,7 +764,12 @@
     "deleteConversationTitle": "Delete conversation",
     "deleteConversationConfirm": "All messages from this customer will be permanently deleted. This cannot be undone.",
     "deleteConversationCount": "{{count}} messages",
-    "deleteConversationFailed": "Failed to delete conversation"
+    "deleteConversationFailed": "Failed to delete conversation",
+    "clearAiCache": "AI cache",
+    "clearAiCacheTitle": "Clear AI response cache",
+    "clearAiCacheConfirm": "Your company's entire AI response cache will be cleared. Similar questions will be regenerated. This cannot be undone.",
+    "clearAiCacheSuccess": "AI response cache cleared",
+    "clearAiCacheFailed": "Failed to clear AI cache"
   },
   "quickReplies": {
     "title": "Quick Replies",

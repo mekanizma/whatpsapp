@@ -325,3 +325,36 @@ export async function getAICostReportHandler(req: AuthRequest, res: Response): P
     });
   }
 }
+
+/** Yalnızca şirket yöneticisi (ve impersonation) AI cevap önbelleğini silebilir */
+export async function clearAiResponseCacheHandler(req: AuthRequest, res: Response): Promise<void> {
+  if (!req.companyId) {
+    res.status(403).json({ success: false, error: 'Şirket bilgisi bulunamadı' });
+    return;
+  }
+
+  if (isDemoSession(req)) {
+    res.json({
+      success: true,
+      data: { company_id: req.companyId },
+      message: 'AI cevap önbelleği silindi',
+    });
+    return;
+  }
+
+  await clearCompanyCache(req.companyId);
+
+  await logActivity({
+    userId: req.userId,
+    companyId: req.companyId,
+    action: 'ai_response_cache_cleared',
+    entityType: 'company',
+    entityId: req.companyId,
+  });
+
+  res.json({
+    success: true,
+    data: { company_id: req.companyId },
+    message: 'AI cevap önbelleği silindi',
+  });
+}

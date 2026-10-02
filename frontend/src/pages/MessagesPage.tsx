@@ -6,7 +6,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Send, Search, Phone, Bot, User, CheckCircle2, Headphones, MessageSquare, ChevronLeft, ImagePlus, Ban, Plus, MessageSquareText, Trash2 } from 'lucide-react';
+import { Send, Search, Phone, Bot, User, CheckCircle2, Headphones, MessageSquare, ChevronLeft, ImagePlus, Ban, Plus, MessageSquareText, Trash2, Database } from 'lucide-react';
 import { api } from '@/services/api';
 import { supabase, supabaseConfigured } from '@/services/supabase';
 import { useAuthStore } from '@/store/authStore';
@@ -112,6 +112,8 @@ export function MessagesPage() {
   const [showQuickReplies, setShowQuickReplies] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Message | null>(null);
   const [showDeleteConversation, setShowDeleteConversation] = useState(false);
+  const [showClearAiCache, setShowClearAiCache] = useState(false);
+  const [cacheClearNotice, setCacheClearNotice] = useState<string | null>(null);
   const [newPhone, setNewPhone] = useState('');
   const [selectedAccountId, setSelectedAccountId] = useState('');
   const queryClient = useQueryClient();
@@ -121,6 +123,12 @@ export function MessagesPage() {
   useEffect(() => {
     if (phoneParam) setSelectedPhone(phoneParam);
   }, [phoneParam]);
+
+  useEffect(() => {
+    if (!cacheClearNotice) return;
+    const timer = window.setTimeout(() => setCacheClearNotice(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [cacheClearNotice]);
 
   const invalidateMessageQueries = useCallback(
     (phone?: string | null) => {
@@ -402,6 +410,19 @@ export function MessagesPage() {
     },
   });
 
+  const clearAiCacheMutation = useMutation({
+    mutationFn: () =>
+      api.delete<{ company_id: string }>('/ai/response-cache'),
+    onSuccess: () => {
+      setShowClearAiCache(false);
+      setCacheClearNotice(t('messages.clearAiCacheSuccess'));
+    },
+    onError: (err: Error) => {
+      setReplyError(err.message || t('messages.clearAiCacheFailed'));
+      setShowClearAiCache(false);
+    },
+  });
+
   const templateMutation = useMutation({
     mutationFn: (payload: { phone: string; whatsapp_account_id?: string }) =>
       api.post<Message>('/messages/outreach-template', {
@@ -625,18 +646,32 @@ export function MessagesPage() {
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   {canDeleteMessages && (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="shrink-0 border-red-200 text-red-700 hover:bg-red-50"
-                      onClick={() => setShowDeleteConversation(true)}
-                      disabled={deleteConversationMutation.isPending || !messages?.length}
-                      title={t('messages.deleteConversation')}
-                      aria-label={t('messages.deleteConversation')}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      <span className="hidden sm:inline">{t('messages.deleteConversation')}</span>
-                    </Button>
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="shrink-0 border-violet-200 text-violet-700 hover:bg-violet-50"
+                        onClick={() => setShowClearAiCache(true)}
+                        disabled={clearAiCacheMutation.isPending}
+                        title={t('messages.clearAiCache')}
+                        aria-label={t('messages.clearAiCache')}
+                      >
+                        <Database className="h-4 w-4" />
+                        <span className="hidden sm:inline">{t('messages.clearAiCache')}</span>
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="shrink-0 border-red-200 text-red-700 hover:bg-red-50"
+                        onClick={() => setShowDeleteConversation(true)}
+                        disabled={deleteConversationMutation.isPending || !messages?.length}
+                        title={t('messages.deleteConversation')}
+                        aria-label={t('messages.deleteConversation')}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                        <span className="hidden sm:inline">{t('messages.deleteConversation')}</span>
+                      </Button>
+                    </>
                   )}
                   {canManageBlacklist && (
                     <Button
@@ -677,6 +712,14 @@ export function MessagesPage() {
                   <div className="flex items-center gap-2 text-xs text-red-800">
                     <Ban className="h-3.5 w-3.5 shrink-0" />
                     <span>{t('messages.blacklistBanner')}</span>
+                  </div>
+                </div>
+              )}
+              {cacheClearNotice && (
+                <div className="border-t border-emerald-100 bg-emerald-50/80 px-4 py-2.5">
+                  <div className="flex items-center gap-2 text-xs text-emerald-800">
+                    <Database className="h-3.5 w-3.5 shrink-0" />
+                    <span>{cacheClearNotice}</span>
                   </div>
                 </div>
               )}
@@ -1246,6 +1289,51 @@ export function MessagesPage() {
                   <Trash2 className="h-4 w-4" />
                 )}
                 {t('messages.deleteConversation')}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showClearAiCache && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-0 sm:items-center sm:p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label={t('messages.clearAiCacheTitle')}
+          onClick={() => !clearAiCacheMutation.isPending && setShowClearAiCache(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-t-2xl bg-white p-4 shadow-xl sm:rounded-2xl sm:p-5"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-base font-semibold text-slate-900">
+              {t('messages.clearAiCacheTitle')}
+            </h3>
+            <p className="mt-2 text-sm text-slate-500">{t('messages.clearAiCacheConfirm')}</p>
+            <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-[44px]"
+                disabled={clearAiCacheMutation.isPending}
+                onClick={() => setShowClearAiCache(false)}
+              >
+                {t('common.cancel')}
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                className="min-h-[44px]"
+                disabled={clearAiCacheMutation.isPending}
+                onClick={() => clearAiCacheMutation.mutate()}
+              >
+                {clearAiCacheMutation.isPending ? (
+                  <Spinner className="h-4 w-4" />
+                ) : (
+                  <Database className="h-4 w-4" />
+                )}
+                {t('messages.clearAiCache')}
               </Button>
             </div>
           </div>

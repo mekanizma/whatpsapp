@@ -764,7 +764,12 @@
     "deleteConversationTitle": "Konuşmayı sil",
     "deleteConversationConfirm": "Bu müşterinin tüm mesajları kalıcı olarak silinecek. Bu işlem geri alınamaz.",
     "deleteConversationCount": "{{count}} mesaj",
-    "deleteConversationFailed": "Konuşma silinemedi"
+    "deleteConversationFailed": "Konuşma silinemedi",
+    "clearAiCache": "AI önbelleği",
+    "clearAiCacheTitle": "AI cevap önbelleğini sil",
+    "clearAiCacheConfirm": "Şirketinizin tüm AI cevap önbelleği silinecek. Sonraki benzer sorular yeniden üretilecek. Bu işlem geri alınamaz.",
+    "clearAiCacheSuccess": "AI cevap önbelleği silindi",
+    "clearAiCacheFailed": "AI önbelleği silinemedi"
   },
   "quickReplies": {
     "title": "Hazır Cevaplar",
