@@ -51,8 +51,10 @@ import {
 } from '../services/ecommerce.service';
 import {
   buildWebsiteCatalogContext,
+  ecommerceContextHasCatalogResults,
   isProductCatalogIntent,
   isWebsiteApiConfigured,
+  shouldSearchCatalogOnKnowledgeMiss,
 } from '../services/website-api.client';
 import {
   getOrderSession,
@@ -196,10 +198,59 @@ async function fetchGenerateAIContext(
   };
 }
 
+/**
+ * Bilgi bankasında eşleşme yoksa ve şirket API'si açıksa,
+ * sorudaki marka/model/ürün terimleriyle canlı katalog araması yapar.
+ */
+async function fetchWebsiteCatalogOnKnowledgeMiss(
+  companyId: string,
+  message: string,
+  whatsappAccountId: string | null | undefined,
+  existingEcommerceContext: string
+): Promise<{ ecommerceContext: string; catalogFromApi: boolean }> {
+  if (ecommerceContextHasCatalogResults(existingEcommerceContext)) {
+    return { ecommerceContext: existingEcommerceContext, catalogFromApi: true };
+  }
+  if (!shouldSearchCatalogOnKnowledgeMiss(message)) {
+    return { ecommerceContext: existingEcommerceContext, catalogFromApi: false };
+  }
+
+  const allowed = await companyCanUseEcommerce(companyId).catch(() => false);
+  if (!allowed) {
+    return { ecommerceContext: existingEcommerceContext, catalogFromApi: false };
+  }
+
+  const lineSettings = whatsappAccountId
+    ? await resolveAccountAiSettings(companyId, whatsappAccountId).catch(() => null)
+    : null;
+  const useWebsiteApi = lineSettings ? lineSettings.websiteApiEnabled : true;
+  if (!useWebsiteApi) {
+    return { ecommerceContext: existingEcommerceContext, catalogFromApi: false };
+  }
+
+  const settings = await getEcommerceSettings(companyId).catch(() => null);
+  if (!settings || !isWebsiteApiConfigured(settings)) {
+    return { ecommerceContext: existingEcommerceContext, catalogFromApi: false };
+  }
+
+  const catalog = await buildWebsiteCatalogContext(settings, message).catch(() => '');
+  if (!catalog) {
+    return { ecommerceContext: existingEcommerceContext, catalogFromApi: false };
+  }
+
+  console.log(
+    `[WebsiteAPI] KB miss → katalog araması: "${message.slice(0, 80)}" (${catalog.length} karakter)`
+  );
+
+  const merged = [existingEcommerceContext, catalog].filter(Boolean).join('\n\n');
+  return { ecommerceContext: merged, catalogFromApi: true };
+}
+
 export const generateAIResponseDeps = {
   fetchGenerateAIContext,
   retrieveKnowledgeContext,
   createChatCompletion,
+  fetchWebsiteCatalogOnKnowledgeMiss,
 };
 
 export interface AIResponse {
@@ -251,13 +302,20 @@ export async function generateAIResponse(
 ): Promise<AIResponse> {
   const trimmed = customerMessage.trim();
 
-  const { history, company, allKnowledge, ecommerceContext, ecommerceReturnsEnabled, knowledgeBaseIds } =
-    await generateAIResponseDeps.fetchGenerateAIContext(
-      companyId,
-      customerPhone,
-      trimmed,
-      whatsappAccountId
-    );
+  const {
+    history,
+    company,
+    allKnowledge,
+    ecommerceContext: initialEcommerceContext,
+    ecommerceReturnsEnabled,
+    knowledgeBaseIds,
+  } = await generateAIResponseDeps.fetchGenerateAIContext(
+    companyId,
+    customerPhone,
+    trimmed,
+    whatsappAccountId
+  );
+  let ecommerceContext = initialEcommerceContext;
 
   const chatHistory = prepareConversationHistoryForChat(history, trimmed);
 
@@ -477,8 +535,27 @@ export async function generateAIResponse(
     allKnowledge,
     { history, knowledgeBaseIds }
   );
+
+  let catalogFromApi = ecommerceContextHasCatalogResults(ecommerceContext);
+  if (retrieval.kbHasNoMatch && !catalogFromApi) {
+    const catalogFallback =
+      await generateAIResponseDeps.fetchWebsiteCatalogOnKnowledgeMiss(
+        companyId,
+        trimmed,
+        whatsappAccountId,
+        ecommerceContext
+      );
+    ecommerceContext = catalogFallback.ecommerceContext;
+    catalogFromApi = catalogFallback.catalogFromApi;
+  }
+
   let knowledge = retrieval.context;
-  if (retrieval.kbHasNoMatch && allKnowledge.length > 0) {
+  if (retrieval.kbHasNoMatch && catalogFromApi) {
+    knowledge =
+      'Bu soru için bilgi bankasında eşleşen içerik bulunamadı. ' +
+      'E-Ticaret bağlamındaki web sitesi API ürün sonuçlarından (marka, model, fiyat, stok) müşteriye cevap ver. ' +
+      'API sonuçlarındaki bilgileri kullan; uydurma. API sonucu yeterliyse temsilci aktarımı önerme.';
+  } else if (retrieval.kbHasNoMatch && allKnowledge.length > 0) {
     knowledge = buildKnowledgeNoMatchHint(allKnowledge, conversationLang);
   }
 
@@ -557,13 +634,16 @@ export async function generateAIResponse(
 
   const { message, shouldTransfer } = stripTransferMarker(raw);
 
+  // API'den ürün bulunduysa bilinmeyen soru / KB miss kaydı tutma
+  const effectiveKbMiss = retrieval.kbHasNoMatch && !catalogFromApi;
+
   const knowledgeMiss = shouldRecordUnknownQuestion({
     customerMessage: trimmed,
     aiResponse: message,
     shouldTransfer,
     skippedAI: false,
     appointmentMode: false,
-    kbHasNoMatch: retrieval.kbHasNoMatch,
+    kbHasNoMatch: effectiveKbMiss,
   });
 
   if (knowledgeMiss) {
@@ -580,7 +660,7 @@ export async function generateAIResponse(
       response: message,
       history,
       latestMessage: trimmed,
-      kbHasNoMatch: retrieval.kbHasNoMatch,
+      kbHasNoMatch: effectiveKbMiss,
       usedRag: retrieval.usedRag,
       hasStrongMatch: retrieval.usedRag && !retrieval.kbHasNoMatch,
       followUp,

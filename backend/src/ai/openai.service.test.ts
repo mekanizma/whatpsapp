@@ -49,6 +49,7 @@ describe('generateAIResponse cost gates', () => {
   const origFetch = generateAIResponseDeps.fetchGenerateAIContext;
   const origRetrieve = generateAIResponseDeps.retrieveKnowledgeContext;
   const origChat = generateAIResponseDeps.createChatCompletion;
+  const origCatalogMiss = generateAIResponseDeps.fetchWebsiteCatalogOnKnowledgeMiss;
   const origEmbeddings = knowledgeRetrievalDeps.createEmbeddings;
   const origRpc = knowledgeRetrievalDeps.matchKnowledgeChunksRpc;
 
@@ -66,6 +67,12 @@ describe('generateAIResponse cost gates', () => {
     counters.retrieveKnowledge = 0;
 
     generateAIResponseDeps.fetchGenerateAIContext = async () => MOCK_CONTEXT;
+    generateAIResponseDeps.fetchWebsiteCatalogOnKnowledgeMiss = async (
+      _companyId,
+      _message,
+      _accountId,
+      existing
+    ) => ({ ecommerceContext: existing, catalogFromApi: false });
 
     generateAIResponseDeps.retrieveKnowledgeContext = async (...args) => {
       counters.retrieveKnowledge++;
@@ -92,6 +99,7 @@ describe('generateAIResponse cost gates', () => {
     generateAIResponseDeps.fetchGenerateAIContext = origFetch;
     generateAIResponseDeps.retrieveKnowledgeContext = origRetrieve;
     generateAIResponseDeps.createChatCompletion = origChat;
+    generateAIResponseDeps.fetchWebsiteCatalogOnKnowledgeMiss = origCatalogMiss;
     knowledgeRetrievalDeps.createEmbeddings = origEmbeddings;
     knowledgeRetrievalDeps.matchKnowledgeChunksRpc = origRpc;
   });
@@ -219,11 +227,13 @@ describe('generateAIResponse follow-up cache and empty rerank', () => {
   const origFetch = generateAIResponseDeps.fetchGenerateAIContext;
   const origRetrieve = generateAIResponseDeps.retrieveKnowledgeContext;
   const origChat = generateAIResponseDeps.createChatCompletion;
+  const origCatalogMiss = generateAIResponseDeps.fetchWebsiteCatalogOnKnowledgeMiss;
 
   afterEach(() => {
     generateAIResponseDeps.fetchGenerateAIContext = origFetch;
     generateAIResponseDeps.retrieveKnowledgeContext = origRetrieve;
     generateAIResponseDeps.createChatCompletion = origChat;
+    generateAIResponseDeps.fetchWebsiteCatalogOnKnowledgeMiss = origCatalogMiss;
     void clearCompanyCache(COMPANY_ID);
   });
 
@@ -310,6 +320,12 @@ describe('generateAIResponse follow-up cache and empty rerank', () => {
       topicChanged: false,
       dependsOnHistory: false,
     });
+    generateAIResponseDeps.fetchWebsiteCatalogOnKnowledgeMiss = async (
+      _companyId,
+      _message,
+      _accountId,
+      existing
+    ) => ({ ecommerceContext: existing, catalogFromApi: false });
 
     let userPrompt = '';
     generateAIResponseDeps.createChatCompletion = async (messages) => {
@@ -333,5 +349,67 @@ describe('generateAIResponse follow-up cache and empty rerank', () => {
       resolvedQuestion: 'yönlendirme',
     });
     assert.match(expected, /eşleşen içerik bulunamadı/);
+  });
+
+  it('on KB miss with website API catalog, answers from API and skips unknown-question flag', async () => {
+    const knowledge = [
+      {
+        id: 'kb1',
+        company_id: COMPANY_ID,
+        title: 'Genel',
+        content: 'Genel bilgi',
+        category: 'general',
+        is_active: true,
+      },
+    ];
+    const catalog =
+      'Web sitesi API ürün sonuçları (güncel fiyat/stok):\n\n(1)\nSamsung Galaxy S24 — 45.000 TL — Stok: 3';
+
+    generateAIResponseDeps.fetchGenerateAIContext = async () => ({
+      ...MOCK_CONTEXT,
+      allKnowledge: knowledge,
+    });
+    generateAIResponseDeps.retrieveKnowledgeContext = async () => ({
+      context: '',
+      chunks: [],
+      usedRag: true,
+      usedLexicalFallback: false,
+      fallbackItems: [],
+      kbHasNoMatch: true,
+      topic: 'samsung',
+      resolvedQuestion: 'Samsung Galaxy S24 fiyatı',
+      topicChanged: false,
+      dependsOnHistory: false,
+    });
+    generateAIResponseDeps.fetchWebsiteCatalogOnKnowledgeMiss = async (
+      _companyId,
+      _message,
+      _accountId,
+      existing
+    ) => ({
+      ecommerceContext: [existing, catalog].filter(Boolean).join('\n\n'),
+      catalogFromApi: true,
+    });
+
+    let userPrompt = '';
+    generateAIResponseDeps.createChatCompletion = async (messages) => {
+      const last = messages[messages.length - 1];
+      userPrompt = typeof last.content === 'string' ? last.content : '';
+      return {
+        choices: [{ message: { content: 'Samsung Galaxy S24 güncel fiyatı 45.000 TL, stokta 3 adet var.' } }],
+        usage: { total_tokens: 40 },
+      } as never;
+    };
+
+    const result = await generateAIResponse(
+      COMPANY_ID,
+      'Samsung Galaxy S24 fiyatı nedir',
+      PHONE
+    );
+
+    assert.match(userPrompt, /Web sitesi API ürün sonuçları/i);
+    assert.match(userPrompt, /API ürün sonuçlarından/i);
+    assert.equal(result.knowledgeMiss, false);
+    assert.match(result.message, /45\.000/);
   });
 });

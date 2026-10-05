@@ -64,6 +64,46 @@ const SEARCH_STOPWORDS = new Set([
   'modelleri',
   'cesitleri',
   'çeşitleri',
+  'nedir',
+  'nasil',
+  'nasıl',
+  'nerede',
+  'nezaman',
+  'calisma',
+  'çalışma',
+  'saat',
+  'saatler',
+  'saatleri',
+  'saatleriniz',
+  'randevu',
+  'iptal',
+  'tesekkur',
+  'teşekkür',
+  'sagol',
+  'sağol',
+  'merhaba',
+  'selam',
+  'yardim',
+  'yardım',
+  'iletisim',
+  'iletişim',
+  'adres',
+  'konum',
+  'acik',
+  'açık',
+  'kapali',
+  'kapalı',
+  'soyler',
+  'söyler',
+  'anlat',
+  'anlatir',
+  'anlatır',
+  'ozellik',
+  'özellik',
+  'ozellikleri',
+  'özellikleri',
+  'bilgi',
+  'bilgiyi',
 ]);
 
 export interface WebsiteProduct {
@@ -600,7 +640,30 @@ export async function buildWebsiteCatalogContext(
 /** Fiyat / stok / ürün sorusu mu? */
 export function isProductCatalogIntent(message: string): boolean {
   const n = normalizeText(message);
-  return /(fiyat|ucret|ne kadar|stok|var\s*mi|mevcut|urun|product|price|stock|kac\s*tl|katalog|liste|hangi\s+\w+|neler\s+var|ne\s+var|monitor|laptop|yazici|telefon|bilgisayar|notebook)/i.test(
+  return /(fiyat|ucret|ne kadar|stok|var\s*mi|mevcut|urun|product|price|stock|kac\s*tl|katalog|liste|hangi\s+\w+|neler\s+var|ne\s+var|monitor|laptop|yazici|telefon|bilgisayar|notebook|marka|model|ozellik|sku|cesit)/i.test(
     n
   );
+}
+
+/**
+ * Bilgi bankasında eşleşme yokken web sitesi API katalog araması denensin mi?
+ * Marka / model / ürün sinyali veya çıkarılabilir arama terimi arar.
+ */
+export function shouldSearchCatalogOnKnowledgeMiss(message: string): boolean {
+  if (isProductBrowseIntent(message) || isProductCatalogIntent(message)) return true;
+  const q = extractProductSearchQuery(message);
+  if (!q) return false;
+  // Model / SKU: rakam içeren kod (S24, MX-120, iPhone15)
+  if (/\d/.test(q)) return true;
+  // "Bosch buzdolabı var mı" gibi ürün soruları (katalog regex'ine düşmeyenler)
+  const softProductAsk =
+    /(var\s*m[iı]|istiyorum|isterim|bakar\s*m[iı]s|goster|göster|kac\s*tl|\btl\b|lira|siparis|sipariş|satin|satın)/i.test(
+      normalizeText(message)
+    );
+  return softProductAsk;
+}
+
+/** Prompt içinde canlı API ürün sonuçlarının olup olmadığını kontrol eder */
+export function ecommerceContextHasCatalogResults(ecommerceContext: string): boolean {
+  return /Web sitesi API ürün sonuçları/i.test(ecommerceContext || '');
 }
