@@ -697,7 +697,16 @@
     "newTicketTitle": "Yeni destek talebi",
     "newTicketBody": "{{customer}} — {{subject}}",
     "ticketMessageTitle": "Talep mesajı",
-    "ticketMessageBody": "{{customer}} — {{subject}}"
+    "ticketMessageBody": "{{customer}} — {{subject}}",
+    "assignedTitle": "Size destek talebi atandı",
+    "assignNotifyTitle": "Destek talebi atandı",
+    "assignedBody": "{{customer}} — {{subject}}",
+    "transferTitle": "Destek talebi transfer edildi",
+    "transferBody": "{{customer}} — {{subject}} → {{department}}",
+    "departmentLabel": "Birim: {{name}}",
+    "assigneeLabel": "Kişi: {{name}}",
+    "unassigned": "Atanmamış — üzerine alınabilir",
+    "unknownDepartment": "Bilinmeyen birim"
   },
   "messages": {
     "title": "Konuşmalar",

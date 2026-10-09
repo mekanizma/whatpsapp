@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { supabase, supabaseConfigured, syncSupabaseRealtimeAuth } from '@/services/supabase';
 import { api } from '@/services/api';
 import { showBrowserNotification } from '@/lib/browser-notifications';
+import { pushPanelLiveAlert } from '@/lib/panel-live-alerts';
 import { getTicketSubjectLabel } from '@/lib/ticket-labels';
 import type { Ticket, UserRole } from '@/types';
 
@@ -28,6 +29,7 @@ interface TicketRow {
   status: string;
   assigned_staff?: string | null;
   last_assigned_staff?: string | null;
+  department_id?: string | null;
 }
 
 interface AssignedTicketInfo {
@@ -38,11 +40,17 @@ interface AssignedTicketInfo {
   status: string;
   assigned_staff: string | null;
   last_assigned_staff: string | null;
+  department_id: string | null;
+  departmentName: string | null;
+  assigneeName: string | null;
 }
 
 interface UsePanelRealtimeNotificationsOptions {
   companyId?: string;
+  /** Hook çalışsın mı (panel açıkken true) */
   enabled: boolean;
+  /** OS tarayıcı bildirimi + mesaj beep’i için */
+  browserNotifyEnabled?: boolean;
   userRole?: UserRole;
   staffId?: string | null;
 }
@@ -59,6 +67,7 @@ function isActiveTicketStatus(status: string): boolean {
 }
 
 function toAssignedTicketInfo(ticket: Ticket | TicketRow): AssignedTicketInfo {
+  const full = ticket as Ticket;
   return {
     id: ticket.id,
     customer_phone: ticket.customer_phone,
@@ -67,12 +76,16 @@ function toAssignedTicketInfo(ticket: Ticket | TicketRow): AssignedTicketInfo {
     status: ticket.status,
     assigned_staff: ticket.assigned_staff ?? null,
     last_assigned_staff: ticket.last_assigned_staff ?? null,
+    department_id: ticket.department_id ?? null,
+    departmentName: full.department?.name ?? null,
+    assigneeName: full.staff?.name ?? null,
   };
 }
 
 export function usePanelRealtimeNotifications({
   companyId,
   enabled,
+  browserNotifyEnabled = false,
   userRole,
   staffId,
 }: UsePanelRealtimeNotificationsOptions): void {
@@ -81,13 +94,16 @@ export function usePanelRealtimeNotifications({
   const queryClient = useQueryClient();
   const seenIdsRef = useRef(new Set<string>());
   const assignedTicketsRef = useRef(new Map<string, AssignedTicketInfo>());
+  const ticketsByIdRef = useRef(new Map<string, AssignedTicketInfo>());
   const pollSnapshotRef = useRef<Set<string> | null>(null);
   const locationRef = useRef(location);
   const userRoleRef = useRef(userRole);
   const staffIdRef = useRef(staffId);
+  const browserNotifyRef = useRef(browserNotifyEnabled);
   locationRef.current = location;
   userRoleRef.current = userRole;
   staffIdRef.current = staffId;
+  browserNotifyRef.current = browserNotifyEnabled;
 
   useEffect(() => {
     if (!enabled || !companyId) return;
@@ -125,16 +141,18 @@ export function usePanelRealtimeNotifications({
 
     const refreshAssignedTickets = (tickets: Ticket[]) => {
       const next = new Map<string, AssignedTicketInfo>();
+      const byId = new Map<string, AssignedTicketInfo>();
 
       for (const ticket of tickets) {
+        const info = toAssignedTicketInfo(ticket);
+        byId.set(ticket.id, info);
         if (!isActiveTicketStatus(ticket.status)) continue;
-        // Yalnızca gerçekten atanmış talepler mesaj bildirimi alır (last_assigned sayılmaz)
         if (!ticket.assigned_staff) continue;
-
-        next.set(normalizePhone(ticket.customer_phone), toAssignedTicketInfo(ticket));
+        next.set(normalizePhone(ticket.customer_phone), info);
       }
 
       assignedTicketsRef.current = next;
+      ticketsByIdRef.current = byId;
     };
 
     const shouldNotifyNewTicket = (ticket: AssignedTicketInfo): boolean => {
@@ -145,7 +163,6 @@ export function usePanelRealtimeNotifications({
 
       if (role === 'staff') {
         const myStaffId = staffIdRef.current;
-        // Atanmamış (açık) talepler: departman personeli üzerine alabilsin diye bildir
         if (!ticket.assigned_staff) return true;
         return !!myStaffId && ticket.assigned_staff === myStaffId;
       }
@@ -153,29 +170,153 @@ export function usePanelRealtimeNotifications({
       return false;
     };
 
-    const notifyNewTicket = (row: Ticket | TicketRow) => {
-      const ticket = toAssignedTicketInfo(row);
-      if (!shouldNotifyNewTicket(ticket)) return;
-      if (seenIdsRef.current.has(`ticket-${row.id}`)) return;
-      markSeen(`ticket-${row.id}`);
+    const enrichTicketInfo = async (row: Ticket | TicketRow): Promise<AssignedTicketInfo> => {
+      const base = toAssignedTicketInfo(row);
+      const cached = ticketsByIdRef.current.get(row.id);
+      if (cached) {
+        return {
+          ...base,
+          departmentName: base.departmentName || cached.departmentName,
+          assigneeName: base.assigneeName || cached.assigneeName,
+          department_id: base.department_id || cached.department_id,
+        };
+      }
 
-      const title = t('browserNotifications.newTicketTitle');
-      const customer = row.customer_name?.trim() || row.customer_phone;
-      const subject = getTicketSubjectLabel(t, row.subject);
-      const body = t('browserNotifications.newTicketBody', { customer, subject });
+      if (base.departmentName || base.assigneeName) {
+        ticketsByIdRef.current.set(row.id, base);
+        return base;
+      }
 
-      // Atanmamış talepler Destek sayfasından üzerine alınır; atanmışlar doğrudan sohbete
-      const url = ticket.assigned_staff
-        ? `/panel/messages?phone=${encodeURIComponent(row.customer_phone)}&ticket=${row.id}`
-        : `/panel/tickets`;
+      try {
+        const tickets = await api.get<Ticket[]>('/tickets');
+        refreshAssignedTickets(tickets);
+        const full = ticketsByIdRef.current.get(row.id);
+        if (full) {
+          return {
+            ...base,
+            departmentName: full.departmentName,
+            assigneeName: full.assigneeName,
+            department_id: full.department_id ?? base.department_id,
+          };
+        }
+      } catch {
+        /* sessiz */
+      }
+
+      ticketsByIdRef.current.set(row.id, base);
+      return base;
+    };
+
+    const emitTicketAlert = (
+      ticket: AssignedTicketInfo,
+      kind: 'ticket' | 'transfer' | 'assign',
+      title: string,
+      body: string,
+      url: string,
+      tag: string
+    ) => {
+      pushPanelLiveAlert({
+        id: tag,
+        kind,
+        title,
+        body,
+        department: ticket.departmentName,
+        assignee: ticket.assigneeName,
+        url,
+      });
 
       showBrowserNotification({
         title,
         body: body.slice(0, 160),
-        tag: `ticket-${row.id}`,
+        tag,
         url,
+        urgent: true,
       });
+    };
 
+    const notifyNewTicket = async (row: Ticket | TicketRow) => {
+      const ticket = await enrichTicketInfo(row);
+      if (!shouldNotifyNewTicket(ticket)) return;
+      if (seenIdsRef.current.has(`ticket-${row.id}`)) return;
+      markSeen(`ticket-${row.id}`);
+
+      const customer = row.customer_name?.trim() || row.customer_phone;
+      const subject = getTicketSubjectLabel(t, row.subject);
+      const title = t('browserNotifications.newTicketTitle');
+      const body = t('browserNotifications.newTicketBody', { customer, subject });
+      const url = ticket.assigned_staff
+        ? `/panel/messages?phone=${encodeURIComponent(row.customer_phone)}&ticket=${row.id}`
+        : `/panel/tickets`;
+
+      emitTicketAlert(ticket, 'ticket', title, body, url, `ticket-${row.id}`);
+
+      queryClient.invalidateQueries({ queryKey: ['tickets'] });
+      queryClient.invalidateQueries({ queryKey: ['active-ticket', row.customer_phone] });
+    };
+
+    const notifyTicketUpdate = async (row: TicketRow, prev?: TicketRow | null) => {
+      if (!isActiveTicketStatus(row.status)) return;
+
+      const ticket = await enrichTicketInfo(row);
+      const myStaffId = staffIdRef.current;
+      const role = userRoleRef.current;
+      const isAdmin = role === 'company_admin' || role === 'super_admin';
+      const prevAssigned = prev?.assigned_staff ?? null;
+      const nextAssigned = row.assigned_staff ?? null;
+      const prevDept = prev?.department_id ?? null;
+      const nextDept = row.department_id ?? null;
+
+      const assignedToMe =
+        !!myStaffId && nextAssigned === myStaffId && prevAssigned !== myStaffId;
+      const assignedChanged =
+        !!nextAssigned && nextAssigned !== prevAssigned && (assignedToMe || isAdmin);
+      const transferred =
+        (!!prevDept && !!nextDept && prevDept !== nextDept) ||
+        (!!prevAssigned && !nextAssigned);
+
+      if (!assignedChanged && !transferred) return;
+      if (!isAdmin && !assignedToMe && !shouldNotifyNewTicket(ticket)) return;
+
+      const customer = row.customer_name?.trim() || row.customer_phone;
+      const subject = getTicketSubjectLabel(t, row.subject);
+      const url = nextAssigned
+        ? `/panel/messages?phone=${encodeURIComponent(row.customer_phone)}&ticket=${row.id}`
+        : `/panel/tickets`;
+
+      if (assignedChanged) {
+        const tag = `ticket-assign-${row.id}-${nextAssigned}`;
+        if (seenIdsRef.current.has(tag)) return;
+        markSeen(tag);
+        const title = assignedToMe
+          ? t('browserNotifications.assignedTitle')
+          : t('browserNotifications.assignNotifyTitle');
+        emitTicketAlert(
+          ticket,
+          'assign',
+          title,
+          t('browserNotifications.assignedBody', { customer, subject }),
+          url,
+          tag
+        );
+      } else if (transferred) {
+        const stableTag = `ticket-transfer-${row.id}-${nextDept || 'none'}-${nextAssigned || 'open'}`;
+        if (seenIdsRef.current.has(stableTag)) return;
+        markSeen(stableTag);
+        emitTicketAlert(
+          { ...ticket, assigneeName: null },
+          'transfer',
+          t('browserNotifications.transferTitle'),
+          t('browserNotifications.transferBody', {
+            customer,
+            subject,
+            department: ticket.departmentName || t('browserNotifications.unknownDepartment'),
+          }),
+          url,
+          stableTag
+        );
+      }
+
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
       queryClient.invalidateQueries({ queryKey: ['tickets'] });
       queryClient.invalidateQueries({ queryKey: ['active-ticket', row.customer_phone] });
     };
@@ -191,6 +332,14 @@ export function usePanelRealtimeNotifications({
       markSeen(row.id);
       if (shouldSkipMessageNotification(row.customer_phone)) return;
 
+      // Mesaj bildirimleri yalnızca tarayıcı bildirimi açıkken
+      if (!browserNotifyRef.current) {
+        queryClient.invalidateQueries({ queryKey: ['conversations'] });
+        queryClient.invalidateQueries({ queryKey: ['messages', row.customer_phone] });
+        queryClient.invalidateQueries({ queryKey: ['active-ticket', row.customer_phone] });
+        return;
+      }
+
       const customer = row.customer_name?.trim() || row.customer_phone;
       const subject = getTicketSubjectLabel(t, ticket.subject);
       const body =
@@ -199,11 +348,24 @@ export function usePanelRealtimeNotifications({
           ? t('browserNotifications.imageMessage')
           : t('browserNotifications.ticketMessageBody', { customer, subject }));
 
+      const title = t('browserNotifications.ticketMessageTitle');
+      const url = `/panel/messages?phone=${encodeURIComponent(row.customer_phone)}&ticket=${ticket.id}`;
+
+      pushPanelLiveAlert({
+        id: `msg-${row.id}`,
+        kind: 'message',
+        title,
+        body: body.slice(0, 160),
+        department: ticket.departmentName,
+        assignee: ticket.assigneeName,
+        url,
+      });
+
       showBrowserNotification({
-        title: t('browserNotifications.ticketMessageTitle'),
+        title,
         body: body.slice(0, 160),
         tag: `ticket-message-${row.id}`,
-        url: `/panel/messages?phone=${encodeURIComponent(row.customer_phone)}&ticket=${ticket.id}`,
+        url,
       });
 
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
@@ -213,10 +375,17 @@ export function usePanelRealtimeNotifications({
 
     const syncTicketRow = (row: TicketRow) => {
       const info = toAssignedTicketInfo(row);
-      const key = normalizePhone(row.customer_phone);
+      const cached = ticketsByIdRef.current.get(row.id);
+      const merged: AssignedTicketInfo = {
+        ...info,
+        departmentName: info.departmentName || cached?.departmentName || null,
+        assigneeName: info.assigneeName || cached?.assigneeName || null,
+      };
+      ticketsByIdRef.current.set(row.id, merged);
 
+      const key = normalizePhone(row.customer_phone);
       if (isActiveTicketStatus(row.status) && row.assigned_staff) {
-        assignedTicketsRef.current.set(key, info);
+        assignedTicketsRef.current.set(key, merged);
         return;
       }
 
@@ -236,7 +405,7 @@ export function usePanelRealtimeNotifications({
           for (const ticket of tickets) {
             if (!isActiveTicketStatus(ticket.status)) continue;
             if (pollSnapshotRef.current.has(ticket.id)) continue;
-            notifyNewTicket(ticket);
+            void notifyNewTicket(ticket);
           }
         }
 
@@ -276,7 +445,7 @@ export function usePanelRealtimeNotifications({
           (payload) => {
             const row = payload.new as TicketRow;
             syncTicketRow(row);
-            notifyNewTicket(row);
+            void notifyNewTicket(row);
           }
         )
         .on(
@@ -289,8 +458,26 @@ export function usePanelRealtimeNotifications({
           },
           (payload) => {
             const row = payload.new as TicketRow;
+            // REPLICA IDENTITY FULL yoksa payload.old yetersiz — cache'den önceki durumu kullan
+            const cached = ticketsByIdRef.current.get(row.id);
+            const oldPayload = payload.old as Partial<TicketRow> | undefined;
+            const prev: TicketRow | null = cached
+              ? {
+                  id: cached.id,
+                  company_id: row.company_id,
+                  customer_phone: cached.customer_phone,
+                  customer_name: cached.customer_name,
+                  subject: cached.subject,
+                  status: cached.status,
+                  assigned_staff: cached.assigned_staff,
+                  last_assigned_staff: cached.last_assigned_staff,
+                  department_id: cached.department_id,
+                }
+              : oldPayload?.id
+                ? ({ ...oldPayload, ...row, ...oldPayload } as TicketRow)
+                : null;
             syncTicketRow(row);
-            // Transfer / atama değişince konuşma listesini yenile
+            void notifyTicketUpdate(row, prev);
             queryClient.invalidateQueries({ queryKey: ['conversations'] });
             queryClient.invalidateQueries({ queryKey: ['tickets'] });
             queryClient.invalidateQueries({
@@ -318,9 +505,10 @@ export function usePanelRealtimeNotifications({
       clearInterval(pollTimer);
       pollSnapshotRef.current = null;
       assignedTicketsRef.current = new Map();
+      ticketsByIdRef.current = new Map();
       if (channel) {
         supabase.removeChannel(channel);
       }
     };
-  }, [companyId, enabled, queryClient, staffId, t, userRole]);
+  }, [browserNotifyEnabled, companyId, enabled, queryClient, staffId, t, userRole]);
 }

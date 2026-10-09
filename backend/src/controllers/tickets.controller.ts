@@ -7,7 +7,11 @@ import { adminClient } from '../database/supabase';
 import { AuthRequest, isDemoSession } from '../middleware/auth.middleware';
 import { logActivity } from '../services/log.service';
 import { clearTransferState, normalizePhoneNumber } from '../whatsapp/message.handler';
-import { createTicketAndNotify, notifyTicketRecipients } from '../services/ticket-notification.service';
+import {
+  createTicketAndNotify,
+  notifyTicketAssignee,
+  notifyTicketRecipients,
+} from '../services/ticket-notification.service';
 import { getSupportReplyWindowStatus } from '../services/support-reply-window.service';
 import {
   getStaffRecord,
@@ -458,15 +462,20 @@ export async function assignTicket(req: AuthRequest, res: Response): Promise<voi
     return;
   }
 
-  void notifyTicketRecipients(companyId, {
-    id: data.id,
-    ticket_number: data.ticket_number,
-    customer_phone: data.customer_phone,
-    customer_name: data.customer_name,
-    subject: data.subject,
-    priority: data.priority,
-    department_id: data.department_id,
-  });
+  // Atamada yalnızca atanan kişiye e-posta (genel alıcı listesine yayın yok)
+  void notifyTicketAssignee(
+    companyId,
+    {
+      id: data.id,
+      ticket_number: data.ticket_number,
+      customer_phone: data.customer_phone,
+      customer_name: data.customer_name,
+      subject: data.subject,
+      priority: data.priority,
+      department_id: data.department_id,
+    },
+    targetStaffId
+  );
 
   await logActivity({
     userId: req.userId,

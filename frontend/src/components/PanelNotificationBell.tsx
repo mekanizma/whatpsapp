@@ -79,7 +79,9 @@ export function PanelNotificationBell({ companyId }: PanelNotificationBellProps)
 
   usePanelRealtimeNotifications({
     companyId,
-    enabled: enabled && permission === 'granted',
+    // Panel açıkken talep/transfer pop-up her zaman; OS bildirimi tercihe bağlı
+    enabled: !!companyId,
+    browserNotifyEnabled: enabled && permission === 'granted',
     userRole: user?.role,
     staffId: staffId ?? null,
   });

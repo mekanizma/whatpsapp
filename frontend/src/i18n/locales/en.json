@@ -697,7 +697,16 @@
     "newTicketTitle": "New support ticket",
     "newTicketBody": "{{customer}} — {{subject}}",
     "ticketMessageTitle": "Ticket message",
-    "ticketMessageBody": "{{customer}} — {{subject}}"
+    "ticketMessageBody": "{{customer}} — {{subject}}",
+    "assignedTitle": "Support ticket assigned to you",
+    "assignNotifyTitle": "Support ticket assigned",
+    "assignedBody": "{{customer}} — {{subject}}",
+    "transferTitle": "Support ticket transferred",
+    "transferBody": "{{customer}} — {{subject}} → {{department}}",
+    "departmentLabel": "Dept: {{name}}",
+    "assigneeLabel": "Assignee: {{name}}",
+    "unassigned": "Unassigned — available to claim",
+    "unknownDepartment": "Unknown department"
   },
   "messages": {
     "title": "Conversations",

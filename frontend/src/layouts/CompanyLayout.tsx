@@ -12,6 +12,7 @@ import {
   MessageSquareText,
 } from 'lucide-react';
 import { PanelNotificationBell } from '@/components/PanelNotificationBell';
+import { PanelLiveAlertStack } from '@/components/PanelLiveAlertStack';
 import { useAuthStore } from '@/store/authStore';
 import { planHasModule, type PlanModuleKey } from '@/lib/plan-capabilities';
 import { canSeeNavItem } from '@/lib/staff-permissions';
@@ -192,6 +193,7 @@ export function CompanyLayout() {
   return (
     <>
       <ImpersonationBanner />
+      <PanelLiveAlertStack />
       <PremiumPanelFrame
       sidebarOpen={sidebarOpen}
       onOpenSidebar={() => setSidebarOpen(true)}

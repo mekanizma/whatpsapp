@@ -84,12 +84,13 @@ function escapeHtml(value: string): string {
     .replace(/"/g, '&quot;');
 }
 
-export function buildMobileEmailHtml(options: {
+function buildEmailSection(options: {
   title: string;
   intro?: string;
   rows: Array<{ label: string; value: string }>;
   ctaLabel?: string;
   ctaUrl?: string;
+  dividerBefore?: boolean;
 }): string {
   const rowsHtml = options.rows
     .map(
@@ -115,6 +116,52 @@ export function buildMobileEmailHtml(options: {
     ? `<p style="margin:0 0 16px;color:#374151;font-size:15px;line-height:1.5;">${escapeHtml(options.intro)}</p>`
     : '';
 
+  const divider = options.dividerBefore
+    ? `<hr style="border:none;border-top:1px solid #e5e7eb;margin:28px 0;" />`
+    : '';
+
+  return `${divider}
+              <h1 style="margin:0 0 16px;font-size:20px;line-height:1.3;color:#111827;">${escapeHtml(options.title)}</h1>
+              ${introHtml}
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
+                ${rowsHtml}
+              </table>
+              ${ctaHtml}`;
+}
+
+export function buildMobileEmailHtml(options: {
+  title: string;
+  intro?: string;
+  rows: Array<{ label: string; value: string }>;
+  ctaLabel?: string;
+  ctaUrl?: string;
+  /** İkinci dil bloğu — aynı e-postada TR + EN için */
+  secondary?: {
+    title: string;
+    intro?: string;
+    rows: Array<{ label: string; value: string }>;
+    ctaLabel?: string;
+  };
+}): string {
+  const primary = buildEmailSection({
+    title: options.title,
+    intro: options.intro,
+    rows: options.rows,
+    ctaLabel: options.ctaLabel,
+    ctaUrl: options.ctaUrl,
+  });
+
+  const secondary = options.secondary
+    ? buildEmailSection({
+        title: options.secondary.title,
+        intro: options.secondary.intro,
+        rows: options.secondary.rows,
+        ctaLabel: options.secondary.ctaLabel,
+        ctaUrl: options.ctaUrl,
+        dividerBefore: true,
+      })
+    : '';
+
   return `<!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -129,12 +176,8 @@ export function buildMobileEmailHtml(options: {
         <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#ffffff;border-radius:12px;padding:24px 20px;">
           <tr>
             <td>
-              <h1 style="margin:0 0 16px;font-size:20px;line-height:1.3;color:#111827;">${escapeHtml(options.title)}</h1>
-              ${introHtml}
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
-                ${rowsHtml}
-              </table>
-              ${ctaHtml}
+              ${primary}
+              ${secondary}
             </td>
           </tr>
         </table>

@@ -218,46 +218,200 @@ function shouldNotifyStaffForDepartment(
   return staffDepartmentId === ticketDepartmentId;
 }
 
+function buildTicketDetailRows(
+  ticket: TicketNotificationPayload,
+  departmentName: string | undefined,
+  lang: 'tr' | 'en',
+  extraRows?: Array<{ label: string; value: string }>
+): Array<{ label: string; value: string }> {
+  const customerLabel = ticket.customer_name
+    ? `${ticket.customer_name} (${ticket.customer_phone})`
+    : ticket.customer_phone;
+  const ticketLabel = formatTicketLabel(ticket);
+  const labels =
+    lang === 'tr'
+      ? { no: 'Talep No', customer: 'Müşteri', subject: 'Konu', priority: 'Öncelik', dept: 'Departman' }
+      : {
+          no: 'Ticket No',
+          customer: 'Customer',
+          subject: 'Subject',
+          priority: 'Priority',
+          dept: 'Department',
+        };
+
+  const rows = [
+    { label: labels.no, value: ticketLabel },
+    { label: labels.customer, value: customerLabel },
+    { label: labels.subject, value: ticket.subject },
+  ];
+  if (ticket.priority) {
+    rows.push({ label: labels.priority, value: ticket.priority });
+  }
+  if (departmentName) {
+    rows.push({ label: labels.dept, value: departmentName });
+  }
+  if (extraRows?.length) {
+    rows.push(...extraRows);
+  }
+  return rows;
+}
+
 async function sendTicketEmail(options: {
   to: string;
   ticket: TicketNotificationPayload;
   departmentName?: string;
 }): Promise<boolean> {
-  const customerLabel = options.ticket.customer_name
-    ? `${options.ticket.customer_name} (${options.ticket.customer_phone})`
-    : options.ticket.customer_phone;
   const ticketLabel = formatTicketLabel(options.ticket);
   const panelUrl = panelTicketsUrl();
-  const rows = [
-    { label: 'Talep No', value: ticketLabel },
-    { label: 'Müşteri', value: customerLabel },
-    { label: 'Konu', value: options.ticket.subject },
-  ];
-  if (options.ticket.priority) {
-    rows.push({ label: 'Öncelik', value: options.ticket.priority });
-  }
-  if (options.departmentName) {
-    rows.push({ label: 'Departman', value: options.departmentName });
-  }
+  const rowsTr = buildTicketDetailRows(options.ticket, options.departmentName, 'tr');
+  const rowsEn = buildTicketDetailRows(options.ticket, options.departmentName, 'en');
 
   return sendEmail({
     to: options.to,
-    subject: `Yeni destek talebi ${ticketLabel}: ${options.ticket.subject}`,
+    subject: `Yeni destek talebi / New support ticket ${ticketLabel}: ${options.ticket.subject}`,
     html: buildMobileEmailHtml({
       title: 'Yeni Destek Talebi',
       intro: 'Şirket paneline yeni bir destek talebi geldi.',
-      rows,
+      rows: rowsTr,
       ctaLabel: 'Talepleri Görüntüle',
       ctaUrl: panelUrl,
+      secondary: {
+        title: 'New Support Ticket',
+        intro: 'A new support ticket has arrived in the company panel.',
+        rows: rowsEn,
+        ctaLabel: 'View Tickets',
+      },
     }),
     text: [
-      'Yeni destek talebi',
+      'Yeni destek talebi / New support ticket',
       '',
-      ...rows.map((r) => `${r.label}: ${r.value}`),
+      ...rowsTr.map((r) => `${r.label}: ${r.value}`),
+      '',
+      '---',
+      '',
+      ...rowsEn.map((r) => `${r.label}: ${r.value}`),
       '',
       `Panel: ${panelUrl}`,
     ].join('\n'),
   });
+}
+
+async function sendTicketAssignmentEmail(options: {
+  to: string;
+  ticket: TicketNotificationPayload;
+  departmentName?: string;
+  assigneeName?: string;
+}): Promise<boolean> {
+  const ticketLabel = formatTicketLabel(options.ticket);
+  const panelUrl = panelTicketsUrl();
+  const assigneeExtraTr = options.assigneeName
+    ? [{ label: 'Atanan', value: options.assigneeName }]
+    : undefined;
+  const assigneeExtraEn = options.assigneeName
+    ? [{ label: 'Assignee', value: options.assigneeName }]
+    : undefined;
+  const rowsTr = buildTicketDetailRows(
+    options.ticket,
+    options.departmentName,
+    'tr',
+    assigneeExtraTr
+  );
+  const rowsEn = buildTicketDetailRows(
+    options.ticket,
+    options.departmentName,
+    'en',
+    assigneeExtraEn
+  );
+
+  return sendEmail({
+    to: options.to,
+    subject: `Size destek talebi atandı / Support ticket assigned to you ${ticketLabel}`,
+    html: buildMobileEmailHtml({
+      title: 'Size Destek Talebi Atandı',
+      intro: 'Bir destek talebi size atandı. Panele girerek talebi inceleyebilirsiniz.',
+      rows: rowsTr,
+      ctaLabel: 'Talebi Görüntüle',
+      ctaUrl: panelUrl,
+      secondary: {
+        title: 'Support Ticket Assigned to You',
+        intro: 'A support ticket has been assigned to you. Open the panel to review it.',
+        rows: rowsEn,
+        ctaLabel: 'View Ticket',
+      },
+    }),
+    text: [
+      'Size destek talebi atandı / Support ticket assigned to you',
+      '',
+      ...rowsTr.map((r) => `${r.label}: ${r.value}`),
+      '',
+      '---',
+      '',
+      ...rowsEn.map((r) => `${r.label}: ${r.value}`),
+      '',
+      `Panel: ${panelUrl}`,
+    ].join('\n'),
+  });
+}
+
+/**
+ * Destek talebi bir personele atandığında yalnızca o kişiye e-posta gönderir (TR + EN).
+ */
+export async function notifyTicketAssignee(
+  companyId: string,
+  ticket: TicketNotificationPayload,
+  staffId: string
+): Promise<void> {
+  const { data: staff, error } = await adminClient
+    .from('staff')
+    .select('id, name, email, profile_id, is_active')
+    .eq('id', staffId)
+    .eq('company_id', companyId)
+    .maybeSingle();
+
+  if (error || !staff || !staff.is_active) {
+    console.error('[TicketNotify] Atanan personel bulunamadı:', error?.message || staffId);
+    return;
+  }
+
+  let departmentName: string | undefined;
+  if (ticket.department_id) {
+    const { data: dept } = await adminClient
+      .from('departments')
+      .select('name')
+      .eq('id', ticket.department_id)
+      .maybeSingle();
+    departmentName = dept?.name || undefined;
+  }
+
+  let email = (staff.email as string | null)?.trim().toLowerCase() || '';
+  if ((!email || !email.includes('@')) && staff.profile_id) {
+    const { data: profile } = await adminClient
+      .from('profiles')
+      .select('user_id')
+      .eq('id', staff.profile_id)
+      .maybeSingle();
+    if (profile?.user_id) {
+      email = ((await getProfileEmail(profile.user_id)) || '').trim().toLowerCase();
+    }
+  }
+
+  if (!email || !email.includes('@')) {
+    console.log(`[TicketNotify] Atanan personelin e-postası yok → ${staff.name || staffId}`);
+    return;
+  }
+
+  const sent = await sendTicketAssignmentEmail({
+    to: email,
+    ticket,
+    departmentName,
+    assigneeName: staff.name || undefined,
+  });
+
+  if (sent) {
+    console.log(`[TicketNotify] Atama e-postası gönderildi → ${email}`);
+  } else {
+    console.error(`[TicketNotify] Atama e-postası gönderilemedi → ${email}`);
+  }
 }
 
 export async function notifyTicketRecipients(
