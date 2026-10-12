@@ -42,6 +42,18 @@ describe('language.service', () => {
     assert.equal(detectConversationLanguage('ok', turkishHistory), 'tr');
   });
 
+  it('kısa kısaltma/takip mesajı sticky İngilizceyi bozmaz (tinyld FP)', () => {
+    // tinyld: "In FIU" / "FIU campus" → ro@1 → other; sticky EN korunmalı
+    assert.equal(detectConversationLanguage('In FIU', englishHistory), 'en');
+    assert.equal(detectConversationLanguage('FIU campus', englishHistory), 'en');
+    assert.equal(detectConversationLanguage('at FIU', englishHistory), 'en');
+  });
+
+  it('kısa net selam sticky dilini değiştirebilir', () => {
+    assert.equal(detectConversationLanguage('Merhaba', englishHistory), 'tr');
+    assert.equal(detectConversationLanguage('Hello', turkishHistory), 'en');
+  });
+
   it('uzun güvenilir mesajla dil değişir', () => {
     const fromEnglish = [
       { sender_type: 'customer', message: 'What are your tuition fees?' },

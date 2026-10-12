@@ -132,13 +132,16 @@ function isConfidentDetection(
   const strongRelative =
     secondAccuracy <= 0 || topAccuracy >= secondAccuracy * MIN_RELATIVE_CONFIDENCE_RATIO;
 
-  // Yüksek doğrulukta kısa ifadeler (ör. "Good morning", "Where are you?")
+  // Yüksek doğrulukta ifadeler (ör. "Good morning", "Where are you?")
+  // Kısa "other" güvenilir değil — tinyld "In FIU"/"FIU campus" → ro@1 gibi FP'ler
+  // Uzun "other" (İtalyanca/Yunanca cümle) hâlâ dil değiştirebilir
   if (
     len >= MIN_SHORT_HIGH_ACCURACY_LENGTH &&
     topAccuracy >= SHORT_HIGH_ACCURACY &&
     strongRelative
   ) {
-    return mapped !== 'other' || topAccuracy >= 0.95;
+    if (mapped === 'other') return len >= MIN_STICKY_LENGTH;
+    return true;
   }
 
   if (len < MIN_STICKY_LENGTH) {
@@ -1230,6 +1233,21 @@ export function detectConversationLanguage(
 
   const detection = detectSingleMessageLanguage(text);
   if (!detection.confident) return stickyLang ?? fallbackLang;
+
+  // Kısa takip mesajlarında tinyld "other"/yanlış dil sticky'yi bozmasın
+  // (ör. EN konuşmada "In FIU" → ro → other → Türkçe KB ile TR cevap)
+  if (stickyLang && text.length < MIN_STICKY_LENGTH && detection.lang !== stickyLang) {
+    const phraseLang = detectShortPhraseLanguage(text);
+    if (phraseLang) return phraseLang;
+
+    const wordHint = detectWordHintLanguage(text);
+    if (wordHint && wordHint === detection.lang) return detection.lang;
+
+    // Arapça / Kiril net script değişimi
+    if (detection.lang === 'ar' || detection.lang === 'ru') return detection.lang;
+
+    return stickyLang;
+  }
 
   return detection.lang;
 }
