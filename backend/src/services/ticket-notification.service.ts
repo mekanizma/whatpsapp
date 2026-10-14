@@ -296,6 +296,62 @@ async function sendTicketEmail(options: {
   });
 }
 
+async function sendTicketReplyReminderEmail(options: {
+  to: string;
+  ticket: TicketNotificationPayload;
+  departmentName?: string;
+  windowClosesAt: string;
+}): Promise<boolean> {
+  const ticketLabel = formatTicketLabel(options.ticket);
+  const panelUrl = panelTicketsUrl();
+  const closesLocal = new Date(options.windowClosesAt).toLocaleString('tr-TR', {
+    timeZone: 'Europe/Istanbul',
+    dateStyle: 'short',
+    timeStyle: 'short',
+  });
+  const extraTr = [
+    { label: 'Uyarı', value: 'Bu talebe henüz personel cevabı verilmedi' },
+    { label: 'Pencere kapanışı', value: `${closesLocal} (yaklaşık 1 saat kaldı)` },
+  ];
+  const extraEn = [
+    { label: 'Warning', value: 'No staff reply has been sent for this ticket yet' },
+    { label: 'Window closes', value: `${closesLocal} (~1 hour left)` },
+  ];
+  const rowsTr = buildTicketDetailRows(options.ticket, options.departmentName, 'tr', extraTr);
+  const rowsEn = buildTicketDetailRows(options.ticket, options.departmentName, 'en', extraEn);
+
+  return sendEmail({
+    to: options.to,
+    subject: `Hatırlatma: cevap bekleyen talep / Reminder: unanswered ticket ${ticketLabel}`,
+    html: buildMobileEmailHtml({
+      title: 'Cevap Bekleyen Destek Talebi',
+      intro:
+        'Bu destek talebine henüz personel cevabı verilmedi. WhatsApp 24 saatlik penceresi yaklaşık 1 saat içinde kapanacak — serbest metin gönderilemez hale gelecek.',
+      rows: rowsTr,
+      ctaLabel: 'Talebi Yanıtla',
+      ctaUrl: panelUrl,
+      secondary: {
+        title: 'Unanswered Support Ticket',
+        intro:
+          'This support ticket has not received a staff reply yet. The WhatsApp 24-hour window closes in about 1 hour — free-form messages will no longer be allowed.',
+        rows: rowsEn,
+        ctaLabel: 'Reply to Ticket',
+      },
+    }),
+    text: [
+      'Cevap bekleyen destek talebi hatırlatması / Unanswered support ticket reminder',
+      '',
+      ...rowsTr.map((r) => `${r.label}: ${r.value}`),
+      '',
+      '---',
+      '',
+      ...rowsEn.map((r) => `${r.label}: ${r.value}`),
+      '',
+      `Panel: ${panelUrl}`,
+    ].join('\n'),
+  });
+}
+
 async function sendTicketAssignmentEmail(options: {
   to: string;
   ticket: TicketNotificationPayload;
@@ -584,6 +640,140 @@ export async function notifyTicketRecipients(
       );
     }
   }
+}
+
+/**
+ * Cevapsız talep 24s hatırlatması — yalnızca e-posta (bildirim alıcıları + departman kutusu + atanan personel).
+ */
+export async function notifyTicketReplyReminder(
+  companyId: string,
+  ticket: TicketNotificationPayload & { assigned_staff?: string | null },
+  windowClosesAt: string
+): Promise<number> {
+  const [
+    { data: profiles, error: profilesError },
+    { data: recipients, error: recipientsError },
+    { data: staffRows, error: staffError },
+  ] = await Promise.all([
+    adminClient
+      .from('profiles')
+      .select('id, user_id, full_name, role, phone, is_active')
+      .eq('company_id', companyId)
+      .eq('is_active', true),
+    adminClient
+      .from('ticket_notification_recipients')
+      .select('profile_id, email_enabled')
+      .eq('company_id', companyId),
+    adminClient
+      .from('staff')
+      .select('id, profile_id, phone, email, department_id, is_active')
+      .eq('company_id', companyId)
+      .eq('is_active', true),
+  ]);
+
+  if (profilesError || recipientsError || staffError) {
+    console.error(
+      '[TicketReminder] Alıcılar alınamadı:',
+      profilesError?.message || recipientsError?.message || staffError?.message
+    );
+    return 0;
+  }
+
+  let departmentName: string | undefined;
+  let departmentEmail: string | null = null;
+  let departmentNotifyEnabled = false;
+  if (ticket.department_id) {
+    const { data: dept } = await adminClient
+      .from('departments')
+      .select('name, email, notify_email_enabled')
+      .eq('id', ticket.department_id)
+      .maybeSingle();
+    departmentName = dept?.name;
+    departmentEmail = (dept?.email as string | null)?.trim().toLowerCase() || null;
+    departmentNotifyEnabled = !!dept?.notify_email_enabled;
+  }
+
+  const recipientMap = new Map(
+    (recipients || []).map((r) => [r.profile_id as string, !!r.email_enabled])
+  );
+  const staffByProfile = new Map(
+    (staffRows || []).map((s) => [
+      s.profile_id as string,
+      {
+        id: s.id as string,
+        email: (s.email as string | null) || null,
+        department_id: (s.department_id as string | null) || null,
+      },
+    ])
+  );
+
+  const configured = (recipients || []).length > 0;
+  const sentEmails = new Set<string>();
+  let notified = 0;
+
+  const sendTo = async (email: string) => {
+    const normalized = email.trim().toLowerCase();
+    if (!normalized.includes('@') || sentEmails.has(normalized)) return;
+    sentEmails.add(normalized);
+    const sent = await sendTicketReplyReminderEmail({
+      to: normalized,
+      ticket,
+      departmentName,
+      windowClosesAt,
+    });
+    if (sent) {
+      notified += 1;
+      console.log(`[TicketReminder] E-posta gönderildi → ${normalized}`);
+    } else {
+      console.error(`[TicketReminder] E-posta gönderilemedi → ${normalized}`);
+    }
+  };
+
+  for (const profile of profiles || []) {
+    const staff = staffByProfile.get(profile.id);
+    const emailEnabled = configured ? !!recipientMap.get(profile.id) : false;
+    if (!emailEnabled) continue;
+    if (!shouldNotifyStaffForDepartment(profile.role, staff?.department_id, ticket.department_id)) {
+      continue;
+    }
+    const email = ((await getProfileEmail(profile.user_id)) || staff?.email || '').trim();
+    await sendTo(email);
+  }
+
+  if (
+    departmentNotifyEnabled &&
+    departmentEmail &&
+    departmentEmail.includes('@')
+  ) {
+    await sendTo(departmentEmail);
+  }
+
+  // Atanan personel (bildirim listesinde olmasa da)
+  if (ticket.assigned_staff) {
+    const assignee = (staffRows || []).find((s) => s.id === ticket.assigned_staff);
+    if (assignee) {
+      let email = ((assignee.email as string | null) || '').trim();
+      if ((!email || !email.includes('@')) && assignee.profile_id) {
+        const { data: profile } = await adminClient
+          .from('profiles')
+          .select('user_id')
+          .eq('id', assignee.profile_id)
+          .maybeSingle();
+        if (profile?.user_id) {
+          email = (await getProfileEmail(profile.user_id)) || '';
+        }
+      }
+      await sendTo(email);
+    }
+  }
+
+  if (!notified) {
+    console.log(
+      `[TicketReminder] ${formatTicketLabel(ticket)} için e-posta alıcısı bulunamadı`
+    );
+  }
+
+  return notified;
 }
 
 export async function createTicketAndNotify(

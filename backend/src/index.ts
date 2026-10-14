@@ -13,6 +13,7 @@ import {
 import { recoverPendingKnowledgeIndexing } from './services/knowledge-index.service';
 import { startResponseCacheCleanupSchedule } from './ai/ai-cache.service';
 import { startActionCenterEmailSchedule } from './services/admin-action-center-email.service';
+import { startTicketReplyReminderSchedule } from './services/ticket-reply-reminder.service';
 import { resolveAdminNotifyEmails } from './services/admin-email-notification.service';
 import { isEmailConfigured } from './services/email.service';
 
@@ -33,6 +34,7 @@ const server = app.listen(config.port, '0.0.0.0', () => {
 
   startResponseCacheCleanupSchedule();
   startActionCenterEmailSchedule();
+  startTicketReplyReminderSchedule();
 
   if (!isEmailConfigured()) {
     console.warn(
