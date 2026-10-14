@@ -593,6 +593,28 @@ export interface QuickReply {
   department?: { id: string; name: string } | null;
 }
 
+/** Hat bazlı Meta outreach şablonu (24s pencere dışı) */
+export interface WaOutreachTemplate {
+  id: string;
+  company_id: string;
+  whatsapp_account_id: string;
+  title: string;
+  template_name: string;
+  language: string;
+  body: string;
+  sort_order: number;
+  is_active: boolean;
+  created_by?: string | null;
+  created_at: string;
+  updated_at: string;
+  whatsapp_account?: {
+    id: string;
+    label: string | null;
+    phone_number: string | null;
+    profile_name: string | null;
+  } | null;
+}
+
 export type AppointmentStatus = 'pending' | 'confirmed' | 'cancelled' | 'completed';
 export type AppointmentSource = 'ai' | 'manual' | 'panel';
 

@@ -36,6 +36,14 @@ export function canStartWaOutreach(user?: Profile | null): boolean {
   return isSuperStaff(user.staff_role);
 }
 
+/** Hat bazlı 24s outreach şablonlarını tanımlama (yönetici / süper personel) */
+export function canManageWaOutreachTemplates(user?: Profile | null): boolean {
+  if (!user) return false;
+  if (user.role === 'company_admin' || user.role === 'super_admin') return true;
+  if (user.role !== 'staff') return false;
+  return isSuperStaff(user.staff_role);
+}
+
 /** Başka departmana aktarma — tüm personel (standart dahil) */
 export function canTransferTickets(user?: Profile | null): boolean {
   if (!user) return false;
@@ -54,7 +62,14 @@ export function canAssignTickets(user?: Profile | null): boolean {
 export function canSeeNavItem(
   userRole: UserRole,
   staffRole: StaffSubRole | null | undefined,
-  navKey: 'messages' | 'knowledge' | 'tickets' | 'settings' | 'calendar' | 'quick_replies'
+  navKey:
+    | 'messages'
+    | 'knowledge'
+    | 'tickets'
+    | 'settings'
+    | 'calendar'
+    | 'quick_replies'
+    | 'outreach_templates'
 ): boolean {
   if (userRole === 'company_admin') return true;
   if (userRole !== 'staff') return false;
@@ -68,6 +83,8 @@ export function canSeeNavItem(
   ) {
     return true;
   }
-  if (navKey === 'knowledge') return isSuperStaff(staffRole);
+  if (navKey === 'knowledge' || navKey === 'outreach_templates') {
+    return isSuperStaff(staffRole);
+  }
   return false;
 }

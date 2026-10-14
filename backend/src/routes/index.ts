@@ -13,6 +13,7 @@ import * as companyCtrl from '../controllers/company.controller';
 import * as whatsappCtrl from '../controllers/whatsapp.controller';
 import * as knowledgeCtrl from '../controllers/knowledge.controller';
 import * as quickRepliesCtrl from '../controllers/quick-replies.controller';
+import * as outreachTemplatesCtrl from '../controllers/outreach-templates.controller';
 import * as messagesCtrl from '../controllers/messages.controller';
 import * as ticketsCtrl from '../controllers/tickets.controller';
 import * as staffCtrl from '../controllers/staff.controller';
@@ -160,6 +161,36 @@ router.get('/quick-replies', authenticate, requireRole('company_admin', 'staff')
 router.post('/quick-replies', authenticate, requireRole('company_admin', 'staff'), requireCompany, quickRepliesCtrl.createQuickReply);
 router.put('/quick-replies/:id', authenticate, requireRole('company_admin', 'staff'), requireCompany, quickRepliesCtrl.updateQuickReply);
 router.delete('/quick-replies/:id', authenticate, requireRole('company_admin', 'staff'), requireCompany, quickRepliesCtrl.deleteQuickReply);
+
+// Hat bazlı Meta outreach şablonları (24s / yeni mesaj) — CRUD: süper personel / şirket yöneticisi
+router.get(
+  '/outreach-templates',
+  authenticate,
+  requireRole('company_admin', 'staff'),
+  requireCompany,
+  outreachTemplatesCtrl.getOutreachTemplates
+);
+router.post(
+  '/outreach-templates',
+  authenticate,
+  requireRole('company_admin', 'staff'),
+  requireCompany,
+  outreachTemplatesCtrl.createOutreachTemplate
+);
+router.put(
+  '/outreach-templates/:id',
+  authenticate,
+  requireRole('company_admin', 'staff'),
+  requireCompany,
+  outreachTemplatesCtrl.updateOutreachTemplate
+);
+router.delete(
+  '/outreach-templates/:id',
+  authenticate,
+  requireRole('company_admin', 'staff'),
+  requireCompany,
+  outreachTemplatesCtrl.deleteOutreachTemplate
+);
 
 // WhatsApp — legacy single-account (backward compatible)
 router.get('/whatsapp/config', authenticate, requireRole('super_admin', 'company_admin'), requireCompany, whatsappCtrl.getWhatsAppConfig);

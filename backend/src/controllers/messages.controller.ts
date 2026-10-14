@@ -37,7 +37,10 @@ import {
 import {
   canUserSendWaOutreach,
   canUserStartWaOutreach,
-  getWaOutreachTemplateConfig,
+  companyHasAnyWaOutreach,
+  getCompanyWaOutreachFallback,
+  listWaOutreachTemplates,
+  resolveWaOutreachForSend,
 } from '../services/wa-outreach-template.service';
 
 function resolvePhoneParam(phone: string): string {
@@ -844,7 +847,7 @@ export async function replyWithImage(req: AuthRequest, res: Response): Promise<v
   res.status(201).json({ success: true, data: withMedia });
 }
 
-/** Panel: outreach şablon bilgisi (yetkili kullanıcılar) */
+/** Panel: outreach şablon bilgisi (yetkili kullanıcılar) — hat bazlı + şirket yedeği */
 export async function getOutreachTemplate(req: AuthRequest, res: Response): Promise<void> {
   if (!req.companyId) {
     res.status(403).json({ success: false, error: 'Şirket bilgisi bulunamadı' });
@@ -852,13 +855,28 @@ export async function getOutreachTemplate(req: AuthRequest, res: Response): Prom
   }
 
   const canStart = await canUserStartWaOutreach(req);
-  const tpl = await getWaOutreachTemplateConfig(req.companyId);
+  const [fallback, templates, enabled] = await Promise.all([
+    getCompanyWaOutreachFallback(req.companyId),
+    listWaOutreachTemplates(req.companyId, { activeOnly: true }),
+    companyHasAnyWaOutreach(req.companyId),
+  ]);
 
   res.json({
     success: true,
     data: {
-      ...tpl,
-      can_start_new: canStart && tpl.enabled,
+      enabled,
+      name: fallback.name,
+      language: fallback.language,
+      body: fallback.body,
+      can_start_new: canStart && enabled,
+      templates: templates.map((t) => ({
+        id: t.id,
+        whatsapp_account_id: t.whatsapp_account_id,
+        title: t.title,
+        name: t.template_name,
+        language: t.language,
+        body: t.body,
+      })),
     },
   });
 }
@@ -927,19 +945,28 @@ export async function sendOutreachTemplate(req: AuthRequest, res: Response): Pro
     return;
   }
 
-  const tpl = await getWaOutreachTemplateConfig(req.companyId);
-  if (!tpl.enabled || !tpl.name) {
-    res.status(400).json({
-      success: false,
-      error: 'Outreach şablonu yapılandırılmamış. Meta şablon adını şirket ayarına veya ortam değişkenine ekleyin.',
-    });
-    return;
-  }
-
   const requestedAccountId =
     typeof req.body?.whatsapp_account_id === 'string'
       ? req.body.whatsapp_account_id.trim()
       : '';
+  const requestedTemplateId =
+    typeof req.body?.template_id === 'string' ? req.body.template_id.trim() : '';
+
+  const tpl = await resolveWaOutreachForSend(req.companyId, {
+    templateId: requestedTemplateId || null,
+    accountId: requestedAccountId || null,
+  });
+
+  if (!tpl || !tpl.name) {
+    res.status(400).json({
+      success: false,
+      error:
+        'Outreach şablonu yapılandırılmamış. Panelden hat için şablon tanımlayın veya Meta şablon adını şirket ayarına ekleyin.',
+    });
+    return;
+  }
+
+  const sendAccountId = requestedAccountId || tpl.accountId || null;
 
   const sendResult = await sendCustomerOutreachTemplate(
     req.companyId,
@@ -947,7 +974,7 @@ export async function sendOutreachTemplate(req: AuthRequest, res: Response): Pro
     tpl.name,
     tpl.language,
     tpl.body,
-    requestedAccountId || null
+    sendAccountId
   );
 
   if (!sendResult.success) {
@@ -998,6 +1025,8 @@ export async function sendOutreachTemplate(req: AuthRequest, res: Response): Pro
       customer_phone: waPhone,
       template_name: tpl.name,
       template_lang: tpl.language,
+      template_id: tpl.templateId || null,
+      template_source: tpl.source,
       is_new: isNewConversation,
     },
   });

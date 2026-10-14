@@ -116,6 +116,7 @@ export function MessagesPage() {
   const [cacheClearNotice, setCacheClearNotice] = useState<string | null>(null);
   const [newPhone, setNewPhone] = useState('');
   const [selectedAccountId, setSelectedAccountId] = useState('');
+  const [selectedTemplateId, setSelectedTemplateId] = useState('');
   const queryClient = useQueryClient();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -238,6 +239,15 @@ export function MessagesPage() {
   });
   const isBlacklisted = !!blacklistStatus?.blacklisted;
 
+  type OutreachTemplateOption = {
+    id: string;
+    whatsapp_account_id: string;
+    title: string;
+    name: string;
+    language: string;
+    body: string;
+  };
+
   const { data: outreachTemplate } = useQuery({
     queryKey: ['outreach-template'],
     queryFn: () =>
@@ -247,10 +257,12 @@ export function MessagesPage() {
         language: string;
         body: string;
         can_start_new: boolean;
+        templates?: OutreachTemplateOption[];
       }>('/messages/outreach-template'),
   });
   const templateEnabled = !!outreachTemplate?.enabled;
   const canStartNewWithTemplate = !!outreachTemplate?.can_start_new;
+  const allLineTemplates = outreachTemplate?.templates || [];
 
   const { data: quickReplies = [] } = useQuery({
     queryKey: authQueryKey(['quick-replies', 'active'], user?.id, user?.role),
@@ -297,6 +309,38 @@ export function MessagesPage() {
       return preferred.id;
     });
   }, [waAccountsData]);
+
+  const templatesForSelectedLine = selectedAccountId
+    ? allLineTemplates.filter((tpl) => tpl.whatsapp_account_id === selectedAccountId)
+    : [];
+
+  const hasLineTemplates = templatesForSelectedLine.length > 0;
+  const hasCompanyFallback = !!(outreachTemplate?.name && outreachTemplate.body);
+  const lineCanSendTemplate = hasLineTemplates || hasCompanyFallback;
+  const lineTemplateIdsKey = templatesForSelectedLine.map((tpl) => tpl.id).join(',');
+
+  const activeTemplatePreview = hasLineTemplates
+    ? templatesForSelectedLine.find((tpl) => tpl.id === selectedTemplateId) ||
+      templatesForSelectedLine[0]
+    : hasCompanyFallback
+      ? {
+          id: '',
+          title: '',
+          body: outreachTemplate!.body,
+          name: outreachTemplate!.name,
+          language: outreachTemplate!.language,
+          whatsapp_account_id: selectedAccountId,
+        }
+      : null;
+
+  useEffect(() => {
+    if (!lineTemplateIdsKey) {
+      setSelectedTemplateId('');
+      return;
+    }
+    const ids = lineTemplateIdsKey.split(',');
+    setSelectedTemplateId((prev) => (prev && ids.includes(prev) ? prev : ids[0]));
+  }, [selectedAccountId, lineTemplateIdsKey]);
 
   const lineLabel = (line: OutreachLine) => {
     const name = line.label?.trim() || line.profile_name?.trim() || '';
@@ -424,12 +468,17 @@ export function MessagesPage() {
   });
 
   const templateMutation = useMutation({
-    mutationFn: (payload: { phone: string; whatsapp_account_id?: string }) =>
+    mutationFn: (payload: {
+      phone: string;
+      whatsapp_account_id?: string;
+      template_id?: string;
+    }) =>
       api.post<Message>('/messages/outreach-template', {
         phone: payload.phone,
         ...(payload.whatsapp_account_id
           ? { whatsapp_account_id: payload.whatsapp_account_id }
           : {}),
+        ...(payload.template_id ? { template_id: payload.template_id } : {}),
       }),
     onSuccess: (_data, payload) => {
       const normalized = payload.phone.replace(/\D/g, '') || payload.phone;
@@ -894,14 +943,6 @@ export function MessagesPage() {
                   </div>
                   {canSendTemplateHere ? (
                     <div className="space-y-2">
-                      {outreachTemplate?.body && (
-                        <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-600 ring-1 ring-slate-100 whitespace-pre-wrap">
-                          <span className="mb-1 block font-semibold text-slate-700">
-                            {t('messages.templatePreview')}
-                          </span>
-                          {outreachTemplate.body}
-                        </p>
-                      )}
                       {outreachLines.length > 0 ? (
                         <label className="block text-xs font-medium text-slate-600">
                           {t('messages.newMessageFromLine')}
@@ -909,7 +950,7 @@ export function MessagesPage() {
                             value={selectedAccountId}
                             onChange={(e) => setSelectedAccountId(e.target.value)}
                             disabled={templateMutation.isPending}
-                            className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary/25 disabled:opacity-50"
+                            className="mt-1.5 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary/25 disabled:opacity-50"
                           >
                             {outreachLines.map((line) => (
                               <option key={line.id} value={line.id}>
@@ -920,6 +961,35 @@ export function MessagesPage() {
                         </label>
                       ) : (
                         <p className="text-xs text-amber-800">{t('messages.newMessageNoLines')}</p>
+                      )}
+                      {hasLineTemplates ? (
+                        <label className="block text-xs font-medium text-slate-600">
+                          {t('messages.templateSelect')}
+                          <select
+                            value={selectedTemplateId}
+                            onChange={(e) => setSelectedTemplateId(e.target.value)}
+                            disabled={templateMutation.isPending}
+                            className="mt-1.5 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary/25 disabled:opacity-50"
+                          >
+                            {templatesForSelectedLine.map((tpl) => (
+                              <option key={tpl.id} value={tpl.id}>
+                                {tpl.title}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      ) : selectedAccountId && !hasCompanyFallback ? (
+                        <p className="text-xs text-amber-800">
+                          {t('messages.templateNotConfiguredForLine')}
+                        </p>
+                      ) : null}
+                      {activeTemplatePreview?.body && (
+                        <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-600 ring-1 ring-slate-100 whitespace-pre-wrap">
+                          <span className="mb-1 block font-semibold text-slate-700">
+                            {t('messages.templatePreview')}
+                          </span>
+                          {activeTemplatePreview.body}
+                        </p>
                       )}
                       {replyError && (
                         <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 ring-1 ring-red-100">
@@ -932,7 +1002,9 @@ export function MessagesPage() {
                         disabled={
                           templateMutation.isPending ||
                           !selectedPhone ||
-                          !selectedAccountId
+                          !selectedAccountId ||
+                          !lineCanSendTemplate ||
+                          (hasLineTemplates && !selectedTemplateId)
                         }
                         onClick={() => {
                           setReplyError(null);
@@ -940,6 +1012,9 @@ export function MessagesPage() {
                             templateMutation.mutate({
                               phone: selectedPhone,
                               whatsapp_account_id: selectedAccountId,
+                              ...(selectedTemplateId
+                                ? { template_id: selectedTemplateId }
+                                : {}),
                             });
                           }
                         }}
@@ -1051,14 +1126,6 @@ export function MessagesPage() {
           >
             <h3 className="text-base font-semibold text-slate-900">{t('messages.newMessageTitle')}</h3>
             <p className="mt-1 text-sm text-slate-500">{t('messages.newMessageDesc')}</p>
-            {outreachTemplate?.body && (
-              <p className="mt-3 max-h-32 overflow-y-auto rounded-lg bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-600 ring-1 ring-slate-100 whitespace-pre-wrap">
-                <span className="mb-1 block font-semibold text-slate-700">
-                  {t('messages.templatePreview')}
-                </span>
-                {outreachTemplate.body}
-              </p>
-            )}
             <label className="mt-4 block text-xs font-medium text-slate-600">
               {t('messages.newMessageFromLine')}
               {outreachLines.length > 0 ? (
@@ -1066,7 +1133,7 @@ export function MessagesPage() {
                   value={selectedAccountId}
                   onChange={(e) => setSelectedAccountId(e.target.value)}
                   disabled={templateMutation.isPending}
-                  className="mt-1.5 h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary/25 disabled:opacity-50"
+                  className="mt-1.5 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary/25 disabled:opacity-50"
                 >
                   <option value="">{t('messages.newMessageFromLineSelect')}</option>
                   {outreachLines.map((line) => (
@@ -1079,6 +1146,35 @@ export function MessagesPage() {
                 <p className="mt-1.5 text-xs text-amber-800">{t('messages.newMessageNoLines')}</p>
               )}
             </label>
+            {hasLineTemplates ? (
+              <label className="mt-4 block text-xs font-medium text-slate-600">
+                {t('messages.templateSelect')}
+                <select
+                  value={selectedTemplateId}
+                  onChange={(e) => setSelectedTemplateId(e.target.value)}
+                  disabled={templateMutation.isPending}
+                  className="mt-1.5 h-11 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary/25 disabled:opacity-50"
+                >
+                  {templatesForSelectedLine.map((tpl) => (
+                    <option key={tpl.id} value={tpl.id}>
+                      {tpl.title}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : selectedAccountId && !hasCompanyFallback ? (
+              <p className="mt-3 text-xs text-amber-800">
+                {t('messages.templateNotConfiguredForLine')}
+              </p>
+            ) : null}
+            {activeTemplatePreview?.body && (
+              <p className="mt-3 max-h-32 overflow-y-auto rounded-lg bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-600 ring-1 ring-slate-100 whitespace-pre-wrap">
+                <span className="mb-1 block font-semibold text-slate-700">
+                  {t('messages.templatePreview')}
+                </span>
+                {activeTemplatePreview.body}
+              </p>
+            )}
             <label className="mt-4 block text-xs font-medium text-slate-600">
               {t('messages.newMessagePhone')}
               <Input
@@ -1115,13 +1211,16 @@ export function MessagesPage() {
                 disabled={
                   templateMutation.isPending ||
                   newPhone.replace(/\D/g, '').length < 8 ||
-                  !selectedAccountId
+                  !selectedAccountId ||
+                  !lineCanSendTemplate ||
+                  (hasLineTemplates && !selectedTemplateId)
                 }
                 onClick={() => {
                   setReplyError(null);
                   templateMutation.mutate({
                     phone: newPhone,
                     whatsapp_account_id: selectedAccountId,
+                    ...(selectedTemplateId ? { template_id: selectedTemplateId } : {}),
                   });
                 }}
               >
